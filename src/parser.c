@@ -57,6 +57,17 @@ static int match(Parser *parser, int count, ...){
 	return 0;
 }
 
+static int check(Parser *parser, TokenType type){
+    Token *token = peek(parser);
+    
+    if(token->type == type){
+        parser->current++;
+        return 1;
+    }
+
+    return 0;
+}
+
 Token *consume(Parser *parser, TokenType type, char *err_msg, ...){
     Token *token = peek(parser);
     
@@ -78,6 +89,7 @@ Token *consume(Parser *parser, TokenType type, char *err_msg, ...){
 }
 
 Expr *parse_expr(Parser *paser);
+Expr *parse_assign(Parser *parser);
 Expr *parse_term(Parser *parser);
 Expr *parse_factor(Parser *parser);
 Expr *parse_literal(Parser *parser);
@@ -85,9 +97,38 @@ Expr *parse_literal(Parser *parser);
 Stmt *parse_stmt(Parser *parser);
 Stmt *parse_expr_stmt(Parser *parser);
 Stmt *parse_print_stmt(Parser *parser);
+Stmt *parse_var_decl_stmt(Parser *parser);
 
 Expr *parse_expr(Parser *parser){
-	return parse_term(parser);
+	return parse_assign(parser);
+}
+
+Expr *parse_assign(Parser *parser){
+    Expr *expr = parse_term(parser);
+
+    if(match(parser, 1, EQUALS_TOKTYPE)){
+        if(expr->type != IDENTIFIER_EXPRTYPE)
+            error(
+                parser, 
+                peek(parser), 
+                "Expect identifier in left side of assignment expression.");
+
+        IdentifierExpr *idenfifier_expr = (IdentifierExpr *)expr->sub_expr;
+        Token *identifier_token = idenfifier_expr->identifier_token;
+        Expr *value_expr = parse_assign(parser);
+
+        AssignExpr *assign_expr = (AssignExpr *)memory_alloc(sizeof(AssignExpr));
+        assign_expr->identifier_token = identifier_token;
+        assign_expr->value_expr = value_expr;
+
+        Expr *expr = memory_alloc(sizeof(Expr));
+		expr->type = ASSIGN_EXPRTYPE;
+		expr->sub_expr = assign_expr;
+
+        return expr;
+    }
+
+    return expr;
 }
 
 Expr *parse_term(Parser *parser){
@@ -187,6 +228,19 @@ Expr *parse_literal(Parser *parser){
 		return expr;
     }
 
+    if(match(parser, 1, IDENTIFIER_TOKTYPE)){
+        Token *identifier_token = previous(parser);
+        
+        IdentifierExpr *identifier_expr = (IdentifierExpr *)memory_alloc(sizeof(IdentifierExpr));
+        identifier_expr->identifier_token= identifier_token;
+
+        Expr *expr = (Expr *)memory_alloc(sizeof(Expr));
+		expr->type = IDENTIFIER_EXPRTYPE;
+		expr->sub_expr = identifier_expr;
+
+		return expr;
+    }
+
 	Token *token = peek(parser);
     error(parser, token, "Expect something: 'false', 'true' or integer, but got '%s'", token->lexeme);
     return NULL;
@@ -195,6 +249,9 @@ Expr *parse_literal(Parser *parser){
 Stmt *parse_stmt(Parser *parser){
     if(match(parser, 1, PRINT_TOKTYPE))
         return parse_print_stmt(parser);
+
+    if(match(parser, 1, VAR_TOKTYPE))
+        return parse_var_decl_stmt(parser);
 
     return parse_expr_stmt(parser);
 }
@@ -212,6 +269,34 @@ Stmt *parse_print_stmt(Parser *parser){
     Stmt *stmt = (Stmt *)memory_alloc(sizeof(Stmt));
     stmt->type = PRINT_STMTTYPE;
     stmt->sub_stmt = print_stmt;
+
+    return stmt;
+}
+
+Stmt *parse_var_decl_stmt(Parser *parser){
+    Token *identifier_token = NULL;
+    Expr *initializer_expr = NULL;
+
+    identifier_token = consume(
+        parser, 
+        IDENTIFIER_TOKTYPE, 
+        "Expect symbol name after 'var' keyword.");
+    
+    if(check(parser, EQUALS_TOKTYPE))
+        initializer_expr = parse_expr(parser);
+
+    consume(
+        parser, 
+        SEMICOLON_TOKTYPE, 
+        "Expect ';' at end of symbol declaration.");
+
+    VarDeclStmt *var_decl_stmt = (VarDeclStmt *)memory_alloc(sizeof(VarDeclStmt));
+    var_decl_stmt->identifier_token = identifier_token;
+    var_decl_stmt->initializer_expr = initializer_expr;
+
+    Stmt *stmt = (Stmt *)memory_alloc(sizeof(Stmt));
+    stmt->type = VAR_DECL_STMTTYPE;
+    stmt->sub_stmt= var_decl_stmt;
 
     return stmt;
 }

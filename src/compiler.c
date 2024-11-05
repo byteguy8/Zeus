@@ -5,6 +5,23 @@
 #include "stmt.h"
 #include <stdint.h>
 #include <assert.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <setjmp.h>
+
+static jmp_buf err_jmp;
+
+static void error(Compiler *compiler, char *msg, ...){
+    va_list args;
+    va_start(args, msg);
+
+    fprintf(stderr, "Compiler error:\n\t");
+    vfprintf(stderr, msg, args);
+    fprintf(stderr, "\n");
+
+    va_end(args);
+    longjmp(err_jmp, 1);
+}
 
 void descompose_i32(int32_t value, uint8_t *bytes)
 {
@@ -16,6 +33,75 @@ void descompose_i32(int32_t value, uint8_t *bytes)
         value = value >> 8;
         bytes[i] = r;
     }
+}
+
+Scope *scope_in(Compiler *compiler){
+    Scope *scope = &compiler->scopes[compiler->depth++];
+    
+    scope->depth = compiler->depth;
+    scope->locals = 0;
+    scope->symbols_len = 0;
+    
+    return scope;
+}
+
+void scope_out(Compiler *compiler){
+    compiler->depth--;
+}
+
+Scope *current_scope(Compiler *compiler){
+    assert(compiler->depth > 0);
+    return &compiler->scopes[compiler->depth - 1];
+}
+
+Symbol *exists_scope(char *name, Scope *scope, Compiler *compiler){
+    for (int i = scope->symbols_len - 1; i >= 0; i--){
+        Symbol *symbol = &scope->symbols[i];
+        
+        if(strcmp(symbol->name, name) == 0)
+            return symbol;
+    }
+    
+    return NULL;
+}
+
+Symbol *exists_local(char *name, Compiler *compiler){
+    assert(compiler->depth > 0);
+    Scope *scope = current_scope(compiler);
+    return exists_scope(name, scope, compiler);
+}
+
+Symbol *get(Token *identifier_token, Compiler *compiler){
+    assert(compiler->depth > 0);
+    char *identifier = identifier_token->lexeme;
+
+    for (int i = compiler->depth - 1; i >= 0; i--)
+    {
+        Scope *scope = &compiler->scopes[i];
+        Symbol *symbol = exists_scope(identifier, scope, compiler);
+        if(symbol != NULL) return symbol;
+    }
+
+    error(compiler, "Symbol '%s' doesn't exists.", identifier);
+    return NULL;
+}
+
+Symbol *declare(Token *identifier_token, Compiler *compiler){
+    char *identifier = identifier_token->lexeme;
+    size_t identifier_len = strlen(identifier);
+
+    if(exists_local(identifier, compiler) != NULL)
+        error(compiler, "Already exists a symbol named as '%s'.", identifier);
+
+    Scope *scope = current_scope(compiler);
+    Symbol *symbol = &scope->symbols[scope->symbols_len++];
+    
+    symbol->local = scope->locals++;
+    memcpy(symbol->name, identifier, identifier_len);
+    symbol->name[identifier_len] = '\0';
+    symbol->name_len = identifier_len;
+
+    return symbol;
 }
 
 void write_chunk(uint8_t chunk, Compiler *compiler){
@@ -46,7 +132,6 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             break;
         }
-
         case INT_EXPRTYPE:{
             IntExpr *int_expr = (IntExpr *)expr->sub_expr;
             Token *token = int_expr->token;
@@ -57,7 +142,18 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             break;
         }
+        case IDENTIFIER_EXPRTYPE:{
+            IdentifierExpr *identifier_expr = (IdentifierExpr *)expr->sub_expr;
+            Token *identifier_token = identifier_expr->identifier_token;
 
+            Symbol *symbol = get(identifier_token, compiler);
+            uint8_t local = (uint8_t)symbol->local;
+            
+            write_chunk(LGET_OPCODE, compiler);
+            write_chunk(local, compiler);
+
+            break;
+        }
         case GROUP_EXPRTYPE:{
             GroupExpr *group_expr = (GroupExpr *)expr->sub_expr;
             Expr *expr = group_expr->expr;
@@ -65,8 +161,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             compile_expr(expr, compiler);
             
             break;
-        }
-            
+        }   
         case BINARY_EXPRTYPE:{
             BinaryExpr *binary_expr = (BinaryExpr *)expr->sub_expr;
             Expr *left = binary_expr->left;
@@ -104,7 +199,19 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             break;
         }
+        case ASSIGN_EXPRTYPE:{
+            AssignExpr *assign_expr = (AssignExpr *)expr->sub_expr;
+            Token *identifier_token = assign_expr->identifier_token;
+            Expr *value_expr = assign_expr->value_expr;
 
+            Symbol *symbol = get(identifier_token, compiler);
+            
+            compile_expr(value_expr, compiler);
+            write_chunk(LSET_OPCODE, compiler);
+            write_chunk(symbol->local, compiler);
+
+            break;
+        }
         default:{
             assert("Illegal expression type");
         }
@@ -132,6 +239,23 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             break;
         }
+
+        case VAR_DECL_STMTTYPE:{
+            VarDeclStmt *var_decl_stmt = (VarDeclStmt *)stmt->sub_stmt;
+            Token *identifier_token = var_decl_stmt->identifier_token;
+            Expr *initializer_expr = var_decl_stmt->initializer_expr;
+
+            Symbol *symbol = declare(identifier_token, compiler);
+            
+            if(initializer_expr == NULL) write_chunk(NULL_OPCODE, compiler);
+            else compile_expr(initializer_expr, compiler);
+
+            write_chunk(LSET_OPCODE, compiler);
+            write_chunk((uint8_t)symbol->local, compiler);
+            write_chunk(POP_OPCODE, compiler);
+
+            break;
+        }
     
         default:{
             assert("Illegal stmt type");
@@ -152,14 +276,21 @@ int compiler_compile(
     DynArrPtr *stmts, 
     Compiler *compiler
 ){
-    compiler->constants = constants;
-    compiler->chunks = chunks;
-    compiler->stmts = stmts;
+    if(setjmp(err_jmp) == 1) return 1;
+    else{
+        compiler->constants = constants;
+        compiler->chunks = chunks;
+        compiler->stmts = stmts;
 
-    for (size_t i = 0; i < stmts->used; i++){
-        Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
-        compile_stmt(stmt, compiler);
+        scope_in(compiler);
+
+        for (size_t i = 0; i < stmts->used; i++){
+            Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
+            compile_stmt(stmt, compiler);
+        }
+
+        scope_out(compiler);
+        
+        return 0;
     }
-    
-    return 0;
 }

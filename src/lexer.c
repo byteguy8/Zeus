@@ -168,14 +168,13 @@ static void identifier(Lexer *lexer){
     char lexeme[lexeme_len];
     lexeme_current_copy(lexeme, lexer);
 
-    TokenType *type = (TokenType *)lzhtable_get((uint8_t *)lexeme, lexeme_len - 1, lexer->keywords);
+    TokenType *type = (TokenType *)lzhtable_get(
+        (uint8_t *)lexeme, 
+        lexeme_len - 1, 
+        lexer->keywords);
 
-    if(type == NULL){
-        error(lexer, "Unknown keyword '%s'", lexeme);
-        return;
-    }
-
-    add_token(*type, lexer);
+    if(type == NULL) add_token(IDENTIFIER_TOKTYPE, lexer);
+    else add_token(*type, lexer);
 }
 
 static void scan_token(Lexer *lexer){
@@ -209,6 +208,10 @@ static void scan_token(Lexer *lexer){
         }
         case ')':{
             add_token(RIGHT_PAREN_TOKTYPE, lexer);
+            break;
+        }
+        case '=':{
+            add_token(EQUALS_TOKTYPE, lexer);
             break;
         }
         case '\n':{

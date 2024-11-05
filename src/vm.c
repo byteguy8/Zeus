@@ -27,6 +27,10 @@ int32_t compose_i32(uint8_t *bytes){
 
 void print_value(Value *value){
     switch (value->type){
+        case NULL_VTYPE:{
+            printf("nil\n");
+            break;
+        }
         case BOOL_VTYPE:{
             uint8_t bool = value->literal.bool;
             printf("%s\n", bool == 0 ? "false" : "true");
@@ -43,9 +47,9 @@ void print_value(Value *value){
 }
 
 void print_stack(VM *vm){
-    for (int i = 0; i < vm->stack_ptr; i++)
+    for (int i = 0; i < vm->temps_ptr; i++)
     {
-        Value *value = &vm->stack[i];
+        Value *value = &vm->temps[i];
         printf("%d --> ", i + 1);
         print_value(value);
     }
@@ -74,14 +78,19 @@ int64_t read_i64(VM *vm){
 }
 
 static void push(Value value, VM *vm){
-    if(vm->stack_ptr >= STACK_SIZE) error(vm, "StackOverFlow");
-    Value *current_value = &vm->stack[vm->stack_ptr++];
+    if(vm->temps_ptr >= TEMPS_SIZE) error(vm, "StackOverFlow");
+    Value *current_value = &vm->temps[vm->temps_ptr++];
     memcpy(current_value, &value, sizeof(Value));
 }
 
 static Value *pop(VM *vm){
-    if(vm->stack_ptr == 0) error(vm, "StackUnderFlow");
-    return &vm->stack[--vm->stack_ptr];
+    if(vm->temps_ptr == 0) error(vm, "StackUnderFlow");
+    return &vm->temps[--vm->temps_ptr];
+}
+
+static Value *peek(VM *vm){
+    if(vm->temps_ptr == 0) error(vm, "StackUnderFlow");
+    return &vm->temps[vm->temps_ptr - 1];
 }
 
 void push_bool(uint8_t bool, VM *vm){
@@ -119,6 +128,11 @@ int64_t pop_i64_assert(VM *vm, char *err_msg, ...){
 
 void execute(uint8_t chunk, VM *vm){
     switch (chunk){
+        case NULL_OPCODE:{
+            Value value = {0};
+            push(value, vm);
+            break;
+        }
         case FALSE_OPCODE:{
             push_bool(0, vm);
             break;
@@ -156,6 +170,18 @@ void execute(uint8_t chunk, VM *vm){
             push_i64(left / right, vm);
             break;
         }
+        case LSET_OPCODE:{
+            Value *value = peek(vm);
+            uint8_t index = advance(vm);
+            memcpy(&vm->locals[index], value, sizeof(Value));
+            break;
+        }
+        case LGET_OPCODE:{
+            uint8_t index = advance(vm);
+            Value value = vm->locals[index];
+            push(value, vm);
+            break;
+        }
         case PRT_OPCODE:{
             Value *value = pop(vm);
             print_value(value);
@@ -185,7 +211,7 @@ int vm_execute(DynArr *constants, DynArr *chunks, VM *vm){
     if(setjmp(err_jmp) == 1) return 1;
     else{
         vm->ip = 0;
-        vm->stack_ptr = 0;
+        vm->temps_ptr = 0;
         vm->constants = constants;
         vm->chunks = chunks;
 

@@ -3,9 +3,11 @@
 
 #include "dynarr.h"
 
-#define STACK_SIZE 255
+#define TEMPS_SIZE 255
+#define LOCALS_SIZE 255
 
 typedef enum value_type{
+    NULL_VTYPE,
     BOOL_VTYPE,
     INT_VTYPE
 }ValueType;
@@ -23,8 +25,10 @@ typedef struct vm
 {
     size_t ip;
 
-    int stack_ptr;
-    Value stack[STACK_SIZE];
+    int temps_ptr;
+    Value temps[TEMPS_SIZE];
+    
+    Value locals[LOCALS_SIZE];
 
     DynArr *constants;
     DynArr *chunks;

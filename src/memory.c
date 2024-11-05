@@ -31,7 +31,7 @@ void region_dealloc(void *ptr, size_t size, void *ctx){
 }
 
 int memory_init(){
-	region = lzregion_create(2097152);
+	region = lzregion_create(33554432);
 
 	dynarr_allocator.alloc = region_alloc;
 	dynarr_allocator.realloc = region_realloc;

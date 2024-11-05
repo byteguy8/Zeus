@@ -6,7 +6,8 @@
 
 typedef enum stmt_type{
     EXPR_STMTTYPE,
-    PRINT_STMTTYPE
+    PRINT_STMTTYPE,
+    VAR_DECL_STMTTYPE
 }StmtType;
 
 typedef struct stmt{
@@ -22,5 +23,11 @@ typedef struct print_stmt{
     Expr *expr;
     Token *print_token;
 }PrintStmt;
+
+typedef struct var_decl_stmt
+{
+    Token *identifier_token;
+    Expr *initializer_expr;
+}VarDeclStmt;
 
 #endif
