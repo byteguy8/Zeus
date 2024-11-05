@@ -66,7 +66,6 @@ Symbol *exists_scope(char *name, Scope *scope, Compiler *compiler){
 }
 
 Symbol *exists_local(char *name, Compiler *compiler){
-    assert(compiler->depth > 0);
     Scope *scope = current_scope(compiler);
     return exists_scope(name, scope, compiler);
 }
@@ -176,22 +175,18 @@ void compile_expr(Expr *expr, Compiler *compiler){
                     write_chunk(ADD_OPCODE, compiler);
                     break;
                 }
-
                 case MINUS_TOKTYPE:{
                     write_chunk(SUB_OPCODE, compiler);
                     break;
                 }
-            
                 case ASTERISK_TOKTYPE:{
                     write_chunk(MUL_OPCODE, compiler);
                     break;
                 }
-
                 case SLASH_TOKTYPE:{
                     write_chunk(DIV_OPCODE, compiler);
                     break;
                 }
-
                 default:{
                     assert("Illegal token type");
                 }
@@ -229,7 +224,6 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             break;
         }
-
         case PRINT_STMTTYPE:{
             PrintStmt *print_stmt = (PrintStmt *)stmt->sub_stmt;
             Expr *expr = print_stmt->expr;
@@ -239,7 +233,6 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             break;
         }
-
         case VAR_DECL_STMTTYPE:{
             VarDeclStmt *var_decl_stmt = (VarDeclStmt *)stmt->sub_stmt;
             Token *identifier_token = var_decl_stmt->identifier_token;
@@ -256,7 +249,6 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             break;
         }
-    
         default:{
             assert("Illegal stmt type");
             break;
