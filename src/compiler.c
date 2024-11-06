@@ -205,6 +205,47 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             break;
         }
+        case COMPARISON_EXPRTYPE:{
+            ComparisonExpr *comparison_expr = (ComparisonExpr *)expr->sub_expr;
+            Expr *left = comparison_expr->left;
+            Token *operator = comparison_expr->operator;
+            Expr *right = comparison_expr->right;
+
+            compile_expr(left, compiler);
+            compile_expr(right, compiler);
+
+            switch (operator->type){
+                case LESS_TOKTYPE:{
+                    write_chunk(LT_OPCODE, compiler);
+                    break;
+                }
+                case GREATER_TOKTYPE:{
+                    write_chunk(GT_OPCODE, compiler);
+                    break;
+                }
+                case LESS_EQUALS_TOKTYPE:{
+                    write_chunk(LE_OPCODE, compiler);
+                    break;
+                }
+                case GREATER_EQUALS_TOKTYPE:{
+                    write_chunk(GE_OPCODE, compiler);
+                    break;
+                }
+                case EQUALS_EQUALS_TOKTYPE:{
+                    write_chunk(EQ_OPCODE, compiler);
+                    break;
+                }
+                case NOT_EQUALS_TOKTYPE:{
+                    write_chunk(NE_OPCODE, compiler);
+                    break;
+                }
+                default:{
+                    assert("Illegal token type");
+                }
+            }
+
+            break;
+        }
         case ASSIGN_EXPRTYPE:{
             AssignExpr *assign_expr = (AssignExpr *)expr->sub_expr;
             Token *identifier_token = assign_expr->identifier_token;

@@ -170,6 +170,42 @@ void execute(uint8_t chunk, VM *vm){
             push_i64(left / right, vm);
             break;
         }
+        case LT_OPCODE:{
+            int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
+            int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
+            push_bool(left < right, vm);
+            break;
+        }
+        case GT_OPCODE:{
+            int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
+            int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
+            push_bool(left > right, vm);
+            break;
+        }
+        case LE_OPCODE:{
+            int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
+            int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
+            push_bool(left <= right, vm);
+            break;
+        }
+        case GE_OPCODE:{
+            int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
+            int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
+            push_bool(left >= right, vm);
+            break;
+        }
+        case EQ_OPCODE:{
+            int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
+            int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
+            push_bool(left == right, vm);
+            break;
+        }
+        case NE_OPCODE:{
+            int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
+            int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
+            push_bool(left != right, vm);
+            break;
+        }
         case LSET_OPCODE:{
             Value *value = peek(vm);
             uint8_t index = advance(vm);

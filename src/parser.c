@@ -22,6 +22,14 @@ static void error(Parser *parser, Token *token, char *msg, ...){
     longjmp(err_jmp, 1);
 }
 
+Expr *create_expr(ExprType type, void *sub_expr){
+    Expr *expr = (Expr *)memory_alloc(sizeof(Expr));
+    expr->type = type;
+    expr->sub_expr = sub_expr;
+
+    return expr;
+}
+
 Stmt *create_stmt(StmtType type, void *sub_stmt){
     Stmt *stmt = (Stmt *)memory_alloc(sizeof(Stmt));
     stmt->type = type;
@@ -92,6 +100,7 @@ Token *consume(Parser *parser, TokenType type, char *err_msg, ...){
 
 Expr *parse_expr(Parser *paser);
 Expr *parse_assign(Parser *parser);
+Expr *parse_comparison(Parser *parser);
 Expr *parse_term(Parser *parser);
 Expr *parse_factor(Parser *parser);
 Expr *parse_literal(Parser *parser);
@@ -107,7 +116,7 @@ Expr *parse_expr(Parser *parser){
 }
 
 Expr *parse_assign(Parser *parser){
-    Expr *expr = parse_term(parser);
+    Expr *expr = parse_comparison(parser);
 
     if(match(parser, 1, EQUALS_TOKTYPE)){
         if(expr->type != IDENTIFIER_EXPRTYPE)
@@ -124,14 +133,34 @@ Expr *parse_assign(Parser *parser){
         assign_expr->identifier_token = identifier_token;
         assign_expr->value_expr = value_expr;
 
-        Expr *expr = memory_alloc(sizeof(Expr));
-		expr->type = ASSIGN_EXPRTYPE;
-		expr->sub_expr = assign_expr;
-
-        return expr;
+        return create_expr(ASSIGN_EXPRTYPE, assign_expr);
     }
 
     return expr;
+}
+
+Expr *parse_comparison(Parser *parser){
+    Expr *left = parse_term(parser);
+
+	while(match(parser, 6, 
+        LESS_TOKTYPE, 
+        GREATER_TOKTYPE,
+        LESS_EQUALS_TOKTYPE,
+        GREATER_EQUALS_TOKTYPE,
+        EQUALS_EQUALS_TOKTYPE,
+        NOT_EQUALS_TOKTYPE)){
+		Token *operator = previous(parser);
+		Expr *right = parse_term(parser);
+
+		ComparisonExpr *binary_expr = (ComparisonExpr *)memory_alloc(sizeof(ComparisonExpr));
+		binary_expr->left = left;
+		binary_expr->operator = operator;
+		binary_expr->right = right;
+
+		left = create_expr(COMPARISON_EXPRTYPE, binary_expr);
+	}
+
+    return left;
 }
 
 Expr *parse_term(Parser *parser){
@@ -146,11 +175,7 @@ Expr *parse_term(Parser *parser){
 		binary_expr->operator = operator;
 		binary_expr->right = right;
 
-		Expr *expr = memory_alloc(sizeof(Expr));
-		expr->type = BINARY_EXPRTYPE;
-		expr->sub_expr = binary_expr;
-
-		left = expr;
+		left = create_expr(BINARY_EXPRTYPE, binary_expr);
 	}
 
 	return left;
@@ -168,11 +193,7 @@ Expr *parse_factor(Parser *parser){
 		binary_expr->operator = operator;
 		binary_expr->right = right;
 
-		Expr *expr = memory_alloc(sizeof(Expr));
-		expr->type = BINARY_EXPRTYPE;
-		expr->sub_expr = binary_expr;
-
-		left = expr;
+		left = create_expr(BINARY_EXPRTYPE, binary_expr);
 	}
 
 	return left;

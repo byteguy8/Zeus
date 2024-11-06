@@ -70,6 +70,18 @@ static char peek(Lexer *lexer){
     return source->buff[lexer->current];
 }
 
+static int match(char c, Lexer *lexer){
+    if(is_at_end(lexer)) return '\0';
+    
+    RawStr *source = lexer->source;
+    char cc = source->buff[lexer->current];
+
+    if(c != cc) return 0;
+    
+    lexer->current++;
+    return 1;
+}
+
 static char advance(Lexer *lexer){
     if(is_at_end(lexer)) return '\0';
     RawStr *source = lexer->source;
@@ -198,6 +210,26 @@ static void scan_token(Lexer *lexer){
             add_token(SLASH_TOKTYPE, lexer);
             break;
         }
+        case '<':{
+            if(match('=', lexer)) add_token(LESS_EQUALS_TOKTYPE, lexer);
+            else add_token(LESS_TOKTYPE, lexer);
+            break;
+        }
+        case '>':{
+            if(match('=', lexer)) add_token(GREATER_EQUALS_TOKTYPE, lexer);
+            else add_token(GREATER_TOKTYPE, lexer);
+            break;
+        }
+        case '=':{
+            if(match('=', lexer)) add_token(EQUALS_EQUALS_TOKTYPE, lexer);
+            else add_token(EQUALS_TOKTYPE, lexer);
+            break;
+        }
+        case '!':{
+            if(match('=', lexer)) add_token(NOT_EQUALS_TOKTYPE, lexer);
+            else error(lexer, "Unknown token '%c'", c);
+            break;
+        }
         case ';':{
             add_token(SEMICOLON_TOKTYPE, lexer);
             break;
@@ -216,10 +248,6 @@ static void scan_token(Lexer *lexer){
         }
         case '}':{
             add_token(RIGHT_BRACKET_TOKTYPE, lexer);
-            break;
-        }
-        case '=':{
-            add_token(EQUALS_TOKTYPE, lexer);
             break;
         }
         case '\n':{
