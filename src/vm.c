@@ -126,6 +126,22 @@ int64_t pop_i64_assert(VM *vm, char *err_msg, ...){
     longjmp(err_jmp, 1);
 }
 
+void assert_value_type(ValueType type, Value *value, char *err_msg, ...){
+    ValueType vtype = value->type;
+    if(vtype == type) return;
+
+    va_list args;
+	va_start(args, err_msg);
+
+	fprintf(stderr, "Runtime error:\n\t");
+	vfprintf(stderr, err_msg, args);
+    fprintf(stderr, "\n");
+
+	va_end(args);
+
+    longjmp(err_jmp, 1);
+}
+
 void execute(uint8_t chunk, VM *vm){
     switch (chunk){
         case NULL_OPCODE:{
@@ -195,15 +211,31 @@ void execute(uint8_t chunk, VM *vm){
             break;
         }
         case EQ_OPCODE:{
-            int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
-            int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
-            push_bool(left == right, vm);
+            Value *left_value = pop(vm);
+            Value *right_value = pop(vm);
+
+            if((left_value->type == BOOL_VTYPE && right_value->type == BOOL_VTYPE) ||
+            (left_value->type == INT_VTYPE && right_value->type == INT_VTYPE)){
+                push_bool(left_value->literal.i64 == right_value->literal.i64, vm);
+                break;
+            }
+
+            error(vm, "Illegal type in equals comparison expression.");
+
             break;
         }
         case NE_OPCODE:{
-            int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
-            int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
-            push_bool(left != right, vm);
+            Value *left_value = pop(vm);
+            Value *right_value = pop(vm);
+
+            if((left_value->type == BOOL_VTYPE && right_value->type == BOOL_VTYPE) ||
+            (left_value->type == INT_VTYPE && right_value->type == INT_VTYPE)){
+                push_bool(left_value->literal.i64 != right_value->literal.i64, vm);
+                break;
+            }
+
+            error(vm, "Illegal type in not equals comparison expression.");
+
             break;
         }
         case LSET_OPCODE:{
