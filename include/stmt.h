@@ -3,11 +3,13 @@
 
 #include "token.h"
 #include "expr.h"
+#include "dynarr.h"
 
 typedef enum stmt_type{
     EXPR_STMTTYPE,
     PRINT_STMTTYPE,
-    VAR_DECL_STMTTYPE
+    VAR_DECL_STMTTYPE,
+    BLOCK_STMTTYPE
 }StmtType;
 
 typedef struct stmt{
@@ -29,5 +31,10 @@ typedef struct var_decl_stmt
     Token *identifier_token;
     Expr *initializer_expr;
 }VarDeclStmt;
+
+typedef struct block_stmt{
+    DynArrPtr *stmts;
+}BlockStmt;
+
 
 #endif

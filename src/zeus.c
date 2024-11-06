@@ -23,7 +23,6 @@ int main(int argc, char const *argv[]){
 	memory_init();
 
     char *source_path = (char *)argv[1];
-
 	RawStr *source = utils_read_source(source_path);
     LZHTable *keywords = memory_lzhtable();
 	DynArrPtr *tokens = memory_dynarr_ptr();

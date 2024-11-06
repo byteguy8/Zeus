@@ -45,6 +45,17 @@ Scope *scope_in(Compiler *compiler){
     return scope;
 }
 
+Scope *scope_in_soft(Compiler *compiler){
+    Scope *enclosing = &compiler->scopes[compiler->depth - 1];
+    Scope *scope = &compiler->scopes[compiler->depth++];
+    
+    scope->depth = compiler->depth;
+    scope->locals = enclosing->locals;
+    scope->symbols_len = 0;
+    
+    return scope;
+}
+
 void scope_out(Compiler *compiler){
     compiler->depth--;
 }
@@ -247,6 +258,22 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             write_chunk((uint8_t)symbol->local, compiler);
             write_chunk(POP_OPCODE, compiler);
 
+            break;
+        }
+        case BLOCK_STMTTYPE:{
+            BlockStmt *block_stmt = (BlockStmt *)stmt->sub_stmt;
+            DynArrPtr *stmts = block_stmt->stmts;
+
+            scope_in_soft(compiler);
+
+            for (size_t i = 0; i < stmts->used; i++)
+            {
+                Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
+                compile_stmt(stmt, compiler);
+            }
+
+            scope_out(compiler);
+            
             break;
         }
         default:{

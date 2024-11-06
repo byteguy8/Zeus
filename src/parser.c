@@ -22,6 +22,14 @@ static void error(Parser *parser, Token *token, char *msg, ...){
     longjmp(err_jmp, 1);
 }
 
+Stmt *create_stmt(StmtType type, void *sub_stmt){
+    Stmt *stmt = (Stmt *)memory_alloc(sizeof(Stmt));
+    stmt->type = type;
+    stmt->sub_stmt = sub_stmt;
+    
+    return stmt;
+}
+
 static Token *peek(Parser *parser){
 	DynArrPtr *tokens = parser->tokens;
 	return (Token *)DYNARR_PTR_GET(parser->current, tokens);
@@ -59,13 +67,7 @@ static int match(Parser *parser, int count, ...){
 
 static int check(Parser *parser, TokenType type){
     Token *token = peek(parser);
-    
-    if(token->type == type){
-        parser->current++;
-        return 1;
-    }
-
-    return 0;
+    return token->type == type;
 }
 
 Token *consume(Parser *parser, TokenType type, char *err_msg, ...){
@@ -98,6 +100,7 @@ Stmt *parse_stmt(Parser *parser);
 Stmt *parse_expr_stmt(Parser *parser);
 Stmt *parse_print_stmt(Parser *parser);
 Stmt *parse_var_decl_stmt(Parser *parser);
+DynArrPtr *parse_block_stmt(Parser *parser);
 
 Expr *parse_expr(Parser *parser){
 	return parse_assign(parser);
@@ -246,16 +249,6 @@ Expr *parse_literal(Parser *parser){
     return NULL;
 }
 
-Stmt *parse_stmt(Parser *parser){
-    if(match(parser, 1, PRINT_TOKTYPE))
-        return parse_print_stmt(parser);
-
-    if(match(parser, 1, VAR_TOKTYPE))
-        return parse_var_decl_stmt(parser);
-
-    return parse_expr_stmt(parser);
-}
-
 Stmt *parse_print_stmt(Parser *parser){
     Token *print_token = previous(parser);
     Expr *expr = parse_expr(parser);
@@ -266,11 +259,7 @@ Stmt *parse_print_stmt(Parser *parser){
     print_stmt->expr = expr;
     print_stmt->print_token = print_token;
 
-    Stmt *stmt = (Stmt *)memory_alloc(sizeof(Stmt));
-    stmt->type = PRINT_STMTTYPE;
-    stmt->sub_stmt = print_stmt;
-
-    return stmt;
+    return create_stmt(PRINT_STMTTYPE, print_stmt);
 }
 
 Stmt *parse_var_decl_stmt(Parser *parser){
@@ -282,7 +271,7 @@ Stmt *parse_var_decl_stmt(Parser *parser){
         IDENTIFIER_TOKTYPE, 
         "Expect symbol name after 'var' keyword.");
     
-    if(check(parser, EQUALS_TOKTYPE))
+    if(match(parser, 1, EQUALS_TOKTYPE))
         initializer_expr = parse_expr(parser);
 
     consume(
@@ -294,11 +283,40 @@ Stmt *parse_var_decl_stmt(Parser *parser){
     var_decl_stmt->identifier_token = identifier_token;
     var_decl_stmt->initializer_expr = initializer_expr;
 
-    Stmt *stmt = (Stmt *)memory_alloc(sizeof(Stmt));
-    stmt->type = VAR_DECL_STMTTYPE;
-    stmt->sub_stmt= var_decl_stmt;
+    return create_stmt(VAR_DECL_STMTTYPE, var_decl_stmt);
+}
 
-    return stmt;
+DynArrPtr *parse_block_stmt(Parser *parser){
+    DynArrPtr *stmts = memory_dynarr_ptr();
+
+    while (!check(parser, RIGHT_BRACKET_TOKTYPE))
+    {
+        Stmt *stmt = parse_stmt(parser);
+        dynarr_ptr_insert(stmt, stmts);
+    }
+
+    consume(parser, RIGHT_BRACKET_TOKTYPE, "Expect '}' at end of block statement.");
+    
+    return stmts;
+}
+
+Stmt *parse_stmt(Parser *parser){
+    if(match(parser, 1, PRINT_TOKTYPE))
+        return parse_print_stmt(parser);
+
+    if(match(parser, 1, VAR_TOKTYPE))
+        return parse_var_decl_stmt(parser);
+
+    if(match(parser, 1, LEFT_BRACKET_TOKTYPE)){
+        DynArrPtr *stmts = parse_block_stmt(parser);
+        
+        BlockStmt *block_stmt = (BlockStmt *)memory_alloc(sizeof(BlockStmt));
+        block_stmt->stmts = stmts;
+
+        return create_stmt(BLOCK_STMTTYPE, block_stmt);
+    }
+
+    return parse_expr_stmt(parser);
 }
 
 Stmt *parse_expr_stmt(Parser *parser){

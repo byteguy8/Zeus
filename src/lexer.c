@@ -210,6 +210,14 @@ static void scan_token(Lexer *lexer){
             add_token(RIGHT_PAREN_TOKTYPE, lexer);
             break;
         }
+        case '{':{
+            add_token(LEFT_BRACKET_TOKTYPE, lexer);
+            break;
+        }
+        case '}':{
+            add_token(RIGHT_BRACKET_TOKTYPE, lexer);
+            break;
+        }
         case '=':{
             add_token(EQUALS_TOKTYPE, lexer);
             break;
