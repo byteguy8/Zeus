@@ -8,8 +8,10 @@ typedef enum expr_type{
     INT_EXPRTYPE,
     GROUP_EXPRTYPE,
     IDENTIFIER_EXPRTYPE,
+    UNARY_EXPRTYPE,
 	BINARY_EXPRTYPE,
     COMPARISON_EXPRTYPE,
+    LOGICAL_EXPRTYPE,
     ASSIGN_EXPRTYPE
 }ExprType;
 
@@ -39,6 +41,12 @@ typedef struct identifier_expr
     Token *identifier_token;
 }IdentifierExpr;
 
+typedef struct unary_expr
+{
+    Token *operator;
+    Expr *right;
+}UnaryExpr;
+
 typedef struct binary_expr{
 	Expr *left;
 	Token *operator;
@@ -50,6 +58,12 @@ typedef struct comparison_expr{
 	Token *operator;
 	Expr *right;
 }ComparisonExpr;
+
+typedef struct logical_expr{
+	Expr *left;
+	Token *operator;
+	Expr *right;
+}LogicalExpr;
 
 typedef struct assign_expr
 {

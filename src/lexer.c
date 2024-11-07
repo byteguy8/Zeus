@@ -227,7 +227,7 @@ static void scan_token(Lexer *lexer){
         }
         case '!':{
             if(match('=', lexer)) add_token(NOT_EQUALS_TOKTYPE, lexer);
-            else error(lexer, "Unknown token '%c'", c);
+            else add_token(EXCLAMATION_TOKTYPE, lexer);
             break;
         }
         case ';':{

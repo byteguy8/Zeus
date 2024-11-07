@@ -41,6 +41,8 @@ int main(int argc, char const *argv[]){
     add_keyword("true", TRUE_TOKTYPE, keywords);
     add_keyword("print", PRINT_TOKTYPE, keywords);
     add_keyword("var", VAR_TOKTYPE, keywords);
+    add_keyword("or", OR_TOKTYPE, keywords);
+    add_keyword("and", AND_TOKTYPE, keywords);
 
     if(lexer_scan(source, tokens, keywords, scanner)) goto CLEAN_UP;
     if(parser_parse(tokens, stmt, parser)) goto CLEAN_UP;

@@ -109,6 +109,23 @@ void push_i64(int64_t i64, VM *vm){
     push(value, vm);
 }
 
+uint8_t pop_bool_assert(VM *vm, char *err_msg, ...){
+    Value *value = pop(vm);
+    
+    if(value->type == BOOL_VTYPE) return value->literal.bool;
+
+    va_list args;
+	va_start(args, err_msg);
+
+	fprintf(stderr, "Runtime error:\n\t");
+	vfprintf(stderr, err_msg, args);
+    fprintf(stderr, "\n");
+
+	va_end(args);
+
+    longjmp(err_jmp, 1);
+}
+
 int64_t pop_i64_assert(VM *vm, char *err_msg, ...){
     Value *value = pop(vm);
     
@@ -248,6 +265,28 @@ void execute(uint8_t chunk, VM *vm){
             uint8_t index = advance(vm);
             Value value = vm->locals[index];
             push(value, vm);
+            break;
+        }
+        case OR_OPCODE:{
+            uint8_t right = pop_bool_assert(vm, "Expect bool at right side.");
+            uint8_t left = pop_bool_assert(vm, "Expect bool at left side.");
+            push_bool(left || right, vm);
+            break;
+        }
+        case AND_OPCODE:{
+            uint8_t right = pop_bool_assert(vm, "Expect bool at right side.");
+            uint8_t left = pop_bool_assert(vm, "Expect bool at left side.");
+            push_bool(left && right, vm);
+            break;
+        }
+        case NNOT_OPCODE:{
+            int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
+            push_i64(-right, vm);
+            break;
+        }
+        case NOT_OPCODE:{
+            uint8_t right = pop_bool_assert(vm, "Expect bool at right side.");
+            push_bool(!right, vm);
             break;
         }
         case PRT_OPCODE:{

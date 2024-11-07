@@ -100,9 +100,12 @@ Token *consume(Parser *parser, TokenType type, char *err_msg, ...){
 
 Expr *parse_expr(Parser *paser);
 Expr *parse_assign(Parser *parser);
+Expr *parse_or(Parser *parser);
+Expr *parse_and(Parser *parser);
 Expr *parse_comparison(Parser *parser);
 Expr *parse_term(Parser *parser);
 Expr *parse_factor(Parser *parser);
+Expr *parse_unary(Parser *parser);
 Expr *parse_literal(Parser *parser);
 
 Stmt *parse_stmt(Parser *parser);
@@ -116,7 +119,7 @@ Expr *parse_expr(Parser *parser){
 }
 
 Expr *parse_assign(Parser *parser){
-    Expr *expr = parse_comparison(parser);
+    Expr *expr = parse_or(parser);
 
     if(match(parser, 1, EQUALS_TOKTYPE)){
         if(expr->type != IDENTIFIER_EXPRTYPE)
@@ -139,6 +142,42 @@ Expr *parse_assign(Parser *parser){
     return expr;
 }
 
+Expr *parse_or(Parser *parser){
+    Expr *left = parse_and(parser);
+
+	while(match(parser, 6, OR_TOKTYPE)){
+		Token *operator = previous(parser);
+		Expr *right = parse_and(parser);
+
+		LogicalExpr *logical_expr = (LogicalExpr *)memory_alloc(sizeof(LogicalExpr));
+		logical_expr->left = left;
+		logical_expr->operator = operator;
+		logical_expr->right = right;
+
+		left = create_expr(LOGICAL_EXPRTYPE, logical_expr);
+	}
+
+    return left;
+}
+
+Expr *parse_and(Parser *parser){
+    Expr *left = parse_comparison(parser);
+
+	while(match(parser, 6, AND_TOKTYPE)){
+		Token *operator = previous(parser);
+		Expr *right = parse_comparison(parser);
+
+		LogicalExpr *logical_expr = (LogicalExpr *)memory_alloc(sizeof(LogicalExpr));
+		logical_expr->left = left;
+		logical_expr->operator = operator;
+		logical_expr->right = right;
+
+		left = create_expr(LOGICAL_EXPRTYPE, logical_expr);
+	}
+
+    return left;
+}
+
 Expr *parse_comparison(Parser *parser){
     Expr *left = parse_term(parser);
 
@@ -152,12 +191,12 @@ Expr *parse_comparison(Parser *parser){
 		Token *operator = previous(parser);
 		Expr *right = parse_term(parser);
 
-		ComparisonExpr *binary_expr = (ComparisonExpr *)memory_alloc(sizeof(ComparisonExpr));
-		binary_expr->left = left;
-		binary_expr->operator = operator;
-		binary_expr->right = right;
+		ComparisonExpr *comparison_expr = (ComparisonExpr *)memory_alloc(sizeof(ComparisonExpr));
+		comparison_expr->left = left;
+		comparison_expr->operator = operator;
+		comparison_expr->right = right;
 
-		left = create_expr(COMPARISON_EXPRTYPE, binary_expr);
+		left = create_expr(COMPARISON_EXPRTYPE, comparison_expr);
 	}
 
     return left;
@@ -182,11 +221,11 @@ Expr *parse_term(Parser *parser){
 }
 
 Expr *parse_factor(Parser *parser){
-	Expr *left = parse_literal(parser);
+	Expr *left = parse_unary(parser);
 
 	while(match(parser, 2, ASTERISK_TOKTYPE, SLASH_TOKTYPE)){
 		Token *operator = previous(parser);
-		Expr *right = parse_literal(parser);
+		Expr *right = parse_unary(parser);
 
 		BinaryExpr *binary_expr = (BinaryExpr *)memory_alloc(sizeof(BinaryExpr));
 		binary_expr->left = left;
@@ -197,6 +236,21 @@ Expr *parse_factor(Parser *parser){
 	}
 
 	return left;
+}
+
+Expr *parse_unary(Parser *parser){
+    if(match(parser, 2, MINUS_TOKTYPE, EXCLAMATION_TOKTYPE)){
+        Token *operator = previous(parser);
+        Expr *right = parse_unary(parser);
+
+        UnaryExpr *unary_expr = (UnaryExpr *)malloc(sizeof(UnaryExpr));
+        unary_expr->operator = operator;
+        unary_expr->right = right;
+
+        return create_expr(UNARY_EXPRTYPE, unary_expr);
+    }
+
+    return parse_literal(parser);
 }
 
 Expr *parse_literal(Parser *parser){

@@ -171,7 +171,30 @@ void compile_expr(Expr *expr, Compiler *compiler){
             compile_expr(expr, compiler);
             
             break;
-        }   
+        }
+        case UNARY_EXPRTYPE:{
+            UnaryExpr *unary_expr = (UnaryExpr *)expr->sub_expr;
+            Token *operator = unary_expr->operator;
+            Expr *right = unary_expr->right;
+
+            compile_expr(right, compiler);
+
+            switch (operator->type){
+                case MINUS_TOKTYPE:{
+                    write_chunk(NNOT_OPCODE, compiler);
+                    break;
+                }
+                case EXCLAMATION_TOKTYPE:{
+                    write_chunk(NOT_OPCODE, compiler);
+                    break;
+                }
+                default:{
+                    assert("Illegal token type");
+                }
+            }
+
+            break;
+        }
         case BINARY_EXPRTYPE:{
             BinaryExpr *binary_expr = (BinaryExpr *)expr->sub_expr;
             Expr *left = binary_expr->left;
@@ -237,6 +260,31 @@ void compile_expr(Expr *expr, Compiler *compiler){
                 }
                 case NOT_EQUALS_TOKTYPE:{
                     write_chunk(NE_OPCODE, compiler);
+                    break;
+                }
+                default:{
+                    assert("Illegal token type");
+                }
+            }
+
+            break;
+        }
+        case LOGICAL_EXPRTYPE:{
+            LogicalExpr *logical_expr = (LogicalExpr *)expr->sub_expr;
+            Expr *left = logical_expr->left;
+            Token *operator = logical_expr->operator;
+            Expr *right = logical_expr->right;
+
+            compile_expr(left, compiler);
+            compile_expr(right, compiler);
+
+            switch (operator->type){
+                case OR_TOKTYPE:{
+                    write_chunk(OR_OPCODE, compiler);
+                    break;
+                }
+                case AND_TOKTYPE:{
+                    write_chunk(AND_OPCODE, compiler);
                     break;
                 }
                 default:{
