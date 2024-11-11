@@ -49,6 +49,8 @@ int main(int argc, char const *argv[]){
     if(compiler_compile(constants, chunks, stmt, compiler)) goto CLEAN_UP;
     if(vm_execute(constants, chunks, vm)) goto CLEAN_UP;
 
+	memory_report();
+
 CLEAN_UP:
     memory_deinit();
 }

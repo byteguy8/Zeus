@@ -2,12 +2,15 @@
 #define COMPILER_H
 
 #include "dynarr.h"
+#define SCOPES_LENGTH 32
+#define SYMBOLS_LENGTH 255
+#define SYMBOL_NAME_LENGTH 16
 
 typedef struct symbol
 {
     size_t local;
     size_t name_len;
-    char name[255];
+    char name[SYMBOL_NAME_LENGTH];
 }Symbol;
 
 typedef struct scope
@@ -15,12 +18,12 @@ typedef struct scope
     size_t depth;
     size_t locals;
     size_t symbols_len;
-    Symbol symbols[255];
+    Symbol symbols[SYMBOLS_LENGTH];
 }Scope;
 
 typedef struct compiler{
     size_t depth;
-    Scope scopes[255];
+    Scope scopes[SCOPES_LENGTH];
 
     DynArr *constants;
     DynArr *chunks;

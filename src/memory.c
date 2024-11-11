@@ -1,9 +1,11 @@
 #include "memory.h"
 #include "lzarena.h"
+#include "lzdynalloc.h"
 #include <stdio.h>
 #include <stdlib.h>
 
 static LZRegion *region = NULL;
+static LZDynAllocNode *dynalloc = NULL;
 static DynArrAllocator dynarr_allocator = {0};
 static LZHTableAllocator lzhtable_allocator = {0};
 
@@ -12,7 +14,7 @@ void *region_alloc(size_t size, void *ctx){
 	void *ptr = LZREGION_ALLOC(size, region);
 
 	if(ptr == NULL){
-        printf("out of memory\n");
+        fprintf(stderr, "out of memory: %ld/%ld\n", region->used, region->buff_size);
 		memory_deinit();
 		exit(EXIT_FAILURE);
 	}
@@ -22,7 +24,15 @@ void *region_alloc(size_t size, void *ctx){
 
 void *region_realloc(void *ptr, size_t new_size, size_t old_size, void *ctx){
     void *new_ptr = region_alloc(new_size, ctx);
+
+	if(!new_ptr){
+		fprintf(stderr, "out of memory: %ld/%ld\n", region->used, region->buff_size);
+		memory_deinit();
+		exit(EXIT_FAILURE);
+	}
+
     memcpy(new_ptr, ptr, old_size);
+
 	return new_ptr;
 }
 
@@ -30,18 +40,52 @@ void region_dealloc(void *ptr, size_t size, void *ctx){
 	// do nothing
 }
 
+void *dyn_alloc(size_t size, void *ctx){
+	LZDynAllocNode *node = (LZDynAllocNode *)ctx;
+	void *ptr = lzdynalloc_node_alloc(size, node);
+
+	if(!ptr){
+		fprintf(stderr, "out of memory: %ld/%ld\n", region->used, region->buff_size);
+		memory_deinit();
+		exit(EXIT_FAILURE);
+	}
+
+	return ptr;
+}
+
+void *dyn_realloc(void *ptr, size_t new_size, size_t old_size, void *ctx){
+	LZDynAllocNode *node = (LZDynAllocNode *)ctx;
+	void *new_ptr = lzdynalloc_node_realloc(new_size, ptr, node);
+
+	if(!new_ptr){
+		fprintf(stderr, "out of memory: %ld/%ld\n", region->used, region->buff_size);
+		memory_deinit();
+		exit(EXIT_FAILURE);
+	}
+
+	return new_ptr;
+
+}
+
+void dyn_dealloc(void *ptr, size_t size, void *ctx){
+	if(!ptr) return;
+	LZDynAllocNode *node = (LZDynAllocNode *)ctx;
+	lzdynalloc_node_dealloc(ptr, node);
+}
+
 int memory_init(){
-	region = lzregion_create(33554432);
+	region = lzregion_create(524288);
+	dynalloc = lzdynalloc_node_raw(4096, LZREGION_ALLOC(4096, region));
 
-	dynarr_allocator.alloc = region_alloc;
-	dynarr_allocator.realloc = region_realloc;
-	dynarr_allocator.dealloc = region_dealloc;
-	dynarr_allocator.ctx = region;
+	dynarr_allocator.alloc = dyn_alloc;
+	dynarr_allocator.realloc = dyn_realloc;
+	dynarr_allocator.dealloc = dyn_dealloc;
+	dynarr_allocator.ctx = dynalloc;
 
-    lzhtable_allocator.alloc = region_alloc;
-	lzhtable_allocator.realloc = region_realloc;
-	lzhtable_allocator.dealloc = region_dealloc;
-	lzhtable_allocator.ctx = region;
+    lzhtable_allocator.alloc = dyn_alloc;
+	lzhtable_allocator.realloc = dyn_realloc;
+	lzhtable_allocator.dealloc = dyn_dealloc;
+	lzhtable_allocator.ctx = dynalloc;
 
     return 0;
 }
@@ -50,11 +94,16 @@ void memory_deinit(){
 	lzregion_destroy(region);
 }
 
+void memory_report(){
+	printf("Region: %ld(%.2f)/%ld\n", region->used, region->used * 1.0 / region->buff_size * 100.0, region->buff_size);
+}
+
 void *memory_alloc(size_t size){
     void *ptr = LZREGION_ALLOC(size, region);
 
 	if(ptr == NULL){
-        printf("out of memory\n");
+        fprintf(stderr, "out of memory: %ld/%ld\n", region->used, region->buff_size);
+		fprintf(stderr, "request: %ld\n", size);
 		memory_deinit();
 		exit(EXIT_FAILURE);
 	}

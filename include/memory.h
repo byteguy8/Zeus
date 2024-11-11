@@ -7,6 +7,7 @@
 
 int memory_init();
 void memory_deinit();
+void memory_report();
 void *memory_alloc(size_t size);
 DynArr *memory_dynarr(size_t size);
 DynArrPtr *memory_dynarr_ptr();
