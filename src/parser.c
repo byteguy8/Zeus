@@ -113,6 +113,7 @@ Stmt *parse_expr_stmt(Parser *parser);
 Stmt *parse_print_stmt(Parser *parser);
 Stmt *parse_var_decl_stmt(Parser *parser);
 DynArrPtr *parse_block_stmt(Parser *parser);
+Stmt *parse_if_stmt(Parser *parser);
 
 Expr *parse_expr(Parser *parser){
 	return parse_assign(parser);
@@ -145,7 +146,7 @@ Expr *parse_assign(Parser *parser){
 Expr *parse_or(Parser *parser){
     Expr *left = parse_and(parser);
 
-	while(match(parser, 6, OR_TOKTYPE)){
+	while(match(parser, 1, OR_TOKTYPE)){
 		Token *operator = previous(parser);
 		Expr *right = parse_and(parser);
 
@@ -163,7 +164,7 @@ Expr *parse_or(Parser *parser){
 Expr *parse_and(Parser *parser){
     Expr *left = parse_comparison(parser);
 
-	while(match(parser, 6, AND_TOKTYPE)){
+	while(match(parser, 1, AND_TOKTYPE)){
 		Token *operator = previous(parser);
 		Expr *right = parse_comparison(parser);
 
@@ -324,6 +325,42 @@ Expr *parse_literal(Parser *parser){
     return NULL;
 }
 
+Stmt *parse_stmt(Parser *parser){
+    if(match(parser, 1, PRINT_TOKTYPE))
+        return parse_print_stmt(parser);
+
+    if(match(parser, 1, VAR_TOKTYPE))
+        return parse_var_decl_stmt(parser);
+
+    if(match(parser, 1, LEFT_BRACKET_TOKTYPE)){
+        DynArrPtr *stmts = parse_block_stmt(parser);
+        
+        BlockStmt *block_stmt = (BlockStmt *)memory_alloc(sizeof(BlockStmt));
+        block_stmt->stmts = stmts;
+
+        return create_stmt(BLOCK_STMTTYPE, block_stmt);
+    }
+
+	if(match(parser, 1, IF_TOKTYPE))
+		return parse_if_stmt(parser);
+
+    return parse_expr_stmt(parser);
+}
+
+Stmt *parse_expr_stmt(Parser *parser){
+    Expr *expr = parse_expr(parser);
+    consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of statement expression.");
+    
+    ExprStmt *expr_stmt = (ExprStmt *)memory_alloc(sizeof(ExprStmt));
+    expr_stmt->expr = expr;
+
+    Stmt *stmt = (Stmt *)memory_alloc(sizeof(Stmt));
+    stmt->type = EXPR_STMTTYPE;
+    stmt->sub_stmt = expr_stmt;
+
+    return stmt;
+}
+
 Stmt *parse_print_stmt(Parser *parser){
     Token *print_token = previous(parser);
     Expr *expr = parse_expr(parser);
@@ -375,37 +412,29 @@ DynArrPtr *parse_block_stmt(Parser *parser){
     return stmts;
 }
 
-Stmt *parse_stmt(Parser *parser){
-    if(match(parser, 1, PRINT_TOKTYPE))
-        return parse_print_stmt(parser);
+Stmt *parse_if_stmt(Parser *parser){
+	Expr *if_condition = NULL;
+	DynArrPtr *if_stmts = NULL;
+	DynArrPtr *else_stmts = NULL;
 
-    if(match(parser, 1, VAR_TOKTYPE))
-        return parse_var_decl_stmt(parser);
+	consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'if' keyword.");
+	if_condition = parse_expr(parser);
+	consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' at end of if condition.");
 
-    if(match(parser, 1, LEFT_BRACKET_TOKTYPE)){
-        DynArrPtr *stmts = parse_block_stmt(parser);
-        
-        BlockStmt *block_stmt = (BlockStmt *)memory_alloc(sizeof(BlockStmt));
-        block_stmt->stmts = stmts;
+	consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of if body.");
+	if_stmts = parse_block_stmt(parser);
 
-        return create_stmt(BLOCK_STMTTYPE, block_stmt);
-    }
+	if(match(parser, 1, ELSE_TOKTYPE)){
+		consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of else body.");
+		else_stmts = parse_block_stmt(parser);
+	}
 
-    return parse_expr_stmt(parser);
-}
+	IfStmt *if_stmt = (IfStmt *)memory_alloc(sizeof(IfStmt));
+	if_stmt->if_condition = if_condition;
+	if_stmt->if_stmts = if_stmts;
+	if_stmt->else_stmts = else_stmts;
 
-Stmt *parse_expr_stmt(Parser *parser){
-    Expr *expr = parse_expr(parser);
-    consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of statement expression.");
-    
-    ExprStmt *expr_stmt = (ExprStmt *)memory_alloc(sizeof(ExprStmt));
-    expr_stmt->expr = expr;
-
-    Stmt *stmt = (Stmt *)memory_alloc(sizeof(Stmt));
-    stmt->type = EXPR_STMTTYPE;
-    stmt->sub_stmt = expr_stmt;
-
-    return stmt;
+	return create_stmt(IF_STMTTYPE, if_stmt);
 }
 
 Parser *parser_create(){

@@ -9,7 +9,8 @@ typedef enum stmt_type{
     EXPR_STMTTYPE,
     PRINT_STMTTYPE,
     VAR_DECL_STMTTYPE,
-    BLOCK_STMTTYPE
+    BLOCK_STMTTYPE,
+	IF_STMTTYPE
 }StmtType;
 
 typedef struct stmt{
@@ -35,5 +36,11 @@ typedef struct var_decl_stmt
 typedef struct block_stmt{
     DynArrPtr *stmts;
 }BlockStmt;
+
+typedef struct if_stmt{
+	Expr *if_condition;
+	DynArrPtr *if_stmts;
+	DynArrPtr *else_stmts;
+}IfStmt;
 
 #endif

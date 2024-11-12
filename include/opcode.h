@@ -25,7 +25,10 @@ typedef enum opcode{
     LSET_OPCODE, LGET_OPCODE,
 
     PRT_OPCODE,
-    POP_OPCODE
+    POP_OPCODE,
+
+    JMP_OPCODE,
+	JIF_OPCODE
 }OPCode;
 
 #endif

@@ -114,9 +114,21 @@ Symbol *declare(Token *identifier_token, Compiler *compiler){
     return symbol;
 }
 
-void write_chunk(uint8_t chunk, Compiler *compiler){
+size_t chunks_len(Compiler *compiler){
+	DynArr *chunks = compiler->chunks;
+	return chunks->used;
+}
+
+size_t write_chunk(uint8_t chunk, Compiler *compiler){
     DynArr *chunks = compiler->chunks;
+	size_t index = chunks->used;
     dynarr_insert(&chunk, chunks);
+	return index;
+}
+
+void update_chunk(size_t index, uint8_t chunk, Compiler *compiler){
+	DynArr *chunks = compiler->chunks;
+	dynarr_set(&chunk, index, chunks);
 }
 
 void write_i64(int64_t i64, Compiler *compiler){
@@ -365,6 +377,52 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             
             break;
         }
+		case IF_STMTTYPE:{
+			IfStmt *if_stmt = (IfStmt *)stmt->sub_stmt;
+			Expr *if_condition = if_stmt->if_condition;
+			DynArrPtr *if_stmts = if_stmt->if_stmts;
+			DynArrPtr *else_stmts = if_stmt->else_stmts;
+
+			compile_expr(if_condition, compiler);
+			write_chunk(JIF_OPCODE, compiler);
+			size_t jif_index = write_chunk(0, compiler);
+
+			size_t len_bef_if = chunks_len(compiler);
+			scope_in_soft(compiler);
+
+			for(size_t i = 0; i < if_stmts->used; i++){
+				Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, if_stmts);
+				compile_stmt(stmt, compiler);
+			}
+
+			scope_out(compiler);
+            
+            write_chunk(JMP_OPCODE, compiler);
+            size_t jmp_index = write_chunk(0, compiler);
+
+			size_t len_af_if = chunks_len(compiler);
+			size_t if_len = len_af_if - len_bef_if;
+
+			update_chunk(jif_index, (uint8_t)if_len, compiler);
+
+            if(else_stmts){
+                size_t len_bef_else = chunks_len(compiler);
+                scope_in_soft(compiler);
+
+                for(size_t i = 0; i < else_stmts->used; i++){
+                    Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, else_stmts);
+                    compile_stmt(stmt, compiler);
+                }
+
+			    scope_out(compiler);
+                size_t len_af_else = chunks_len(compiler);
+                size_t else_len = len_af_else - len_bef_else;
+
+                update_chunk(jmp_index, (uint8_t)else_len, compiler);
+            }
+            
+			break;
+		}
         default:{
             assert("Illegal stmt type");
             break;

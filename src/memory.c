@@ -46,6 +46,7 @@ void *dyn_alloc(size_t size, void *ctx){
 
 	if(!ptr){
 		fprintf(stderr, "out of memory: %ld/%ld\n", region->used, region->buff_size);
+        fprintf(stderr, "request: %ld\n", size);
 		memory_deinit();
 		exit(EXIT_FAILURE);
 	}
@@ -59,6 +60,7 @@ void *dyn_realloc(void *ptr, size_t new_size, size_t old_size, void *ctx){
 
 	if(!new_ptr){
 		fprintf(stderr, "out of memory: %ld/%ld\n", region->used, region->buff_size);
+        fprintf(stderr, "request: %ld\n", new_size);
 		memory_deinit();
 		exit(EXIT_FAILURE);
 	}
@@ -74,8 +76,8 @@ void dyn_dealloc(void *ptr, size_t size, void *ctx){
 }
 
 int memory_init(){
-	region = lzregion_create(524288);
-	dynalloc = lzdynalloc_node_raw(4096, LZREGION_ALLOC(4096, region));
+	region = lzregion_create(33554432);
+	dynalloc = lzdynalloc_node_raw(16777216, LZREGION_ALLOC(16777216, region));
 
 	dynarr_allocator.alloc = dyn_alloc;
 	dynarr_allocator.realloc = dyn_realloc;

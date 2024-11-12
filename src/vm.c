@@ -298,6 +298,18 @@ void execute(uint8_t chunk, VM *vm){
             pop(vm);
             break;
         }
+        case JMP_OPCODE:{
+            uint8_t jmp_value = advance(vm);
+            vm->ip += (size_t)jmp_value;
+            break;
+        }
+		case JIF_OPCODE:{
+			uint8_t condition = pop_bool_assert(vm, "Expect 'bool' as conditional value to jump.");
+			uint8_t jmp_value = advance(vm);
+
+			if(!condition) vm->ip += (size_t)jmp_value;
+			break;
+		}
         default:{
             assert("Illegal opcode");
         }
