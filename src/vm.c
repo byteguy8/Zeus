@@ -302,7 +302,7 @@ void execute(uint8_t chunk, VM *vm){
             break;
         }
         case JMP_OPCODE:{
-            uint8_t jmp_value = advance(vm);
+            int32_t jmp_value = read_i32(vm);
             vm->ip += (size_t)jmp_value;
             break;
         }
