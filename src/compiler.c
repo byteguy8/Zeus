@@ -131,17 +131,34 @@ void update_chunk(size_t index, uint8_t chunk, Compiler *compiler){
 	dynarr_set(&chunk, index, chunks);
 }
 
-void write_i64(int64_t i64, Compiler *compiler){
+size_t write_i32(int32_t i32, Compiler *compiler){
+	size_t index = chunks_len(compiler);
+
+	uint8_t bytes[4];
+	descompose_i32(i32, bytes);
+
+	for(size_t i = 0; i < 4; i++)
+		write_chunk(bytes[i], compiler);
+
+	return index;
+}
+
+void update_i32(size_t index, int32_t i32, Compiler *compiler){
+	uint8_t bytes[4];
+	DynArr *chunks = compiler->chunks;
+
+	descompose_i32(i32, bytes);
+
+	for(size_t i = 0; i < 4; i++)
+		dynarr_set(bytes + i, index + i, chunks);
+}
+
+size_t write_i64_const(int64_t i64, Compiler *compiler){
     DynArr *constants = compiler->constants;
     int32_t index = (int32_t) constants->used;
 
     dynarr_insert(&i64, constants);
-    
-    uint8_t bytes[4];
-    descompose_i32(index, bytes);
-
-    for (size_t i = 0; i < 4; i++)
-        write_chunk(bytes[i], compiler);
+	return write_i32(index, compiler);
 }
 
 void compile_expr(Expr *expr, Compiler *compiler){
@@ -160,7 +177,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             int64_t value = *(int64_t *)token->literal;
 
             write_chunk(INT_OPCODE, compiler);
-            write_i64(value, compiler);
+            write_i64_const(value, compiler);
 
             break;
         }
@@ -385,8 +402,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
 			compile_expr(if_condition, compiler);
 			write_chunk(JIF_OPCODE, compiler);
-			size_t jif_index = write_chunk(0, compiler);
-
+			size_t jif_index = write_i32(0, compiler);
+			//> if branch body
 			size_t len_bef_if = chunks_len(compiler);
 			scope_in_soft(compiler);
 
@@ -398,14 +415,15 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			scope_out(compiler);
             
             write_chunk(JMP_OPCODE, compiler);
-            size_t jmp_index = write_chunk(0, compiler);
+            size_t jmp_index = write_i32(0, compiler);
 
 			size_t len_af_if = chunks_len(compiler);
 			size_t if_len = len_af_if - len_bef_if;
-
-			update_chunk(jif_index, (uint8_t)if_len, compiler);
+			//< if branch body
+			update_i32(jif_index, (int32_t)if_len, compiler);
 
             if(else_stmts){
+				//> else body
                 size_t len_bef_else = chunks_len(compiler);
                 scope_in_soft(compiler);
 
@@ -417,8 +435,9 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			    scope_out(compiler);
                 size_t len_af_else = chunks_len(compiler);
                 size_t else_len = len_af_else - len_bef_else;
+				//< else body
 
-                update_chunk(jmp_index, (uint8_t)else_len, compiler);
+				update_i32(jmp_index, (int32_t)else_len, compiler);
             }
             
 			break;
