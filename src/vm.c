@@ -21,7 +21,7 @@ static void error(VM *vm, char *msg, ...){
     longjmp(err_jmp, 1);
 }
 
-int32_t compose_i32(uint8_t *bytes){
+static int32_t compose_i32(uint8_t *bytes){
     return ((int32_t)bytes[3] << 24) | ((int32_t)bytes[2] << 16) | ((int32_t)bytes[1] << 8) | ((int32_t)bytes[0]);
 }
 
@@ -65,7 +65,7 @@ static uint8_t advance(VM *vm){
     return *(uint8_t *)dynarr_get(vm->ip++, chunks);
 }
 
-int32_t read_i32(VM *vm){
+static int32_t read_i32(VM *vm){
 	uint8_t bytes[4];
 
 	for(size_t i = 0; i < 4; i++)
@@ -74,7 +74,7 @@ int32_t read_i32(VM *vm){
 	return compose_i32(bytes);
 }
 
-int64_t read_i64_const(VM *vm){
+static int64_t read_i64_const(VM *vm){
     DynArr *constants = vm->constants;
     int32_t index = read_i32(vm);
     return *(int64_t *)dynarr_get(index, constants);
@@ -162,7 +162,7 @@ void assert_value_type(ValueType type, Value *value, char *err_msg, ...){
     longjmp(err_jmp, 1);
 }
 
-void execute(uint8_t chunk, VM *vm){
+static void execute(uint8_t chunk, VM *vm){
     switch (chunk){
         case NULL_OPCODE:{
             Value value = {0};
@@ -303,14 +303,35 @@ void execute(uint8_t chunk, VM *vm){
         }
         case JMP_OPCODE:{
             int32_t jmp_value = read_i32(vm);
-            vm->ip += (size_t)jmp_value;
+            if(jmp_value == 0) break;
+            
+            if(jmp_value > 0) vm->ip += jmp_value - 1;
+            else vm->ip += jmp_value - 5;
+
             break;
         }
 		case JIF_OPCODE:{
 			uint8_t condition = pop_bool_assert(vm, "Expect 'bool' as conditional value.");
 			int32_t jmp_value = read_i32(vm);
+			if(jmp_value == 0) break;
 
-			if(!condition) vm->ip += (size_t)jmp_value;
+            if(!condition){
+                if(jmp_value > 0) vm->ip += jmp_value - 1;
+                else vm->ip += jmp_value - 5;
+            }
+
+			break;
+		}
+		case JIT_OPCODE:{
+			uint8_t condition = pop_bool_assert(vm, "Expect 'bool' as conditional value.");
+			int32_t jmp_value = read_i32(vm);
+			if(jmp_value == 0) break;
+
+			if(condition){
+                if(jmp_value > 0) vm->ip += jmp_value - 1;
+                else vm->ip += jmp_value - 5;
+            }
+
 			break;
 		}
         default:{

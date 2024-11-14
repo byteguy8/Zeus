@@ -45,6 +45,7 @@ int main(int argc, char const *argv[]){
     add_keyword("and", AND_TOKTYPE, keywords);
 	add_keyword("if", IF_TOKTYPE, keywords);
 	add_keyword("else", ELSE_TOKTYPE, keywords);
+	add_keyword("while", WHILE_TOKTYPE, keywords);
 
     if(lexer_scan(source, tokens, keywords, scanner)) goto CLEAN_UP;
     if(parser_parse(tokens, stmt, parser)) goto CLEAN_UP;

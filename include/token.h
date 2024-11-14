@@ -22,6 +22,7 @@ typedef enum token_type{
     FALSE_TOKTYPE, TRUE_TOKTYPE,
     PRINT_TOKTYPE, VAR_TOKTYPE,
 	IF_TOKTYPE, ELSE_TOKTYPE,
+	WHILE_TOKTYPE,
 
     //types
     INT_TOKTYPE,

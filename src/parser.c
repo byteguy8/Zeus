@@ -114,6 +114,7 @@ Stmt *parse_print_stmt(Parser *parser);
 Stmt *parse_var_decl_stmt(Parser *parser);
 DynArrPtr *parse_block_stmt(Parser *parser);
 Stmt *parse_if_stmt(Parser *parser);
+Stmt *parse_while_stmt(Parser *parser);
 
 Expr *parse_expr(Parser *parser){
 	return parse_assign(parser);
@@ -344,6 +345,9 @@ Stmt *parse_stmt(Parser *parser){
 	if(match(parser, 1, IF_TOKTYPE))
 		return parse_if_stmt(parser);
 
+	if(match(parser, 1, WHILE_TOKTYPE))
+		return parse_while_stmt(parser);
+
     return parse_expr_stmt(parser);
 }
 
@@ -435,6 +439,24 @@ Stmt *parse_if_stmt(Parser *parser){
 	if_stmt->else_stmts = else_stmts;
 
 	return create_stmt(IF_STMTTYPE, if_stmt);
+}
+
+Stmt *parse_while_stmt(Parser *parser){
+	Expr *condition = NULL;
+	DynArrPtr *stmts = NULL;
+
+	consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'while' keyword.");
+	condition = parse_expr(parser);
+	consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' at end of while statement condition.");
+
+	consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of while statement body.");
+	stmts = parse_block_stmt(parser);
+
+	WhileStmt *while_stmt = (WhileStmt *)memory_alloc(sizeof(WhileStmt));
+	while_stmt->condition = condition;
+	while_stmt->stmts = stmts;
+
+	return create_stmt(WHILE_STMTTYPE, while_stmt);
 }
 
 Parser *parser_create(){

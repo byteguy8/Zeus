@@ -401,8 +401,10 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			DynArrPtr *else_stmts = if_stmt->else_stmts;
 
 			compile_expr(if_condition, compiler);
+			
 			write_chunk(JIF_OPCODE, compiler);
 			size_t jif_index = write_i32(0, compiler);
+			
 			//> if branch body
 			size_t len_bef_if = chunks_len(compiler);
 			scope_in_soft(compiler);
@@ -420,7 +422,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			size_t len_af_if = chunks_len(compiler);
 			size_t if_len = len_af_if - len_bef_if;
 			//< if branch body
-			update_i32(jif_index, (int32_t)if_len, compiler);
+			
+			update_i32(jif_index, (int32_t)if_len + 1, compiler);
 
             if(else_stmts){
 				//> else body
@@ -437,9 +440,40 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 size_t else_len = len_af_else - len_bef_else;
 				//< else body
 
-				update_i32(jmp_index, (int32_t)else_len, compiler);
+				update_i32(jmp_index, (int32_t)else_len + 1, compiler);
             }
             
+			break;
+		}
+		case WHILE_STMTTYPE:{
+			WhileStmt *while_stmt = (WhileStmt *)stmt->sub_stmt;
+			Expr *condition = while_stmt->condition;
+			DynArrPtr *stmts = while_stmt->stmts;
+
+			write_chunk(JMP_OPCODE, compiler);
+			size_t jmp_index = write_i32(0, compiler);
+
+			size_t len_bef_body = chunks_len(compiler);
+			scope_in_soft(compiler);
+
+			for(size_t i = 0; i < stmts->used; i++){
+				Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
+				compile_stmt(stmt, compiler);
+			}
+			
+			scope_out(compiler);
+            size_t len_af_body = chunks_len(compiler);
+			size_t body_len = len_af_body - len_bef_body;
+
+            update_i32(jmp_index, (int32_t)body_len + 1, compiler);
+
+			compile_expr(condition, compiler);
+            size_t len_af_while = chunks_len(compiler);
+			size_t while_len = len_af_while - len_bef_body;
+
+			write_chunk(JIT_OPCODE, compiler);
+			write_i32(-((int32_t)while_len), compiler);
+
 			break;
 		}
         default:{
