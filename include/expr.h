@@ -12,7 +12,8 @@ typedef enum expr_type{
 	BINARY_EXPRTYPE,
     COMPARISON_EXPRTYPE,
     LOGICAL_EXPRTYPE,
-    ASSIGN_EXPRTYPE
+    ASSIGN_EXPRTYPE,
+	COMPOUND_EXPRTYPE,
 }ExprType;
 
 typedef struct expr{
@@ -70,5 +71,11 @@ typedef struct assign_expr
     Token *identifier_token;
     Expr *value_expr;
 }AssignExpr;
+
+typedef struct compound_expr{
+	Token *identifier_token;
+	Token *operator;
+	Expr *right;
+}CompoundExpr;
 
 #endif

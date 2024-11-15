@@ -339,6 +339,49 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             break;
         }
+		case COMPOUND_EXPRTYPE:{
+			CompoundExpr *compound_expr = (CompoundExpr *)expr->sub_expr;
+			Token *identifier_token = compound_expr->identifier_token;
+			Token *operator = compound_expr->operator;
+			Expr *right = compound_expr->right;
+
+			Symbol *symbol = get(identifier_token, compiler);
+
+			if(symbol->is_const)
+				error(compiler, "'%s' declared as constant. Can't change its value.", identifier_token->lexeme);
+			
+			write_chunk(LGET_OPCODE, compiler);
+			write_chunk(symbol->local, compiler);
+
+			compile_expr(right, compiler);			
+
+			switch(operator->type){
+				case COMPOUND_ADD_TOKTYPE:{
+					write_chunk(ADD_OPCODE, compiler);
+					break;
+				}
+				case COMPOUND_SUB_TOKTYPE:{
+					write_chunk(SUB_OPCODE, compiler);
+					break;
+				}
+				case COMPOUND_MUL_TOKTYPE:{
+					write_chunk(MUL_OPCODE, compiler);
+					break;
+				}
+				case COMPOUND_DIV_TOKTYPE:{
+					write_chunk(DIV_OPCODE, compiler);
+					break;
+				}
+				default:{
+					assert("Illegal compound type");
+				}
+			}
+
+			write_chunk(LSET_OPCODE, compiler);
+			write_chunk(symbol->local, compiler);
+	
+			break;
+		}
         default:{
             assert("Illegal expression type");
         }

@@ -122,6 +122,30 @@ Expr *parse_expr(Parser *parser){
 
 Expr *parse_assign(Parser *parser){
     Expr *expr = parse_or(parser);
+	
+	if(match(parser, 4, 
+			 COMPOUND_ADD_TOKTYPE, 
+			 COMPOUND_SUB_TOKTYPE, 
+			 COMPOUND_MUL_TOKTYPE, 
+			 COMPOUND_DIV_TOKTYPE)){
+		if(expr->type != IDENTIFIER_EXPRTYPE)
+            error(
+                parser, 
+                peek(parser), 
+                "Expect identifier in left side of assignment expression.");
+
+		IdentifierExpr *identifier_expr = (IdentifierExpr *)expr->sub_expr;
+		Token *identifier_token = identifier_expr->identifier_token;
+		Token *operator = previous(parser);
+		Expr *right = parse_assign(parser);
+
+		CompoundExpr *compound_expr = (CompoundExpr *)memory_alloc(sizeof(CompoundExpr));
+		compound_expr->identifier_token = identifier_token;
+		compound_expr->operator = operator;
+		compound_expr->right = right;
+
+		return create_expr(COMPOUND_EXPRTYPE, compound_expr);
+	}
 
     if(match(parser, 1, EQUALS_TOKTYPE)){
         if(expr->type != IDENTIFIER_EXPRTYPE)

@@ -195,19 +195,23 @@ static void scan_token(Lexer *lexer){
     switch (c)
     {
         case '+':{
-            add_token(PLUS_TOKTYPE, lexer);
+			if(match('=', lexer)) add_token(COMPOUND_ADD_TOKTYPE, lexer);
+			else add_token(PLUS_TOKTYPE, lexer);
             break;
         }
         case '-':{
-            add_token(MINUS_TOKTYPE, lexer);
+			if(match('=', lexer)) add_token(COMPOUND_SUB_TOKTYPE, lexer);
+			else add_token(MINUS_TOKTYPE, lexer);
             break;
         }
         case '*':{
-            add_token(ASTERISK_TOKTYPE, lexer);
+			if(match('=', lexer)) add_token(COMPOUND_MUL_TOKTYPE, lexer);
+            else add_token(ASTERISK_TOKTYPE, lexer);
             break;
         }
         case '/':{
-            add_token(SLASH_TOKTYPE, lexer);
+			if(match('=', lexer)) add_token(COMPOUND_DIV_TOKTYPE, lexer);
+            else add_token(SLASH_TOKTYPE, lexer);
             break;
         }
         case '<':{
