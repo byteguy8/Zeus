@@ -330,6 +330,9 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             Symbol *symbol = get(identifier_token, compiler);
             
+            if(symbol->is_const)
+                error(compiler, "'%s' declared as constant. Can't change its value.", identifier_token->lexeme);
+            
             compile_expr(value_expr, compiler);
             write_chunk(LSET_OPCODE, compiler);
             write_chunk(symbol->local, compiler);
@@ -364,10 +367,16 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
         }
         case VAR_DECL_STMTTYPE:{
             VarDeclStmt *var_decl_stmt = (VarDeclStmt *)stmt->sub_stmt;
+            char is_const = var_decl_stmt->is_const;
+            char is_initialized = var_decl_stmt->is_initialized;
             Token *identifier_token = var_decl_stmt->identifier_token;
             Expr *initializer_expr = var_decl_stmt->initializer_expr;
 
+            if(is_const && !is_initialized)
+                error(compiler, "'%s' declared as constant, but is not being initialized.", identifier_token->lexeme);
+
             Symbol *symbol = declare(identifier_token, compiler);
+            symbol->is_const = is_const;
             
             if(initializer_expr == NULL) write_chunk(NULL_OPCODE, compiler);
             else compile_expr(initializer_expr, compiler);

@@ -30,6 +30,8 @@ typedef struct print_stmt{
 
 typedef struct var_decl_stmt
 {
+    char is_const;
+    char is_initialized;
     Token *identifier_token;
     Expr *initializer_expr;
 }VarDeclStmt;

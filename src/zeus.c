@@ -40,7 +40,8 @@ int main(int argc, char const *argv[]){
     add_keyword("false", FALSE_TOKTYPE, keywords);
     add_keyword("true", TRUE_TOKTYPE, keywords);
     add_keyword("print", PRINT_TOKTYPE, keywords);
-    add_keyword("var", VAR_TOKTYPE, keywords);
+    add_keyword("mut", MUT_TOKTYPE, keywords);
+    add_keyword("imut", IMUT_TOKTYPE, keywords);
     add_keyword("or", OR_TOKTYPE, keywords);
     add_keyword("and", AND_TOKTYPE, keywords);
 	add_keyword("if", IF_TOKTYPE, keywords);

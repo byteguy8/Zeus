@@ -9,6 +9,7 @@
 typedef struct symbol
 {
     size_t local;
+    char is_const;
     size_t name_len;
     char name[SYMBOL_NAME_LENGTH];
 }Symbol;

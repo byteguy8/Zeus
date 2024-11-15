@@ -330,7 +330,7 @@ Stmt *parse_stmt(Parser *parser){
     if(match(parser, 1, PRINT_TOKTYPE))
         return parse_print_stmt(parser);
 
-    if(match(parser, 1, VAR_TOKTYPE))
+    if(match(parser, 2, MUT_TOKTYPE, IMUT_TOKTYPE))
         return parse_var_decl_stmt(parser);
 
     if(match(parser, 1, LEFT_BRACKET_TOKTYPE)){
@@ -379,16 +379,22 @@ Stmt *parse_print_stmt(Parser *parser){
 }
 
 Stmt *parse_var_decl_stmt(Parser *parser){
+    char is_const = 0;
+    char is_initialized = 0;
     Token *identifier_token = NULL;
     Expr *initializer_expr = NULL;
+
+    is_const = previous(parser)->type == IMUT_TOKTYPE;
 
     identifier_token = consume(
         parser, 
         IDENTIFIER_TOKTYPE, 
         "Expect symbol name after 'var' keyword.");
     
-    if(match(parser, 1, EQUALS_TOKTYPE))
+    if(match(parser, 1, EQUALS_TOKTYPE)){
+        is_initialized = 1;
         initializer_expr = parse_expr(parser);
+    }
 
     consume(
         parser, 
@@ -396,6 +402,8 @@ Stmt *parse_var_decl_stmt(Parser *parser){
         "Expect ';' at end of symbol declaration.");
 
     VarDeclStmt *var_decl_stmt = (VarDeclStmt *)memory_alloc(sizeof(VarDeclStmt));
+    var_decl_stmt->is_const = is_const;
+    var_decl_stmt->is_initialized = is_initialized;
     var_decl_stmt->identifier_token = identifier_token;
     var_decl_stmt->initializer_expr = initializer_expr;
 
