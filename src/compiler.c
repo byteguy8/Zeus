@@ -11,11 +11,11 @@
 
 static jmp_buf err_jmp;
 
-static void error(Compiler *compiler, char *msg, ...){
+static void error(Compiler *compiler, Token *token, char *msg, ...){
     va_list args;
     va_start(args, msg);
 
-    fprintf(stderr, "Compiler error:\n\t");
+    fprintf(stderr, "Compiler error at line %d:\n\t", token->line);
     vfprintf(stderr, msg, args);
     fprintf(stderr, "\n");
 
@@ -92,7 +92,8 @@ Symbol *get(Token *identifier_token, Compiler *compiler){
         if(symbol != NULL) return symbol;
     }
 
-    error(compiler, "Symbol '%s' doesn't exists.", identifier);
+    error(compiler, identifier_token, "Symbol '%s' doesn't exists.", identifier);
+
     return NULL;
 }
 
@@ -101,7 +102,7 @@ Symbol *declare(Token *identifier_token, Compiler *compiler){
     size_t identifier_len = strlen(identifier);
 
     if(exists_local(identifier, compiler) != NULL)
-        error(compiler, "Already exists a symbol named as '%s'.", identifier);
+        error(compiler, identifier_token, "Already exists a symbol named as '%s'.", identifier);
 
     Scope *scope = current_scope(compiler);
     Symbol *symbol = &scope->symbols[scope->symbols_len++];
@@ -335,7 +336,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             Symbol *symbol = get(identifier_token, compiler);
             
             if(symbol->is_const)
-                error(compiler, "'%s' declared as constant. Can't change its value.", identifier_token->lexeme);
+                error(compiler, identifier_token, "'%s' declared as constant. Can't change its value.", identifier_token->lexeme);
             
             compile_expr(value_expr, compiler);
             write_chunk(LSET_OPCODE, compiler);
@@ -352,7 +353,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			Symbol *symbol = get(identifier_token, compiler);
 
 			if(symbol->is_const)
-				error(compiler, "'%s' declared as constant. Can't change its value.", identifier_token->lexeme);
+				error(compiler, identifier_token, "'%s' declared as constant. Can't change its value.", identifier_token->lexeme);
 			
 			write_chunk(LGET_OPCODE, compiler);
 			write_chunk(symbol->local, compiler);
@@ -420,7 +421,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             Expr *initializer_expr = var_decl_stmt->initializer_expr;
 
             if(is_const && !is_initialized)
-                error(compiler, "'%s' declared as constant, but is not being initialized.", identifier_token->lexeme);
+                error(compiler, identifier_token, "'%s' declared as constant, but is not being initialized.", identifier_token->lexeme);
 
             Symbol *symbol = declare(identifier_token, compiler);
             symbol->is_const = is_const;
