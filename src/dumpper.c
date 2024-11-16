@@ -37,7 +37,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 	printf("%.7ld ", dumpper->ip - 1);
 
     switch (chunk){
-        case NULL_OPCODE:{
+        case EMPTY_OPCODE:{
             printf("NULL_OPCODE\n");
             break;
         }

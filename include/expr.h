@@ -4,6 +4,7 @@
 #include "token.h"
 
 typedef enum expr_type{
+    EMPTY_EXPRTYPE,
 	BOOL_EXPRTYPE,
     INT_EXPRTYPE,
     GROUP_EXPRTYPE,
@@ -20,6 +21,11 @@ typedef struct expr{
 	ExprType type;
 	void *sub_expr;
 }Expr;
+
+typedef struct empty_expr
+{
+    Token *empty_token;
+}EmptyExpr;
 
 typedef struct bool_expr
 {

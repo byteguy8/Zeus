@@ -2,7 +2,7 @@
 #define OPCODE_H
 
 typedef enum opcode{
-    NULL_OPCODE,
+    EMPTY_OPCODE,
     TRUE_OPCODE, FALSE_OPCODE,
     INT_OPCODE,
     

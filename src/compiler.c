@@ -163,6 +163,10 @@ size_t write_i64_const(int64_t i64, Compiler *compiler){
 
 void compile_expr(Expr *expr, Compiler *compiler){
     switch (expr->type){
+        case EMPTY_EXPRTYPE:{
+            write_chunk(EMPTY_OPCODE, compiler);
+            break;
+        }
         case BOOL_EXPRTYPE:{
             BoolExpr *bool_expr = (BoolExpr *)expr->sub_expr;
             uint8_t value = bool_expr->value;
@@ -421,7 +425,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             Symbol *symbol = declare(identifier_token, compiler);
             symbol->is_const = is_const;
             
-            if(initializer_expr == NULL) write_chunk(NULL_OPCODE, compiler);
+            if(initializer_expr == NULL) write_chunk(EMPTY_OPCODE, compiler);
             else compile_expr(initializer_expr, compiler);
 
             write_chunk(LSET_OPCODE, compiler);

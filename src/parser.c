@@ -280,39 +280,42 @@ Expr *parse_unary(Parser *parser){
 }
 
 Expr *parse_literal(Parser *parser){
+    if(match(parser, 1, EMPTY_TOKTYPE)){
+        Token *empty_token = previous(parser);
+        
+        EmptyExpr *empty_expr = (EmptyExpr *)memory_alloc(sizeof(EmptyExpr));
+        empty_expr->empty_token = empty_token;
+
+        return create_expr(EMPTY_EXPRTYPE, empty_expr);
+    }
+
 	if(match(parser, 1, INT_TOKTYPE)){
-		IntExpr *int_expr = (IntExpr *)memory_alloc(sizeof(IntExpr));
-		int_expr->token = previous(parser);
+		Token *int_token = previous(parser);
 
-		Expr *expr = (Expr *)memory_alloc(sizeof(Expr));
-		expr->type = INT_EXPRTYPE;
-		expr->sub_expr = int_expr;
+        IntExpr *int_expr = (IntExpr *)memory_alloc(sizeof(IntExpr));
+		int_expr->token = int_token;
 
-		return expr;
+        return create_expr(INT_EXPRTYPE, int_expr);
 	}
 
     if(match(parser, 1, FALSE_TOKTYPE)){
+        Token *bool_token = previous(parser);
+
         BoolExpr *bool_expr = (BoolExpr *)memory_alloc(sizeof(BoolExpr));
         bool_expr->value = 0;
-        bool_expr->bool_token = previous(parser);
+        bool_expr->bool_token = bool_token;
 
-        Expr *expr = (Expr *)memory_alloc(sizeof(Expr));
-		expr->type = BOOL_EXPRTYPE;
-		expr->sub_expr = bool_expr;
-
-		return expr;
+        return create_expr(BOOL_EXPRTYPE, bool_expr);
     }
 
     if(match(parser, 1, TRUE_TOKTYPE)){
+        Token *bool_token = previous(parser);
+
         BoolExpr *bool_expr = (BoolExpr *)memory_alloc(sizeof(BoolExpr));
         bool_expr->value = 1;
-        bool_expr->bool_token = previous(parser);
-
-        Expr *expr = (Expr *)memory_alloc(sizeof(Expr));
-		expr->type = BOOL_EXPRTYPE;
-		expr->sub_expr = bool_expr;
-
-		return expr;
+        bool_expr->bool_token = bool_token;
+        
+        return create_expr(BOOL_EXPRTYPE, bool_expr);
     }
 
     if(match(parser, 1, LEFT_PAREN_TOKTYPE)){
@@ -324,12 +327,8 @@ Expr *parse_literal(Parser *parser){
         group_expr->expr = group_sub_expr;
         
         consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' after expression in group expression");
-
-        Expr *expr = (Expr *)memory_alloc(sizeof(Expr));
-		expr->type = GROUP_EXPRTYPE;
-		expr->sub_expr = group_expr;
-
-		return expr;
+        
+        return create_expr(GROUP_EXPRTYPE, group_expr);
     }
 
     if(match(parser, 1, IDENTIFIER_TOKTYPE)){
@@ -337,16 +336,19 @@ Expr *parse_literal(Parser *parser){
         
         IdentifierExpr *identifier_expr = (IdentifierExpr *)memory_alloc(sizeof(IdentifierExpr));
         identifier_expr->identifier_token= identifier_token;
-
-        Expr *expr = (Expr *)memory_alloc(sizeof(Expr));
-		expr->type = IDENTIFIER_EXPRTYPE;
-		expr->sub_expr = identifier_expr;
-
-		return expr;
+        
+        return create_expr(IDENTIFIER_EXPRTYPE, identifier_expr);
     }
 
 	Token *token = peek(parser);
-    error(parser, token, "Expect something: 'false', 'true' or integer, but got '%s'", token->lexeme);
+    
+    error(
+        parser, 
+        token, 
+        "Expect something: 'false', 'true' or integer, but got '%s'", 
+        token->lexeme
+    );
+    
     return NULL;
 }
 

@@ -37,6 +37,7 @@ int main(int argc, char const *argv[]){
     Compiler *compiler = compiler_create();
     VM *vm = vm_create();
 
+	add_keyword("empty", EMPTY_TOKTYPE, keywords);
     add_keyword("false", FALSE_TOKTYPE, keywords);
     add_keyword("true", TRUE_TOKTYPE, keywords);
     add_keyword("print", PRINT_TOKTYPE, keywords);

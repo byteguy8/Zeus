@@ -7,7 +7,7 @@
 #define LOCALS_SIZE 255
 
 typedef enum value_type{
-    NULL_VTYPE,
+    EMPTY_VTYPE,
     BOOL_VTYPE,
     INT_VTYPE
 }ValueType;

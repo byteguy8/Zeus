@@ -27,8 +27,8 @@ static int32_t compose_i32(uint8_t *bytes){
 
 void print_value(Value *value){
     switch (value->type){
-        case NULL_VTYPE:{
-            printf("nil\n");
+        case EMPTY_VTYPE:{
+            printf("empty\n");
             break;
         }
         case BOOL_VTYPE:{
@@ -164,7 +164,7 @@ void assert_value_type(ValueType type, Value *value, char *err_msg, ...){
 
 static void execute(uint8_t chunk, VM *vm){
     switch (chunk){
-        case NULL_OPCODE:{
+        case EMPTY_OPCODE:{
             Value value = {0};
             push(value, vm);
             break;
