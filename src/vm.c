@@ -21,17 +21,39 @@ static void error(VM *vm, char *msg, ...){
     longjmp(err_jmp, 1);
 }
 
-static void clean_up(VM *vm){
-    Obj *current = vm->head;
-    
-    while (current)
-    {
-        Obj *next = current->next;
-        memset(current, 0, sizeof(Obj));
-        free(current);
-        current = next;
-    }
+static char *join_buff(char *buffa, size_t sza, char *buffb, size_t szb){
+    size_t szc = sza + szb;
+    char *buff = malloc(szc + 1);
+
+    memcpy(buff, buffa, sza);
+    memcpy(buff + sza, buffb, szb);
+    buff[szc] = '\0';
+
+    return buff;
 }
+
+static int is_i64(Value *value, int64_t *i64){
+    if(value->type != INT_VTYPE) return 0;
+    if(i64) *i64 = value->literal.i64;
+    return 1;
+}
+
+static int is_str(Value *value, Str **str){
+    if(value->type != OBJ_VTYPE) return 0;
+    
+    Obj *obj = value->literal.obj;
+
+    if(obj->type == STRING_OTYPE){
+        Str *ostr = &obj->value.str;
+        if(str) *str = ostr;
+    
+        return 1;
+    }
+
+    return 0;
+}
+
+#define TO_STR(v)(&v->literal.obj->value.str)
 
 static int32_t compose_i32(uint8_t *bytes){
     return ((int32_t)bytes[3] << 24) | ((int32_t)bytes[2] << 16) | ((int32_t)bytes[1] << 8) | ((int32_t)bytes[0]);
@@ -110,6 +132,35 @@ static int64_t read_i64_const(VM *vm){
     return *(int64_t *)dynarr_get(index, constants);
 }
 
+static void destroy_obj(Obj *obj, VM *vm){
+    Obj *prev = obj->prev;
+    Obj *next = obj->next;
+
+    if(prev) prev->next = next;
+	if(next) next->prev = prev;
+
+	if(vm->head == obj) vm->head = next;
+	if(vm->tail == obj) vm->tail = prev;
+
+	switch(obj->type){
+		case STRING_OTYPE:{
+			Str *str = (Str *)&obj->value.str;
+			if(!str->core) free(str->buff);
+			break;
+		}
+		default:{
+			assert("Illegal object type");
+		}
+	}
+
+	free(obj);
+}
+
+static void clean_up(VM *vm){
+    while (vm->head)
+        destroy_obj(vm->head, vm);
+}
+
 static Obj *create_obj(ObjType type, VM *vm){
     Obj *obj = malloc(sizeof(Obj));
     
@@ -160,11 +211,11 @@ void push_i64(int64_t i64, VM *vm){
     push(value, vm);
 }
 
-void push_string(char *buff, VM *vm){
+void push_string(char *buff, char core, VM *vm){
     Obj *obj = create_obj(STRING_OTYPE, vm);
     Str *str = &obj->value.str;
 
-    str->core = 1;
+    str->core = core;
     str->len = strlen(buff);
     str->buff = buff;
     
@@ -248,13 +299,37 @@ static void execute(uint8_t chunk, VM *vm){
 		case STRING_OPCODE:{
 			uint32_t hash = (uint32_t)read_i32(vm);
             char *str = lzhtable_hash_get(hash, vm->strings);
-            push_string(str, vm);
+            push_string(str, 1, vm);
 			break;
 		}
         case ADD_OPCODE:{
-            int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
-            int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
+            Value *vb = pop(vm);
+            Value *va = pop(vm);
+
+            if(is_str(va, NULL)){
+                Str *astr = TO_STR(va);
+                Str *bstr = NULL;
+
+                if(!is_str(vb, &bstr))
+                    error(vm, "Expect string at right side of string concatenation.");
+
+                char *buff = join_buff(astr->buff, astr->len, bstr->buff, bstr->len);
+                push_string(buff, 0, vm);
+
+                break;
+            }
+
+            if(!is_i64(va, NULL))
+                error(vm, "Expect int at left side of string sum.");
+
+            if(!is_i64(vb, NULL))
+                error(vm, "Expect int at right side of string sum.");
+
+            int64_t right = vb->literal.i64;
+            int64_t left = va->literal.i64;
+            
             push_i64(left + right, vm);
+            
             break;
         }
         case SUB_OPCODE:{
