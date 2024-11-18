@@ -21,15 +21,33 @@ static void error(VM *vm, char *msg, ...){
     longjmp(err_jmp, 1);
 }
 
-static char *join_buff(char *buffa, size_t sza, char *buffb, size_t szb){
+static char *join_buff(char *buffa, size_t sza, char *buffb, size_t szb, VM *vm){
     size_t szc = sza + szb;
     char *buff = malloc(szc + 1);
+
+	if(!buff)
+		error(vm, "Failed to create buffer: out of memory.");
 
     memcpy(buff, buffa, sza);
     memcpy(buff + sza, buffb, szb);
     buff[szc] = '\0';
 
     return buff;
+}
+
+static char *multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm){
+	size_t sz = szbuff * by;
+	char *b = malloc(sz + 1);
+
+	if(!b)
+		error(vm, "failed to create buffer: out of memory.");
+
+	for(size_t i = 0; i < by; i++)
+		memcpy(b + (i * szbuff), buff, szbuff);
+
+	b[sz] = '\0';
+
+	return b;
 }
 
 static int is_i64(Value *value, int64_t *i64){
@@ -313,7 +331,7 @@ static void execute(uint8_t chunk, VM *vm){
                 if(!is_str(vb, &bstr))
                     error(vm, "Expect string at right side of string concatenation.");
 
-                char *buff = join_buff(astr->buff, astr->len, bstr->buff, bstr->len);
+                char *buff = join_buff(astr->buff, astr->len, bstr->buff, bstr->len, vm);
                 push_string(buff, 0, vm);
 
                 break;
@@ -339,10 +357,55 @@ static void execute(uint8_t chunk, VM *vm){
             break;
         }
         case MUL_OPCODE:{
-            int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
-            int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
-            push_i64(left * right, vm);
+            Value *vb = pop(vm);
+            Value *va = pop(vm);
+
+            if(is_str(va, NULL)){
+                Str *str = TO_STR(va);
+                int64_t by = -1;
+
+                if(!is_i64(vb, &by))
+                    error(vm, "Expect integer at right side of string multiplication.");
+
+				if(by < 0)
+					error(vm, "Negative values not allowed in string multiplication.");
+
+                char *buff = multiply_buff(str->buff, str->len, (size_t)by, vm);
+                push_string(buff, 0, vm);
+
+                break;
+            }
+
+			if(is_str(vb, NULL)){
+                Str *str = TO_STR(vb);
+                int64_t by = -1;
+
+                if(!is_i64(va, &by))
+                    error(vm, "Expect integer at left side of string multiplication.");
+
+				if(by < 0)
+					error(vm, "Negative values not allowed in string multiplication.");
+
+                char *buff = multiply_buff(str->buff, str->len, (size_t)by, vm);
+                push_string(buff, 0, vm);
+
+                break;
+            }
+
+
+            if(!is_i64(va, NULL))
+                error(vm, "Expect int at left side of string sum.");
+
+            if(!is_i64(vb, NULL))
+                error(vm, "Expect int at right side of string sum.");
+
+            int64_t right = vb->literal.i64;
+            int64_t left = va->literal.i64;
+            
+            push_i64(left + right, vm);
+            
             break;
+
         }
         case DIV_OPCODE:{
             int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
