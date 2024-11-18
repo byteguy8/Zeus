@@ -2,11 +2,13 @@
 #define XPR_H
 
 #include "token.h"
+#include <stdint.h>
 
 typedef enum expr_type{
     EMPTY_EXPRTYPE,
 	BOOL_EXPRTYPE,
     INT_EXPRTYPE,
+	STRING_EXPRTYPE,
     GROUP_EXPRTYPE,
     IDENTIFIER_EXPRTYPE,
     UNARY_EXPRTYPE,
@@ -36,6 +38,11 @@ typedef struct bool_expr
 typedef struct int_expr{
 	Token *token;
 }IntExpr;
+
+typedef struct string_expr{
+	uint32_t hash;
+	Token *string_token;
+}StringExpr;
 
 typedef struct group_expr
 {

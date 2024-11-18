@@ -21,8 +21,34 @@ static void error(VM *vm, char *msg, ...){
     longjmp(err_jmp, 1);
 }
 
+static void clean_up(VM *vm){
+    Obj *current = vm->head;
+    
+    while (current)
+    {
+        Obj *next = current->next;
+        memset(current, 0, sizeof(Obj));
+        free(current);
+        current = next;
+    }
+}
+
 static int32_t compose_i32(uint8_t *bytes){
     return ((int32_t)bytes[3] << 24) | ((int32_t)bytes[2] << 16) | ((int32_t)bytes[1] << 8) | ((int32_t)bytes[0]);
+}
+
+void print_object(Obj *object){
+    switch (object->type){
+        case STRING_OTYPE:{
+            Str *str = &object->value.str;
+            printf("%s\n", str->buff);
+            break;
+        }
+    
+        default:{
+            assert("Illegal object type");
+        }
+    }
 }
 
 void print_value(Value *value){
@@ -38,6 +64,10 @@ void print_value(Value *value){
         }
         case INT_VTYPE:{
             printf("%ld\n", value->literal.i64);   
+            break;
+        }
+        case OBJ_VTYPE:{
+            print_object(value->literal.obj);
             break;
         }
         default:{
@@ -80,6 +110,24 @@ static int64_t read_i64_const(VM *vm){
     return *(int64_t *)dynarr_get(index, constants);
 }
 
+static Obj *create_obj(ObjType type, VM *vm){
+    Obj *obj = malloc(sizeof(Obj));
+    
+    if(!obj) error(vm, "Failed to allocate object: out of memory.");
+
+    memset(obj, 0, sizeof(Obj));
+    obj->type = type;
+    
+    if(vm->tail){
+        obj->prev = vm->tail;
+        vm->tail->next = obj;
+    }else vm->head = obj;
+
+    vm->tail = obj;
+
+    return obj;
+}
+
 static void push(Value value, VM *vm){
     if(vm->temps_ptr >= TEMPS_SIZE) error(vm, "StackOverFlow");
     Value *current_value = &vm->temps[vm->temps_ptr++];
@@ -109,6 +157,21 @@ void push_i64(int64_t i64, VM *vm){
     value.type = INT_VTYPE;
     value.literal.i64 = i64;
     
+    push(value, vm);
+}
+
+void push_string(char *buff, VM *vm){
+    Obj *obj = create_obj(STRING_OTYPE, vm);
+    Str *str = &obj->value.str;
+
+    str->core = 1;
+    str->len = strlen(buff);
+    str->buff = buff;
+    
+    Value value = {0};
+    value.type = OBJ_VTYPE;
+    value.literal.obj = obj;
+
     push(value, vm);
 }
 
@@ -182,6 +245,12 @@ static void execute(uint8_t chunk, VM *vm){
             push_i64(i64, vm);
             break;
         }
+		case STRING_OPCODE:{
+			uint32_t hash = (uint32_t)read_i32(vm);
+            char *str = lzhtable_hash_get(hash, vm->strings);
+            push_string(str, vm);
+			break;
+		}
         case ADD_OPCODE:{
             int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
             int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
@@ -350,18 +419,21 @@ void vm_print_stack(VM *vm){
     print_stack(vm);
 }
 
-int vm_execute(DynArr *constants, DynArr *chunks, VM *vm){
+int vm_execute(DynArr *constants, LZHTable *strings, DynArr *chunks, VM *vm){
     if(setjmp(err_jmp) == 1) return 1;
     else{
         vm->ip = 0;
         vm->temps_ptr = 0;
         vm->constants = constants;
+		vm->strings = strings;
         vm->chunks = chunks;
 
         while (!is_at_end(vm)){
             uint8_t chunk = advance(vm);
             execute(chunk, vm);
         }
+
+        clean_up(vm);
 
         return 0;
     }

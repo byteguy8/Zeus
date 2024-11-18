@@ -186,6 +186,15 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             break;
         }
+		case STRING_EXPRTYPE:{
+			StringExpr *string_expr = (StringExpr *)expr->sub_expr;
+			uint32_t hash = string_expr->hash;
+
+			write_chunk(STRING_OPCODE, compiler);
+			write_i32((int32_t) hash, compiler);
+
+			break;
+		}
         case IDENTIFIER_EXPRTYPE:{
             IdentifierExpr *identifier_expr = (IdentifierExpr *)expr->sub_expr;
             Token *identifier_token = identifier_expr->identifier_token;

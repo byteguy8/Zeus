@@ -24,6 +24,7 @@ int main(int argc, char const *argv[]){
 
     char *source_path = (char *)argv[1];
 	RawStr *source = utils_read_source(source_path);
+	LZHTable *strings = memory_lzhtable();
     LZHTable *keywords = memory_lzhtable();
 	DynArrPtr *tokens = memory_dynarr_ptr();
 	DynArrPtr *stmt = memory_dynarr_ptr();
@@ -49,10 +50,10 @@ int main(int argc, char const *argv[]){
 	add_keyword("else", ELSE_TOKTYPE, keywords);
 	add_keyword("while", WHILE_TOKTYPE, keywords);
 
-    if(lexer_scan(source, tokens, keywords, scanner)) goto CLEAN_UP;
+    if(lexer_scan(source, tokens, strings, keywords, scanner)) goto CLEAN_UP;
     if(parser_parse(tokens, stmt, parser)) goto CLEAN_UP;
     if(compiler_compile(constants, chunks, stmt, compiler)) goto CLEAN_UP;
-    if(vm_execute(constants, chunks, vm)) goto CLEAN_UP;
+    if(vm_execute(constants, strings, chunks, vm)) goto CLEAN_UP;
 
 	memory_report();
 

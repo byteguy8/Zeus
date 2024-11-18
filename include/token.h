@@ -28,7 +28,7 @@ typedef enum token_type{
     ELSE_TOKTYPE, WHILE_TOKTYPE,
 
     //types
-    INT_TOKTYPE,
+    INT_TOKTYPE, STRING_TOKTYPE,
 
     IDENTIFIER_TOKTYPE,
     EOF_TOKTYPE

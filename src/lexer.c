@@ -101,8 +101,26 @@ static char *lexeme_range(int start, int end, Lexer *lexer){
     return lexeme;
 }
 
+static int lexeme_range_copy(
+    int start,
+    int end,
+    char *lexeme,
+    size_t lexeme_len,
+    Lexer *lexer
+){
+    int len = end - start + 1;
+
+	if(!lexeme) return len;
+    if(lexeme_len == 0) return 0;
+
+    RawStr *source = lexer->source;
+	memcpy(lexeme, source->buff + start, lexeme_len);
+
+	return 0;
+}
+
 static size_t lexeme_current_len(Lexer *lexer){
-    return lexer->current - lexer->start + 1;
+    return lexer->current - lexer->start;
 }
 
 static char *lexeme_current(Lexer *lexer){
@@ -113,7 +131,7 @@ static char *lexeme_current_copy(char *lexeme_copy, Lexer *lexer){
     size_t len = lexeme_current_len(lexer);
     RawStr *source = lexer->source;
 
-    memcpy(lexeme_copy, source->buff + lexer->start, len - 1);
+    memcpy(lexeme_copy, source->buff + lexer->start, len);
     lexeme_copy[len] = '\0';
 
     return lexeme_copy;
@@ -177,16 +195,51 @@ static void identifier(Lexer *lexer){
         advance(lexer);
     
     size_t lexeme_len = lexeme_current_len(lexer);
-    char lexeme[lexeme_len];
+    char lexeme[lexeme_len + 1];
     lexeme_current_copy(lexeme, lexer);
 
     TokenType *type = (TokenType *)lzhtable_get(
         (uint8_t *)lexeme, 
-        lexeme_len - 1, 
+        lexeme_len, 
         lexer->keywords);
 
     if(type == NULL) add_token(IDENTIFIER_TOKTYPE, lexer);
     else add_token(*type, lexer);
+}
+
+static void string(Lexer *lexer){
+	int lines = 0;
+    char empty = peek(lexer) == '"';
+	
+	while(peek(lexer) != '"')
+		if(advance(lexer) == '\n') lines++;
+
+	if(peek(lexer) != '"'){
+		error(lexer, "Unterminated string");
+		return;
+	}
+
+	size_t len = empty ? 0 : lexeme_range_copy(lexer->start + 1, lexer->current - 1, NULL, 0, lexer);
+	char str[len + 1];
+
+	lexeme_range_copy(lexer->start + 1, lexer->current - 1, str, empty ? 0 : len, lexer);
+    str[len] = 0;
+
+    advance(lexer);
+
+	uint32_t *hash = memory_alloc(sizeof(uint32_t));
+	*hash = lzhtable_hash((uint8_t *)str, len);
+
+	if(!lzhtable_hash_contains(*hash, lexer->strings, NULL)){
+		char *literal = memory_alloc(len + 1);
+		memcpy(literal, str, len);
+		literal[len] = '\0';
+
+		lzhtable_hash_put(*hash, literal, lexer->strings);
+	}
+
+	add_token_literal(hash, sizeof(uint32_t), STRING_TOKTYPE, lexer);
+	lexer->line += lines;
 }
 
 static void scan_token(Lexer *lexer){
@@ -264,6 +317,7 @@ static void scan_token(Lexer *lexer){
         default:{
             if(is_digit(c)) number(lexer);
             else if(is_alpha(c)) identifier(lexer);
+			else if(c == '"') string(lexer);
             else error(lexer, "Unknown token '%c'", c);
             break;
         }
@@ -276,12 +330,19 @@ Lexer *lexer_create(){
     return lexer;
 }
 
-int lexer_scan(RawStr *source, DynArrPtr *tokens, LZHTable *keywords, Lexer *lexer){
+int lexer_scan(
+	RawStr *source,
+	DynArrPtr *tokens,
+	LZHTable *strings,
+	LZHTable *keywords,
+	Lexer *lexer
+){
     lexer->line = 1;
     lexer->start = 0;
     lexer->current = 0;
     lexer->source = source;
     lexer->tokens = tokens;
+	lexer->strings = strings;
     lexer->keywords = keywords;
 
     while (!is_at_end(lexer)){

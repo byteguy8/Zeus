@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct _lzhtable_allocator_
+typedef struct lzhtable_allocator
 {
     void *(*alloc)(size_t byes, void *ctx);
     void *(*realloc)(void *ptr, size_t old_size, size_t new_size, void *ctx);
@@ -15,43 +15,68 @@ typedef struct _lzhtable_allocator_
     void *ctx;
 } LZHTableAllocator;
 
-typedef struct _lzhtable_node_
+typedef struct lzhtable_node
 {
-    uint8_t *key;
-    size_t key_size;
+    uint32_t hash;
     void *value;
 
-    struct _lzhtable_node_ *previous_table_node;
-    struct _lzhtable_node_ *next_table_node;
+    struct lzhtable_node *previous_table_node;
+    struct lzhtable_node *next_table_node;
 
-    struct _lzhtable_node_ *previous_bucket_node;
-    struct _lzhtable_node_ *next_bucket_node;
+    struct lzhtable_node *previous_bucket_node;
+    struct lzhtable_node *next_bucket_node;
 } LZHTableNode;
 
-typedef struct _lzhtable_bucket_
+typedef struct lzhtable_bucket
 {
     size_t size;
-    struct _lzhtable_node_ *head;
-    struct _lzhtable_node_ *tail;
+    struct lzhtable_node *head;
+    struct lzhtable_node *tail;
 } LZHTableBucket;
 
-typedef struct _lzhtable_
+typedef struct lzhtable
 {
     size_t m; // count of buckets available
     size_t n; // count of distinct elements in the table
-    struct _lzhtable_bucket_ *buckets;
-    struct _lzhtable_node_ *nodes;
-    struct _lzhtable_allocator_ *allocator;
+    struct lzhtable_bucket *buckets;
+    struct lzhtable_node *nodes;
+    struct lzhtable_allocator *allocator;
 } LZHTable;
 
 // interface
-struct _lzhtable_ *lzhtable_create(size_t length, struct _lzhtable_allocator_ *allocator);
-void lzhtable_destroy(void (*destroy_value)(void *value), struct _lzhtable_ *table);
-struct _lzhtable_bucket_ *lzhtable_contains(uint8_t *key, size_t key_size, struct _lzhtable_ *table, struct _lzhtable_node_ **node_out);
-void *lzhtable_get(uint8_t *key, size_t key_size, struct _lzhtable_ *table);
-int lzhtable_put(uint8_t *key, size_t key_size, void *value, struct _lzhtable_ *table, uint32_t **hash_out);
-int lzhtable_remove(uint8_t *key, size_t key_size, struct _lzhtable_ *table, void **value);
-void lzhtable_clear(void (*clear_fn)(void *value), struct _lzhtable_ *table);
+struct lzhtable *lzhtable_create(size_t length, struct lzhtable_allocator *allocator);
+void lzhtable_destroy(void (*destroy_value)(void *value), struct lzhtable *table);
+
+uint32_t lzhtable_hash(uint8_t *key, size_t key_size);
+
+struct lzhtable_bucket *lzhtable_hash_contains(
+    uint32_t hash,
+    struct lzhtable *table,
+    struct lzhtable_node **node_out
+);
+struct lzhtable_bucket *lzhtable_contains(
+    uint8_t *key,
+    size_t key_size,
+    struct lzhtable *table,
+    struct lzhtable_node **node_out
+);
+
+void *lzhtable_hash_get(uint32_t hash, struct lzhtable *table);
+void *lzhtable_get(uint8_t *key, size_t key_size, struct lzhtable *table);
+
+int lzhtable_hash_put(uint32_t hash, void *value, struct lzhtable *table);
+int lzhtable_put(
+    uint8_t *key,
+    size_t key_size,
+    void *value,
+    struct lzhtable *table,
+    uint32_t **hash_out
+);
+
+int lzhtable_hash_remove(uint32_t hash, struct lzhtable *table, void **value);
+int lzhtable_remove(uint8_t *key, size_t key_size, struct lzhtable *table, void **value);
+
+void lzhtable_clear(void (*clear_fn)(void *value), struct lzhtable *table);
 
 #define LZHTABLE_SIZE(table) (table->n)
 

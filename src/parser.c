@@ -289,16 +289,7 @@ Expr *parse_literal(Parser *parser){
         return create_expr(EMPTY_EXPRTYPE, empty_expr);
     }
 
-	if(match(parser, 1, INT_TOKTYPE)){
-		Token *int_token = previous(parser);
-
-        IntExpr *int_expr = (IntExpr *)memory_alloc(sizeof(IntExpr));
-		int_expr->token = int_token;
-
-        return create_expr(INT_EXPRTYPE, int_expr);
-	}
-
-    if(match(parser, 1, FALSE_TOKTYPE)){
+	if(match(parser, 1, FALSE_TOKTYPE)){
         Token *bool_token = previous(parser);
 
         BoolExpr *bool_expr = (BoolExpr *)memory_alloc(sizeof(BoolExpr));
@@ -317,6 +308,26 @@ Expr *parse_literal(Parser *parser){
         
         return create_expr(BOOL_EXPRTYPE, bool_expr);
     }
+
+	if(match(parser, 1, INT_TOKTYPE)){
+		Token *int_token = previous(parser);
+
+        IntExpr *int_expr = (IntExpr *)memory_alloc(sizeof(IntExpr));
+		int_expr->token = int_token;
+
+        return create_expr(INT_EXPRTYPE, int_expr);
+	}
+
+	if(match(parser, 1, STRING_TOKTYPE)){
+		Token *string_token = previous(parser);
+		size_t literal_size = string_token->literal_size;
+		
+		StringExpr *string_expr = (StringExpr *)memory_alloc(sizeof(StringExpr));
+		string_expr->hash = literal_size > 0 ? *(uint32_t *)string_token->literal : 0;
+		string_expr->string_token = string_token;
+
+		return create_expr(STRING_EXPRTYPE, string_expr);
+	}
 
     if(match(parser, 1, LEFT_PAREN_TOKTYPE)){
         Token *left_paren_token = previous(parser);
