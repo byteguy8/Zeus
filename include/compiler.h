@@ -6,16 +6,14 @@
 #define SYMBOLS_LENGTH 255
 #define SYMBOL_NAME_LENGTH 16
 
-typedef struct symbol
-{
+typedef struct symbol{
     size_t local;
     char is_const;
     size_t name_len;
     char name[SYMBOL_NAME_LENGTH];
 }Symbol;
 
-typedef struct scope
-{
+typedef struct scope{
     size_t depth;
     size_t locals;
     size_t symbols_len;
