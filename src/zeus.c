@@ -30,7 +30,7 @@ int main(int argc, char const *argv[]){
 	DynArrPtr *stmt = memory_dynarr_ptr();
     //> compiler related
     DynArr *constants = memory_dynarr(sizeof(int64_t));
-    DynArr *chunks = memory_dynarr(sizeof(uint8_t));
+    DynArrPtr *functions = memory_dynarr_ptr();
     //< compiler related
 
 	Lexer *scanner = lexer_create();
@@ -52,8 +52,8 @@ int main(int argc, char const *argv[]){
 
     if(lexer_scan(source, tokens, strings, keywords, scanner)) goto CLEAN_UP;
     if(parser_parse(tokens, stmt, parser)) goto CLEAN_UP;
-    if(compiler_compile(constants, chunks, stmt, compiler)) goto CLEAN_UP;
-    if(vm_execute(constants, strings, chunks, vm)) goto CLEAN_UP;
+    if(compiler_compile(constants, functions, stmt, compiler)) goto CLEAN_UP;
+    if(vm_execute(constants, strings, functions, vm)) goto CLEAN_UP;
 
 	memory_report();
 

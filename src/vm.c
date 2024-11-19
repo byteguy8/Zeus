@@ -1,6 +1,7 @@
 #include "vm.h"
 #include "memory.h"
 #include "opcode.h"
+#include "function.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
@@ -48,6 +49,41 @@ static char *multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm){
 	b[sz] = '\0';
 
 	return b;
+}
+
+static Frame *current_frame(VM *vm){
+    if(vm->frame_ptr == 0)
+        error(vm, "Frame stack is empty");
+
+    return &vm->frame_stack[vm->frame_ptr - 1];
+}
+
+#define CURRENT_LOCALS(vm)(current_frame(vm)->locals)
+
+static Frame *frame_up(size_t fn_index, VM *vm){
+    if(vm->frame_ptr >= FRAME_LENGTH)
+        error(vm, "FrameOverFlow");
+
+    DynArrPtr *functions = vm->functions;
+    
+    if(fn_index >= functions->used)
+        error(vm, "Illegal function index.");
+
+    Function *fn = DYNARR_PTR_GET(fn_index, functions);
+    Frame *frame = &vm->frame_stack[vm->frame_ptr++];
+
+    frame->ip = 0;
+    frame->name = fn->name;
+    frame->chunks = fn->chunks;
+
+    return frame;
+}
+
+static void frame_down(VM *vm){
+    if(vm->frame_ptr == 0)
+        error(vm, "FrameUnderFlow");
+
+    vm->frame_ptr--;
 }
 
 static int is_i64(Value *value, int64_t *i64){
@@ -117,22 +153,24 @@ void print_value(Value *value){
 }
 
 void print_stack(VM *vm){
-    for (int i = 0; i < vm->temps_ptr; i++)
+    for (int i = 0; i < vm->stack_ptr; i++)
     {
-        Value *value = &vm->temps[i];
+        Value *value = &vm->stack[i];
         printf("%d --> ", i + 1);
         print_value(value);
     }
 }
 
 static int is_at_end(VM *vm){
-    DynArr *chunks = vm->chunks;
-    return vm->ip >= chunks->used;
+    Frame *frame = current_frame(vm);
+    DynArr *chunks = frame->chunks;
+    return frame->ip >= chunks->used;
 }
 
 static uint8_t advance(VM *vm){
-    DynArr *chunks = vm->chunks;
-    return *(uint8_t *)dynarr_get(vm->ip++, chunks);
+    Frame *frame = current_frame(vm);
+    DynArr *chunks = frame->chunks;
+    return *(uint8_t *)dynarr_get(frame->ip++, chunks);
 }
 
 static int32_t read_i32(VM *vm){
@@ -198,19 +236,19 @@ static Obj *create_obj(ObjType type, VM *vm){
 }
 
 static void push(Value value, VM *vm){
-    if(vm->temps_ptr >= TEMPS_SIZE) error(vm, "StackOverFlow");
-    Value *current_value = &vm->temps[vm->temps_ptr++];
+    if(vm->stack_ptr >= STACK_LENGTH) error(vm, "StackOverFlow");
+    Value *current_value = &vm->stack[vm->stack_ptr++];
     memcpy(current_value, &value, sizeof(Value));
 }
 
 static Value *pop(VM *vm){
-    if(vm->temps_ptr == 0) error(vm, "StackUnderFlow");
-    return &vm->temps[--vm->temps_ptr];
+    if(vm->stack_ptr == 0) error(vm, "StackUnderFlow");
+    return &vm->stack[--vm->stack_ptr];
 }
 
 static Value *peek(VM *vm){
-    if(vm->temps_ptr == 0) error(vm, "StackUnderFlow");
-    return &vm->temps[vm->temps_ptr - 1];
+    if(vm->stack_ptr == 0) error(vm, "StackUnderFlow");
+    return &vm->stack[vm->stack_ptr - 1];
 }
 
 void push_bool(uint8_t bool, VM *vm){
@@ -468,12 +506,12 @@ static void execute(uint8_t chunk, VM *vm){
         case LSET_OPCODE:{
             Value *value = peek(vm);
             uint8_t index = advance(vm);
-            memcpy(&vm->locals[index], value, sizeof(Value));
+            memcpy(&current_frame(vm)->locals[index], value, sizeof(Value));
             break;
         }
         case LGET_OPCODE:{
             uint8_t index = advance(vm);
-            Value value = vm->locals[index];
+            Value value = current_frame(vm)->locals[index];
             push(value, vm);
             break;
         }
@@ -512,8 +550,8 @@ static void execute(uint8_t chunk, VM *vm){
             int32_t jmp_value = read_i32(vm);
             if(jmp_value == 0) break;
             
-            if(jmp_value > 0) vm->ip += jmp_value - 1;
-            else vm->ip += jmp_value - 5;
+            if(jmp_value > 0) current_frame(vm)->ip += jmp_value - 1;
+            else current_frame(vm)->ip += jmp_value - 5;
 
             break;
         }
@@ -523,8 +561,8 @@ static void execute(uint8_t chunk, VM *vm){
 			if(jmp_value == 0) break;
 
             if(!condition){
-                if(jmp_value > 0) vm->ip += jmp_value - 1;
-                else vm->ip += jmp_value - 5;
+                if(jmp_value > 0) current_frame(vm)->ip += jmp_value - 1;
+                else current_frame(vm)->ip += jmp_value - 5;
             }
 
 			break;
@@ -535,8 +573,8 @@ static void execute(uint8_t chunk, VM *vm){
 			if(jmp_value == 0) break;
 
 			if(condition){
-                if(jmp_value > 0) vm->ip += jmp_value - 1;
-                else vm->ip += jmp_value - 5;
+                if(jmp_value > 0) current_frame(vm)->ip += jmp_value - 1;
+                else current_frame(vm)->ip += jmp_value - 5;
             }
 
 			break;
@@ -557,19 +595,27 @@ void vm_print_stack(VM *vm){
     print_stack(vm);
 }
 
-int vm_execute(DynArr *constants, LZHTable *strings, DynArr *chunks, VM *vm){
+int vm_execute(
+    DynArr *constants,
+    LZHTable *strings,
+    DynArrPtr *functions,
+    VM *vm
+){
     if(setjmp(err_jmp) == 1) return 1;
     else{
-        vm->ip = 0;
-        vm->temps_ptr = 0;
+        vm->stack_ptr = 0;
         vm->constants = constants;
 		vm->strings = strings;
-        vm->chunks = chunks;
+        vm->functions = functions;
+
+        frame_up(0, vm);
 
         while (!is_at_end(vm)){
             uint8_t chunk = advance(vm);
             execute(chunk, vm);
         }
+
+        frame_down(vm);
 
         clean_up(vm);
 

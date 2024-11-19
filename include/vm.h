@@ -5,28 +5,41 @@
 #include "dynarr.h"
 #include "lzhtable.h"
 
-#define TEMPS_SIZE 255
-#define LOCALS_SIZE 255
+#define STACK_LENGTH 255
+#define LOCALS_LENGTH 255
+#define FRAME_LENGTH 255
 
-typedef struct vm
+typedef struct frame
 {
     size_t ip;
+    char *name;
+    DynArr *chunks;
+    Value locals[LOCALS_LENGTH];
+}Frame;
 
-    int temps_ptr;
-    Value temps[TEMPS_SIZE];
-    
-    Value locals[LOCALS_SIZE];
+typedef struct vm{
+    int stack_ptr;
+    Value stack[STACK_LENGTH];
+
+    size_t frame_ptr;
+    Frame frame_stack[FRAME_LENGTH];
 
     DynArr *constants;
 	LZHTable *strings;
-    DynArr *chunks;
-
+    DynArrPtr *functions;
+//> garbage collector
     Obj *head;
     Obj *tail;
+//< garbage collector
 }VM;
 
 VM *vm_create();
 void vm_print_stack(VM *vm);
-int vm_execute(DynArr *constants, LZHTable *strings, DynArr *chunks, VM *vm);
+int vm_execute(
+    DynArr *constants,
+    LZHTable *strings,
+    DynArrPtr *functions,
+    VM *vm
+);
 
 #endif

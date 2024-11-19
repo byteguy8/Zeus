@@ -60,6 +60,33 @@ void scope_out(Compiler *compiler){
     compiler->depth--;
 }
 
+Scope *scope_in_fn(char *name, Compiler *compiler){
+    assert(compiler->fn_ptr < FUNCTIONS_LENGTH);
+
+    char *fn_name = memory_clone_str(name);
+    DynArr *chunks = memory_dynarr(sizeof(uint8_t));
+    DynArrPtr *params = memory_dynarr_ptr();
+    Function *fn = memory_alloc(sizeof(Function));
+
+    fn->name = fn_name;
+    fn->chunks = chunks;
+    fn->params = params;
+
+    compiler->fn_stack[compiler->fn_ptr++] = fn;
+
+    return scope_in(compiler);
+}
+
+Function *scope_out_fn(Compiler *compiler){
+    assert(compiler->fn_ptr > 0);
+
+    Function *fn = compiler->fn_stack[--compiler->fn_ptr];
+    
+    scope_out(compiler);
+
+    return fn;
+}
+
 Scope *current_scope(Compiler *compiler){
     assert(compiler->depth > 0);
     return &compiler->scopes[compiler->depth - 1];
@@ -115,20 +142,25 @@ Symbol *declare(Token *identifier_token, Compiler *compiler){
     return symbol;
 }
 
+DynArr *current_chunks(Compiler *compiler){
+    assert(compiler->fn_ptr > 0 && compiler->fn_ptr < FUNCTIONS_LENGTH);
+    Function *fn = compiler->fn_stack[compiler->fn_ptr - 1];
+    return fn->chunks;
+}
+
 size_t chunks_len(Compiler *compiler){
-	DynArr *chunks = compiler->chunks;
-	return chunks->used;
+	return current_chunks(compiler)->used;
 }
 
 size_t write_chunk(uint8_t chunk, Compiler *compiler){
-    DynArr *chunks = compiler->chunks;
+    DynArr *chunks = current_chunks(compiler);
 	size_t index = chunks->used;
     dynarr_insert(&chunk, chunks);
 	return index;
 }
 
 void update_chunk(size_t index, uint8_t chunk, Compiler *compiler){
-	DynArr *chunks = compiler->chunks;
+	DynArr *chunks = current_chunks(compiler);
 	dynarr_set(&chunk, index, chunks);
 }
 
@@ -146,7 +178,7 @@ size_t write_i32(int32_t i32, Compiler *compiler){
 
 void update_i32(size_t index, int32_t i32, Compiler *compiler){
 	uint8_t bytes[4];
-	DynArr *chunks = compiler->chunks;
+	DynArr *chunks = current_chunks(compiler);
 
 	descompose_i32(i32, bytes);
 
@@ -557,24 +589,25 @@ Compiler *compiler_create(){
 
 int compiler_compile(
     DynArr *constants,
-    DynArr *chunks,
+    DynArrPtr *functions,
     DynArrPtr *stmts, 
     Compiler *compiler
 ){
     if(setjmp(err_jmp) == 1) return 1;
     else{
         compiler->constants = constants;
-        compiler->chunks = chunks;
+        compiler->functions = functions;
         compiler->stmts = stmts;
 
-        scope_in(compiler);
+        scope_in_fn("main", compiler);
 
         for (size_t i = 0; i < stmts->used; i++){
             Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
             compile_stmt(stmt, compiler);
         }
 
-        scope_out(compiler);
+        Function *fn = scope_out_fn(compiler);
+        dynarr_ptr_insert(fn, functions);
         
         return 0;
     }
