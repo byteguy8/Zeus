@@ -9,6 +9,7 @@ typedef enum opcode{
     // arithmeric
     ADD_OPCODE, SUB_OPCODE,
     MUL_OPCODE, DIV_OPCODE,
+	MOD_OPCODE,
 
     // comparison
     LT_OPCODE, // less

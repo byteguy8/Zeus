@@ -451,6 +451,13 @@ static void execute(uint8_t chunk, VM *vm){
             push_i64(left / right, vm);
             break;
         }
+		case MOD_OPCODE:{
+			int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
+            int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
+            push_i64(left % right, vm);
+            break;
+
+		}
         case LT_OPCODE:{
             int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
             int64_t left = pop_i64_assert(vm, "Expect integer at left side.");

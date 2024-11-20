@@ -31,6 +31,7 @@ int main(int argc, char const *argv[]){
     DynArr *constants = memory_dynarr(sizeof(int64_t));
     DynArrPtr *functions = memory_dynarr_ptr();
 
+	add_keyword("mod", MOD_TOKTYPE, keywords);
 	add_keyword("empty", EMPTY_TOKTYPE, keywords);
     add_keyword("false", FALSE_TOKTYPE, keywords);
     add_keyword("true", TRUE_TOKTYPE, keywords);

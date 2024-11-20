@@ -296,6 +296,10 @@ void compile_expr(Expr *expr, Compiler *compiler){
                     write_chunk(DIV_OPCODE, compiler);
                     break;
                 }
+				case MOD_TOKTYPE:{
+					write_chunk(MOD_OPCODE, compiler);
+					break;
+				}
                 default:{
                     assert("Illegal token type");
                 }

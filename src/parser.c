@@ -249,7 +249,7 @@ Expr *parse_term(Parser *parser){
 Expr *parse_factor(Parser *parser){
 	Expr *left = parse_unary(parser);
 
-	while(match(parser, 2, ASTERISK_TOKTYPE, SLASH_TOKTYPE)){
+	while(match(parser, 3, ASTERISK_TOKTYPE, SLASH_TOKTYPE, MOD_TOKTYPE)){
 		Token *operator = previous(parser);
 		Expr *right = parse_unary(parser);
 
