@@ -35,6 +35,16 @@ void descompose_i32(int32_t value, uint8_t *bytes)
     }
 }
 
+static void mark_stop(size_t index, Compiler *compiler){
+	assert(compiler->stop_mark_ptr < STOP_MARKS_LENGTH);
+	compiler->stop_marks[compiler->stop_mark_ptr++] = index;
+}
+
+static size_t unmark_stop(Compiler *compiler){
+	assert(compiler->stop_mark_ptr > 0);
+	return compiler->stop_marks[--compiler->stop_mark_ptr];
+}
+
 Scope *scope_in(Compiler *compiler){
     Scope *scope = &compiler->scopes[compiler->depth++];
     
@@ -575,6 +585,25 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
 			write_chunk(JIT_OPCODE, compiler);
 			write_i32(-((int32_t)while_len), compiler);
+
+			size_t all = chunks_len(compiler);
+
+			while(compiler->stop_mark_ptr > 0){
+				size_t index = unmark_stop(compiler);
+				size_t jmp_value = all - index;
+				update_i32(index, jmp_value + 1, compiler);
+			}
+
+			break;
+		}
+		case STOP_STMTTYPE:{
+			StopStmt *stop_stmt = (StopStmt *)stmt->sub_stmt;
+			Token *stop_token = stop_stmt->stop_token;
+
+			write_chunk(JMP_OPCODE, compiler);
+			size_t index = write_i32(0, compiler);
+
+			mark_stop(index, compiler);
 
 			break;
 		}
