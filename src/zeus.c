@@ -24,19 +24,12 @@ int main(int argc, char const *argv[]){
 
     char *source_path = (char *)argv[1];
 	RawStr *source = utils_read_source(source_path);
-	LZHTable *strings = memory_lzhtable();
-    LZHTable *keywords = memory_lzhtable();
 	DynArrPtr *tokens = memory_dynarr_ptr();
-	DynArrPtr *stmt = memory_dynarr_ptr();
-    //> compiler related
+	LZHTable *strings = memory_lzhtable();
+	LZHTable *keywords = memory_lzhtable();
+	DynArrPtr *stmts = memory_dynarr_ptr();
     DynArr *constants = memory_dynarr(sizeof(int64_t));
     DynArrPtr *functions = memory_dynarr_ptr();
-    //< compiler related
-
-	Lexer *scanner = lexer_create();
-	Parser *parser = parser_create();
-    Compiler *compiler = compiler_create();
-    VM *vm = vm_create();
 
 	add_keyword("empty", EMPTY_TOKTYPE, keywords);
     add_keyword("false", FALSE_TOKTYPE, keywords);
@@ -50,9 +43,14 @@ int main(int argc, char const *argv[]){
 	add_keyword("else", ELSE_TOKTYPE, keywords);
 	add_keyword("while", WHILE_TOKTYPE, keywords);
 
-    if(lexer_scan(source, tokens, strings, keywords, scanner)) goto CLEAN_UP;
-    if(parser_parse(tokens, stmt, parser)) goto CLEAN_UP;
-    if(compiler_compile(constants, functions, stmt, compiler)) goto CLEAN_UP;
+	Lexer *lexer = lexer_create();
+	Parser *parser = parser_create();
+    Compiler *compiler = compiler_create();
+    VM *vm = vm_create();
+
+	if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
+    if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
+    if(compiler_compile(constants, functions, stmts, compiler)) goto CLEAN_UP;
     if(vm_execute(constants, strings, functions, vm)) goto CLEAN_UP;
 
 	memory_report();
