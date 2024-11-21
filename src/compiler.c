@@ -658,6 +658,8 @@ int compiler_compile(
 ){
     if(setjmp(err_jmp) == 1) return 1;
     else{
+		memset(compiler, 0, sizeof(Compiler));
+		
         compiler->constants = constants;
         compiler->functions = functions;
         compiler->stmts = stmts;
