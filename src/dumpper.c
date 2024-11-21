@@ -1,5 +1,6 @@
 #include "dumpper.h"
 #include "memory.h"
+#include "function.h"
 #include "opcode.h"
 #include <stdio.h>
 #include <assert.h>
@@ -54,6 +55,12 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf("INT_OPCODE value: %ld\n", i64);
             break;
         }
+        case STRING_OPCODE:{
+            uint32_t hash = (uint32_t)read_i32(dumpper);
+            char *str = lzhtable_hash_get(hash, dumpper->strings);
+            printf("STRING_OPCODE hash: %u value: '%s'\n", hash, str);
+            break;
+        }
         case ADD_OPCODE:{
             printf("ADD_OPCODE\n");
             break;
@@ -70,6 +77,10 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 			printf("DIV_OPCODE\n");
             break;
         }
+        case MOD_OPCODE:{
+            printf("MOD_OPCODE\n");
+            break;
+		}
         case LT_OPCODE:{
 			printf("LT_OPCODE\n");
             break;
@@ -130,11 +141,10 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
         }
         case JMP_OPCODE:{
 			int32_t jmp_value = read_i32(dumpper);
-
-			if(jmp_value == 0) break;
-
 			size_t ip = dumpper->ip;
-			if(jmp_value > 0) ip += jmp_value - 1;
+
+			if(jmp_value == 0) ip -= 5;
+			else if(jmp_value > 0) ip += jmp_value - 1;
 			else ip += jmp_value - 5; 
 
 			printf("JMP_OPCODE value: %d, to: %ld\n", jmp_value, ip);
@@ -143,11 +153,10 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
         }
 		case JIF_OPCODE:{
 			int32_t jmp_value = read_i32(dumpper);
-
-			if(jmp_value == 0) break;
-
 			size_t ip = dumpper->ip;
-			if(jmp_value > 0) ip += jmp_value - 1;
+
+			if(jmp_value == 0) ip -= 5;
+			else if(jmp_value > 0) ip += jmp_value - 1;
 			else ip += jmp_value - 5;
 
 			printf("JIF_OPCODE value: %d, to: %ld\n", jmp_value, ip);
@@ -156,11 +165,10 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 		}
 		case JIT_OPCODE:{
 			int32_t jmp_value = read_i32(dumpper);
-
-			if(jmp_value == 0) break;
-
 			size_t ip = dumpper->ip;
-			if(jmp_value > 0) ip += jmp_value - 1;
+
+			if(jmp_value == 0) ip -= 5;
+			else if(jmp_value > 0) ip += jmp_value - 1;
 			else ip += jmp_value - 5;
 
 			printf("JIT_OPCODE value: %d, to: %ld\n", jmp_value, ip);
@@ -173,17 +181,30 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
     }
 }
 
+static void dump_function(Function *function, Dumpper *dumpper){
+    DynArr *chunks = function->chunks;
+    
+    dumpper->ip = 0;
+    dumpper->chunks = chunks;
+
+    while(!is_at_end(dumpper))
+		execute(advance(dumpper), dumpper);
+}
+
 Dumpper *dumpper_create(){
 	Dumpper *dumpper = (Dumpper *)memory_alloc(sizeof(Dumpper));
 	memset(dumpper, 0, sizeof(Dumpper));
 	return dumpper;
 }
 
-void dumpper_dump(DynArr *constants, DynArr *chunks, Dumpper *dumpper){
+void dumpper_dump(DynArr *constants, LZHTable *strings, DynArrPtr *functions, Dumpper *dumpper){
 	dumpper->ip = 0;
 	dumpper->constants = constants;
-	dumpper->chunks = chunks;
+    dumpper->strings = strings;
 
-	while(!is_at_end(dumpper))
-		execute(advance(dumpper), dumpper);
+    for (size_t i = 0; i < functions->used; i++)
+    {
+        Function *function = (Function *)DYNARR_PTR_GET(i, functions);
+        dump_function(function, dumpper);
+    }
 }

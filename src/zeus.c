@@ -5,6 +5,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include "compiler.h"
+#include "dumpper.h"
 #include "vm.h"
 #include <stdio.h>
 
@@ -48,11 +49,13 @@ int main(int argc, char const *argv[]){
 	Lexer *lexer = lexer_create();
 	Parser *parser = parser_create();
     Compiler *compiler = compiler_create();
+    Dumpper *dumpper = dumpper_create();    
     VM *vm = vm_create();
 
 	if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
     if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
     if(compiler_compile(constants, functions, stmts, compiler)) goto CLEAN_UP;
+    //dumpper_dump(constants, strings, functions, dumpper);    
     if(vm_execute(constants, strings, functions, vm)) goto CLEAN_UP;
 
 	memory_report();

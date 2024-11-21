@@ -35,14 +35,28 @@ void descompose_i32(int32_t value, uint8_t *bytes)
     }
 }
 
-static void mark_stop(size_t index, Compiler *compiler){
+#define WHILE_IN(compiler) (++compiler->while_counter)
+#define WHILE_OUT(compiler) (--compiler->while_counter)
+
+static void mark_stop(size_t len, size_t index, Compiler *compiler){
 	assert(compiler->stop_mark_ptr < STOP_MARKS_LENGTH);
-	compiler->stop_marks[compiler->stop_mark_ptr++] = index;
+	int ptr = compiler->stop_mark_ptr++;
+    
+	compiler->stop_marks[ptr][0] = compiler->while_counter;
+    compiler->stop_marks[ptr][1] = len;
+    compiler->stop_marks[ptr][2] = index;
 }
 
-static size_t unmark_stop(Compiler *compiler){
-	assert(compiler->stop_mark_ptr > 0);
-	return compiler->stop_marks[--compiler->stop_mark_ptr];
+static void unmark_stop(size_t which, Compiler *compiler){
+	assert(which < compiler->stop_mark_ptr);
+
+	for(size_t i = which; i + 1 < compiler->stop_mark_ptr; i++){
+		size_t *a = compiler->stop_marks[i];
+		size_t *b = compiler->stop_marks[i + 1];
+		memcpy(a, b, sizeof(size_t) * 3);
+	}
+
+	compiler->stop_mark_ptr--;
 }
 
 Scope *scope_in(Compiler *compiler){
@@ -566,14 +580,18 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			size_t jmp_index = write_i32(0, compiler);
 
 			size_t len_bef_body = chunks_len(compiler);
+
 			scope_in_soft(compiler);
+			char while_id = WHILE_IN(compiler);
 
 			for(size_t i = 0; i < stmts->used; i++){
 				Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
 				compile_stmt(stmt, compiler);
 			}
-			
+
+			WHILE_OUT(compiler);
 			scope_out(compiler);
+
             size_t len_af_body = chunks_len(compiler);
 			size_t body_len = len_af_body - len_bef_body;
 
@@ -586,14 +604,25 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			write_chunk(JIT_OPCODE, compiler);
 			write_i32(-((int32_t)while_len), compiler);
 
-			size_t all = chunks_len(compiler);
+			size_t af_header = chunks_len(compiler);
 
-			while(compiler->stop_mark_ptr > 0){
-				size_t index = unmark_stop(compiler);
-				size_t jmp_value = all - index;
-				update_i32(index, jmp_value + 1, compiler);
+			size_t ptr = 0;
+			while (compiler->stop_mark_ptr > 0 && ptr < compiler->stop_mark_ptr){
+				size_t *inf = compiler->stop_marks[ptr];
+				size_t id = inf[0];
+				size_t len = inf[1];
+				size_t index = inf[2];
+
+				if(id != while_id){
+					ptr++;
+					continue;
+				}
+
+				unmark_stop(ptr, compiler);
+
+				update_i32(index, af_header - len + 1, compiler);
 			}
-
+		
 			break;
 		}
 		case STOP_STMTTYPE:{
@@ -603,7 +632,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			write_chunk(JMP_OPCODE, compiler);
 			size_t index = write_i32(0, compiler);
 
-			mark_stop(index, compiler);
+            size_t len = chunks_len(compiler);
+			mark_stop(len, index, compiler);
 
 			break;
 		}

@@ -37,8 +37,9 @@ typedef struct compiler{
     size_t fn_ptr;
     Function *fn_stack[FUNCTIONS_LENGTH];
 
+	unsigned char while_counter;
 	size_t stop_mark_ptr;
-	size_t stop_marks[STOP_MARKS_LENGTH];
+	size_t stop_marks[STOP_MARKS_LENGTH][3];
     
     DynArr *constants;
     DynArrPtr *functions;
