@@ -9,6 +9,27 @@
 #include "vm.h"
 #include <stdio.h>
 
+typedef struct args{
+	unsigned char lex;
+	unsigned char parse;
+	unsigned char compile;
+	unsigned char dump;
+	unsigned char memuse;
+    char *source_path;
+}Args;
+
+static void get_args(int argc, char const *argv[], Args *args){
+	for(int i = 1; i < argc; i++){
+		const char *arg = argv[i];
+		if(strcmp("-l", arg) == 0) args->lex = 1;
+		else if(strcmp("-p", arg) == 0) args->parse = 1;
+		else if(strcmp("-c", arg) == 0) args->compile = 1;
+		else if(strcmp("-d", arg) == 0) args->dump = 1;
+		else if(strcmp("-u", arg) == 0) args->memuse = 1;
+        else args->source_path = (char *)arg;
+	}
+}
+
 void add_keyword(char *name, TokenType type, LZHTable *keywords){
     TokenType *ctype = (TokenType *)memory_alloc(sizeof(TokenType));
     *ctype = type;
@@ -16,14 +37,17 @@ void add_keyword(char *name, TokenType type, LZHTable *keywords){
 }
 
 int main(int argc, char const *argv[]){
-    if(argc != 2){
-        fprintf(stderr, "Expect source path\n");
-        return 1;
-    }
+	Args args = {0};
+	get_args(argc, argv, &args);
+
+	if(!args.source_path){
+		fprintf(stderr, "Expect source path\n");
+		return 1;
+	}
 
 	memory_init();
 
-    char *source_path = (char *)argv[1];
+    char *source_path = args.source_path;
 	RawStr *source = utils_read_source(source_path);
 	DynArrPtr *tokens = memory_dynarr_ptr();
 	LZHTable *strings = memory_lzhtable();
@@ -52,13 +76,31 @@ int main(int argc, char const *argv[]){
     Dumpper *dumpper = dumpper_create();    
     VM *vm = vm_create();
 
-	if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
-    if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
-    if(compiler_compile(constants, functions, stmts, compiler)) goto CLEAN_UP;
-    //dumpper_dump(constants, strings, functions, dumpper);    
-    if(vm_execute(constants, strings, functions, vm)) goto CLEAN_UP;
+    if(args.lex){
+        if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
+		printf("No errors in lexer phase\n");
+    }else if(args.parse){
+        if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
+        if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
+		printf("No errors in parse phase\n");
+    }else if(args.compile){
+        if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
+        if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
+        if(compiler_compile(constants, functions, stmts, compiler)) goto CLEAN_UP;
+		printf("No errors in compile phase\n");
+    }else if(args.dump){
+        if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
+        if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
+        if(compiler_compile(constants, functions, stmts, compiler)) goto CLEAN_UP;
+        dumpper_dump(constants, strings, functions, dumpper);
+    }else{
+        if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
+        if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
+        if(compiler_compile(constants, functions, stmts, compiler)) goto CLEAN_UP;
+        if(vm_execute(constants, strings, functions, vm)) goto CLEAN_UP;
+    }
 
-	memory_report();
+	if(args.memuse) memory_report();
 
 CLEAN_UP:
     memory_deinit();
