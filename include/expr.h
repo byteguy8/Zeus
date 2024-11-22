@@ -17,6 +17,7 @@ typedef enum expr_type{
     LOGICAL_EXPRTYPE,
     ASSIGN_EXPRTYPE,
 	COMPOUND_EXPRTYPE,
+	LIST_EXPRTYPE,
 }ExprType;
 
 typedef struct expr{
@@ -90,5 +91,10 @@ typedef struct compound_expr{
 	Token *operator;
 	Expr *right;
 }CompoundExpr;
+
+typedef struct list_expr{
+	Token *list_token;
+	DynArrPtr *exprs;
+}ListExpr;
 
 #endif

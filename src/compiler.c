@@ -456,6 +456,25 @@ void compile_expr(Expr *expr, Compiler *compiler){
 	
 			break;
 		}
+		case LIST_EXPRTYPE:{
+			ListExpr *list_expr = (ListExpr *)expr->sub_expr;
+			Token *list_token = list_expr->list_token;
+			DynArrPtr *exprs = list_expr->exprs;
+
+            if(exprs){
+				for(size_t i = 0; i < exprs->used; i++){
+					Expr *expr = (Expr *)DYNARR_PTR_GET(i, exprs);
+					compile_expr(expr, compiler);
+				}
+			}
+
+            size_t len = exprs ? (int32_t)exprs->used : 0;
+			
+            write_chunk(LIST_OPCODE, compiler);
+            write_i32(len, compiler);
+
+			break;
+		}
         default:{
             assert("Illegal expression type");
         }

@@ -30,7 +30,9 @@ typedef enum opcode{
 
     JMP_OPCODE,
 	JIF_OPCODE,
-	JIT_OPCODE
+	JIT_OPCODE,
+
+	LIST_OPCODE
 }OPCode;
 
 #endif

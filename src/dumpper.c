@@ -175,6 +175,11 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 
 			break;
 		}
+		case LIST_OPCODE:{
+			int32_t len = read_i32(dumpper);
+			printf("LIST_OPCODE len: %d\n", len);
+			break;
+		}
         default:{
             assert("Illegal opcode\n");
         }

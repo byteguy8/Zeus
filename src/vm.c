@@ -107,6 +107,20 @@ static int is_str(Value *value, Str **str){
     return 0;
 }
 
+static int is_list(Value *value, DynArr **list){
+	if(value->type != OBJ_VTYPE) return 0;
+	
+	Obj *obj = value->literal.obj;
+
+	if(obj->type == LIST_OTYPE){
+		DynArr *olist = obj->value.list;
+		if(list) *list = olist;
+		return 1;
+	}
+
+	return 0;
+}
+
 #define TO_STR(v)(&v->literal.obj->value.str)
 
 static int32_t compose_i32(uint8_t *bytes){
@@ -120,7 +134,11 @@ void print_object(Obj *object){
             printf("%s\n", str->buff);
             break;
         }
-    
+   		case LIST_OTYPE:{
+			DynArr *list = object->value.list;
+			printf("<list %ld at %p>\n", list->used, list);
+			break;
+		} 
         default:{
             assert("Illegal object type");
         }
@@ -202,6 +220,11 @@ static void destroy_obj(Obj *obj, VM *vm){
 		case STRING_OTYPE:{
 			Str *str = (Str *)&obj->value.str;
 			if(!str->core) free(str->buff);
+			break;
+		}
+		case LIST_OTYPE:{
+			DynArr *list = obj->value.list;
+			dynarr_destroy(list);
 			break;
 		}
 		default:{
@@ -583,6 +606,30 @@ static void execute(uint8_t chunk, VM *vm){
                 if(jmp_value > 0) current_frame(vm)->ip += jmp_value - 1;
                 else current_frame(vm)->ip += jmp_value - 5;
             }
+
+			break;
+		}
+		case LIST_OPCODE:{
+			int32_t len = read_i32(vm);
+
+			DynArr *list = dynarr_create(sizeof(Value), NULL);
+			if(!list) error(vm, "Failed to create list: out of memory\n");
+
+			for(int32_t i = 0; i < len; i++){
+				Value *value = pop(vm);
+
+				if(dynarr_insert(value, list))
+					error(vm, "Failed to insert value at list: out of memory\n");		
+			}
+
+			Obj *obj = create_obj(LIST_OTYPE, vm);
+			obj->value.list = list;
+
+			Value value = {0};
+			value.type = OBJ_VTYPE;
+			value.literal.obj = obj;
+
+			push(value, vm);
 
 			break;
 		}

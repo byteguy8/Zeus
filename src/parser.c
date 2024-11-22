@@ -100,6 +100,7 @@ Token *consume(Parser *parser, TokenType type, char *err_msg, ...){
 
 Expr *parse_expr(Parser *paser);
 Expr *parse_assign(Parser *parser);
+Expr *parse_list(Parser *parser);
 Expr *parse_or(Parser *parser);
 Expr *parse_and(Parser *parser);
 Expr *parse_comparison(Parser *parser);
@@ -121,7 +122,7 @@ Expr *parse_expr(Parser *parser){
 }
 
 Expr *parse_assign(Parser *parser){
-    Expr *expr = parse_or(parser);
+    Expr *expr = parse_list(parser);
 	
 	if(match(parser, 4, 
 			 COMPOUND_ADD_TOKTYPE, 
@@ -167,6 +168,35 @@ Expr *parse_assign(Parser *parser){
 
     return expr;
 }
+
+Expr *parse_list(Parser *parser){
+	if(match(parser, 1, LIST_TOKTYPE)){
+		Token *list_token = NULL;
+		DynArrPtr *exprs = NULL;
+	
+		list_token = previous(parser);
+		consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'list' keyword.");
+		
+		if(!check(parser, RIGHT_PAREN_TOKTYPE)){
+			exprs = memory_dynarr_ptr();
+			do{
+				Expr *expr = parse_expr(parser);
+				dynarr_ptr_insert(expr, exprs);
+			}while(match(parser, 1, COMMA_TOKTYPE));
+		}
+
+		consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' at end of list expression.");
+
+		ListExpr *list_expr = (ListExpr *)memory_alloc(sizeof(ListExpr));
+		list_expr->list_token = list_token;
+		list_expr->exprs = exprs;
+
+		return create_expr(LIST_EXPRTYPE, list_expr);
+	}
+
+	return parse_or(parser);
+}
+
 
 Expr *parse_or(Parser *parser){
     Expr *left = parse_and(parser);

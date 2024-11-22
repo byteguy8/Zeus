@@ -1,11 +1,13 @@
 #ifndef VALUE_H
 #define VALUE_H
 
+#include "dynarr.h"
 #include <stddef.h>
 #include <stdint.h>
 
 typedef enum obj_type{
-	STRING_OTYPE
+	STRING_OTYPE,
+	LIST_OTYPE
 }ObjType;
 
 typedef struct str{
@@ -23,6 +25,7 @@ typedef struct obj{
 
     union{
 		Str str;
+		DynArr *list;
 	}value;
 }Obj;
 
