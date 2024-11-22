@@ -306,7 +306,7 @@ static Value *peek(VM *vm){
     return &vm->stack[vm->stack_ptr - 1];
 }
 
-static Value *peek_at(size_t offset, VM *vm){
+static Value *peek_at(int offset, VM *vm){
     if(1 + offset > vm->stack_ptr) error(vm, "Illegal offset");
     size_t at = vm->stack_ptr - 1 - offset;
     return &vm->stack[at];

@@ -106,9 +106,8 @@ Scope *scope_in_fn(char *name, Compiler *compiler, Function **out_function){
 
 void scope_out_fn(Compiler *compiler){
     assert(compiler->fn_ptr > 0);
-    Function *fn = compiler->fn_stack[--compiler->fn_ptr];
+	compiler->fn_ptr--;
     scope_out(compiler);
-    return fn;
 }
 
 Scope *current_scope(Compiler *compiler){
