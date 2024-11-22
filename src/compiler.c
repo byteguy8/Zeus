@@ -59,29 +59,27 @@ static void unmark_stop(size_t which, Compiler *compiler){
 	compiler->stop_mark_ptr--;
 }
 
-Scope *scope_in(Compiler *compiler){
+Scope *scope_in(ScopeType type, Compiler *compiler){
     Scope *scope = &compiler->scopes[compiler->depth++];
     
     scope->depth = compiler->depth;
     scope->locals = 0;
+	scope->type = type;
     scope->symbols_len = 0;
     
     return scope;
 }
 
-Scope *scope_in_soft(Compiler *compiler){
+Scope *scope_in_soft(ScopeType type, Compiler *compiler){
     Scope *enclosing = &compiler->scopes[compiler->depth - 1];
     Scope *scope = &compiler->scopes[compiler->depth++];
     
     scope->depth = compiler->depth;
     scope->locals = enclosing->locals;
+	scope->type = type;
     scope->symbols_len = 0;
     
     return scope;
-}
-
-void scope_out(Compiler *compiler){
-    compiler->depth--;
 }
 
 Scope *scope_in_fn(char *name, Compiler *compiler, Function **out_function){
@@ -101,13 +99,42 @@ Scope *scope_in_fn(char *name, Compiler *compiler, Function **out_function){
 
     if(out_function) *out_function = fn;
 
-    return scope_in(compiler);
+    return scope_in(FUNCTION_SCOPE, compiler);
+}
+
+
+void scope_out(Compiler *compiler){
+    compiler->depth--;
 }
 
 void scope_out_fn(Compiler *compiler){
     assert(compiler->fn_ptr > 0);
 	compiler->fn_ptr--;
     scope_out(compiler);
+}
+
+Scope *inside_while(Compiler *compiler){
+	assert(compiler->depth > 0);
+
+	for(int i = (int)compiler->depth - 1; i >= 0; i--){
+		Scope *scope = compiler->scopes + i;
+		if(scope->type == WHILE_SCOPE) return scope;
+		if(scope->type == FUNCTION_SCOPE) return NULL;
+	}
+
+	return NULL;
+}
+
+Scope *inside_function(Compiler *compiler){
+	assert(compiler->depth > 0);
+
+	for(int i = (int)compiler->depth - 1; i >= 0; i--){
+		Scope *scope = compiler->scopes + i;
+		if(scope->type == FUNCTION_SCOPE) return scope;
+	}
+
+	return NULL;
+
 }
 
 Scope *current_scope(Compiler *compiler){
@@ -562,7 +589,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             BlockStmt *block_stmt = (BlockStmt *)stmt->sub_stmt;
             DynArrPtr *stmts = block_stmt->stmts;
 
-            scope_in_soft(compiler);
+            scope_in_soft(BLOCK_SCOPE, compiler);
 
             for (size_t i = 0; i < stmts->used; i++)
             {
@@ -587,7 +614,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			
 			//> if branch body
 			size_t len_bef_if = chunks_len(compiler);
-			scope_in_soft(compiler);
+			scope_in_soft(BLOCK_SCOPE, compiler);
 
 			for(size_t i = 0; i < if_stmts->used; i++){
 				Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, if_stmts);
@@ -608,7 +635,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             if(else_stmts){
 				//> else body
                 size_t len_bef_else = chunks_len(compiler);
-                scope_in_soft(compiler);
+                scope_in_soft(BLOCK_SCOPE, compiler);
 
                 for(size_t i = 0; i < else_stmts->used; i++){
                     Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, else_stmts);
@@ -635,7 +662,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
 			size_t len_bef_body = chunks_len(compiler);
 
-			scope_in_soft(compiler);
+			scope_in_soft(WHILE_SCOPE, compiler);
 			char while_id = WHILE_IN(compiler);
 
 			for(size_t i = 0; i < stmts->used; i++){
@@ -683,6 +710,9 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			StopStmt *stop_stmt = (StopStmt *)stmt->sub_stmt;
 			Token *stop_token = stop_stmt->stop_token;
 
+			if(!inside_while(compiler))
+				error(compiler, stop_token, "Can't use 'stop' statement outside loops.");
+
 			write_chunk(JMP_OPCODE, compiler);
 			size_t index = write_i32(0, compiler);
 
@@ -693,8 +723,13 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 		}
         case RETURN_STMTTYPE:{
             ReturnStmt *return_stmt = (ReturnStmt *)stmt->sub_stmt;
+			Token *return_token = return_stmt->return_token;
             Expr *value = return_stmt->value;
-            
+
+			Scope *scope = inside_function(compiler);
+			if(!scope || scope->depth == 1)
+				error(compiler, return_token, "Can't use 'return' statement outside functions.");
+
             if(value) compile_expr(value, compiler);
             else write_chunk(EMPTY_OPCODE, compiler);
 

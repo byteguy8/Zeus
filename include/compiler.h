@@ -25,6 +25,7 @@ typedef struct symbol{
 
 typedef enum scope_type{
     BLOCK_SCOPE,
+	WHILE_SCOPE,
     FUNCTION_SCOPE
 }ScopeType;
 
