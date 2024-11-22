@@ -10,9 +10,15 @@
 #define FUNCTIONS_LENGTH 16
 #define STOP_MARKS_LENGTH 16
 
+typedef enum symbol_type{
+    MUT_SYMTYPE,
+    IMUT_SYMTYPE,
+    FN_SYMTYPE,
+}SymbolType;
+
 typedef struct symbol{
     size_t local;
-    char is_const;
+    SymbolType type;
     size_t name_len;
     char name[SYMBOL_NAME_LENGTH];
 }Symbol;
@@ -31,6 +37,8 @@ typedef struct scope{
 }Scope;
 
 typedef struct compiler{
+    size_t symbols;
+    
     size_t depth;
     Scope scopes[SCOPES_LENGTH];
     

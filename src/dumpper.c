@@ -112,8 +112,13 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
         }
         case LGET_OPCODE:{
 			uint8_t slot = advance(dumpper);
-			printf("LGET_OPCODE %d\n", slot);
+			printf("LGET_OPCODE slot: %d\n", slot);
            	break;
+        }
+        case SGET_OPCODE:{
+            int32_t index = read_i32(dumpper);
+            printf("SGET_OPCODE index: %d\n", index);
+            break;
         }
         case OR_OPCODE:{
 			printf("OR_OPCODE\n");
@@ -180,6 +185,15 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 			printf("LIST_OPCODE len: %d\n", len);
 			break;
 		}
+        case CALL_OPCODE:{
+            uint8_t args_count = advance(dumpper);
+            printf("CALL_OPCODE args: %d\n", args_count);
+            break;
+        }
+        case RET_OPCODE:{
+            printf("RET_OPCODE\n");
+            break;
+        }
         default:{
             assert("Illegal opcode\n");
         }
@@ -191,6 +205,8 @@ static void dump_function(Function *function, Dumpper *dumpper){
     
     dumpper->ip = 0;
     dumpper->chunks = chunks;
+
+    printf("Dumpping '%s':\n", function->name);
 
     while(!is_at_end(dumpper))
 		execute(advance(dumpper), dumpper);
@@ -211,5 +227,8 @@ void dumpper_dump(DynArr *constants, LZHTable *strings, DynArrPtr *functions, Du
     {
         Function *function = (Function *)DYNARR_PTR_GET(i, functions);
         dump_function(function, dumpper);
+        
+        if(i + 1 < functions->used)
+            printf("\n");
     }
 }

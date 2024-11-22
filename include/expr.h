@@ -11,6 +11,7 @@ typedef enum expr_type{
 	STRING_EXPRTYPE,
     GROUP_EXPRTYPE,
     IDENTIFIER_EXPRTYPE,
+    CALL_EXPRTYPE,
     UNARY_EXPRTYPE,
 	BINARY_EXPRTYPE,
     COMPARISON_EXPRTYPE,
@@ -55,6 +56,12 @@ typedef struct identifier_expr
 {
     Token *identifier_token;
 }IdentifierExpr;
+
+typedef struct call_expr{
+    Expr *left;
+    Token *left_paren;
+    DynArrPtr *args;    
+}CallExpr;
 
 typedef struct unary_expr
 {

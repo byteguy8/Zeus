@@ -79,6 +79,19 @@ static Frame *frame_up(size_t fn_index, VM *vm){
     return frame;
 }
 
+static Frame *frame_up_fn(Function *fn, VM *vm){
+    if(vm->frame_ptr >= FRAME_LENGTH)
+        error(vm, "FrameOverFlow");
+        
+    Frame *frame = &vm->frame_stack[vm->frame_ptr++];
+
+    frame->ip = 0;
+    frame->name = fn->name;
+    frame->chunks = fn->chunks;
+
+    return frame;
+}
+
 static void frame_down(VM *vm){
     if(vm->frame_ptr == 0)
         error(vm, "FrameUnderFlow");
@@ -121,6 +134,20 @@ static int is_list(Value *value, DynArr **list){
 	return 0;
 }
 
+static int is_function(Value *value, Function **out_fn){
+	if(value->type != OBJ_VTYPE) return 0;
+	
+	Obj *obj = value->literal.obj;
+
+	if(obj->type == FN_OTYPE){
+		Function *ofn = obj->value.fn;
+		if(out_fn) *out_fn = ofn;
+		return 1;
+	}
+
+	return 0;
+}
+
 #define TO_STR(v)(&v->literal.obj->value.str)
 
 static int32_t compose_i32(uint8_t *bytes){
@@ -138,7 +165,12 @@ void print_object(Obj *object){
 			DynArr *list = object->value.list;
 			printf("<list %ld at %p>\n", list->used, list);
 			break;
-		} 
+		}
+        case FN_OTYPE:{
+            Function *fn = (Function *)object->value.fn;
+            printf("<fn '%s' - %d at %p>\n", fn->name, (uint8_t)(fn->params ? fn->params->used : 0), fn);
+            break;
+        }
         default:{
             assert("Illegal object type");
         }
@@ -272,6 +304,12 @@ static Value *pop(VM *vm){
 static Value *peek(VM *vm){
     if(vm->stack_ptr == 0) error(vm, "StackUnderFlow");
     return &vm->stack[vm->stack_ptr - 1];
+}
+
+static Value *peek_at(size_t offset, VM *vm){
+    if(1 + offset > vm->stack_ptr) error(vm, "Illegal offset");
+    size_t at = vm->stack_ptr - 1 - offset;
+    return &vm->stack[at];
 }
 
 void push_bool(uint8_t bool, VM *vm){
@@ -545,6 +583,22 @@ static void execute(uint8_t chunk, VM *vm){
             push(value, vm);
             break;
         }
+        case SGET_OPCODE:{
+            int32_t index = read_i32(vm);
+            DynArrPtr *functions = vm->functions;
+            Function *function = (Function *)DYNARR_PTR_GET((size_t)index, functions);
+
+            Obj *fn_obj = create_obj(FN_OTYPE, vm);
+            fn_obj->value.fn = function;
+
+            Value value = {0};
+            value.type = OBJ_VTYPE;
+            value.literal.obj = fn_obj;
+
+            push(value, vm);
+
+            break;
+        }
         case OR_OPCODE:{
             uint8_t right = pop_bool_assert(vm, "Expect bool at right side.");
             uint8_t left = pop_bool_assert(vm, "Expect bool at left side.");
@@ -633,6 +687,33 @@ static void execute(uint8_t chunk, VM *vm){
 
 			break;
 		}
+        case CALL_OPCODE:{
+            Function *fn = NULL;
+            uint8_t args_count = advance(vm);
+
+            if(!is_function(peek_at(args_count, vm), &fn))
+                error(vm, "Expect function after %d parameters count.", args_count);
+
+            uint8_t params_count = fn->params ? fn->params->used : 0;
+
+            if(params_count != args_count)
+                error(vm, "Failed to call function '%s'.\n\tDeclared with %d parameter(s), but got %d argument(s).", fn->name, params_count, args_count);
+
+            frame_up_fn(fn, vm);
+
+            int from = (int)(args_count == 0 ? 0 : args_count - 1);
+
+            for (int i = from; i >= 0; i--)
+                memcpy(current_frame(vm)->locals + i, pop(vm), sizeof(Value));
+
+            pop(vm);
+
+            break;
+        }
+        case RET_OPCODE:{
+            frame_down(vm);
+            break;
+        }
         default:{
             assert("Illegal opcode");
         }

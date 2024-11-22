@@ -70,6 +70,8 @@ int main(int argc, char const *argv[]){
 	add_keyword("while", WHILE_TOKTYPE, keywords);
 	add_keyword("stop", STOP_TOKTYPE, keywords);
 	add_keyword("list", LIST_TOKTYPE, keywords);
+    add_keyword("proc", PROC_TOKTYPE, keywords);
+    add_keyword("ret", RET_TOKTYPE, keywords);
 
 	Lexer *lexer = lexer_create();
 	Parser *parser = parser_create();

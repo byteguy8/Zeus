@@ -12,7 +12,9 @@ typedef enum stmt_type{
     BLOCK_STMTTYPE,
 	IF_STMTTYPE,
 	WHILE_STMTTYPE,
-	STOP_STMTTYPE
+	STOP_STMTTYPE,
+    FUNCTION_STMTTYPE,
+    RETURN_STMTTYPE,
 }StmtType;
 
 typedef struct stmt{
@@ -55,5 +57,16 @@ typedef struct while_stmt{
 typedef struct stop_stmt{
 	Token *stop_token;
 }StopStmt;
+
+typedef struct function_stmt{
+    Token *name_token;
+    DynArrPtr *params;
+    DynArrPtr *stmts;
+}FunctionStmt;
+
+typedef struct return_stmt{
+    Token *return_token;
+    Expr *value;
+}ReturnStmt;
 
 #endif

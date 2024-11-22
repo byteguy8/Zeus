@@ -107,6 +107,7 @@ Expr *parse_comparison(Parser *parser);
 Expr *parse_term(Parser *parser);
 Expr *parse_factor(Parser *parser);
 Expr *parse_unary(Parser *parser);
+Expr *parse_call(Parser *parser);
 Expr *parse_literal(Parser *parser);
 
 Stmt *parse_stmt(Parser *parser);
@@ -116,6 +117,8 @@ Stmt *parse_var_decl_stmt(Parser *parser);
 DynArrPtr *parse_block_stmt(Parser *parser);
 Stmt *parse_if_stmt(Parser *parser);
 Stmt *parse_while_stmt(Parser *parser);
+Stmt *parse_return_stmt(Parser *parser);
+Stmt *parse_function_stmt(Parser *parser);
 
 Expr *parse_expr(Parser *parser){
 	return parse_assign(parser);
@@ -306,7 +309,38 @@ Expr *parse_unary(Parser *parser){
         return create_expr(UNARY_EXPRTYPE, unary_expr);
     }
 
-    return parse_literal(parser);
+    return parse_call(parser);
+}
+
+Expr *parse_call(Parser *parser){
+    Expr *left = parse_literal(parser);
+
+    if(match(parser, 1, LEFT_PAREN_TOKTYPE)){
+        Token *left_paren = NULL;
+        DynArrPtr *args = NULL;
+
+        left_paren = previous(parser);
+        
+        if(!check(parser, RIGHT_PAREN_TOKTYPE)){
+            args = memory_dynarr_ptr();
+
+            do{
+                Expr *expr = parse_expr(parser);
+                dynarr_ptr_insert(expr, args);
+            } while (match(parser, 1, COMMA_TOKTYPE));
+        }
+
+        consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' after call arguments.");
+
+        CallExpr *call_expr = (CallExpr *)memory_alloc(sizeof(CallExpr));
+        call_expr->left = left;
+        call_expr->left_paren = left_paren;
+        call_expr->args = args;
+
+        return create_expr(CALL_EXPRTYPE, call_expr);
+    }
+
+    return left;
 }
 
 Expr *parse_literal(Parser *parser){
@@ -425,6 +459,12 @@ Stmt *parse_stmt(Parser *parser){
 		return create_stmt(STOP_STMTTYPE, stop_stmt);
 	}
 
+    if(match(parser, 1, RET_TOKTYPE))
+        return parse_return_stmt(parser);
+
+    if(match(parser, 1, PROC_TOKTYPE))
+        return parse_function_stmt(parser);
+
     return parse_expr_stmt(parser);
 }
 
@@ -542,6 +582,53 @@ Stmt *parse_while_stmt(Parser *parser){
 	while_stmt->stmts = stmts;
 
 	return create_stmt(WHILE_STMTTYPE, while_stmt);
+}
+
+Stmt *parse_return_stmt(Parser *parser){
+    Token *return_token = NULL;
+    Expr *value = NULL;
+
+    return_token = previous(parser);
+    
+    if(!check(parser, SEMICOLON_TOKTYPE))
+        value = parse_expr(parser);
+
+    consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of return statement.");
+
+    ReturnStmt *return_stmt = (ReturnStmt *)memory_alloc(sizeof(ReturnStmt));
+    return_stmt->return_token = return_token;
+    return_stmt->value = value;
+    
+    return create_stmt(RETURN_STMTTYPE, return_stmt);
+}
+
+Stmt *parse_function_stmt(Parser *parser){
+    Token *name_token = NULL;
+    DynArrPtr *params = NULL;
+    DynArrPtr *stmts = NULL;
+
+    name_token = consume(parser, IDENTIFIER_TOKTYPE, "Expect function name after 'proc' keyword.");
+    consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after function name.");
+
+    if(!check(parser, RIGHT_PAREN_TOKTYPE)){
+        params = memory_dynarr_ptr();
+        
+        do{
+            Token *param_token = consume(parser, IDENTIFIER_TOKTYPE, "Expect function parameter name.");
+            dynarr_ptr_insert(param_token, params);
+        } while (match(parser, 1, COMMA_TOKTYPE));
+    }
+
+    consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' at end of function parameters.");
+    consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of function body.");
+    stmts = parse_block_stmt(parser);
+
+    FunctionStmt *function_stmt = (FunctionStmt *)memory_alloc(sizeof(FunctionStmt));
+    function_stmt->name_token = name_token;
+    function_stmt->params = params;
+    function_stmt->stmts = stmts;
+
+    return create_stmt(FUNCTION_STMTTYPE, function_stmt);
 }
 
 Parser *parser_create(){

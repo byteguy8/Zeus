@@ -84,7 +84,7 @@ void scope_out(Compiler *compiler){
     compiler->depth--;
 }
 
-Scope *scope_in_fn(char *name, Compiler *compiler){
+Scope *scope_in_fn(char *name, Compiler *compiler, Function **out_function){
     assert(compiler->fn_ptr < FUNCTIONS_LENGTH);
 
     char *fn_name = memory_clone_str(name);
@@ -97,17 +97,17 @@ Scope *scope_in_fn(char *name, Compiler *compiler){
     fn->params = params;
 
     compiler->fn_stack[compiler->fn_ptr++] = fn;
+    dynarr_ptr_insert(fn, compiler->functions);
+
+    if(out_function) *out_function = fn;
 
     return scope_in(compiler);
 }
 
-Function *scope_out_fn(Compiler *compiler){
+void scope_out_fn(Compiler *compiler){
     assert(compiler->fn_ptr > 0);
-
     Function *fn = compiler->fn_stack[--compiler->fn_ptr];
-    
     scope_out(compiler);
-
     return fn;
 }
 
@@ -148,7 +148,7 @@ Symbol *get(Token *identifier_token, Compiler *compiler){
     return NULL;
 }
 
-Symbol *declare(Token *identifier_token, Compiler *compiler){
+Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler){
     char *identifier = identifier_token->lexeme;
     size_t identifier_len = strlen(identifier);
 
@@ -158,10 +158,20 @@ Symbol *declare(Token *identifier_token, Compiler *compiler){
     Scope *scope = current_scope(compiler);
     Symbol *symbol = &scope->symbols[scope->symbols_len++];
     
-    symbol->local = scope->locals++;
+    size_t local;
+
+    if(type == FN_SYMTYPE){
+        assert(compiler->functions->used > 0);
+        local = compiler->symbols++;
+    }else{
+        local = scope->locals++;
+    }
+    
+    symbol->local = local;
+    symbol->type = type;
+    symbol->name_len = identifier_len;
     memcpy(symbol->name, identifier, identifier_len);
     symbol->name[identifier_len] = '\0';
-    symbol->name_len = identifier_len;
 
     return symbol;
 }
@@ -256,10 +266,16 @@ void compile_expr(Expr *expr, Compiler *compiler){
             Token *identifier_token = identifier_expr->identifier_token;
 
             Symbol *symbol = get(identifier_token, compiler);
-            uint8_t local = (uint8_t)symbol->local;
-            
-            write_chunk(LGET_OPCODE, compiler);
-            write_chunk(local, compiler);
+
+            if(symbol->type == MUT_SYMTYPE || symbol->type == IMUT_SYMTYPE){
+                write_chunk(LGET_OPCODE, compiler);
+                write_chunk((uint8_t)symbol->local, compiler);
+            }else if(symbol->type == FN_SYMTYPE){
+                write_chunk(SGET_OPCODE, compiler);
+                write_i32(symbol->local, compiler);
+            }else{
+                assert("Illegal symbol type");
+            }
 
             break;
         }
@@ -269,6 +285,27 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             compile_expr(expr, compiler);
             
+            break;
+        }
+        case CALL_EXPRTYPE:{
+            CallExpr *call_expr = (CallExpr *)expr->sub_expr;
+            Expr *left = call_expr->left;
+            DynArrPtr *args = call_expr->args;
+
+            compile_expr(left, compiler);
+
+            if(args){
+                for (size_t i = 0; i < args->used; i++){
+                    Expr *expr = (Expr *)DYNARR_PTR_GET(i, args);
+                    compile_expr(expr, compiler);
+                }
+            }
+
+            write_chunk(CALL_OPCODE, compiler);
+            
+            uint8_t args_count = args ? (uint8_t)args->used : 0;
+            write_chunk(args_count, compiler);
+
             break;
         }
         case UNARY_EXPRTYPE:{
@@ -404,7 +441,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             Symbol *symbol = get(identifier_token, compiler);
             
-            if(symbol->is_const)
+            if(symbol->type == IMUT_SYMTYPE)
                 error(compiler, identifier_token, "'%s' declared as constant. Can't change its value.", identifier_token->lexeme);
             
             compile_expr(value_expr, compiler);
@@ -421,7 +458,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
 			Symbol *symbol = get(identifier_token, compiler);
 
-			if(symbol->is_const)
+			if(symbol->type == IMUT_SYMTYPE)
 				error(compiler, identifier_token, "'%s' declared as constant. Can't change its value.", identifier_token->lexeme);
 			
 			write_chunk(LGET_OPCODE, compiler);
@@ -511,8 +548,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             if(is_const && !is_initialized)
                 error(compiler, identifier_token, "'%s' declared as constant, but is not being initialized.", identifier_token->lexeme);
 
-            Symbol *symbol = declare(identifier_token, compiler);
-            symbol->is_const = is_const;
+            Symbol *symbol = declare(is_const ? IMUT_SYMTYPE : MUT_SYMTYPE, identifier_token, compiler);
             
             if(initializer_expr == NULL) write_chunk(EMPTY_OPCODE, compiler);
             else compile_expr(initializer_expr, compiler);
@@ -656,6 +692,57 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
 			break;
 		}
+        case RETURN_STMTTYPE:{
+            ReturnStmt *return_stmt = (ReturnStmt *)stmt->sub_stmt;
+            Expr *value = return_stmt->value;
+            
+            if(value) compile_expr(value, compiler);
+            else write_chunk(EMPTY_OPCODE, compiler);
+
+            write_chunk(RET_OPCODE, compiler);
+
+            break;
+        }
+        case FUNCTION_STMTTYPE:{
+            FunctionStmt *function_stmt = (FunctionStmt *)stmt->sub_stmt;
+            Token *name_token = function_stmt->name_token;
+            DynArrPtr *params = function_stmt->params;
+            DynArrPtr *stmts = function_stmt->stmts;
+
+            Function *fn = NULL;
+
+            declare(FN_SYMTYPE, name_token, compiler);
+            scope_in_fn(name_token->lexeme, compiler, &fn);
+
+            if(params){
+                for (size_t i = 0; i < params->used; i++){
+                    Token *param_token = (Token *)DYNARR_PTR_GET(i, params);
+                    declare(MUT_SYMTYPE, param_token, compiler);
+                    
+                    char *name = memory_clone_str(param_token->lexeme);
+                    dynarr_ptr_insert(name, fn->params);
+                }
+            }
+
+            char returned = 0;
+
+            for (size_t i = 0; i < stmts->used; i++){
+                Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
+                compile_stmt(stmt, compiler);
+                
+                if(i + 1 >= stmts->used && stmt->type == RETURN_STMTTYPE)
+                    returned = 1;
+            }
+
+            if(!returned){
+                write_chunk(EMPTY_OPCODE, compiler);
+                write_chunk(RET_OPCODE, compiler);
+            }
+            
+            scope_out_fn(compiler);
+
+            break;
+        }
         default:{
             assert("Illegal stmt type");
             break;
@@ -678,20 +765,20 @@ int compiler_compile(
     if(setjmp(err_jmp) == 1) return 1;
     else{
 		memset(compiler, 0, sizeof(Compiler));
-		
+
+        compiler->symbols = 1;
         compiler->constants = constants;
         compiler->functions = functions;
         compiler->stmts = stmts;
 
-        scope_in_fn("main", compiler);
+        scope_in_fn("main", compiler, NULL);
 
         for (size_t i = 0; i < stmts->used; i++){
             Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
             compile_stmt(stmt, compiler);
         }
 
-        Function *fn = scope_out_fn(compiler);
-        dynarr_ptr_insert(fn, functions);
+        scope_out_fn(compiler);
         
         return 0;
     }
