@@ -6,6 +6,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <setjmp.h>
+#include <assert.h>
 
 static jmp_buf err_jmp;
 
@@ -315,29 +316,53 @@ Expr *parse_unary(Parser *parser){
 Expr *parse_call(Parser *parser){
     Expr *left = parse_literal(parser);
 
-    if(match(parser, 1, LEFT_PAREN_TOKTYPE)){
-        Token *left_paren = NULL;
-        DynArrPtr *args = NULL;
+    if(check(parser, DOT_TOKTYPE) ||
+       check(parser, LEFT_PAREN_TOKTYPE)){
 
-        left_paren = previous(parser);
+        while (match(parser, 2, DOT_TOKTYPE, LEFT_PAREN_TOKTYPE)){
+            Token *token = previous(parser);
+
+            switch (token->type){
+                case DOT_TOKTYPE:{
+                    Token *symbol_token = consume(parser, IDENTIFIER_TOKTYPE, "Expect identifier.");
+                    
+                    AccessExpr *access_expr = (AccessExpr *)memory_alloc(sizeof(AccessExpr));
+                    access_expr->left = left;
+                    access_expr->dot_token = token;
+                    access_expr->symbol_token = symbol_token;
+                    
+                    left = create_expr(ACCESS_EXPRTYPE, access_expr);
+
+                    break;
+                }
+                case LEFT_PAREN_TOKTYPE:{
+                    DynArrPtr *args = NULL;
         
-        if(!check(parser, RIGHT_PAREN_TOKTYPE)){
-            args = memory_dynarr_ptr();
+                    if(!check(parser, RIGHT_PAREN_TOKTYPE)){
+                        args = memory_dynarr_ptr();
 
-            do{
-                Expr *expr = parse_expr(parser);
-                dynarr_ptr_insert(expr, args);
-            } while (match(parser, 1, COMMA_TOKTYPE));
+                        do{
+                            Expr *expr = parse_expr(parser);
+                            dynarr_ptr_insert(expr, args);
+                        } while (match(parser, 1, COMMA_TOKTYPE));
+                    }
+
+                    consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' after call arguments.");
+
+                    CallExpr *call_expr = (CallExpr *)memory_alloc(sizeof(CallExpr));
+                    call_expr->left = left;
+                    call_expr->left_paren = token;
+                    call_expr->args = args;
+
+                    left = create_expr(CALL_EXPRTYPE, call_expr);
+                    
+                    break;
+                }
+                default:{
+                    assert("Illegal token type");
+                }
+            }
         }
-
-        consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' after call arguments.");
-
-        CallExpr *call_expr = (CallExpr *)memory_alloc(sizeof(CallExpr));
-        call_expr->left = left;
-        call_expr->left_paren = left_paren;
-        call_expr->args = args;
-
-        return create_expr(CALL_EXPRTYPE, call_expr);
     }
 
     return left;

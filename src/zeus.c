@@ -89,17 +89,17 @@ int main(int argc, char const *argv[]){
     }else if(args.compile){
         if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
-        if(compiler_compile(constants, functions, stmts, compiler)) goto CLEAN_UP;
+        if(compiler_compile(constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
 		printf("No errors in compile phase\n");
     }else if(args.dump){
         if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
-        if(compiler_compile(constants, functions, stmts, compiler)) goto CLEAN_UP;
+        if(compiler_compile(constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
         dumpper_dump(constants, strings, functions, dumpper);
     }else{
         if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
-        if(compiler_compile(constants, functions, stmts, compiler)) goto CLEAN_UP;
+        if(compiler_compile(constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
         if(vm_execute(constants, strings, functions, vm)) goto CLEAN_UP;
     }
 

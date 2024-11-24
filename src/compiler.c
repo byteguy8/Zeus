@@ -254,6 +254,19 @@ size_t write_i64_const(int64_t i64, Compiler *compiler){
 	return write_i32(index, compiler);
 }
 
+void write_str(char *rstr, Compiler *compiler){
+    uint8_t *key = (uint8_t *)rstr;
+    size_t key_size = strlen(rstr);
+    uint32_t hash = lzhtable_hash(key, key_size);
+
+    if(!lzhtable_hash_contains(hash, compiler->strings, NULL)){
+        char *str = memory_clone_str(rstr);
+        lzhtable_hash_put(hash, str, compiler->strings);
+    }
+
+    write_i32((int32_t)hash, compiler);
+}
+
 void compile_expr(Expr *expr, Compiler *compiler){
     switch (expr->type){
         case EMPTY_EXPRTYPE:{
@@ -331,6 +344,17 @@ void compile_expr(Expr *expr, Compiler *compiler){
             
             uint8_t args_count = args ? (uint8_t)args->used : 0;
             write_chunk(args_count, compiler);
+
+            break;
+        }
+        case ACCESS_EXPRTYPE:{
+            AccessExpr *access_expr = (AccessExpr *)expr->sub_expr;
+            Expr *left = access_expr->left;
+            Token *symbol_token = access_expr->symbol_token;
+
+            compile_expr(left, compiler);
+            write_chunk(ACCESS_OPCODE, compiler);
+            write_str(symbol_token->lexeme, compiler);
 
             break;
         }
@@ -525,8 +549,8 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			DynArrPtr *exprs = list_expr->exprs;
 
             if(exprs){
-				for(size_t i = 0; i < exprs->used; i++){
-					Expr *expr = (Expr *)DYNARR_PTR_GET(i, exprs);
+				for(int i = exprs->used - 1; i >= 0; i--){
+					Expr *expr = (Expr *)DYNARR_PTR_GET((size_t)i, exprs);
 					compile_expr(expr, compiler);
 				}
 			}
@@ -792,6 +816,7 @@ Compiler *compiler_create(){
 
 int compiler_compile(
     DynArr *constants,
+    LZHTable *strings,
     DynArrPtr *functions,
     DynArrPtr *stmts, 
     Compiler *compiler
@@ -802,6 +827,7 @@ int compiler_compile(
 
         compiler->symbols = 1;
         compiler->constants = constants;
+        compiler->strings = strings;
         compiler->functions = functions;
         compiler->stmts = stmts;
 

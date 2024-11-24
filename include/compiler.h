@@ -3,6 +3,7 @@
 
 #include "dynarr.h"
 #include "function.h"
+#include "lzhtable.h"
 
 #define SCOPES_LENGTH 32
 #define SYMBOLS_LENGTH 255
@@ -51,6 +52,7 @@ typedef struct compiler{
 	size_t stop_marks[STOP_MARKS_LENGTH][3];
     
     DynArr *constants;
+    LZHTable *strings;
     DynArrPtr *functions;
     DynArrPtr *stmts;
 }Compiler;
@@ -58,6 +60,7 @@ typedef struct compiler{
 Compiler *compiler_create();
 int compiler_compile(
     DynArr *constants,
+    LZHTable *strings,
     DynArrPtr *functions,
     DynArrPtr *stmts,
     Compiler *compiler

@@ -7,19 +7,138 @@
 #include <assert.h>
 #include <setjmp.h>
 
+//> ERROR RELATED
 static jmp_buf err_jmp;
+static void error(VM *vm, char *msg, ...);
+//< ERROR RELATED
 
-static void error(VM *vm, char *msg, ...){
-    va_list args;
-	va_start(args, msg);
+//> VALUE RELATED
+static int is_i64(Value *value, int64_t *i64);
+static int is_str(Value *value, Str **str);
+static int is_list(Value *value, DynArr **list);
+static int is_function(Value *value, Function **out_fn);
+static int is_native_function(Value *value, NativeFunction **out_native_fn);
 
-	fprintf(stderr, "Runtime error:\n\t");
-	vfprintf(stderr, msg, args);
-    fprintf(stderr, "\n");
+static Obj *create_obj(ObjType type, VM *vm);
+static void destroy_obj(Obj *obj, VM *vm);
+static NativeFunction *create_native_function(
+    int arity,
+    char *name,
+    void *target,
+    void(native)(void *target, VM *vm), VM *vm
+);
+static void clean_up(VM *vm);
+//< VALUE RELATED
+//> STACK RELATED
+static void push(Value value, VM *vm);
+static Value *pop(VM *vm);
+static Value *peek(VM *vm);
+static void push_bool(uint8_t bool, VM *vm);
+static void push_empty(VM *vm);
+static void push_i64(int64_t i64, VM *vm);
+static void push_string(char *buff, char core, VM *vm);
+static void push_native_fn(NativeFunction *native, VM *vm);
+//< STACK RELATED
 
-	va_end(args);
+void native_fn_list_insert(void *target, VM *vm){
+    Value *value = pop(vm);
+    DynArr *list = (DynArr *)target;
 
-    longjmp(err_jmp, 1);
+    if(dynarr_insert(value, list))
+        error(vm, "Failed to insert value in list: out of memory");
+
+    pop(vm); // pop native function
+    push_empty(vm);
+}
+
+void native_fn_list_insert_at(void *target, VM *vm){
+    Value *value = pop(vm);
+    Value *index_value = pop(vm);
+    DynArr *list = (DynArr *)target;
+
+    int64_t index = -1;
+
+    if(!is_i64(index_value, &index))
+        error(vm, "Failed to insert value: expect int as index, but got something else");
+    if(index < 0)
+        error(vm, "Failed to insert value. Illegal index(%ld): negative", index);
+    if((size_t)index >= list->used)
+        error(vm, "Failed to insert value. Index(%ld) out of bounds", index);
+
+    
+    Value *out_value = dynarr_get((size_t)index, list);
+
+    if(dynarr_insert_at((size_t) index, value, list))
+        error(vm, "Failed to insert value in list: out of memory");
+
+    pop(vm); // pop native function
+    push(*out_value, vm);
+}
+
+void native_fn_list_get(void *target, VM *vm){
+    int64_t index = -1;
+    DynArr *list = (DynArr *)target;
+
+    if(!is_i64(pop(vm), &index))
+        error(vm, "Failed to get value: expect int as index, but got something else");
+
+    if(index < 0)
+        error(vm, "Failed to get value. Illegal index(%ld): negative", index);
+    if((size_t)index >= list->used)
+        error(vm, "Failed to get value. Index(%ld) out of bounds", index);
+
+    Value *value = (Value *)dynarr_get((size_t)index, list);
+    
+    pop(vm); // pop native function
+    push(*value, vm);
+}
+
+void native_fn_list_remove(void *target, VM *vm){
+    int64_t index = -1;
+    DynArr *list = (DynArr *)target;
+
+    if(!is_i64(pop(vm), &index))
+        error(vm, "Failed to remove value: expect int as index, but got something else");
+
+    if(index < 0)
+        error(vm, "Failed to remove value. Illegal index(%ld): negative", index);
+    if((size_t)index >= list->used)
+        error(vm, "Failed to remove value. Index(%ld) out of bounds", index);
+
+    Value *out_value = (Value *)dynarr_get((size_t)index, list);
+    Value in_value = {0};
+    memcpy(&in_value, out_value, sizeof(Value));
+
+    dynarr_remove_index((size_t)index, list);
+    
+    pop(vm); // pop native function
+    push(in_value, vm);
+}
+
+void native_fn_list_append(void *target, VM *vm){
+    DynArr *from = NULL;
+    DynArr *to = (DynArr *)target;
+
+    if(!is_list(pop(vm), &from))
+        error(vm, "Failed to append list: expect another list, but got something else");
+
+    int64_t from_len = (int64_t)from->used;
+
+    if(dynarr_append(from, to))
+        error(vm, "Failed to append to list: out of memory");
+    
+    pop(vm); // pop native function
+    push_i64(from_len, vm);
+}
+
+void native_fn_list_clear(void *target, VM *vm){
+    DynArr *list = (DynArr *)target;
+    int64_t list_len = (int64_t)list->used;
+
+    dynarr_remove_all(list);
+
+    pop(vm); // pop native function
+    push_i64(list_len, vm);
 }
 
 static char *join_buff(char *buffa, size_t sza, char *buffb, size_t szb, VM *vm){
@@ -27,7 +146,7 @@ static char *join_buff(char *buffa, size_t sza, char *buffb, size_t szb, VM *vm)
     char *buff = malloc(szc + 1);
 
 	if(!buff)
-		error(vm, "Failed to create buffer: out of memory.");
+		error(vm, "Failed to create buffer: out of memory");
 
     memcpy(buff, buffa, sza);
     memcpy(buff + sza, buffb, szb);
@@ -99,62 +218,13 @@ static void frame_down(VM *vm){
     vm->frame_ptr--;
 }
 
-static int is_i64(Value *value, int64_t *i64){
-    if(value->type != INT_VTYPE) return 0;
-    if(i64) *i64 = value->literal.i64;
-    return 1;
-}
-
-static int is_str(Value *value, Str **str){
-    if(value->type != OBJ_VTYPE) return 0;
-    
-    Obj *obj = value->literal.obj;
-
-    if(obj->type == STRING_OTYPE){
-        Str *ostr = &obj->value.str;
-        if(str) *str = ostr;
-    
-        return 1;
-    }
-
-    return 0;
-}
-
-static int is_list(Value *value, DynArr **list){
-	if(value->type != OBJ_VTYPE) return 0;
-	
-	Obj *obj = value->literal.obj;
-
-	if(obj->type == LIST_OTYPE){
-		DynArr *olist = obj->value.list;
-		if(list) *list = olist;
-		return 1;
-	}
-
-	return 0;
-}
-
-static int is_function(Value *value, Function **out_fn){
-	if(value->type != OBJ_VTYPE) return 0;
-	
-	Obj *obj = value->literal.obj;
-
-	if(obj->type == FN_OTYPE){
-		Function *ofn = obj->value.fn;
-		if(out_fn) *out_fn = ofn;
-		return 1;
-	}
-
-	return 0;
-}
-
 #define TO_STR(v)(&v->literal.obj->value.str)
 
 static int32_t compose_i32(uint8_t *bytes){
     return ((int32_t)bytes[3] << 24) | ((int32_t)bytes[2] << 16) | ((int32_t)bytes[1] << 8) | ((int32_t)bytes[0]);
 }
 
-void print_object(Obj *object){
+void print_obj(Obj *object){
     switch (object->type){
         case STRING_OTYPE:{
             Str *str = &object->value.str;
@@ -169,6 +239,11 @@ void print_object(Obj *object){
         case FN_OTYPE:{
             Function *fn = (Function *)object->value.fn;
             printf("<fn '%s' - %d at %p>\n", fn->name, (uint8_t)(fn->params ? fn->params->used : 0), fn);
+            break;
+        }
+        case NATIVE_FN_OTYPE:{
+            NativeFunction *native_fn = object->value.native_fn;
+            printf("<native fn '%s' - %d at %p>\n", native_fn->name, native_fn->arity, native_fn);
             break;
         }
         default:{
@@ -193,7 +268,7 @@ void print_value(Value *value){
             break;
         }
         case OBJ_VTYPE:{
-            print_object(value->literal.obj);
+            print_obj(value->literal.obj);
             break;
         }
         default:{
@@ -238,7 +313,108 @@ static int64_t read_i64_const(VM *vm){
     return *(int64_t *)dynarr_get(index, constants);
 }
 
-static void destroy_obj(Obj *obj, VM *vm){
+static char *read_str(VM *vm, uint32_t *out_hash){
+    uint32_t hash = (uint32_t)read_i32(vm);
+    if(out_hash) *out_hash = hash;
+    return lzhtable_hash_get(hash, vm->strings);
+}
+
+void error(VM *vm, char *msg, ...){
+    va_list args;
+	va_start(args, msg);
+
+	fprintf(stderr, "Runtime error:\n\t");
+	vfprintf(stderr, msg, args);
+    fprintf(stderr, "\n");
+
+	va_end(args);
+    clean_up(vm);
+
+    longjmp(err_jmp, 1);
+}
+
+int is_i64(Value *value, int64_t *i64){
+    if(value->type != INT_VTYPE) return 0;
+    if(i64) *i64 = value->literal.i64;
+    return 1;
+}
+
+int is_str(Value *value, Str **str){
+    if(value->type != OBJ_VTYPE) return 0;
+    
+    Obj *obj = value->literal.obj;
+
+    if(obj->type == STRING_OTYPE){
+        Str *ostr = &obj->value.str;
+        if(str) *str = ostr;
+    
+        return 1;
+    }
+
+    return 0;
+}
+
+int is_list(Value *value, DynArr **list){
+	if(value->type != OBJ_VTYPE) return 0;
+	
+	Obj *obj = value->literal.obj;
+
+	if(obj->type == LIST_OTYPE){
+		DynArr *olist = obj->value.list;
+		if(list) *list = olist;
+		return 1;
+	}
+
+	return 0;
+}
+
+int is_function(Value *value, Function **out_fn){
+	if(value->type != OBJ_VTYPE) return 0;
+	
+	Obj *obj = value->literal.obj;
+
+	if(obj->type == FN_OTYPE){
+		Function *ofn = obj->value.fn;
+		if(out_fn) *out_fn = ofn;
+		return 1;
+	}
+
+	return 0;
+}
+
+int is_native_function(Value *value, NativeFunction **out_native_fn){
+	if(value->type != OBJ_VTYPE) return 0;
+	
+	Obj *obj = value->literal.obj;
+
+	if(obj->type == NATIVE_FN_OTYPE){
+		NativeFunction *ofn = obj->value.native_fn;
+		if(out_native_fn) *out_native_fn = ofn;
+		return 1;
+	}
+
+	return 0;
+}
+
+Obj *create_obj(ObjType type, VM *vm){
+    Obj *obj = malloc(sizeof(Obj));
+    
+    if(!obj) error(vm, "Failed to allocate object: out of memory.");
+
+    memset(obj, 0, sizeof(Obj));
+    obj->type = type;
+    
+    if(vm->tail){
+        obj->prev = vm->tail;
+        vm->tail->next = obj;
+    }else vm->head = obj;
+
+    vm->tail = obj;
+
+    return obj;
+}
+
+void destroy_obj(Obj *obj, VM *vm){
     Obj *prev = obj->prev;
     Obj *next = obj->next;
 
@@ -259,6 +435,11 @@ static void destroy_obj(Obj *obj, VM *vm){
 			dynarr_destroy(list);
 			break;
 		}
+        case NATIVE_FN_OTYPE:{
+            NativeFunction *native_fn = obj->value.native_fn;
+            free(native_fn);
+            break;
+        }
 		default:{
 			assert("Illegal object type");
 		}
@@ -267,46 +448,52 @@ static void destroy_obj(Obj *obj, VM *vm){
 	free(obj);
 }
 
+static NativeFunction *create_native_function(
+    int arity,
+    char *name,
+    void *target,
+    void(native)(void *target, VM *vm), VM *vm
+){
+    size_t name_len = strlen(name);
+    assert(name_len < NAME_LEN - 1);
+
+    NativeFunction *native_fn = (NativeFunction *)malloc(sizeof(NativeFunction));
+    
+    if(!native_fn)
+        error(vm, "Failed to create native function: out of memory");
+
+    native_fn->arity = arity;
+    memcpy(native_fn->name, name, name_len);
+    native_fn->name[name_len] = '\0';
+    native_fn->name_len = name_len;
+    native_fn->target = target;
+    native_fn->native = native;
+
+    return native_fn;
+}
+
 static void clean_up(VM *vm){
     while (vm->head)
         destroy_obj(vm->head, vm);
 }
 
-static Obj *create_obj(ObjType type, VM *vm){
-    Obj *obj = malloc(sizeof(Obj));
-    
-    if(!obj) error(vm, "Failed to allocate object: out of memory.");
-
-    memset(obj, 0, sizeof(Obj));
-    obj->type = type;
-    
-    if(vm->tail){
-        obj->prev = vm->tail;
-        vm->tail->next = obj;
-    }else vm->head = obj;
-
-    vm->tail = obj;
-
-    return obj;
-}
-
-static void push(Value value, VM *vm){
+void push(Value value, VM *vm){
     if(vm->stack_ptr >= STACK_LENGTH) error(vm, "StackOverFlow");
     Value *current_value = &vm->stack[vm->stack_ptr++];
     memcpy(current_value, &value, sizeof(Value));
 }
 
-static Value *pop(VM *vm){
+Value *pop(VM *vm){
     if(vm->stack_ptr == 0) error(vm, "StackUnderFlow");
     return &vm->stack[--vm->stack_ptr];
 }
 
-static Value *peek(VM *vm){
+Value *peek(VM *vm){
     if(vm->stack_ptr == 0) error(vm, "StackUnderFlow");
     return &vm->stack[vm->stack_ptr - 1];
 }
 
-static Value *peek_at(int offset, VM *vm){
+Value *peek_at(int offset, VM *vm){
     if(1 + offset > vm->stack_ptr) error(vm, "Illegal offset");
     size_t at = vm->stack_ptr - 1 - offset;
     return &vm->stack[at];
@@ -318,6 +505,13 @@ void push_bool(uint8_t bool, VM *vm){
     value.literal.bool = bool;
     
     push(value, vm);
+}
+
+static void push_empty(VM *vm){
+    Value value = {0};
+    value.type = EMPTY_VTYPE;
+    
+    push(value, vm);   
 }
 
 void push_i64(int64_t i64, VM *vm){
@@ -336,6 +530,17 @@ void push_string(char *buff, char core, VM *vm){
     str->len = strlen(buff);
     str->buff = buff;
     
+    Value value = {0};
+    value.type = OBJ_VTYPE;
+    value.literal.obj = obj;
+
+    push(value, vm);
+}
+
+void push_native_fn(NativeFunction *native, VM *vm){
+    Obj *obj = create_obj(NATIVE_FN_OTYPE, vm);
+    obj->value.native_fn = native;
+
     Value value = {0};
     value.type = OBJ_VTYPE;
     value.literal.obj = obj;
@@ -414,8 +619,8 @@ static void execute(uint8_t chunk, VM *vm){
             break;
         }
 		case STRING_OPCODE:{
-			uint32_t hash = (uint32_t)read_i32(vm);
-            char *str = lzhtable_hash_get(hash, vm->strings);
+			uint32_t hash = 0;
+            char *str = read_str(vm, &hash);
             push_string(str, 1, vm);
 			break;
 		}
@@ -689,24 +894,75 @@ static void execute(uint8_t chunk, VM *vm){
 		}
         case CALL_OPCODE:{
             Function *fn = NULL;
+            NativeFunction *native_fn = NULL;
             uint8_t args_count = advance(vm);
 
-            if(!is_function(peek_at(args_count, vm), &fn))
+            if(is_function(peek_at(args_count, vm), &fn)){
+                uint8_t params_count = fn->params ? fn->params->used : 0;
+
+                if(params_count != args_count)
+                    error(vm, "Failed to call function '%s'.\n\tDeclared with %d parameter(s), but got %d argument(s).", fn->name, params_count, args_count);
+
+                frame_up_fn(fn, vm);
+
+                int from = (int)(args_count == 0 ? 0 : args_count - 1);
+
+                for (int i = from; i >= 0; i--)
+                    memcpy(current_frame(vm)->locals + i, pop(vm), sizeof(Value));
+
+                pop(vm);
+            }else if(is_native_function(peek_at(args_count, vm), &native_fn)){
+                void *target = native_fn->target;
+                void (*native)(void *target, VM *vm) = native_fn->native;
+
+                if(native_fn->arity != args_count)
+                    error(
+                        vm,
+                        "Failed to call function '%s'.\n\tDeclared with %d parameter(s), but got %d argument(s).",
+                        native_fn->name,
+                        native_fn->arity,
+                        args_count
+                    );
+
+                native(target, vm);
+            }else
                 error(vm, "Expect function after %d parameters count.", args_count);
 
-            uint8_t params_count = fn->params ? fn->params->used : 0;
+            break;
+        }
+        case ACCESS_OPCODE:{
+            char *symbol = read_str(vm, NULL);
+            DynArr *list = NULL;
 
-            if(params_count != args_count)
-                error(vm, "Failed to call function '%s'.\n\tDeclared with %d parameter(s), but got %d argument(s).", fn->name, params_count, args_count);
+            if(is_list(pop(vm), &list)){
+                if(strcmp(symbol, "size") == 0)
+                    push_i64((int64_t)list->used, vm);
+                else if(strcmp(symbol, "insert") == 0){
+                    NativeFunction *native_fn = create_native_function(1, "insert", list, native_fn_list_insert, vm);
+                    push_native_fn(native_fn, vm);
+                }if(strcmp(symbol, "insert_at") == 0){
+                    NativeFunction *native_fn = create_native_function(2, "insert_at", list, native_fn_list_insert_at, vm);
+                    push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "get") == 0){
+                    NativeFunction *native_fn = create_native_function(1, "get", list, native_fn_list_get, vm);
+                    push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "remove") == 0){
+                    NativeFunction *native_fn = create_native_function(1, "remove", list, native_fn_list_remove, vm);
+                    push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "append") == 0){
+                    NativeFunction *native_fn = create_native_function(1, "append", list, native_fn_list_append, vm);
+                    push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "clear") == 0){
+                    NativeFunction *native_fn = create_native_function(0, "clear", list, native_fn_list_clear, vm);
+                    push_native_fn(native_fn, vm);
+                }else{
+                    error(vm, "list do not have symbol named as '%s'", symbol);
+                }
 
-            frame_up_fn(fn, vm);
+                break;
+            }
 
-            int from = (int)(args_count == 0 ? 0 : args_count - 1);
-
-            for (int i = from; i >= 0; i--)
-                memcpy(current_frame(vm)->locals + i, pop(vm), sizeof(Value));
-
-            pop(vm);
+            error(vm, "Illegal target to access.");
 
             break;
         }

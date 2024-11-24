@@ -271,6 +271,10 @@ static void scan_token(Lexer *lexer){
 			add_token(COMMA_TOKTYPE, lexer);
 			break;
 		}
+		case '.':{
+			add_token(DOT_TOKTYPE, lexer);
+			break;
+		}
         case '<':{
             if(match('=', lexer)) add_token(LESS_EQUALS_TOKTYPE, lexer);
             else add_token(LESS_TOKTYPE, lexer);

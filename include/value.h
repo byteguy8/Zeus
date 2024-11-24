@@ -3,6 +3,7 @@
 
 #include "dynarr.h"
 #include "function.h"
+#include "native_function.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -10,6 +11,7 @@ typedef enum obj_type{
 	STRING_OTYPE,
 	LIST_OTYPE,
     FN_OTYPE,
+    NATIVE_FN_OTYPE,
 }ObjType;
 
 typedef struct str{
@@ -29,6 +31,7 @@ typedef struct obj{
 		Str str;
 		DynArr *list;
         Function *fn;
+        NativeFunction *native_fn;
 	}value;
 }Obj;
 

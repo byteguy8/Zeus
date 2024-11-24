@@ -34,6 +34,12 @@ static int64_t read_i64_const(Dumpper *dumpper){
     return *(int64_t *)dynarr_get(index, constants);
 }
 
+static char *read_str(Dumpper *dumpper, uint32_t *out_hash){
+    uint32_t hash = (uint32_t)read_i32(dumpper);
+    if(out_hash) *out_hash = hash;
+    return lzhtable_hash_get(hash, dumpper->strings);
+}
+
 static void execute(uint8_t chunk, Dumpper *dumpper){
 	printf("%.7ld ", dumpper->ip - 1);
 
@@ -56,8 +62,8 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             break;
         }
         case STRING_OPCODE:{
-            uint32_t hash = (uint32_t)read_i32(dumpper);
-            char *str = lzhtable_hash_get(hash, dumpper->strings);
+            uint32_t hash = 0;
+            char *str = read_str(dumpper, &hash);
             printf("STRING_OPCODE hash: %u value: '%s'\n", hash, str);
             break;
         }
@@ -188,6 +194,11 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
         case CALL_OPCODE:{
             uint8_t args_count = advance(dumpper);
             printf("CALL_OPCODE args: %d\n", args_count);
+            break;
+        }
+        case ACCESS_OPCODE:{
+            char *symbol = read_str(dumpper, NULL);
+            printf("ACCESS_OPCODE symbol: %s\n", symbol);
             break;
         }
         case RET_OPCODE:{
