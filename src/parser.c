@@ -303,7 +303,7 @@ Expr *parse_unary(Parser *parser){
         Token *operator = previous(parser);
         Expr *right = parse_unary(parser);
 
-        UnaryExpr *unary_expr = (UnaryExpr *)malloc(sizeof(UnaryExpr));
+        UnaryExpr *unary_expr = (UnaryExpr *)memory_alloc(sizeof(UnaryExpr));
         unary_expr->operator = operator;
         unary_expr->right = right;
 

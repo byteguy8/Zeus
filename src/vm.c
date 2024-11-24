@@ -36,7 +36,7 @@ static Value *peek(VM *vm);
 static void push_bool(uint8_t bool, VM *vm);
 static void push_empty(VM *vm);
 static void push_i64(int64_t i64, VM *vm);
-static void push_string(char *buff, char core, VM *vm);
+static void push_str(char *buff, char core, VM *vm);
 static void push_native_fn(NativeFunction *native, VM *vm);
 //< STACK RELATED
 
@@ -239,7 +239,7 @@ static void frame_down(VM *vm){
     vm->frame_ptr--;
 }
 
-#define TO_STR(v)(&v->literal.obj->value.str)
+#define TO_STR(v)(v->literal.obj->value.str)
 
 static int32_t compose_i32(uint8_t *bytes){
     return ((int32_t)bytes[3] << 24) | ((int32_t)bytes[2] << 16) | ((int32_t)bytes[1] << 8) | ((int32_t)bytes[0]);
@@ -248,7 +248,7 @@ static int32_t compose_i32(uint8_t *bytes){
 void print_obj(Obj *object){
     switch (object->type){
         case STRING_OTYPE:{
-            Str *str = &object->value.str;
+            Str *str = object->value.str;
             printf("%s\n", str->buff);
             break;
         }
@@ -366,7 +366,7 @@ int is_str(Value *value, Str **str){
     Obj *obj = value->literal.obj;
 
     if(obj->type == STRING_OTYPE){
-        Str *ostr = &obj->value.str;
+        Str *ostr = obj->value.str;
         if(str) *str = ostr;
     
         return 1;
@@ -447,8 +447,9 @@ void destroy_obj(Obj *obj, VM *vm){
 
 	switch(obj->type){
 		case STRING_OTYPE:{
-			Str *str = (Str *)&obj->value.str;
+			Str *str = obj->value.str;
 			if(!str->core) free(str->buff);
+            free(str);
 			break;
 		}
 		case LIST_OTYPE:{
@@ -543,9 +544,14 @@ void push_i64(int64_t i64, VM *vm){
     push(value, vm);
 }
 
-void push_string(char *buff, char core, VM *vm){
+void push_str(char *buff, char core, VM *vm){
     Obj *obj = create_obj(STRING_OTYPE, vm);
-    Str *str = &obj->value.str;
+    Str *str = (Str *)malloc(sizeof(Str));
+
+    if(!str)
+        error(vm, "Failed to push string: out of memory");
+
+    obj->value.str = str;
 
     str->core = core;
     str->len = strlen(buff);
@@ -642,7 +648,7 @@ static void execute(uint8_t chunk, VM *vm){
 		case STRING_OPCODE:{
 			uint32_t hash = 0;
             char *str = read_str(vm, &hash);
-            push_string(str, 1, vm);
+            push_str(str, 1, vm);
 			break;
 		}
         case ADD_OPCODE:{
@@ -657,7 +663,7 @@ static void execute(uint8_t chunk, VM *vm){
                     error(vm, "Expect string at right side of string concatenation.");
 
                 char *buff = join_buff(astr->buff, astr->len, bstr->buff, bstr->len, vm);
-                push_string(buff, 0, vm);
+                push_str(buff, 0, vm);
 
                 break;
             }
@@ -696,7 +702,7 @@ static void execute(uint8_t chunk, VM *vm){
 					error(vm, "Negative values not allowed in string multiplication.");
 
                 char *buff = multiply_buff(str->buff, str->len, (size_t)by, vm);
-                push_string(buff, 0, vm);
+                push_str(buff, 0, vm);
 
                 break;
             }
@@ -712,7 +718,7 @@ static void execute(uint8_t chunk, VM *vm){
 					error(vm, "Negative values not allowed in string multiplication.");
 
                 char *buff = multiply_buff(str->buff, str->len, (size_t)by, vm);
-                push_string(buff, 0, vm);
+                push_str(buff, 0, vm);
 
                 break;
             }

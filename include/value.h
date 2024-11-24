@@ -28,7 +28,7 @@ typedef struct obj{
     ObjType type;
 
     union{
-		Str str;
+		Str *str;
 		DynArr *list;
         Function *fn;
         NativeFunction *native_fn;
