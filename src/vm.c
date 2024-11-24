@@ -40,6 +40,24 @@ static void push_string(char *buff, char core, VM *vm);
 static void push_native_fn(NativeFunction *native, VM *vm);
 //< STACK RELATED
 
+void native_fn_list_get(void *target, VM *vm){
+    int64_t index = -1;
+    DynArr *list = (DynArr *)target;
+
+    if(!is_i64(pop(vm), &index))
+        error(vm, "Failed to get value: expect int as index, but got something else");
+
+    if(index < 0)
+        error(vm, "Failed to get value. Illegal index(%ld): negative", index);
+    if((size_t)index >= list->used)
+        error(vm, "Failed to get value. Index(%ld) out of bounds", index);
+
+    Value *value = (Value *)dynarr_get((size_t)index, list);
+    
+    pop(vm); // pop native function
+    push(*value, vm);
+}
+
 void native_fn_list_insert(void *target, VM *vm){
     Value *value = pop(vm);
     DynArr *list = (DynArr *)target;
@@ -65,7 +83,6 @@ void native_fn_list_insert_at(void *target, VM *vm){
     if((size_t)index >= list->used)
         error(vm, "Failed to insert value. Index(%ld) out of bounds", index);
 
-    
     Value *out_value = dynarr_get((size_t)index, list);
 
     if(dynarr_insert_at((size_t) index, value, list))
@@ -75,22 +92,25 @@ void native_fn_list_insert_at(void *target, VM *vm){
     push(*out_value, vm);
 }
 
-void native_fn_list_get(void *target, VM *vm){
-    int64_t index = -1;
+void native_fn_list_set(void *target, VM *vm){
+    Value *value = pop(vm);
+    Value *index_value = pop(vm);
     DynArr *list = (DynArr *)target;
 
-    if(!is_i64(pop(vm), &index))
-        error(vm, "Failed to get value: expect int as index, but got something else");
+    int64_t index = -1;
 
+    if(!is_i64(index_value, &index))
+        error(vm, "Failed to set value: expect int as index, but got something else");
     if(index < 0)
-        error(vm, "Failed to get value. Illegal index(%ld): negative", index);
+        error(vm, "Failed to set value. Illegal index(%ld): negative", index);
     if((size_t)index >= list->used)
-        error(vm, "Failed to get value. Index(%ld) out of bounds", index);
+        error(vm, "Failed to set value. Index(%ld) out of bounds", index);
 
-    Value *value = (Value *)dynarr_get((size_t)index, list);
-    
+    Value *out_value = dynarr_get((size_t)index, list);
+    dynarr_set(value, (size_t)index, list);
+
     pop(vm); // pop native function
-    push(*value, vm);
+    push(*out_value, vm);
 }
 
 void native_fn_list_remove(void *target, VM *vm){
@@ -706,7 +726,7 @@ static void execute(uint8_t chunk, VM *vm){
             int64_t right = vb->literal.i64;
             int64_t left = va->literal.i64;
             
-            push_i64(left + right, vm);
+            push_i64(left * right, vm);
             
             break;
 
@@ -935,16 +955,21 @@ static void execute(uint8_t chunk, VM *vm){
             DynArr *list = NULL;
 
             if(is_list(pop(vm), &list)){
-                if(strcmp(symbol, "size") == 0)
+                if(strcmp(symbol, "size") == 0){
                     push_i64((int64_t)list->used, vm);
-                else if(strcmp(symbol, "insert") == 0){
-                    NativeFunction *native_fn = create_native_function(1, "insert", list, native_fn_list_insert, vm);
-                    push_native_fn(native_fn, vm);
-                }if(strcmp(symbol, "insert_at") == 0){
-                    NativeFunction *native_fn = create_native_function(2, "insert_at", list, native_fn_list_insert_at, vm);
-                    push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "capacity") == 0){
+                    push_i64((int64_t)(list->count - DYNARR_LEN(list)), vm);
                 }else if(strcmp(symbol, "get") == 0){
                     NativeFunction *native_fn = create_native_function(1, "get", list, native_fn_list_get, vm);
+                    push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "insert") == 0){
+                    NativeFunction *native_fn = create_native_function(1, "insert", list, native_fn_list_insert, vm);
+                    push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "insert_at") == 0){
+                    NativeFunction *native_fn = create_native_function(2, "insert_at", list, native_fn_list_insert_at, vm);
+                    push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "set") == 0){
+                    NativeFunction *native_fn = create_native_function(2, "set", list, native_fn_list_set, vm);
                     push_native_fn(native_fn, vm);
                 }else if(strcmp(symbol, "remove") == 0){
                     NativeFunction *native_fn = create_native_function(1, "remove", list, native_fn_list_remove, vm);

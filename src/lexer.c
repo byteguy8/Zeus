@@ -61,7 +61,7 @@ static int is_digit(char c){
 }
 
 static int is_alpha(char c){
-    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 }
 
 static char peek(Lexer *lexer){

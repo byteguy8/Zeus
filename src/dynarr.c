@@ -119,14 +119,19 @@ int dynarr_insert(void *item, struct dynarr *dynarr){
 }
 
 int dynarr_insert_at(size_t index, void *item, struct dynarr *dynarr){
+    if(DYNARR_LEN(dynarr) == 0)
+        return dynarr_insert(item, dynarr);
+
     if (dynarr->used >= dynarr->count)
     {
         size_t new_count = DYNARR_DETERMINATE_GROW(dynarr->count);
         if (resize(new_count, dynarr)) return 1;
     }
 
-    move_items(index, index + 1, 1, dynarr);
+    move_items(index, index + 1, DYNARR_LEN(dynarr) - index, dynarr);
     dynarr_set(item, index, dynarr);
+
+    dynarr->used++;
 
     return 0;
 }
