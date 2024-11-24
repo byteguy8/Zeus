@@ -83,13 +83,14 @@ void native_fn_list_insert_at(void *target, VM *vm){
     if((size_t)index >= list->used)
         error(vm, "Failed to insert value. Index(%ld) out of bounds", index);
 
-    Value *out_value = dynarr_get((size_t)index, list);
+    Value out_value = {0};
+    memcpy(&out_value, dynarr_get((size_t)index, list), sizeof(Value));
 
     if(dynarr_insert_at((size_t) index, value, list))
         error(vm, "Failed to insert value in list: out of memory");
 
     pop(vm); // pop native function
-    push(*out_value, vm);
+    push(out_value, vm);
 }
 
 void native_fn_list_set(void *target, VM *vm){
@@ -106,11 +107,13 @@ void native_fn_list_set(void *target, VM *vm){
     if((size_t)index >= list->used)
         error(vm, "Failed to set value. Index(%ld) out of bounds", index);
 
-    Value *out_value = dynarr_get((size_t)index, list);
+    Value out_value = {0};
+    memcpy(&out_value, dynarr_get((size_t)index, list), sizeof(Value));
+
     dynarr_set(value, (size_t)index, list);
 
     pop(vm); // pop native function
-    push(*out_value, vm);
+    push(out_value, vm);
 }
 
 void native_fn_list_remove(void *target, VM *vm){
@@ -119,20 +122,18 @@ void native_fn_list_remove(void *target, VM *vm){
 
     if(!is_i64(pop(vm), &index))
         error(vm, "Failed to remove value: expect int as index, but got something else");
-
     if(index < 0)
         error(vm, "Failed to remove value. Illegal index(%ld): negative", index);
     if((size_t)index >= list->used)
         error(vm, "Failed to remove value. Index(%ld) out of bounds", index);
 
-    Value *out_value = (Value *)dynarr_get((size_t)index, list);
-    Value in_value = {0};
-    memcpy(&in_value, out_value, sizeof(Value));
+    Value out_value = {0};
+    memcpy(&out_value, dynarr_get((size_t)index, list), sizeof(Value));
 
     dynarr_remove_index((size_t)index, list);
     
     pop(vm); // pop native function
-    push(in_value, vm);
+    push(out_value, vm);
 }
 
 void native_fn_list_append(void *target, VM *vm){
@@ -959,6 +960,12 @@ static void execute(uint8_t chunk, VM *vm){
                     push_i64((int64_t)list->used, vm);
                 }else if(strcmp(symbol, "capacity") == 0){
                     push_i64((int64_t)(list->count - DYNARR_LEN(list)), vm);
+                }else if(strcmp(symbol, "first") == 0){
+                    if(DYNARR_LEN(list) == 0) push_empty(vm);
+                    else push(*(Value *)dynarr_get(0, list), vm);
+                }else if(strcmp(symbol, "last") == 0){
+                    if(DYNARR_LEN(list) == 0) push_empty(vm);
+                    else push(*(Value *)dynarr_get(DYNARR_LEN(list) - 1, list), vm);
                 }else if(strcmp(symbol, "get") == 0){
                     NativeFunction *native_fn = create_native_function(1, "get", list, native_fn_list_get, vm);
                     push_native_fn(native_fn, vm);
