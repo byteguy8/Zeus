@@ -28,6 +28,13 @@ static NativeFunction *create_native_function(
     void(native)(void *target, VM *vm), VM *vm
 );
 static void clean_up(VM *vm);
+static char *clone_range_buff(size_t from, size_t to, char *buff, size_t *out_len, VM *vm);
+static Str *create_str(char *buff, char core, VM *vm);
+static Str *create_range_str(size_t from, size_t to, char *buff, VM *vm);
+static Obj *create_range_str_obj(size_t from, size_t to, char *buff, Value *out_value, VM *vm);
+static DynArr *create_dyarr(VM *vm);
+#define INSERT_VALUE(value, list, vm) \
+    if(dynarr_insert(value, list)) error(vm, "Out of memory");
 //< VALUE RELATED
 //> STACK RELATED
 static void push(Value value, VM *vm);
@@ -36,21 +43,105 @@ static Value *peek(VM *vm);
 static void push_bool(uint8_t bool, VM *vm);
 static void push_empty(VM *vm);
 static void push_i64(int64_t i64, VM *vm);
-static void push_str(char *buff, char core, VM *vm);
+static void push_str(Str *str, VM *vm);
+static void push_list(DynArr *list, VM *vm);
 static void push_native_fn(NativeFunction *native, VM *vm);
 //< STACK RELATED
+
+#define VALIDATE_INDEX(value, index, len)\
+    if(!is_i64(value, &index))\
+        error(vm, "Unexpected index value. Expect int, but got something else");\
+    if(index < 0 || index >= (int64_t)len)\
+        error(vm, "Index out of bounds. Must be 0 >= index(%ld) < len(%ld)", index, len);
+
+#define VALIDATE_INDEX_NAME(value, index, len, name)\
+    if(!is_i64(value, &index))\
+        error(vm, "Unexpected value for '%s'. Expect int, but got something else", name);\
+    if(index < 0 || index >= (int64_t)len)\
+        error(vm, "'%s' out of bounds. Must be 0 >= index(%ld) < len(%ld)", name, index, len);
+
+//> Native functions related to strings
+void native_fn_char_at(void *target, VM *vm){
+    int64_t index = -1;
+    Str *in_str = (Str *)target;
+
+    VALIDATE_INDEX(pop(vm), index, in_str->len)
+
+    Str *out_str = create_range_str(index, index, in_str->buff, vm);
+
+    pop(vm);
+    push_str(out_str, vm);
+}
+
+void native_fn_sub_str(void *target, VM *vm){
+    int64_t to = -1;
+    int64_t from = -1;
+    Str *in_str = (Str *)target;
+
+    VALIDATE_INDEX_NAME(pop(vm), to, in_str->len, "to")
+    VALIDATE_INDEX_NAME(pop(vm), from, in_str->len, "from")
+
+    if(from > to) 
+        error(vm, "Illegal index 'from'(%ld). Must be less or equals to 'to'(%ld)", from, to);
+
+    Str *out_str = create_range_str(from, to, in_str->buff, vm);
+
+    pop(vm);
+    push_str(out_str, vm);
+}
+
+void native_fn_char_code(void *target, VM *vm){
+    int64_t index = -1;
+    Str *str = (Str *)target;
+
+    VALIDATE_INDEX(pop(vm), index, str->len)
+    int64_t code = (int64_t)str->buff[index];
+
+    pop(vm);
+    push_i64(code, vm);
+}
+
+void native_fn_split(void *target, VM *vm){
+    Str *by = NULL;
+    Str *str = (Str *)target;
+
+    if(!is_str(pop(vm), &by))
+        error(vm, "Expect string as 'by' to split");
+
+    if(by->len != 1)
+        error(vm, "Expect string of length 1 as 'by' to split");
+
+    DynArr *arr = create_dyarr(vm);
+
+    size_t from = 0;
+    size_t to = 0;
+    size_t i = 0;
+
+    while (i < str->len){
+        char c = str->buff[i++];
+        
+        if(c == by->buff[0]){
+            to = i - 1;
+
+            Value str_value = {0};
+            create_range_str_obj(from, to, str->buff, &str_value, vm);
+
+            INSERT_VALUE(&str_value, arr, vm)
+
+            from = i;
+        }
+    }
+
+    pop(vm);
+    push_list(arr, vm);
+}
+//< Native functions related to strings
 
 void native_fn_list_get(void *target, VM *vm){
     int64_t index = -1;
     DynArr *list = (DynArr *)target;
 
-    if(!is_i64(pop(vm), &index))
-        error(vm, "Failed to get value: expect int as index, but got something else");
-
-    if(index < 0)
-        error(vm, "Failed to get value. Illegal index(%ld): negative", index);
-    if((size_t)index >= list->used)
-        error(vm, "Failed to get value. Index(%ld) out of bounds", index);
+    VALIDATE_INDEX(pop(vm),index, list->used)
 
     Value *value = (Value *)dynarr_get((size_t)index, list);
     
@@ -70,18 +161,11 @@ void native_fn_list_insert(void *target, VM *vm){
 }
 
 void native_fn_list_insert_at(void *target, VM *vm){
+    int64_t index = -1;
     Value *value = pop(vm);
-    Value *index_value = pop(vm);
     DynArr *list = (DynArr *)target;
 
-    int64_t index = -1;
-
-    if(!is_i64(index_value, &index))
-        error(vm, "Failed to insert value: expect int as index, but got something else");
-    if(index < 0)
-        error(vm, "Failed to insert value. Illegal index(%ld): negative", index);
-    if((size_t)index >= list->used)
-        error(vm, "Failed to insert value. Index(%ld) out of bounds", index);
+    VALIDATE_INDEX(pop(vm), index, list->used)
 
     Value out_value = {0};
     memcpy(&out_value, dynarr_get((size_t)index, list), sizeof(Value));
@@ -94,18 +178,11 @@ void native_fn_list_insert_at(void *target, VM *vm){
 }
 
 void native_fn_list_set(void *target, VM *vm){
+    int64_t index = -1;
     Value *value = pop(vm);
-    Value *index_value = pop(vm);
     DynArr *list = (DynArr *)target;
 
-    int64_t index = -1;
-
-    if(!is_i64(index_value, &index))
-        error(vm, "Failed to set value: expect int as index, but got something else");
-    if(index < 0)
-        error(vm, "Failed to set value. Illegal index(%ld): negative", index);
-    if((size_t)index >= list->used)
-        error(vm, "Failed to set value. Index(%ld) out of bounds", index);
+    VALIDATE_INDEX(pop(vm), index, list->used)
 
     Value out_value = {0};
     memcpy(&out_value, dynarr_get((size_t)index, list), sizeof(Value));
@@ -120,12 +197,7 @@ void native_fn_list_remove(void *target, VM *vm){
     int64_t index = -1;
     DynArr *list = (DynArr *)target;
 
-    if(!is_i64(pop(vm), &index))
-        error(vm, "Failed to remove value: expect int as index, but got something else");
-    if(index < 0)
-        error(vm, "Failed to remove value. Illegal index(%ld): negative", index);
-    if((size_t)index >= list->used)
-        error(vm, "Failed to remove value. Index(%ld) out of bounds", index);
+    VALIDATE_INDEX(pop(vm), index, list->used)
 
     Value out_value = {0};
     memcpy(&out_value, dynarr_get((size_t)index, list), sizeof(Value));
@@ -162,7 +234,7 @@ void native_fn_list_clear(void *target, VM *vm){
     push_i64(list_len, vm);
 }
 
-static char *join_buff(char *buffa, size_t sza, char *buffb, size_t szb, VM *vm){
+char *join_buff(char *buffa, size_t sza, char *buffb, size_t szb, VM *vm){
     size_t szc = sza + szb;
     char *buff = malloc(szc + 1);
 
@@ -176,7 +248,7 @@ static char *join_buff(char *buffa, size_t sza, char *buffb, size_t szb, VM *vm)
     return buff;
 }
 
-static char *multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm){
+char *multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm){
 	size_t sz = szbuff * by;
 	char *b = malloc(sz + 1);
 
@@ -191,7 +263,7 @@ static char *multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm){
 	return b;
 }
 
-static Frame *current_frame(VM *vm){
+Frame *current_frame(VM *vm){
     if(vm->frame_ptr == 0)
         error(vm, "Frame stack is empty");
 
@@ -200,7 +272,7 @@ static Frame *current_frame(VM *vm){
 
 #define CURRENT_LOCALS(vm)(current_frame(vm)->locals)
 
-static Frame *frame_up(size_t fn_index, VM *vm){
+Frame *frame_up(size_t fn_index, VM *vm){
     if(vm->frame_ptr >= FRAME_LENGTH)
         error(vm, "FrameOverFlow");
 
@@ -219,7 +291,7 @@ static Frame *frame_up(size_t fn_index, VM *vm){
     return frame;
 }
 
-static Frame *frame_up_fn(Function *fn, VM *vm){
+Frame *frame_up_fn(Function *fn, VM *vm){
     if(vm->frame_ptr >= FRAME_LENGTH)
         error(vm, "FrameOverFlow");
         
@@ -232,7 +304,7 @@ static Frame *frame_up_fn(Function *fn, VM *vm){
     return frame;
 }
 
-static void frame_down(VM *vm){
+void frame_down(VM *vm){
     if(vm->frame_ptr == 0)
         error(vm, "FrameUnderFlow");
 
@@ -241,7 +313,7 @@ static void frame_down(VM *vm){
 
 #define TO_STR(v)(v->literal.obj->value.str)
 
-static int32_t compose_i32(uint8_t *bytes){
+int32_t compose_i32(uint8_t *bytes){
     return ((int32_t)bytes[3] << 24) | ((int32_t)bytes[2] << 16) | ((int32_t)bytes[1] << 8) | ((int32_t)bytes[0]);
 }
 
@@ -307,19 +379,19 @@ void print_stack(VM *vm){
     }
 }
 
-static int is_at_end(VM *vm){
+int is_at_end(VM *vm){
     Frame *frame = current_frame(vm);
     DynArr *chunks = frame->chunks;
     return frame->ip >= chunks->used;
 }
 
-static uint8_t advance(VM *vm){
+uint8_t advance(VM *vm){
     Frame *frame = current_frame(vm);
     DynArr *chunks = frame->chunks;
     return *(uint8_t *)dynarr_get(frame->ip++, chunks);
 }
 
-static int32_t read_i32(VM *vm){
+int32_t read_i32(VM *vm){
 	uint8_t bytes[4];
 
 	for(size_t i = 0; i < 4; i++)
@@ -328,13 +400,13 @@ static int32_t read_i32(VM *vm){
 	return compose_i32(bytes);
 }
 
-static int64_t read_i64_const(VM *vm){
+int64_t read_i64_const(VM *vm){
     DynArr *constants = vm->constants;
     int32_t index = read_i32(vm);
     return *(int64_t *)dynarr_get(index, constants);
 }
 
-static char *read_str(VM *vm, uint32_t *out_hash){
+char *read_str(VM *vm, uint32_t *out_hash){
     uint32_t hash = (uint32_t)read_i32(vm);
     if(out_hash) *out_hash = hash;
     return lzhtable_hash_get(hash, vm->strings);
@@ -470,7 +542,7 @@ void destroy_obj(Obj *obj, VM *vm){
 	free(obj);
 }
 
-static NativeFunction *create_native_function(
+NativeFunction *create_native_function(
     int arity,
     char *name,
     void *target,
@@ -494,9 +566,74 @@ static NativeFunction *create_native_function(
     return native_fn;
 }
 
-static void clean_up(VM *vm){
+void clean_up(VM *vm){
     while (vm->head)
         destroy_obj(vm->head, vm);
+}
+
+char *clone_range_buff(size_t from, size_t to, char *buff, size_t *out_len, VM *vm){
+    size_t len = to - from + 1;
+    char *rstr = (char *)malloc(len + 1);
+
+    if(!rstr) error(vm, "Out of memory");
+
+    memcpy(rstr, buff + from, len);
+    rstr[len] = '\0';
+    
+    return rstr;
+}
+
+Str *create_str(char *buff, char core, VM *vm){
+    size_t buff_len = strlen(buff);
+    Str *str = (Str *)malloc(sizeof(Str));
+
+    if(!str) error(vm, "Out of memory");
+
+    str->core = core;
+    str->len = buff_len;
+    str->buff = buff;
+
+    return str;
+}
+
+Str *create_range_str(size_t from, size_t to, char *buff, VM *vm){
+    size_t buff_len = 0;
+    char *clone_buff = clone_range_buff(from, to, buff, &buff_len, vm);
+    Str *str = (Str *)malloc(sizeof(Str));
+
+    if(!str) error(vm, "Out of memory");
+
+    str->core = 0;
+    str->len = buff_len;
+    str->buff = clone_buff;
+
+    return str;
+}
+
+Obj *create_range_str_obj(
+    size_t from,
+    size_t to,
+    char *buff,
+    Value *out_value,
+    VM *vm
+){
+    Str *str = create_range_str(from, to, buff, vm);
+    Obj *str_obj = create_obj(STRING_OTYPE, vm);
+
+    str_obj->value.str = str;
+
+    if(out_value){
+        out_value->type = OBJ_VTYPE;
+        out_value->literal.obj = str_obj;
+    }
+
+    return str_obj;
+}
+
+DynArr *create_dyarr(VM *vm){
+    DynArr *dynarr = dynarr_create(sizeof(Value), NULL);
+    if(!dynarr) error(vm, "Out of memory");
+    return dynarr;
 }
 
 void push(Value value, VM *vm){
@@ -529,7 +666,7 @@ void push_bool(uint8_t bool, VM *vm){
     push(value, vm);
 }
 
-static void push_empty(VM *vm){
+void push_empty(VM *vm){
     Value value = {0};
     value.type = EMPTY_VTYPE;
     
@@ -544,19 +681,21 @@ void push_i64(int64_t i64, VM *vm){
     push(value, vm);
 }
 
-void push_str(char *buff, char core, VM *vm){
-    Obj *obj = create_obj(STRING_OTYPE, vm);
-    Str *str = (Str *)malloc(sizeof(Str));
+void push_str(Str *str, VM *vm){
+    Obj *str_obj = create_obj(STRING_OTYPE, vm);
+    str_obj->value.str = str;
 
-    if(!str)
-        error(vm, "Failed to push string: out of memory");
+    Value value = {0};
+    value.type = OBJ_VTYPE;
+    value.literal.obj = str_obj;
 
-    obj->value.str = str;
+    push(value, vm);
+}
 
-    str->core = core;
-    str->len = strlen(buff);
-    str->buff = buff;
-    
+void push_list(DynArr *list, VM *vm){
+    Obj *obj = create_obj(LIST_OTYPE, vm);
+    obj->value.list = list;
+
     Value value = {0};
     value.type = OBJ_VTYPE;
     value.literal.obj = obj;
@@ -625,7 +764,7 @@ void assert_value_type(ValueType type, Value *value, char *err_msg, ...){
     longjmp(err_jmp, 1);
 }
 
-static void execute(uint8_t chunk, VM *vm){
+void execute(uint8_t chunk, VM *vm){
     switch (chunk){
         case EMPTY_OPCODE:{
             Value value = {0};
@@ -647,9 +786,12 @@ static void execute(uint8_t chunk, VM *vm){
         }
 		case STRING_OPCODE:{
 			uint32_t hash = 0;
-            char *str = read_str(vm, &hash);
-            push_str(str, 1, vm);
-			break;
+            char *buff = read_str(vm, &hash);
+            Str *str = create_str(buff, 1, vm);
+            
+            push_str(str, vm);
+			
+            break;
 		}
         case ADD_OPCODE:{
             Value *vb = pop(vm);
@@ -663,7 +805,9 @@ static void execute(uint8_t chunk, VM *vm){
                     error(vm, "Expect string at right side of string concatenation.");
 
                 char *buff = join_buff(astr->buff, astr->len, bstr->buff, bstr->len, vm);
-                push_str(buff, 0, vm);
+                Str *out_str = create_str(buff, 0, vm);
+
+                push_str(out_str, vm);
 
                 break;
             }
@@ -692,8 +836,8 @@ static void execute(uint8_t chunk, VM *vm){
             Value *va = pop(vm);
 
             if(is_str(va, NULL)){
-                Str *str = TO_STR(va);
                 int64_t by = -1;
+                Str *in_str = TO_STR(va);
 
                 if(!is_i64(vb, &by))
                     error(vm, "Expect integer at right side of string multiplication.");
@@ -701,15 +845,17 @@ static void execute(uint8_t chunk, VM *vm){
 				if(by < 0)
 					error(vm, "Negative values not allowed in string multiplication.");
 
-                char *buff = multiply_buff(str->buff, str->len, (size_t)by, vm);
-                push_str(buff, 0, vm);
+                char *buff = multiply_buff(in_str->buff, in_str->len, (size_t)by, vm);
+                Str *out_str = create_str(buff, 0, vm);
+                
+                push_str(out_str, vm);
 
                 break;
             }
 
 			if(is_str(vb, NULL)){
-                Str *str = TO_STR(vb);
                 int64_t by = -1;
+                Str *in_str = TO_STR(vb);
 
                 if(!is_i64(va, &by))
                     error(vm, "Expect integer at left side of string multiplication.");
@@ -717,8 +863,10 @@ static void execute(uint8_t chunk, VM *vm){
 				if(by < 0)
 					error(vm, "Negative values not allowed in string multiplication.");
 
-                char *buff = multiply_buff(str->buff, str->len, (size_t)by, vm);
-                push_str(buff, 0, vm);
+                char *buff = multiply_buff(in_str->buff, in_str->len, (size_t)by, vm);
+                Str *out_str = create_str(buff, 0, vm);
+                
+                push_str(out_str, vm);
 
                 break;
             }
@@ -897,9 +1045,7 @@ static void execute(uint8_t chunk, VM *vm){
 		}
 		case LIST_OPCODE:{
 			int32_t len = read_i32(vm);
-
-			DynArr *list = dynarr_create(sizeof(Value), NULL);
-			if(!list) error(vm, "Failed to create list: out of memory\n");
+			DynArr *list = create_dyarr(vm);
 
 			for(int32_t i = 0; i < len; i++){
 				Value *value = pop(vm);
@@ -958,10 +1104,36 @@ static void execute(uint8_t chunk, VM *vm){
             break;
         }
         case ACCESS_OPCODE:{
-            char *symbol = read_str(vm, NULL);
+            Str *str = NULL;
             DynArr *list = NULL;
+            char *symbol = read_str(vm, NULL);
+            Value *value = pop(vm);
 
-            if(is_list(pop(vm), &list)){
+            if(is_str(value, &str)){
+                if(strcmp(symbol, "len") == 0){
+                    push_i64((int64_t)str->len, vm);
+                }else if(strcmp(symbol, "is_core") == 0){
+                    push_bool((uint8_t)str->core, vm);
+                }else if(strcmp(symbol, "char_at") == 0){
+                    NativeFunction *native_fn = create_native_function(1, "char_at", str, native_fn_char_at, vm);
+                    push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "sub_str") == 0){
+                    NativeFunction *native_fn = create_native_function(2, "sub_str", str, native_fn_sub_str, vm);
+                    push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "char_code") == 0){
+                    NativeFunction *native_fn = create_native_function(1, "char_code", str, native_fn_char_code, vm);
+                    push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "split") == 0){
+                    NativeFunction *native_fn = create_native_function(1, "split", str, native_fn_split, vm);
+                    push_native_fn(native_fn, vm);
+                }else{
+                    error(vm, "string do not have symbol named as '%s'", symbol);
+                }
+
+                break;
+            }
+
+            if(is_list(value, &list)){
                 if(strcmp(symbol, "size") == 0){
                     push_i64((int64_t)list->used, vm);
                 }else if(strcmp(symbol, "capacity") == 0){
