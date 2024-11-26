@@ -476,13 +476,23 @@ Stmt *parse_stmt(Parser *parser){
 
 	if(match(parser, 1, STOP_TOKTYPE)){
 		Token *stop_token = previous(parser);
-		consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of stop statement.");
+		consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of 'stop' statement.");
 		
 		StopStmt *stop_stmt = (StopStmt *)memory_alloc(sizeof(StopStmt));
 		stop_stmt->stop_token = stop_token;
 
 		return create_stmt(STOP_STMTTYPE, stop_stmt);
 	}
+
+    if(match(parser, 1, CONTINUE_TOKTYPE)){
+        Token *continue_token = previous(parser);
+        consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of 'continue' statement.");
+
+        ContinueStmt *continue_stmt = (ContinueStmt *)memory_alloc(sizeof(ContinueStmt));
+        continue_stmt->continue_token = continue_token;
+
+        return create_stmt(CONTINUE_STMTTYPE, continue_stmt);
+    }
 
     if(match(parser, 1, RET_TOKTYPE))
         return parse_return_stmt(parser);

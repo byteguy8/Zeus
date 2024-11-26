@@ -1080,7 +1080,7 @@ void execute(uint8_t chunk, VM *vm){
 
                 int from = (int)(args_count == 0 ? 0 : args_count - 1);
 
-                for (int i = from; i >= 0; i--)
+                for (int i = from; i > 0; i--)
                     memcpy(current_frame(vm)->locals + i, pop(vm), sizeof(Value));
 
                 pop(vm);

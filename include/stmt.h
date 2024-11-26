@@ -13,6 +13,7 @@ typedef enum stmt_type{
 	IF_STMTTYPE,
 	WHILE_STMTTYPE,
 	STOP_STMTTYPE,
+    CONTINUE_STMTTYPE,
     FUNCTION_STMTTYPE,
     RETURN_STMTTYPE,
 }StmtType;
@@ -57,6 +58,11 @@ typedef struct while_stmt{
 typedef struct stop_stmt{
 	Token *stop_token;
 }StopStmt;
+
+typedef struct continue_stmt
+{
+    Token *continue_token;
+}ContinueStmt;
 
 typedef struct function_stmt{
     Token *name_token;

@@ -9,7 +9,7 @@
 #define SYMBOLS_LENGTH 255
 #define SYMBOL_NAME_LENGTH 16
 #define FUNCTIONS_LENGTH 16
-#define STOP_MARKS_LENGTH 16
+#define LOOP_MARK_LENGTH 16
 
 typedef enum symbol_type{
     MUT_SYMTYPE,
@@ -38,6 +38,13 @@ typedef struct scope{
     Symbol symbols[SYMBOLS_LENGTH];
 }Scope;
 
+typedef struct loop_mark
+{
+    size_t id;
+    size_t len;
+    size_t index;
+}LoopMark;
+
 typedef struct compiler{
     size_t symbols;
     
@@ -48,8 +55,11 @@ typedef struct compiler{
     Function *fn_stack[FUNCTIONS_LENGTH];
 
 	unsigned char while_counter;
-	size_t stop_mark_ptr;
-	size_t stop_marks[STOP_MARKS_LENGTH][3];
+	size_t stop_ptr;
+	LoopMark stops[LOOP_MARK_LENGTH];
+
+    size_t continue_ptr;
+    LoopMark continues[LOOP_MARK_LENGTH];
     
     DynArr *constants;
     LZHTable *strings;

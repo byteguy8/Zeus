@@ -39,24 +39,47 @@ void descompose_i32(int32_t value, uint8_t *bytes)
 #define WHILE_OUT(compiler) (--compiler->while_counter)
 
 static void mark_stop(size_t len, size_t index, Compiler *compiler){
-	assert(compiler->stop_mark_ptr < STOP_MARKS_LENGTH);
-	int ptr = compiler->stop_mark_ptr++;
+	assert(compiler->stop_ptr < LOOP_MARK_LENGTH);
+    LoopMark *loop_mark = &compiler->stops[compiler->stop_ptr++];
     
-	compiler->stop_marks[ptr][0] = compiler->while_counter;
-    compiler->stop_marks[ptr][1] = len;
-    compiler->stop_marks[ptr][2] = index;
+    loop_mark->id = compiler->while_counter;
+	loop_mark->len = len;
+    loop_mark->index = index;
 }
 
 static void unmark_stop(size_t which, Compiler *compiler){
-	assert(which < compiler->stop_mark_ptr);
+	assert(which < compiler->stop_ptr);
 
-	for(size_t i = which; i + 1 < compiler->stop_mark_ptr; i++){
-		size_t *a = compiler->stop_marks[i];
-		size_t *b = compiler->stop_marks[i + 1];
-		memcpy(a, b, sizeof(size_t) * 3);
+	for(size_t i = which; i + 1 < compiler->stop_ptr; i++){
+        LoopMark *a = &compiler->stops[i];
+        LoopMark *b = &compiler->stops[i + 1];
+
+		memcpy(a, b, sizeof(LoopMark));
 	}
 
-	compiler->stop_mark_ptr--;
+	compiler->stop_ptr--;
+}
+
+static void mark_continue(size_t len, size_t index, Compiler *compiler){
+	assert(compiler->stop_ptr < LOOP_MARK_LENGTH);
+    LoopMark *loop_mark = &compiler->continues[compiler->continue_ptr++];
+    
+    loop_mark->id = compiler->while_counter;
+	loop_mark->len = len;
+    loop_mark->index = index;
+}
+
+static void unmark_continue(size_t which, Compiler *compiler){
+	assert(which < compiler->continue_ptr);
+
+	for(size_t i = which; i + 1 < compiler->continue_ptr; i++){
+        LoopMark *a = &compiler->stops[i];
+        LoopMark *b = &compiler->stops[i + 1];
+
+		memcpy(a, b, sizeof(LoopMark));
+	}
+
+	compiler->continue_ptr--;
 }
 
 Scope *scope_in(ScopeType type, Compiler *compiler){
@@ -710,22 +733,32 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			write_i32(-((int32_t)while_len), compiler);
 
 			size_t af_header = chunks_len(compiler);
-
 			size_t ptr = 0;
-			while (compiler->stop_mark_ptr > 0 && ptr < compiler->stop_mark_ptr){
-				size_t *inf = compiler->stop_marks[ptr];
-				size_t id = inf[0];
-				size_t len = inf[1];
-				size_t index = inf[2];
 
-				if(id != while_id){
+			while (compiler->stop_ptr > 0 && ptr < compiler->stop_ptr){
+				LoopMark *loop_mark = &compiler->stops[ptr];
+
+				if(loop_mark->id != while_id){
 					ptr++;
 					continue;
 				}
 
 				unmark_stop(ptr, compiler);
+				update_i32(loop_mark->index, af_header - loop_mark->len + 1, compiler);
+			}
 
-				update_i32(index, af_header - len + 1, compiler);
+            ptr = 0;
+
+            while (compiler->continue_ptr > 0 && ptr < compiler->continue_ptr){
+				LoopMark *loop_mark = &compiler->continues[ptr];
+
+				if(loop_mark->id != while_id){
+					ptr++;
+					continue;
+				}
+
+                unmark_continue(ptr, compiler);
+				update_i32(loop_mark->index, len_af_body - loop_mark->len + 1, compiler);
 			}
 		
 			break;
@@ -745,6 +778,21 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
 			break;
 		}
+        case CONTINUE_STMTTYPE:{
+            ContinueStmt *continue_stmt = (ContinueStmt *)stmt->sub_stmt;
+            Token *continue_token = continue_stmt->continue_token;
+
+            if(!inside_while(compiler))
+                error(compiler, continue_token, "Can't use 'continue' statement outside loops.");
+
+            write_chunk(JMP_OPCODE, compiler);
+            size_t index = write_i32(0, compiler);
+
+            size_t len = chunks_len(compiler);
+            mark_continue(len, index, compiler);
+
+            break;
+        }
         case RETURN_STMTTYPE:{
             ReturnStmt *return_stmt = (ReturnStmt *)stmt->sub_stmt;
 			Token *return_token = return_stmt->return_token;
