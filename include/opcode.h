@@ -34,6 +34,7 @@ typedef enum opcode{
 	JIT_OPCODE,
 
 	LIST_OPCODE,
+    DICT_OPCODE,
     CALL_OPCODE,
     RET_OPCODE,
     ACCESS_OPCODE,

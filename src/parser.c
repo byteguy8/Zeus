@@ -101,7 +101,9 @@ Token *consume(Parser *parser, TokenType type, char *err_msg, ...){
 
 Expr *parse_expr(Parser *paser);
 Expr *parse_assign(Parser *parser);
+Expr *parse_dict(Parser *parser);
 Expr *parse_list(Parser *parser);
+Expr *parse_struct(Parser *parser);
 Expr *parse_or(Parser *parser);
 Expr *parse_and(Parser *parser);
 Expr *parse_comparison(Parser *parser);
@@ -126,7 +128,7 @@ Expr *parse_expr(Parser *parser){
 }
 
 Expr *parse_assign(Parser *parser){
-    Expr *expr = parse_list(parser);
+    Expr *expr = parse_dict(parser);
 	
 	if(match(parser, 4, 
 			 COMPOUND_ADD_TOKTYPE, 
@@ -173,6 +175,41 @@ Expr *parse_assign(Parser *parser){
     return expr;
 }
 
+Expr *parse_dict(Parser *parser){
+    if(match(parser, 1, DICT_TOKTYPE)){
+        Token *dict_token = NULL;
+        DynArrPtr *key_values = NULL;
+
+        dict_token = previous(parser);
+        consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'dict' keyword.");
+		
+		if(!check(parser, RIGHT_PAREN_TOKTYPE)){
+			key_values = memory_dynarr_ptr();
+			do{
+				Expr *key = parse_expr(parser);
+                consume(parser, TO_TOKTYPE, "Expect 'to' after keyword.");
+                Expr *value = parse_expr(parser);
+                
+                DictKeyValue *key_value = (DictKeyValue *)memory_alloc(sizeof(DictKeyValue));
+                key_value->key = key;
+                key_value->value = value;
+				
+                dynarr_ptr_insert(key_value, key_values);
+			}while(match(parser, 1, COMMA_TOKTYPE));
+		}
+
+		consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' at end of list expression.");
+
+		DictExpr *dict_expr = (DictExpr *)memory_alloc(sizeof(DictExpr));
+		dict_expr->dict_token = dict_token;
+        dict_expr->key_values = key_values;
+
+		return create_expr(DICT_EXPRTYPE, dict_expr);
+    }
+
+    return parse_list(parser);
+}
+
 Expr *parse_list(Parser *parser){
 	if(match(parser, 1, LIST_TOKTYPE)){
 		Token *list_token = NULL;
@@ -200,7 +237,6 @@ Expr *parse_list(Parser *parser){
 
 	return parse_or(parser);
 }
-
 
 Expr *parse_or(Parser *parser){
     Expr *left = parse_and(parser);

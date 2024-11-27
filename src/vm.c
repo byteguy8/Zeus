@@ -16,10 +16,13 @@ static void error(VM *vm, char *msg, ...);
 static int is_i64(Value *value, int64_t *i64);
 static int is_str(Value *value, Str **str);
 static int is_list(Value *value, DynArr **list);
+static int is_dict(Value *value, LZHTable **dict);
 static int is_function(Value *value, Function **out_fn);
 static int is_native_function(Value *value, NativeFunction **out_native_fn);
 
+static Value *clone_value(Value *value, VM *vm);
 static Obj *create_obj(ObjType type, VM *vm);
+static void destroy_dict_values(void *ptr);
 static void destroy_obj(Obj *obj, VM *vm);
 static NativeFunction *create_native_function(
     int arity,
@@ -33,8 +36,13 @@ static Str *create_str(char *buff, char core, VM *vm);
 static Str *create_range_str(size_t from, size_t to, char *buff, VM *vm);
 static Obj *create_range_str_obj(size_t from, size_t to, char *buff, Value *out_value, VM *vm);
 static DynArr *create_dyarr(VM *vm);
+static LZHTable *create_table(VM *vm);
 #define INSERT_VALUE(value, list, vm) \
     if(dynarr_insert(value, list)) error(vm, "Out of memory");
+static uint32_t hash_obj(Obj *obj);
+static uint32_t hash_value(Value *value);
+#define PUT_VALUE(key, value, table, vm) \
+    {uint32_t hash = hash_value(key); if(lzhtable_hash_put(hash, value, table)) error(vm, "Out of memory");}
 //< VALUE RELATED
 //> STACK RELATED
 static void push(Value value, VM *vm);
@@ -234,6 +242,44 @@ void native_fn_list_clear(void *target, VM *vm){
     push_i64(list_len, vm);
 }
 
+void native_dict_contains(void *target, VM *vm){
+    LZHTable *dict = (LZHTable *)target;
+    Value *value = pop(vm);
+
+    uint32_t hash = hash_value(value);
+    uint8_t contains = lzhtable_hash_contains(hash, dict, NULL) != NULL;
+
+    pop(vm);
+    push_bool(contains, vm);
+}
+
+void native_dict_get(void *target, VM *vm){
+    LZHTable *dict = (LZHTable *)target;
+    Value *key = pop(vm);
+
+    uint32_t hash = hash_value(key);
+    LZHTableNode *node = NULL;
+
+    lzhtable_hash_contains(hash, dict, &node);
+
+    pop(vm);
+
+    if(node) push(*(Value *)node->value, vm);
+    else push_empty(vm);
+}
+
+void native_dict_put(void *target, VM *vm){
+    LZHTable *dict = (LZHTable *)target;
+    Value *value = pop(vm);
+    Value *key = pop(vm);
+
+    uint32_t hash = hash_value(key);
+    lzhtable_hash_put(hash, clone_value(value, vm), dict);
+
+    pop(vm);
+    push_empty(vm);
+}
+
 char *join_buff(char *buffa, size_t sza, char *buffb, size_t szb, VM *vm){
     size_t szc = sza + szb;
     char *buff = malloc(szc + 1);
@@ -329,6 +375,11 @@ void print_obj(Obj *object){
 			printf("<list %ld at %p>\n", list->used, list);
 			break;
 		}
+        case DICT_OTYPE:{
+            LZHTable *table = object->value.dict;
+            printf("<dict %ld %p>\n", table->n, table);
+            break;
+        }
         case FN_OTYPE:{
             Function *fn = (Function *)object->value.fn;
             printf("<fn '%s' - %d at %p>\n", fn->name, (uint8_t)(fn->params ? fn->params->used : 0), fn);
@@ -461,6 +512,20 @@ int is_list(Value *value, DynArr **list){
 	return 0;
 }
 
+int is_dict(Value *value, LZHTable **dict){
+	if(value->type != OBJ_VTYPE) return 0;
+	
+	Obj *obj = value->literal.obj;
+
+	if(obj->type == DICT_OTYPE){
+		LZHTable *odict = obj->value.dict;
+		if(dict) *dict = odict;
+		return 1;
+	}
+
+	return 0;
+}
+
 int is_function(Value *value, Function **out_fn){
 	if(value->type != OBJ_VTYPE) return 0;
 	
@@ -489,6 +554,13 @@ int is_native_function(Value *value, NativeFunction **out_native_fn){
 	return 0;
 }
 
+Value *clone_value(Value *value, VM *vm){
+    Value *clone = (Value *)malloc(sizeof(Value));
+    if(!clone) error(vm, "Out of memory");
+    memcpy(clone, value, sizeof(Value));
+    return clone;
+}
+
 Obj *create_obj(ObjType type, VM *vm){
     Obj *obj = malloc(sizeof(Obj));
     
@@ -505,6 +577,10 @@ Obj *create_obj(ObjType type, VM *vm){
     vm->tail = obj;
 
     return obj;
+}
+
+void destroy_dict_values(void *ptr){
+    free(ptr);
 }
 
 void destroy_obj(Obj *obj, VM *vm){
@@ -529,6 +605,11 @@ void destroy_obj(Obj *obj, VM *vm){
 			dynarr_destroy(list);
 			break;
 		}
+        case DICT_OTYPE:{
+            LZHTable *table = obj->value.dict;
+            lzhtable_destroy(destroy_dict_values, table);
+            break;
+        }
         case NATIVE_FN_OTYPE:{
             NativeFunction *native_fn = obj->value.native_fn;
             free(native_fn);
@@ -634,6 +715,41 @@ DynArr *create_dyarr(VM *vm){
     DynArr *dynarr = dynarr_create(sizeof(Value), NULL);
     if(!dynarr) error(vm, "Out of memory");
     return dynarr;
+}
+
+LZHTable *create_table(VM *vm){
+    LZHTable *table = lzhtable_create(17, NULL);
+    if(!table) error(vm, "Out of memory");
+    return table;
+}
+
+uint32_t hash_obj(Obj *obj){
+    switch (obj->type){
+        case STRING_OTYPE :{
+            Str *str = obj->value.str;
+            uint32_t hash = lzhtable_hash((uint8_t *)str->buff, str->len);
+            return hash;
+        }
+        default:{
+            uint32_t hash = lzhtable_hash((uint8_t *)&obj->value, sizeof(obj->value));
+            return hash;
+        }
+    }
+}
+
+uint32_t hash_value(Value *value){
+    switch (value->type){
+        case EMPTY_VTYPE:
+        case BOOL_VTYPE:
+        case INT_VTYPE:{
+            uint32_t hash = lzhtable_hash((uint8_t *)&value->literal, sizeof(value->literal));
+            return hash;
+        }
+        default:{
+            Obj *obj = value->literal.obj;
+            return hash_obj(obj);
+        }
+    }   
 }
 
 void push(Value value, VM *vm){
@@ -1065,6 +1181,27 @@ void execute(uint8_t chunk, VM *vm){
 
 			break;
 		}
+        case DICT_OPCODE:{
+            int32_t len = read_i32(vm);
+            LZHTable *dict = create_table(vm);
+
+            for (int32_t i = 0; i < len; i++){
+                Value *value = pop(vm);
+                Value *key = pop(vm);
+                PUT_VALUE(key, clone_value(value, vm), dict, vm);
+            }
+            
+            Obj *obj = create_obj(DICT_OTYPE, vm);
+            obj->value.dict = dict;
+
+            Value value = {0};
+            value.type = OBJ_VTYPE;
+            value.literal.obj = obj;
+
+            push(value, vm);
+
+            break;
+        }
         case CALL_OPCODE:{
             Function *fn = NULL;
             NativeFunction *native_fn = NULL;
@@ -1106,6 +1243,7 @@ void execute(uint8_t chunk, VM *vm){
         case ACCESS_OPCODE:{
             Str *str = NULL;
             DynArr *list = NULL;
+            LZHTable *dict = NULL;
             char *symbol = read_str(vm, NULL);
             Value *value = pop(vm);
 
@@ -1167,6 +1305,23 @@ void execute(uint8_t chunk, VM *vm){
                     push_native_fn(native_fn, vm);
                 }else{
                     error(vm, "list do not have symbol named as '%s'", symbol);
+                }
+
+                break;
+            }
+
+            if(is_dict(value, &dict)){
+                if(strcmp(symbol, "contains") == 0){
+                    NativeFunction *native_fn = create_native_function(1, "contains", dict, native_dict_contains, vm);
+                    push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "get") == 0){
+                    NativeFunction *native_fn = create_native_function(1, "get", dict, native_dict_get, vm);
+                    push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "put") == 0){
+                    NativeFunction *native_fn = create_native_function(2, "put", dict, native_dict_put, vm);
+                    push_native_fn(native_fn, vm);
+                }else{
+                    error(vm, "dictionary do not have symbol named as '%s'", symbol);
                 }
 
                 break;

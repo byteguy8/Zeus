@@ -2,6 +2,7 @@
 #define VALUE_H
 
 #include "dynarr.h"
+#include "lzhtable.h"
 #include "function.h"
 #include "native_function.h"
 #include <stddef.h>
@@ -10,6 +11,7 @@
 typedef enum obj_type{
 	STRING_OTYPE,
 	LIST_OTYPE,
+    DICT_OTYPE,
     FN_OTYPE,
     NATIVE_FN_OTYPE,
 }ObjType;
@@ -30,6 +32,7 @@ typedef struct obj{
     union{
 		Str *str;
 		DynArr *list;
+        LZHTable *dict;
         Function *fn;
         NativeFunction *native_fn;
 	}value;

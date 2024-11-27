@@ -585,6 +585,28 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
 			break;
 		}
+        case DICT_EXPRTYPE:{
+            DictExpr *dict_expr = (DictExpr *)expr->sub_expr;
+            DynArrPtr *key_values = dict_expr->key_values;
+
+            if(key_values){
+                for (size_t i = 0; i < key_values->used; i++){
+                    DictKeyValue *key_value = (DictKeyValue *)DYNARR_PTR_GET(i, key_values);
+                    Expr *key = key_value->key;
+                    Expr *value = key_value->value;
+
+                    compile_expr(key, compiler);
+                    compile_expr(value, compiler);
+                }
+            }
+
+            int32_t len = (int32_t)(key_values ? key_values->used : 0);
+            
+            write_chunk(DICT_OPCODE, compiler);
+            write_i32(len, compiler);
+
+            break;
+        }
         default:{
             assert("Illegal expression type");
         }

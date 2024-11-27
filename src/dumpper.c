@@ -191,6 +191,11 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 			printf("LIST_OPCODE len: %d\n", len);
 			break;
 		}
+        case DICT_OPCODE:{
+            int32_t len = read_i32(dumpper);
+			printf("DICT_OPCODE len: %d\n", len);
+			break;
+        }
         case CALL_OPCODE:{
             uint8_t args_count = advance(dumpper);
             printf("CALL_OPCODE args: %d\n", args_count);
