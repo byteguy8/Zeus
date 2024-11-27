@@ -1215,10 +1215,12 @@ void execute(uint8_t chunk, VM *vm){
 
                 frame_up_fn(fn, vm);
 
-                int from = (int)(args_count == 0 ? 0 : args_count - 1);
+                if(args_count > 0){
+                    int from = (int)(args_count == 0 ? 0 : args_count - 1);
 
-                for (int i = from; i > 0; i--)
-                    memcpy(current_frame(vm)->locals + i, pop(vm), sizeof(Value));
+                    for (int i = from; i >= 0; i--)
+                        memcpy(current_frame(vm)->locals + i, pop(vm), sizeof(Value));
+                }
 
                 pop(vm);
             }else if(is_native_function(peek_at(args_count, vm), &native_fn)){
