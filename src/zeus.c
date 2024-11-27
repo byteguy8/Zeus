@@ -8,6 +8,20 @@
 #include "dumpper.h"
 #include "vm.h"
 #include <stdio.h>
+#include <unistd.h>
+#include <sys/stat.h>
+
+#define EXISTS_FILE(pathname) \
+	(access(pathname, F_OK) == 0)
+
+int is_reg(char *filename){
+	struct stat file = {0};
+
+	if(stat(filename, &file) == -1)
+		return -1;
+
+	return S_ISREG(file.st_mode);
+}
 
 typedef struct args{
 	unsigned char lex;
@@ -40,14 +54,25 @@ int main(int argc, char const *argv[]){
 	Args args = {0};
 	get_args(argc, argv, &args);
 
-	if(!args.source_path){
-		fprintf(stderr, "Expect source path\n");
-		return 1;
+	 char *source_path = args.source_path;
+
+	if(!source_path){
+		fprintf(stderr, "Expect path to input source file\n");
+		exit(EXIT_FAILURE);
+	}
+
+	if(!EXISTS_FILE(source_path)){
+		fprintf(stderr, "File at '%s' do not exists.\n", source_path);
+		exit(EXIT_FAILURE);
+	}
+
+	if(!is_reg(source_path)){
+		fprintf(stderr, "File at '%s' is not a regular file.\n", source_path);
+		exit(EXIT_FAILURE);
 	}
 
 	memory_init();
 
-    char *source_path = args.source_path;
 	RawStr *source = utils_read_source(source_path);
 	DynArrPtr *tokens = memory_dynarr_ptr();
 	LZHTable *strings = memory_lzhtable();
