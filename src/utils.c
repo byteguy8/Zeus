@@ -11,8 +11,8 @@ RawStr *utils_read_source(char *path){
 	fseek(source_file, 0, SEEK_END);
 
 	size_t source_size = (size_t)ftell(source_file);
-	char *buff = memory_alloc(source_size + 1);
-	RawStr *rstr = (RawStr *)memory_alloc(sizeof(RawStr));
+	char *buff = A_COMPILE_ALLOC(source_size + 1);
+	RawStr *rstr = (RawStr *)A_COMPILE_ALLOC(sizeof(RawStr));
 
 	fseek(source_file, 0, SEEK_SET);
 	fread(buff, 1, source_size, source_file);

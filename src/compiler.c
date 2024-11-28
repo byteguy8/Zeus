@@ -108,10 +108,10 @@ Scope *scope_in_soft(ScopeType type, Compiler *compiler){
 Scope *scope_in_fn(char *name, Compiler *compiler, Function **out_function){
     assert(compiler->fn_ptr < FUNCTIONS_LENGTH);
 
-    char *fn_name = memory_clone_str(name);
-    DynArr *chunks = memory_dynarr(sizeof(uint8_t));
-    DynArrPtr *params = memory_dynarr_ptr();
-    Function *fn = memory_alloc(sizeof(Function));
+    char *fn_name = runtime_clone_str(name);
+    DynArr *chunks = runtime_dynarr(sizeof(uint8_t));
+    DynArrPtr *params = runtime_dynarr_ptr();
+    Function *fn = A_RUNTIME_ALLOC(sizeof(Function));
 
     fn->name = fn_name;
     fn->chunks = chunks;
@@ -283,7 +283,7 @@ void write_str(char *rstr, Compiler *compiler){
     uint32_t hash = lzhtable_hash(key, key_size);
 
     if(!lzhtable_hash_contains(hash, compiler->strings, NULL)){
-        char *str = memory_clone_str(rstr);
+        char *str = runtime_clone_str(rstr);
         lzhtable_hash_put(hash, str, compiler->strings);
     }
 
@@ -847,7 +847,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                     Token *param_token = (Token *)DYNARR_PTR_GET(i, params);
                     declare(MUT_SYMTYPE, param_token, compiler);
                     
-                    char *name = memory_clone_str(param_token->lexeme);
+                    char *name = runtime_clone_str(param_token->lexeme);
                     dynarr_ptr_insert(name, fn->params);
                 }
             }
@@ -879,7 +879,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 }
 
 Compiler *compiler_create(){
-    Compiler *compiler = (Compiler *)memory_alloc(sizeof(Compiler));
+    Compiler *compiler = (Compiler *)A_COMPILE_ALLOC(sizeof(Compiler));
     memset(compiler, 0, sizeof(Compiler));
     return compiler;
 }

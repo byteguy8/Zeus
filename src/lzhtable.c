@@ -4,17 +4,17 @@
 #define TABLE_SIZE (sizeof(struct lzhtable))
 
 // private interface
-static void *lzalloc(size_t size, struct lzhtable_allocator *allocator);
+static void *lzalloc(size_t size, struct compile_lzhtable_allocator *allocator);
 static void *lzrealloc(
     void *ptr,
     size_t old_size,
     size_t new_size,
-    struct lzhtable_allocator *allocator
+    struct compile_lzhtable_allocator *allocator
 );
 static void lzdealloc(
     void *ptr,
     size_t size,
-    struct lzhtable_allocator *allocator
+    struct compile_lzhtable_allocator *allocator
 );
 
 static uint32_t jenkins_hash(const uint8_t *key, size_t length);
@@ -25,29 +25,29 @@ int lzhtable_bucket_hash_insert(
     void *value, 
     struct lzhtable_bucket *bucket, 
     struct lzhtable_node **out_node,
-    struct lzhtable_allocator *allocator
+    struct compile_lzhtable_allocator *allocator
 );
 int lzhtable_bucket_insert(
     uint8_t *key, 
     size_t key_size, 
     void *value, 
     struct lzhtable_bucket *bucket, 
-    struct lzhtable_allocator *allocator, 
+    struct compile_lzhtable_allocator *allocator, 
     struct lzhtable_node **out_node
 );
 
 // private implementation
-void *lzalloc(size_t size, struct lzhtable_allocator *allocator)
+void *lzalloc(size_t size, struct compile_lzhtable_allocator *allocator)
 {
     return allocator ? allocator->alloc(size, allocator->ctx) : malloc(size);
 }
 
-void *lzrealloc(void *ptr, size_t old_size, size_t new_size, struct lzhtable_allocator *allocator)
+void *lzrealloc(void *ptr, size_t old_size, size_t new_size, struct compile_lzhtable_allocator *allocator)
 {
     return allocator ? allocator->realloc(ptr, old_size, new_size, allocator->ctx) : realloc(ptr, new_size);
 }
 
-void lzdealloc(void *ptr, size_t size, struct lzhtable_allocator *allocator)
+void lzdealloc(void *ptr, size_t size, struct compile_lzhtable_allocator *allocator)
 {
     if (!ptr)
         return;
@@ -119,7 +119,7 @@ int lzhtable_bucket_hash_insert(
     void *value, 
     struct lzhtable_bucket *bucket, 
     struct lzhtable_node **out_node,
-    struct lzhtable_allocator *allocator
+    struct compile_lzhtable_allocator *allocator
 ){
     struct lzhtable_node *node = lzalloc(NODE_SIZE, allocator);
 
@@ -156,7 +156,7 @@ int lzhtable_bucket_insert(
     size_t key_size, 
     void *value, 
     struct lzhtable_bucket *bucket, 
-    struct lzhtable_allocator *allocator, 
+    struct compile_lzhtable_allocator *allocator, 
     struct lzhtable_node **out_node
 )
 {
@@ -165,7 +165,7 @@ int lzhtable_bucket_insert(
 }
 
 // public implementation
-struct lzhtable *lzhtable_create(size_t length, struct lzhtable_allocator *allocator)
+struct lzhtable *lzhtable_create(size_t length, struct compile_lzhtable_allocator *allocator)
 {
     size_t buckets_length = sizeof(struct lzhtable_bucket) * length;
 
@@ -196,7 +196,7 @@ void lzhtable_destroy(void (*destroy_value)(void *value), struct lzhtable *table
     if (!table)
         return;
 
-    struct lzhtable_allocator *allocator = table->allocator;
+    struct compile_lzhtable_allocator *allocator = table->allocator;
     struct lzhtable_node *node = table->nodes;
 
     while (node)

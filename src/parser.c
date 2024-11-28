@@ -24,7 +24,7 @@ static void error(Parser *parser, Token *token, char *msg, ...){
 }
 
 Expr *create_expr(ExprType type, void *sub_expr){
-    Expr *expr = (Expr *)memory_alloc(sizeof(Expr));
+    Expr *expr = (Expr *)A_COMPILE_ALLOC(sizeof(Expr));
     expr->type = type;
     expr->sub_expr = sub_expr;
 
@@ -32,7 +32,7 @@ Expr *create_expr(ExprType type, void *sub_expr){
 }
 
 Stmt *create_stmt(StmtType type, void *sub_stmt){
-    Stmt *stmt = (Stmt *)memory_alloc(sizeof(Stmt));
+    Stmt *stmt = (Stmt *)A_COMPILE_ALLOC(sizeof(Stmt));
     stmt->type = type;
     stmt->sub_stmt = sub_stmt;
     
@@ -146,7 +146,7 @@ Expr *parse_assign(Parser *parser){
 		Token *operator = previous(parser);
 		Expr *right = parse_assign(parser);
 
-		CompoundExpr *compound_expr = (CompoundExpr *)memory_alloc(sizeof(CompoundExpr));
+		CompoundExpr *compound_expr = (CompoundExpr *)A_COMPILE_ALLOC(sizeof(CompoundExpr));
 		compound_expr->identifier_token = identifier_token;
 		compound_expr->operator = operator;
 		compound_expr->right = right;
@@ -165,7 +165,7 @@ Expr *parse_assign(Parser *parser){
         Token *identifier_token = idenfifier_expr->identifier_token;
         Expr *value_expr = parse_assign(parser);
 
-        AssignExpr *assign_expr = (AssignExpr *)memory_alloc(sizeof(AssignExpr));
+        AssignExpr *assign_expr = (AssignExpr *)A_COMPILE_ALLOC(sizeof(AssignExpr));
         assign_expr->identifier_token = identifier_token;
         assign_expr->value_expr = value_expr;
 
@@ -184,13 +184,13 @@ Expr *parse_dict(Parser *parser){
         consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'dict' keyword.");
 		
 		if(!check(parser, RIGHT_PAREN_TOKTYPE)){
-			key_values = memory_dynarr_ptr();
+			key_values = compile_dynarr_ptr();
 			do{
 				Expr *key = parse_expr(parser);
                 consume(parser, TO_TOKTYPE, "Expect 'to' after keyword.");
                 Expr *value = parse_expr(parser);
                 
-                DictKeyValue *key_value = (DictKeyValue *)memory_alloc(sizeof(DictKeyValue));
+                DictKeyValue *key_value = (DictKeyValue *)A_COMPILE_ALLOC(sizeof(DictKeyValue));
                 key_value->key = key;
                 key_value->value = value;
 				
@@ -200,7 +200,7 @@ Expr *parse_dict(Parser *parser){
 
 		consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' at end of list expression.");
 
-		DictExpr *dict_expr = (DictExpr *)memory_alloc(sizeof(DictExpr));
+		DictExpr *dict_expr = (DictExpr *)A_COMPILE_ALLOC(sizeof(DictExpr));
 		dict_expr->dict_token = dict_token;
         dict_expr->key_values = key_values;
 
@@ -219,7 +219,7 @@ Expr *parse_list(Parser *parser){
 		consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'list' keyword.");
 		
 		if(!check(parser, RIGHT_PAREN_TOKTYPE)){
-			exprs = memory_dynarr_ptr();
+			exprs = compile_dynarr_ptr();
 			do{
 				Expr *expr = parse_expr(parser);
 				dynarr_ptr_insert(expr, exprs);
@@ -228,7 +228,7 @@ Expr *parse_list(Parser *parser){
 
 		consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' at end of list expression.");
 
-		ListExpr *list_expr = (ListExpr *)memory_alloc(sizeof(ListExpr));
+		ListExpr *list_expr = (ListExpr *)A_COMPILE_ALLOC(sizeof(ListExpr));
 		list_expr->list_token = list_token;
 		list_expr->exprs = exprs;
 
@@ -245,7 +245,7 @@ Expr *parse_or(Parser *parser){
 		Token *operator = previous(parser);
 		Expr *right = parse_and(parser);
 
-		LogicalExpr *logical_expr = (LogicalExpr *)memory_alloc(sizeof(LogicalExpr));
+		LogicalExpr *logical_expr = (LogicalExpr *)A_COMPILE_ALLOC(sizeof(LogicalExpr));
 		logical_expr->left = left;
 		logical_expr->operator = operator;
 		logical_expr->right = right;
@@ -263,7 +263,7 @@ Expr *parse_and(Parser *parser){
 		Token *operator = previous(parser);
 		Expr *right = parse_comparison(parser);
 
-		LogicalExpr *logical_expr = (LogicalExpr *)memory_alloc(sizeof(LogicalExpr));
+		LogicalExpr *logical_expr = (LogicalExpr *)A_COMPILE_ALLOC(sizeof(LogicalExpr));
 		logical_expr->left = left;
 		logical_expr->operator = operator;
 		logical_expr->right = right;
@@ -287,7 +287,7 @@ Expr *parse_comparison(Parser *parser){
 		Token *operator = previous(parser);
 		Expr *right = parse_term(parser);
 
-		ComparisonExpr *comparison_expr = (ComparisonExpr *)memory_alloc(sizeof(ComparisonExpr));
+		ComparisonExpr *comparison_expr = (ComparisonExpr *)A_COMPILE_ALLOC(sizeof(ComparisonExpr));
 		comparison_expr->left = left;
 		comparison_expr->operator = operator;
 		comparison_expr->right = right;
@@ -305,7 +305,7 @@ Expr *parse_term(Parser *parser){
 		Token *operator = previous(parser);
 		Expr *right = parse_factor(parser);
 
-		BinaryExpr *binary_expr = (BinaryExpr *)memory_alloc(sizeof(BinaryExpr));
+		BinaryExpr *binary_expr = (BinaryExpr *)A_COMPILE_ALLOC(sizeof(BinaryExpr));
 		binary_expr->left = left;
 		binary_expr->operator = operator;
 		binary_expr->right = right;
@@ -323,7 +323,7 @@ Expr *parse_factor(Parser *parser){
 		Token *operator = previous(parser);
 		Expr *right = parse_unary(parser);
 
-		BinaryExpr *binary_expr = (BinaryExpr *)memory_alloc(sizeof(BinaryExpr));
+		BinaryExpr *binary_expr = (BinaryExpr *)A_COMPILE_ALLOC(sizeof(BinaryExpr));
 		binary_expr->left = left;
 		binary_expr->operator = operator;
 		binary_expr->right = right;
@@ -339,7 +339,7 @@ Expr *parse_unary(Parser *parser){
         Token *operator = previous(parser);
         Expr *right = parse_unary(parser);
 
-        UnaryExpr *unary_expr = (UnaryExpr *)memory_alloc(sizeof(UnaryExpr));
+        UnaryExpr *unary_expr = (UnaryExpr *)A_COMPILE_ALLOC(sizeof(UnaryExpr));
         unary_expr->operator = operator;
         unary_expr->right = right;
 
@@ -362,7 +362,7 @@ Expr *parse_call(Parser *parser){
                 case DOT_TOKTYPE:{
                     Token *symbol_token = consume(parser, IDENTIFIER_TOKTYPE, "Expect identifier.");
                     
-                    AccessExpr *access_expr = (AccessExpr *)memory_alloc(sizeof(AccessExpr));
+                    AccessExpr *access_expr = (AccessExpr *)A_COMPILE_ALLOC(sizeof(AccessExpr));
                     access_expr->left = left;
                     access_expr->dot_token = token;
                     access_expr->symbol_token = symbol_token;
@@ -375,7 +375,7 @@ Expr *parse_call(Parser *parser){
                     DynArrPtr *args = NULL;
         
                     if(!check(parser, RIGHT_PAREN_TOKTYPE)){
-                        args = memory_dynarr_ptr();
+                        args = compile_dynarr_ptr();
 
                         do{
                             Expr *expr = parse_expr(parser);
@@ -385,7 +385,7 @@ Expr *parse_call(Parser *parser){
 
                     consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' after call arguments.");
 
-                    CallExpr *call_expr = (CallExpr *)memory_alloc(sizeof(CallExpr));
+                    CallExpr *call_expr = (CallExpr *)A_COMPILE_ALLOC(sizeof(CallExpr));
                     call_expr->left = left;
                     call_expr->left_paren = token;
                     call_expr->args = args;
@@ -408,7 +408,7 @@ Expr *parse_literal(Parser *parser){
     if(match(parser, 1, EMPTY_TOKTYPE)){
         Token *empty_token = previous(parser);
         
-        EmptyExpr *empty_expr = (EmptyExpr *)memory_alloc(sizeof(EmptyExpr));
+        EmptyExpr *empty_expr = (EmptyExpr *)A_COMPILE_ALLOC(sizeof(EmptyExpr));
         empty_expr->empty_token = empty_token;
 
         return create_expr(EMPTY_EXPRTYPE, empty_expr);
@@ -417,7 +417,7 @@ Expr *parse_literal(Parser *parser){
 	if(match(parser, 1, FALSE_TOKTYPE)){
         Token *bool_token = previous(parser);
 
-        BoolExpr *bool_expr = (BoolExpr *)memory_alloc(sizeof(BoolExpr));
+        BoolExpr *bool_expr = (BoolExpr *)A_COMPILE_ALLOC(sizeof(BoolExpr));
         bool_expr->value = 0;
         bool_expr->bool_token = bool_token;
 
@@ -427,7 +427,7 @@ Expr *parse_literal(Parser *parser){
     if(match(parser, 1, TRUE_TOKTYPE)){
         Token *bool_token = previous(parser);
 
-        BoolExpr *bool_expr = (BoolExpr *)memory_alloc(sizeof(BoolExpr));
+        BoolExpr *bool_expr = (BoolExpr *)A_COMPILE_ALLOC(sizeof(BoolExpr));
         bool_expr->value = 1;
         bool_expr->bool_token = bool_token;
         
@@ -437,7 +437,7 @@ Expr *parse_literal(Parser *parser){
 	if(match(parser, 1, INT_TOKTYPE)){
 		Token *int_token = previous(parser);
 
-        IntExpr *int_expr = (IntExpr *)memory_alloc(sizeof(IntExpr));
+        IntExpr *int_expr = (IntExpr *)A_COMPILE_ALLOC(sizeof(IntExpr));
 		int_expr->token = int_token;
 
         return create_expr(INT_EXPRTYPE, int_expr);
@@ -447,7 +447,7 @@ Expr *parse_literal(Parser *parser){
 		Token *string_token = previous(parser);
 		size_t literal_size = string_token->literal_size;
 		
-		StringExpr *string_expr = (StringExpr *)memory_alloc(sizeof(StringExpr));
+		StringExpr *string_expr = (StringExpr *)A_COMPILE_ALLOC(sizeof(StringExpr));
 		string_expr->hash = literal_size > 0 ? *(uint32_t *)string_token->literal : 0;
 		string_expr->string_token = string_token;
 
@@ -458,7 +458,7 @@ Expr *parse_literal(Parser *parser){
         Token *left_paren_token = previous(parser);
         Expr *group_sub_expr = parse_expr(parser);
 
-        GroupExpr *group_expr = (GroupExpr *)memory_alloc(sizeof(GroupExpr));
+        GroupExpr *group_expr = (GroupExpr *)A_COMPILE_ALLOC(sizeof(GroupExpr));
         group_expr->left_paren_token = left_paren_token;
         group_expr->expr = group_sub_expr;
         
@@ -470,7 +470,7 @@ Expr *parse_literal(Parser *parser){
     if(match(parser, 1, IDENTIFIER_TOKTYPE)){
         Token *identifier_token = previous(parser);
         
-        IdentifierExpr *identifier_expr = (IdentifierExpr *)memory_alloc(sizeof(IdentifierExpr));
+        IdentifierExpr *identifier_expr = (IdentifierExpr *)A_COMPILE_ALLOC(sizeof(IdentifierExpr));
         identifier_expr->identifier_token= identifier_token;
         
         return create_expr(IDENTIFIER_EXPRTYPE, identifier_expr);
@@ -498,7 +498,7 @@ Stmt *parse_stmt(Parser *parser){
     if(match(parser, 1, LEFT_BRACKET_TOKTYPE)){
         DynArrPtr *stmts = parse_block_stmt(parser);
         
-        BlockStmt *block_stmt = (BlockStmt *)memory_alloc(sizeof(BlockStmt));
+        BlockStmt *block_stmt = (BlockStmt *)A_COMPILE_ALLOC(sizeof(BlockStmt));
         block_stmt->stmts = stmts;
 
         return create_stmt(BLOCK_STMTTYPE, block_stmt);
@@ -514,7 +514,7 @@ Stmt *parse_stmt(Parser *parser){
 		Token *stop_token = previous(parser);
 		consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of 'stop' statement.");
 		
-		StopStmt *stop_stmt = (StopStmt *)memory_alloc(sizeof(StopStmt));
+		StopStmt *stop_stmt = (StopStmt *)A_COMPILE_ALLOC(sizeof(StopStmt));
 		stop_stmt->stop_token = stop_token;
 
 		return create_stmt(STOP_STMTTYPE, stop_stmt);
@@ -524,7 +524,7 @@ Stmt *parse_stmt(Parser *parser){
         Token *continue_token = previous(parser);
         consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of 'continue' statement.");
 
-        ContinueStmt *continue_stmt = (ContinueStmt *)memory_alloc(sizeof(ContinueStmt));
+        ContinueStmt *continue_stmt = (ContinueStmt *)A_COMPILE_ALLOC(sizeof(ContinueStmt));
         continue_stmt->continue_token = continue_token;
 
         return create_stmt(CONTINUE_STMTTYPE, continue_stmt);
@@ -543,10 +543,10 @@ Stmt *parse_expr_stmt(Parser *parser){
     Expr *expr = parse_expr(parser);
     consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of statement expression.");
     
-    ExprStmt *expr_stmt = (ExprStmt *)memory_alloc(sizeof(ExprStmt));
+    ExprStmt *expr_stmt = (ExprStmt *)A_COMPILE_ALLOC(sizeof(ExprStmt));
     expr_stmt->expr = expr;
 
-    Stmt *stmt = (Stmt *)memory_alloc(sizeof(Stmt));
+    Stmt *stmt = (Stmt *)A_COMPILE_ALLOC(sizeof(Stmt));
     stmt->type = EXPR_STMTTYPE;
     stmt->sub_stmt = expr_stmt;
 
@@ -559,7 +559,7 @@ Stmt *parse_print_stmt(Parser *parser){
 
     consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of statement expression.");
 
-    PrintStmt *print_stmt = (PrintStmt *)memory_alloc(sizeof(PrintStmt));
+    PrintStmt *print_stmt = (PrintStmt *)A_COMPILE_ALLOC(sizeof(PrintStmt));
     print_stmt->expr = expr;
     print_stmt->print_token = print_token;
 
@@ -589,7 +589,7 @@ Stmt *parse_var_decl_stmt(Parser *parser){
         SEMICOLON_TOKTYPE, 
         "Expect ';' at end of symbol declaration.");
 
-    VarDeclStmt *var_decl_stmt = (VarDeclStmt *)memory_alloc(sizeof(VarDeclStmt));
+    VarDeclStmt *var_decl_stmt = (VarDeclStmt *)A_COMPILE_ALLOC(sizeof(VarDeclStmt));
     var_decl_stmt->is_const = is_const;
     var_decl_stmt->is_initialized = is_initialized;
     var_decl_stmt->identifier_token = identifier_token;
@@ -599,7 +599,7 @@ Stmt *parse_var_decl_stmt(Parser *parser){
 }
 
 DynArrPtr *parse_block_stmt(Parser *parser){
-    DynArrPtr *stmts = memory_dynarr_ptr();
+    DynArrPtr *stmts = compile_dynarr_ptr();
 
     while (!check(parser, RIGHT_BRACKET_TOKTYPE))
     {
@@ -629,7 +629,7 @@ Stmt *parse_if_stmt(Parser *parser){
 		else_stmts = parse_block_stmt(parser);
 	}
 
-	IfStmt *if_stmt = (IfStmt *)memory_alloc(sizeof(IfStmt));
+	IfStmt *if_stmt = (IfStmt *)A_COMPILE_ALLOC(sizeof(IfStmt));
 	if_stmt->if_condition = if_condition;
 	if_stmt->if_stmts = if_stmts;
 	if_stmt->else_stmts = else_stmts;
@@ -648,7 +648,7 @@ Stmt *parse_while_stmt(Parser *parser){
 	consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of while statement body.");
 	stmts = parse_block_stmt(parser);
 
-	WhileStmt *while_stmt = (WhileStmt *)memory_alloc(sizeof(WhileStmt));
+	WhileStmt *while_stmt = (WhileStmt *)A_COMPILE_ALLOC(sizeof(WhileStmt));
 	while_stmt->condition = condition;
 	while_stmt->stmts = stmts;
 
@@ -666,7 +666,7 @@ Stmt *parse_return_stmt(Parser *parser){
 
     consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of return statement.");
 
-    ReturnStmt *return_stmt = (ReturnStmt *)memory_alloc(sizeof(ReturnStmt));
+    ReturnStmt *return_stmt = (ReturnStmt *)A_COMPILE_ALLOC(sizeof(ReturnStmt));
     return_stmt->return_token = return_token;
     return_stmt->value = value;
     
@@ -682,7 +682,7 @@ Stmt *parse_function_stmt(Parser *parser){
     consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after function name.");
 
     if(!check(parser, RIGHT_PAREN_TOKTYPE)){
-        params = memory_dynarr_ptr();
+        params = compile_dynarr_ptr();
         
         do{
             Token *param_token = consume(parser, IDENTIFIER_TOKTYPE, "Expect function parameter name.");
@@ -694,7 +694,7 @@ Stmt *parse_function_stmt(Parser *parser){
     consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of function body.");
     stmts = parse_block_stmt(parser);
 
-    FunctionStmt *function_stmt = (FunctionStmt *)memory_alloc(sizeof(FunctionStmt));
+    FunctionStmt *function_stmt = (FunctionStmt *)A_COMPILE_ALLOC(sizeof(FunctionStmt));
     function_stmt->name_token = name_token;
     function_stmt->params = params;
     function_stmt->stmts = stmts;
@@ -703,7 +703,7 @@ Stmt *parse_function_stmt(Parser *parser){
 }
 
 Parser *parser_create(){
-	Parser *parser = (Parser *)memory_alloc(sizeof(Parser));
+	Parser *parser = (Parser *)A_COMPILE_ALLOC(sizeof(Parser));
 	memset(parser, 0, sizeof(Parser));
 	return parser;
 }

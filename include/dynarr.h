@@ -15,7 +15,7 @@
 #define DYNARR_DEFAULT_GROW_SIZE 8
 #endif
 
-typedef struct dynarr_allocator
+typedef struct compile_dynarr_allocator
 {
     void *(*alloc)(size_t size, void *ctx);
     void *(*realloc)(void *ptr, size_t new_size, size_t old_size, void *ctx);
@@ -29,7 +29,7 @@ typedef struct dynarr
     size_t used;
     size_t size;
     void *items;
-    struct dynarr_allocator *allocator;
+    struct compile_dynarr_allocator *allocator;
 } DynArr;
 
 typedef struct dynarr_ptr
@@ -37,13 +37,13 @@ typedef struct dynarr_ptr
     size_t used;
     size_t count;
     void **items;
-    struct dynarr_allocator *allocator;
+    struct compile_dynarr_allocator *allocator;
 } DynArrPtr;
 
 // interface
 
 //> DynArr
-struct dynarr *dynarr_create(size_t item_size, struct dynarr_allocator *allocator);
+struct dynarr *dynarr_create(size_t item_size, struct compile_dynarr_allocator *allocator);
 void dynarr_destroy(struct dynarr *dynarr);
 
 #define DYNARR_LEN(dynarr) (dynarr->used)
@@ -58,7 +58,7 @@ void dynarr_remove_index(size_t index, struct dynarr *dynarr);
 void dynarr_remove_all(struct dynarr *dynarr);
 
 //> DynArrPtr
-struct dynarr_ptr *dynarr_ptr_create(struct dynarr_allocator *allocator);
+struct dynarr_ptr *dynarr_ptr_create(struct compile_dynarr_allocator *allocator);
 void dynarr_ptr_destroy(struct dynarr_ptr *dynarr);
 
 #define DYNARR_PTR_SIZE(count, dynarr) (sizeof(void *) * (count))

@@ -2,9 +2,9 @@
 #include <assert.h>
 
 // private interface
-static void *_alloc_(size_t size, struct dynarr_allocator *allocator);
-static void *_realloc_(void *ptr, size_t old_size, size_t new_size, struct dynarr_allocator *allocator);
-static void _dealloc_(void *ptr, size_t size, struct dynarr_allocator *allocator);
+static void *_alloc_(size_t size, struct compile_dynarr_allocator *allocator);
+static void *_realloc_(void *ptr, size_t old_size, size_t new_size, struct compile_dynarr_allocator *allocator);
+static void _dealloc_(void *ptr, size_t size, struct compile_dynarr_allocator *allocator);
 
 static size_t padding_size(size_t item_size);
 static int resize(size_t new_count, struct dynarr *dynarr);
@@ -21,15 +21,15 @@ static void move_items(size_t from, size_t to, size_t count, struct dynarr *dyna
 #define DYNARR_PTR_ITEMS_SIZE(dynarr_ptr) (sizeof(void *) * dynarr_ptr->count)
 
 // private implementation
-void *_alloc_(size_t size, struct dynarr_allocator *allocator){
+void *_alloc_(size_t size, struct compile_dynarr_allocator *allocator){
     return allocator ? allocator->alloc(size, allocator->ctx) : malloc(size);
 }
 
-void *_realloc_(void *ptr, size_t new_size, size_t old_size, struct dynarr_allocator *allocator){
+void *_realloc_(void *ptr, size_t new_size, size_t old_size, struct compile_dynarr_allocator *allocator){
     return allocator ? allocator->realloc(ptr, new_size, old_size, allocator->ctx) : realloc(ptr, new_size);
 }
 
-void _dealloc_(void *ptr, size_t size, struct dynarr_allocator *allocator){
+void _dealloc_(void *ptr, size_t size, struct compile_dynarr_allocator *allocator){
     if (!ptr)
         return;
 
@@ -66,7 +66,7 @@ void move_items(size_t from, size_t to, size_t count, struct dynarr *dynarr){
 }
 
 // public implementation
-struct dynarr *dynarr_create(size_t item_size, struct dynarr_allocator *allocator){
+struct dynarr *dynarr_create(size_t item_size, struct compile_dynarr_allocator *allocator){
     size_t bytes = sizeof(struct dynarr);
     struct dynarr *vector = (struct dynarr *)_alloc_(bytes, allocator);
 
@@ -83,7 +83,7 @@ void dynarr_destroy(struct dynarr *dynarr){
     if (!dynarr)
         return;
 
-    struct dynarr_allocator *allocator = dynarr->allocator;
+    struct compile_dynarr_allocator *allocator = dynarr->allocator;
     size_t size = DYNARR_ITEMS_SIZE(dynarr);
 
     _dealloc_(dynarr->items, size, allocator);
@@ -177,7 +177,7 @@ void dynarr_remove_all(struct dynarr *dynarr){
     dynarr->used = 0;
 }
 
-struct dynarr_ptr *dynarr_ptr_create(struct dynarr_allocator *allocator){
+struct dynarr_ptr *dynarr_ptr_create(struct compile_dynarr_allocator *allocator){
     struct dynarr_ptr *dynarr = (struct dynarr_ptr *)_alloc_(sizeof(struct dynarr_ptr), allocator);
 
     if (!dynarr)

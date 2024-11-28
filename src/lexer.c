@@ -93,7 +93,7 @@ static char *lexeme_range(int start, int end, Lexer *lexer){
 
     RawStr *source = lexer->source;
     size_t lexeme_size = end - start;
-    char *lexeme = (char *)memory_alloc(lexeme_size + 1);
+    char *lexeme = (char *)A_COMPILE_ALLOC(lexeme_size + 1);
 
     memcpy(lexeme, source->buff + (size_t)start, lexeme_size);
     lexeme[lexeme_size] = '\0';
@@ -145,7 +145,7 @@ static void add_token_raw(
     TokenType type, 
     Lexer *lexer
 ){
-    Token *token = (Token *)memory_alloc(sizeof(Token));
+    Token *token = (Token *)A_COMPILE_ALLOC(sizeof(Token));
 
     token->line = line;
     token->lexeme = lexeme;
@@ -177,7 +177,7 @@ static void number(Lexer *lexer){
         advance(lexer);
 
     char *lexeme = lexeme_current(lexer);
-    int64_t *value = memory_alloc(sizeof(int64_t));
+    int64_t *value = A_COMPILE_ALLOC(sizeof(int64_t));
 
     str_to_i64(lexeme, value);
     add_token_raw(
@@ -219,19 +219,31 @@ static void string(Lexer *lexer){
 		return;
 	}
 
-	size_t len = empty ? 0 : lexeme_range_copy(lexer->start + 1, lexer->current - 1, NULL, 0, lexer);
+	size_t len = empty ? 0 : lexeme_range_copy(
+        lexer->start + 1,
+        lexer->current - 1,
+        NULL,
+        0,
+        lexer
+    );
 	char str[len + 1];
 
-	lexeme_range_copy(lexer->start + 1, lexer->current - 1, str, empty ? 0 : len, lexer);
+	lexeme_range_copy(
+        lexer->start + 1,
+        lexer->current - 1,
+        str,
+        empty ? 0 : len,
+        lexer
+    );
     str[len] = 0;
 
     advance(lexer);
 
-	uint32_t *hash = memory_alloc(sizeof(uint32_t));
+	uint32_t *hash = A_COMPILE_ALLOC(sizeof(uint32_t));
 	*hash = lzhtable_hash((uint8_t *)str, len);
 
 	if(!lzhtable_hash_contains(*hash, lexer->strings, NULL)){
-		char *literal = memory_alloc(len + 1);
+		char *literal = A_RUNTIME_ALLOC(len + 1);
 		memcpy(literal, str, len);
 		literal[len] = '\0';
 
@@ -333,7 +345,7 @@ static void scan_token(Lexer *lexer){
 }
 
 Lexer *lexer_create(){
-    Lexer *lexer = (Lexer *)memory_alloc(sizeof(Lexer));
+    Lexer *lexer = (Lexer *)A_COMPILE_ALLOC(sizeof(Lexer));
     memset(lexer, 0, sizeof(Lexer));
     return lexer;
 }

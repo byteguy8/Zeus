@@ -3,11 +3,17 @@
 #include "lzdynalloc.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
-static LZArena *arena = NULL;
-static LZDynAllocNode *dynalloc = NULL;
-static DynArrAllocator dynarr_allocator = {0};
-static LZHTableAllocator lzhtable_allocator = {0};
+static LZArena *compile_arena = NULL;
+static LZDynAllocNode *compile_dynalloc = NULL;
+static DynArrAllocator compile_dynarr_allocator = {0};
+static LZHTableAllocator compile_lzhtable_allocator = {0};
+
+static LZArena *runtime_arena = NULL;
+static LZDynAllocNode *runtime_dynalloc = NULL;
+static DynArrAllocator runtime_dynarr_allocator = {0};
+static LZHTableAllocator runtime_lzhtable_allocator = {0};
 
 void *arena_alloc(size_t size, void *ctx){
 	void *ptr = LZARENA_ALLOC(size, ctx);
@@ -68,36 +74,58 @@ void dyn_dealloc(void *ptr, size_t size, void *ctx){
 }
 
 int memory_init(){
-	arena = lzarena_create();
-	dynalloc = lzdynalloc_node_raw(32768, LZARENA_ALLOC(32768, arena));
+	compile_arena = lzarena_create();
+	compile_dynalloc = lzdynalloc_node_raw(32768, LZARENA_ALLOC(32768, compile_arena));
 
-	dynarr_allocator.alloc = dyn_alloc;
-	dynarr_allocator.realloc = dyn_realloc;
-	dynarr_allocator.dealloc = dyn_dealloc;
-	dynarr_allocator.ctx = dynalloc;
+	compile_dynarr_allocator.alloc = dyn_alloc;
+	compile_dynarr_allocator.realloc = dyn_realloc;
+	compile_dynarr_allocator.dealloc = dyn_dealloc;
+	compile_dynarr_allocator.ctx = compile_dynalloc;
 
-    lzhtable_allocator.alloc = dyn_alloc;
-	lzhtable_allocator.realloc = dyn_realloc;
-	lzhtable_allocator.dealloc = dyn_dealloc;
-	lzhtable_allocator.ctx = dynalloc;
+    compile_lzhtable_allocator.alloc = dyn_alloc;
+	compile_lzhtable_allocator.realloc = dyn_realloc;
+	compile_lzhtable_allocator.dealloc = dyn_dealloc;
+	compile_lzhtable_allocator.ctx = compile_dynalloc;
+
+    runtime_arena = lzarena_create();
+    runtime_dynalloc = lzdynalloc_node_raw(32768, LZARENA_ALLOC(32768, runtime_arena));
+
+	runtime_dynarr_allocator.alloc = dyn_alloc;
+	runtime_dynarr_allocator.realloc = dyn_realloc;
+	runtime_dynarr_allocator.dealloc = dyn_dealloc;
+	runtime_dynarr_allocator.ctx = runtime_dynalloc;
+
+    runtime_lzhtable_allocator.alloc = dyn_alloc;
+	runtime_lzhtable_allocator.realloc = dyn_realloc;
+	runtime_lzhtable_allocator.dealloc = dyn_dealloc;
+	runtime_lzhtable_allocator.ctx = runtime_dynalloc;
 
     return 0;
 }
 
 void memory_deinit(){
-	lzarena_destroy(arena);
+	lzarena_destroy(compile_arena);
+    lzarena_destroy(runtime_arena);
 }
 
 void memory_report(){
-	printf("Arena: %ld/%ld\n", arena->used, arena->len);
+	printf("Compile arena: %ld/%ld\n", compile_arena->used, compile_arena->len);
+    printf("Runtime arena: %ld/%ld\n", runtime_arena->used, runtime_arena->len);
 }
 
-void *memory_alloc(size_t size){
+void memory_free_compile(){
+    lzarena_destroy(compile_arena);
+    compile_arena = NULL;
+}
+
+void *memory_arena_alloc(size_t size, int type){
+    assert(type >= 0 && type <= 1);
+
+    LZArena *arena = type == COMPILE_ARENA ? compile_arena : runtime_arena;
     void *ptr = LZARENA_ALLOC(size, arena);
 
 	if(!ptr){
         fprintf(stderr, "out of memory\n");
-		fprintf(stderr, "request: %ld\n", size);
 		memory_deinit();
 		exit(EXIT_FAILURE);
 	}
@@ -105,21 +133,43 @@ void *memory_alloc(size_t size){
 	return ptr;
 }
 
-DynArr *memory_dynarr(size_t size){
-    return dynarr_create(size, &dynarr_allocator);
+DynArr *compile_dynarr(size_t size){
+    return dynarr_create(size, &compile_dynarr_allocator);
 }
 
-DynArrPtr *memory_dynarr_ptr(){
-	return dynarr_ptr_create(&dynarr_allocator);
+DynArrPtr *compile_dynarr_ptr(){
+	return dynarr_ptr_create(&compile_dynarr_allocator);
 }
 
-LZHTable *memory_lzhtable(){
-    return lzhtable_create(17, &lzhtable_allocator);
+LZHTable *compile_lzhtable(){
+    return lzhtable_create(17, &compile_lzhtable_allocator);
 }
 
-char *memory_clone_str(char *str){
+char *compile_clone_str(char *str){
     size_t len = strlen(str);
-    char *cstr = memory_alloc(len + 1);
+    char *cstr = A_COMPILE_ALLOC(len + 1);
+    
+    memcpy(cstr, str, len);
+    cstr[len] = '\0';
+
+    return cstr;
+}
+
+DynArr *runtime_dynarr(size_t size){
+    return dynarr_create(size, &runtime_dynarr_allocator);
+}
+
+DynArrPtr *runtime_dynarr_ptr(){
+    return dynarr_ptr_create(&runtime_dynarr_allocator);
+}
+
+LZHTable *runtime_lzhtable(){
+    return lzhtable_create(17, &runtime_lzhtable_allocator);
+}
+
+char *runtime_clone_str(char *str){
+    size_t len = strlen(str);
+    char *cstr = A_RUNTIME_ALLOC(len + 1);
     
     memcpy(cstr, str, len);
     cstr[len] = '\0';

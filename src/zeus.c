@@ -45,7 +45,7 @@ static void get_args(int argc, char const *argv[], Args *args){
 }
 
 void add_keyword(char *name, TokenType type, LZHTable *keywords){
-    TokenType *ctype = (TokenType *)memory_alloc(sizeof(TokenType));
+    TokenType *ctype = (TokenType *)A_COMPILE_ALLOC(sizeof(TokenType));
     *ctype = type;
     lzhtable_put((uint8_t *)name, strlen(name), ctype, keywords, NULL);
 }
@@ -74,12 +74,12 @@ int main(int argc, char const *argv[]){
 	memory_init();
 
 	RawStr *source = utils_read_source(source_path);
-	DynArrPtr *tokens = memory_dynarr_ptr();
-	LZHTable *strings = memory_lzhtable();
-	LZHTable *keywords = memory_lzhtable();
-	DynArrPtr *stmts = memory_dynarr_ptr();
-    DynArr *constants = memory_dynarr(sizeof(int64_t));
-    DynArrPtr *functions = memory_dynarr_ptr();
+	DynArrPtr *tokens = compile_dynarr_ptr();
+	LZHTable *strings = runtime_lzhtable();
+	LZHTable *keywords = compile_lzhtable();
+	DynArrPtr *stmts = compile_dynarr_ptr();
+    DynArr *constants = runtime_dynarr(sizeof(int64_t));
+    DynArrPtr *functions = runtime_dynarr_ptr();
 
 	add_keyword("mod", MOD_TOKTYPE, keywords);
 	add_keyword("empty", EMPTY_TOKTYPE, keywords);
@@ -128,6 +128,7 @@ int main(int argc, char const *argv[]){
         if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
         if(compiler_compile(constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
+        memory_free_compile();
         if(vm_execute(constants, strings, functions, vm)) goto CLEAN_UP;
     }
 

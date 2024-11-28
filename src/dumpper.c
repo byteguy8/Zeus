@@ -229,7 +229,7 @@ static void dump_function(Function *function, Dumpper *dumpper){
 }
 
 Dumpper *dumpper_create(){
-	Dumpper *dumpper = (Dumpper *)memory_alloc(sizeof(Dumpper));
+	Dumpper *dumpper = (Dumpper *)A_COMPILE_ALLOC(sizeof(Dumpper));
 	memset(dumpper, 0, sizeof(Dumpper));
 	return dumpper;
 }

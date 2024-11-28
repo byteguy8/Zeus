@@ -1344,7 +1344,7 @@ void execute(uint8_t chunk, VM *vm){
 }
 
 VM *vm_create(){
-    VM *vm = (VM *)memory_alloc(sizeof(VM));
+    VM *vm = (VM *)A_RUNTIME_ALLOC(sizeof(VM));
     memset(vm, 0, sizeof(VM));
     return vm;
 }
