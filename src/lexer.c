@@ -172,6 +172,15 @@ static void add_token(TokenType type, Lexer *lexer){
     add_token_literal(NULL, 0, type, lexer);
 }
 
+static void comment(Lexer *lexer){
+	while(!is_at_end(lexer)){
+		if(advance(lexer) == '\n'){
+			lexer->line++;
+			break;
+		}
+	}
+}
+
 static void number(Lexer *lexer){
     while (!is_at_end(lexer) && is_digit(peek(lexer)))
         advance(lexer);
@@ -275,7 +284,8 @@ static void scan_token(Lexer *lexer){
             break;
         }
         case '/':{
-			if(match('=', lexer)) add_token(COMPOUND_DIV_TOKTYPE, lexer);
+			if(match('/', lexer)) comment(lexer);
+			else if(match('=', lexer)) add_token(COMPOUND_DIV_TOKTYPE, lexer);
             else add_token(SLASH_TOKTYPE, lexer);
             break;
         }
