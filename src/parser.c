@@ -122,6 +122,7 @@ Stmt *parse_if_stmt(Parser *parser);
 Stmt *parse_while_stmt(Parser *parser);
 Stmt *parse_return_stmt(Parser *parser);
 Stmt *parse_function_stmt(Parser *parser);
+Stmt *parse_import_stmt(Parser *parser);
 
 Expr *parse_expr(Parser *parser){
 	return parse_assign(parser);
@@ -536,6 +537,9 @@ Stmt *parse_stmt(Parser *parser){
     if(match(parser, 1, PROC_TOKTYPE))
         return parse_function_stmt(parser);
 
+    if(match(parser, 1, IMPORT_TOKTYPE))
+        return parse_import_stmt(parser);
+
     return parse_expr_stmt(parser);
 }
 
@@ -700,6 +704,22 @@ Stmt *parse_function_stmt(Parser *parser){
     function_stmt->stmts = stmts;
 
     return create_stmt(FUNCTION_STMTTYPE, function_stmt);
+}
+
+Stmt *parse_import_stmt(Parser *parser){
+    Token *import_token = NULL;
+    char *path_token = NULL;
+
+    import_token = previous(parser);
+    path_token = consume(parser, STRING_TOKTYPE, "Expect string path.");
+    
+    consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of import statement.");
+
+    ImportStmt *import_stmt = (ImportStmt *)A_COMPILE_ALLOC(sizeof(ImportStmt));
+    import_stmt->import_token = import_token;
+    import_stmt->path_token = path_token;
+
+    return create_stmt(IMPORT_STMTTYPE, import_stmt);
 }
 
 Parser *parser_create(){

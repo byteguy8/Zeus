@@ -2,12 +2,14 @@
 #define COMPILER_H
 
 #include "dynarr.h"
+#include "token.h"
 #include "function.h"
 #include "lzhtable.h"
+#include <setjmp.h>
 
 #define SCOPES_LENGTH 32
 #define SYMBOLS_LENGTH 255
-#define SYMBOL_NAME_LENGTH 16
+#define SYMBOL_NAME_LENGTH 32
 #define FUNCTIONS_LENGTH 16
 #define LOOP_MARK_LENGTH 16
 
@@ -22,6 +24,7 @@ typedef struct symbol{
     SymbolType type;
     size_t name_len;
     char name[SYMBOL_NAME_LENGTH];
+    Token *identifier_token;
 }Symbol;
 
 typedef enum scope_type{
@@ -46,6 +49,9 @@ typedef struct loop_mark
 }LoopMark;
 
 typedef struct compiler{
+    jmp_buf err_jmp;
+	char import;
+
     size_t symbols;
     
     size_t depth;
@@ -61,16 +67,30 @@ typedef struct compiler{
     size_t continue_ptr;
     LoopMark continues[LOOP_MARK_LENGTH];
     
+    LZHTable *keywords;
     DynArr *constants;
     LZHTable *strings;
+	DynArr *chunks;
     DynArrPtr *functions;
     DynArrPtr *stmts;
 }Compiler;
 
 Compiler *compiler_create();
 int compiler_compile(
+    LZHTable *keywords,
     DynArr *constants,
     LZHTable *strings,
+    DynArrPtr *functions,
+    DynArrPtr *stmts,
+    Compiler *compiler
+);
+
+int compiler_import(
+	size_t symbols,
+    LZHTable *keywords,
+    DynArr *constants,
+    LZHTable *strings,
+	DynArr *chunks,
     DynArrPtr *functions,
     DynArrPtr *stmts,
     Compiler *compiler

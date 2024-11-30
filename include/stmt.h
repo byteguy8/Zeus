@@ -16,6 +16,7 @@ typedef enum stmt_type{
     CONTINUE_STMTTYPE,
     FUNCTION_STMTTYPE,
     RETURN_STMTTYPE,
+    IMPORT_STMTTYPE
 }StmtType;
 
 typedef struct stmt{
@@ -74,5 +75,11 @@ typedef struct return_stmt{
     Token *return_token;
     Expr *value;
 }ReturnStmt;
+
+typedef struct import_stmt
+{
+    Token *import_token;
+    Token *path_token;
+}ImportStmt;
 
 #endif

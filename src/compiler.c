@@ -1,15 +1,15 @@
 #include "compiler.h"
 #include "memory.h"
+#include "utils.h"
 #include "opcode.h"
 #include "token.h"
 #include "stmt.h"
+#include "lexer.h"
+#include "parser.h"
 #include <stdint.h>
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
-#include <setjmp.h>
-
-static jmp_buf err_jmp;
 
 static void error(Compiler *compiler, Token *token, char *msg, ...){
     va_list args;
@@ -20,7 +20,7 @@ static void error(Compiler *compiler, Token *token, char *msg, ...){
     fprintf(stderr, "\n");
 
     va_end(args);
-    longjmp(err_jmp, 1);
+    longjmp(compiler->err_jmp, 1);
 }
 
 void descompose_i32(int32_t value, uint8_t *bytes)
@@ -201,6 +201,8 @@ Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler){
     char *identifier = identifier_token->lexeme;
     size_t identifier_len = strlen(identifier);
 
+	if(identifier_len + 1 >= SYMBOL_NAME_LENGTH)
+		error(compiler, identifier_token, "Symbol name too long.");
     if(exists_local(identifier, compiler) != NULL)
         error(compiler, identifier_token, "Already exists a symbol named as '%s'.", identifier);
 
@@ -221,13 +223,20 @@ Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler){
     symbol->name_len = identifier_len;
     memcpy(symbol->name, identifier, identifier_len);
     symbol->name[identifier_len] = '\0';
+    symbol->identifier_token = identifier_token;
 
     return symbol;
 }
 
 DynArr *current_chunks(Compiler *compiler){
-    assert(compiler->fn_ptr > 0 && compiler->fn_ptr < FUNCTIONS_LENGTH);
-    Function *fn = compiler->fn_stack[compiler->fn_ptr - 1];
+	if(compiler->import && compiler->depth == 1){ 
+		assert(compiler->chunks);
+		return compiler->chunks;
+	}
+   	
+	assert(compiler->fn_ptr > 0 && compiler->fn_ptr < FUNCTIONS_LENGTH);
+	Function *fn = compiler->fn_stack[compiler->fn_ptr - 1];
+
     return fn->chunks;
 }
 
@@ -871,6 +880,46 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             break;
         }
+        case IMPORT_STMTTYPE:{
+            ImportStmt *import_stmt = (ImportStmt *)stmt->sub_stmt;
+            Token *import_token = import_stmt->import_token;
+            Token *path_token = import_stmt->path_token;
+
+            uint32_t hash = *(uint32_t *) path_token->literal;
+            char *source_path = lzhtable_hash_get(hash, compiler->strings);
+
+            if(!UTILS_EXISTS_FILE(source_path))
+                error(compiler, import_token, "File at '%s' do not exists.\n", source_path);
+
+            if(!utils_is_reg(source_path))
+                error(compiler, import_token, "File at '%s' is not a regular file.\n", source_path);
+
+            RawStr *source = utils_read_source(source_path);
+            DynArrPtr *tokens = compile_dynarr_ptr();
+            LZHTable *strings = compiler->strings;
+			DynArr *chunks = ((Function *)DYNARR_PTR_GET(0, compiler->functions))->chunks;
+            LZHTable *keywords = compiler->keywords;
+            DynArrPtr *stmts = compile_dynarr_ptr();
+            DynArr *constants = compiler->constants;
+            DynArrPtr *functions = compiler->functions;
+
+            Lexer *lexer = lexer_create();
+	        Parser *parser = parser_create();
+            Compiler *import_compiler = compiler_create();
+
+            if(lexer_scan(source, tokens, strings, keywords, lexer)) return;
+            if(parser_parse(tokens, stmts, parser)) return;
+            if(compiler_import(compiler->symbols, keywords, constants, strings, chunks, functions, stmts, import_compiler)) return;
+
+            Scope *scope = &import_compiler->scopes[0];
+            
+            for (size_t i = 0; i < scope->symbols_len; i++){
+                Symbol *symbol = &scope->symbols[i];
+                declare(symbol->type, symbol->identifier_token, compiler);
+            }
+            
+            break;
+        }
         default:{
             assert("Illegal stmt type");
             break;
@@ -885,17 +934,19 @@ Compiler *compiler_create(){
 }
 
 int compiler_compile(
+    LZHTable *keywords,
     DynArr *constants,
     LZHTable *strings,
     DynArrPtr *functions,
     DynArrPtr *stmts, 
     Compiler *compiler
 ){
-    if(setjmp(err_jmp) == 1) return 1;
+    memset(compiler, 0, sizeof(Compiler));
+    
+    if(setjmp(compiler->err_jmp) == 1) return 1;
     else{
-		memset(compiler, 0, sizeof(Compiler));
-
         compiler->symbols = 1;
+        compiler->keywords = keywords;
         compiler->constants = constants;
         compiler->strings = strings;
         compiler->functions = functions;
@@ -909,6 +960,42 @@ int compiler_compile(
         }
 
         scope_out_fn(compiler);
+        
+        return 0;
+    }
+}
+
+int compiler_import(
+	size_t symbols,
+    LZHTable *keywords,
+    DynArr *constants,
+    LZHTable *strings,
+	DynArr *chunks,
+    DynArrPtr *functions,
+    DynArrPtr *stmts,
+    Compiler *compiler
+){
+    memset(compiler, 0, sizeof(Compiler));
+    
+    if(setjmp(compiler->err_jmp) == 1) return 1;
+    else{
+		compiler->import = 1;
+        compiler->symbols = symbols;
+        compiler->keywords = keywords;
+        compiler->constants = constants;
+        compiler->strings = strings;
+		compiler->chunks = chunks;
+        compiler->functions = functions;
+        compiler->stmts = stmts;
+
+		scope_in(BLOCK_SCOPE, compiler);
+
+        for (size_t i = 0; i < stmts->used; i++){
+            Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
+            compile_stmt(stmt, compiler);
+        }
+
+		scope_out(compiler);
         
         return 0;
     }

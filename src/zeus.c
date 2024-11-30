@@ -11,18 +11,6 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-#define EXISTS_FILE(pathname) \
-	(access(pathname, F_OK) == 0)
-
-int is_reg(char *filename){
-	struct stat file = {0};
-
-	if(stat(filename, &file) == -1)
-		return -1;
-
-	return S_ISREG(file.st_mode);
-}
-
 typedef struct args{
 	unsigned char lex;
 	unsigned char parse;
@@ -61,12 +49,12 @@ int main(int argc, char const *argv[]){
 		exit(EXIT_FAILURE);
 	}
 
-	if(!EXISTS_FILE(source_path)){
+	if(!UTILS_EXISTS_FILE(source_path)){
 		fprintf(stderr, "File at '%s' do not exists.\n", source_path);
 		exit(EXIT_FAILURE);
 	}
 
-	if(!is_reg(source_path)){
+	if(!utils_is_reg(source_path)){
 		fprintf(stderr, "File at '%s' is not a regular file.\n", source_path);
 		exit(EXIT_FAILURE);
 	}
@@ -100,6 +88,7 @@ int main(int argc, char const *argv[]){
     add_keyword("dict", DICT_TOKTYPE, keywords);
     add_keyword("proc", PROC_TOKTYPE, keywords);
     add_keyword("ret", RET_TOKTYPE, keywords);
+    add_keyword("import", IMPORT_TOKTYPE, keywords);
 
 	Lexer *lexer = lexer_create();
 	Parser *parser = parser_create();
@@ -117,17 +106,17 @@ int main(int argc, char const *argv[]){
     }else if(args.compile){
         if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
-        if(compiler_compile(constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
+        if(compiler_compile(keywords, constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
 		printf("No errors in compile phase\n");
     }else if(args.dump){
         if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
-        if(compiler_compile(constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
+        if(compiler_compile(keywords, constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
         dumpper_dump(constants, strings, functions, dumpper);
     }else{
         if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
-        if(compiler_compile(constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
+        if(compiler_compile(keywords, constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
         memory_free_compile();
         if(vm_execute(constants, strings, functions, vm)) goto CLEAN_UP;
     }
