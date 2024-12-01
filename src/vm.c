@@ -1079,6 +1079,33 @@ void execute(uint8_t chunk, VM *vm){
             push(value, vm);
             break;
         }
+        case GSET_OPCODE:{
+            uint32_t hash = (uint32_t)read_i32(vm);
+            Value *value = peek(vm);
+
+            LZHTableNode *node = NULL;
+
+            if(lzhtable_hash_contains(hash, vm->globals, &node))
+                memcpy(node->value, value, sizeof(Value));
+            else{
+                Value *new_value = clone_value(value, vm);
+                lzhtable_hash_put(hash, new_value, vm->globals);
+            }
+
+            break;
+        }
+        case GGET_OPCODE:{
+            uint32_t hash = 0;
+            char *symbol = read_str(vm, &hash);
+            LZHTableNode *node = NULL;
+
+            if(!lzhtable_hash_contains(hash, vm->globals, &node))
+                error(vm, "Global symbol '%s' does not exists", symbol);
+            
+            push(*(Value *)node->value, vm);
+
+            break;
+        }
         case SGET_OPCODE:{
             int32_t index = read_i32(vm);
             DynArrPtr *functions = vm->functions;
@@ -1357,6 +1384,7 @@ int vm_execute(
     DynArr *constants,
     LZHTable *strings,
     DynArrPtr *functions,
+    LZHTable *globals,
     VM *vm
 ){
     if(setjmp(err_jmp) == 1) return 1;
@@ -1365,6 +1393,7 @@ int vm_execute(
         vm->constants = constants;
 		vm->strings = strings;
         vm->functions = functions;
+        vm->globals = globals;
 
         frame_up(0, vm);
 

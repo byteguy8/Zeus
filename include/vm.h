@@ -9,8 +9,7 @@
 #define LOCALS_LENGTH 255
 #define FRAME_LENGTH 255
 
-typedef struct frame
-{
+typedef struct frame{
     size_t ip;
     char *name;
     DynArr *chunks;
@@ -27,6 +26,7 @@ typedef struct vm{
     DynArr *constants;
 	LZHTable *strings;
     DynArrPtr *functions;
+    LZHTable *globals;
 //> garbage collector
     Obj *head;
     Obj *tail;
@@ -39,6 +39,7 @@ int vm_execute(
     DynArr *constants,
     LZHTable *strings,
     DynArrPtr *functions,
+    LZHTable *globals,
     VM *vm
 );
 

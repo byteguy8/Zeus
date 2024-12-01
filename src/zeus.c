@@ -68,6 +68,7 @@ int main(int argc, char const *argv[]){
 	DynArrPtr *stmts = compile_dynarr_ptr();
     DynArr *constants = runtime_dynarr(sizeof(int64_t));
     DynArrPtr *functions = runtime_dynarr_ptr();
+    LZHTable *globals = runtime_lzhtable();
 
 	add_keyword("mod", MOD_TOKTYPE, keywords);
 	add_keyword("empty", EMPTY_TOKTYPE, keywords);
@@ -118,7 +119,7 @@ int main(int argc, char const *argv[]){
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
         if(compiler_compile(keywords, constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
         memory_free_compile();
-        if(vm_execute(constants, strings, functions, vm)) goto CLEAN_UP;
+        if(vm_execute(constants, strings, functions, globals, vm)) goto CLEAN_UP;
     }
 
 	if(args.memuse) memory_report();

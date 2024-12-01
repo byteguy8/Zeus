@@ -202,22 +202,25 @@ Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler){
     size_t identifier_len = strlen(identifier);
 
 	if(identifier_len + 1 >= SYMBOL_NAME_LENGTH)
-		error(compiler, identifier_token, "Symbol name too long.");
+		error(compiler, identifier_token, "Symbol name '%s' too long.", identifier);
     if(exists_local(identifier, compiler) != NULL)
         error(compiler, identifier_token, "Already exists a symbol named as '%s'.", identifier);
 
+    int local;
     Scope *scope = current_scope(compiler);
     Symbol *symbol = &scope->symbols[scope->symbols_len++];
-    
-    size_t local;
 
     if(type == FN_SYMTYPE){
         assert(compiler->functions->used > 0);
         local = compiler->symbols++;
     }else{
-        local = scope->locals++;
+        // symbols declared in the global scope(1) must have
+        // a local value of -1, because globals use a hash table
+        // instead of a index for the frame locals slots
+        local = scope->depth == 1 ? -1 : scope->locals++;
     }
     
+    symbol->depth = scope->depth;
     symbol->local = local;
     symbol->type = type;
     symbol->name_len = identifier_len;
@@ -339,8 +342,13 @@ void compile_expr(Expr *expr, Compiler *compiler){
             Symbol *symbol = get(identifier_token, compiler);
 
             if(symbol->type == MUT_SYMTYPE || symbol->type == IMUT_SYMTYPE){
-                write_chunk(LGET_OPCODE, compiler);
-                write_chunk((uint8_t)symbol->local, compiler);
+                if(symbol->depth == 1){
+                    write_chunk(GGET_OPCODE, compiler);
+                    write_str(identifier_token->lexeme, compiler);
+                }else{
+                    write_chunk(LGET_OPCODE, compiler);
+                    write_chunk((uint8_t)symbol->local, compiler);
+                }
             }else if(symbol->type == FN_SYMTYPE){
                 write_chunk(SGET_OPCODE, compiler);
                 write_i32(symbol->local, compiler);
@@ -527,8 +535,14 @@ void compile_expr(Expr *expr, Compiler *compiler){
                 error(compiler, identifier_token, "'%s' declared as constant. Can't change its value.", identifier_token->lexeme);
             
             compile_expr(value_expr, compiler);
-            write_chunk(LSET_OPCODE, compiler);
-            write_chunk(symbol->local, compiler);
+
+            if(symbol->depth == 1){
+                write_chunk(GSET_OPCODE, compiler);
+                write_str(identifier_token->lexeme, compiler);
+            }else{
+                write_chunk(LSET_OPCODE, compiler);
+                write_chunk(symbol->local, compiler);
+            }
 
             break;
         }
@@ -657,8 +671,14 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             if(initializer_expr == NULL) write_chunk(EMPTY_OPCODE, compiler);
             else compile_expr(initializer_expr, compiler);
 
-            write_chunk(LSET_OPCODE, compiler);
-            write_chunk((uint8_t)symbol->local, compiler);
+            if(symbol->depth == 1){
+                write_chunk(GSET_OPCODE, compiler);
+                write_str(identifier_token->lexeme, compiler);
+            }else{
+                write_chunk(LSET_OPCODE, compiler);
+                write_chunk((uint8_t)symbol->local, compiler);
+            }
+
             write_chunk(POP_OPCODE, compiler);
 
             break;

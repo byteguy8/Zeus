@@ -121,6 +121,18 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 			printf("LGET_OPCODE slot: %d\n", slot);
            	break;
         }
+        case GSET_OPCODE:{
+            uint32_t hash = 0;
+            char *str = read_str(dumpper, &hash);
+            printf("GSET_OPCODE hash: '%u' value: '%s'\n", hash, str);
+            break;
+        }
+        case GGET_OPCODE:{
+            uint32_t hash = 0;
+            char *str = read_str(dumpper, &hash);
+            printf("GGET_OPCODE hash: '%u' value: '%s'\n", hash, str);
+            break;
+        }
         case SGET_OPCODE:{
             int32_t index = read_i32(dumpper);
             printf("SGET_OPCODE index: %d\n", index);

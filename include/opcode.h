@@ -24,6 +24,7 @@ typedef enum opcode{
     NOT_OPCODE, NNOT_OPCODE,
 
     LSET_OPCODE, LGET_OPCODE,
+    GSET_OPCODE, GGET_OPCODE,
     SGET_OPCODE,
 
     PRT_OPCODE,

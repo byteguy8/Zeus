@@ -20,7 +20,8 @@ typedef enum symbol_type{
 }SymbolType;
 
 typedef struct symbol{
-    size_t local;
+    int depth;
+    int local;
     SymbolType type;
     size_t name_len;
     char name[SYMBOL_NAME_LENGTH];
@@ -34,8 +35,8 @@ typedef enum scope_type{
 }ScopeType;
 
 typedef struct scope{
-    size_t depth;
-    size_t locals;
+    int depth;
+    int locals;
     ScopeType type;
     size_t symbols_len;
     Symbol symbols[SYMBOLS_LENGTH];
@@ -52,7 +53,7 @@ typedef struct compiler{
     jmp_buf err_jmp;
 	char import;
 
-    size_t symbols;
+    int symbols;
     
     size_t depth;
     Scope scopes[SCOPES_LENGTH];
