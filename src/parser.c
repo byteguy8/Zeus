@@ -708,7 +708,7 @@ Stmt *parse_function_stmt(Parser *parser){
 
 Stmt *parse_import_stmt(Parser *parser){
     Token *import_token = NULL;
-    char *path_token = NULL;
+    Token *path_token = NULL;
 
     import_token = previous(parser);
     path_token = consume(parser, STRING_TOKTYPE, "Expect string path.");

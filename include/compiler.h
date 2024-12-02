@@ -44,7 +44,7 @@ typedef struct scope{
 
 typedef struct loop_mark
 {
-    size_t id;
+    uint8_t id;
     size_t len;
     size_t index;
 }LoopMark;
@@ -55,17 +55,17 @@ typedef struct compiler{
 
     int symbols;
     
-    size_t depth;
+    uint8_t depth;
     Scope scopes[SCOPES_LENGTH];
     
-    size_t fn_ptr;
+    uint8_t fn_ptr;
     Function *fn_stack[FUNCTIONS_LENGTH];
 
-	unsigned char while_counter;
-	size_t stop_ptr;
+	uint8_t while_counter;
+	uint8_t stop_ptr;
 	LoopMark stops[LOOP_MARK_LENGTH];
 
-    size_t continue_ptr;
+    uint8_t continue_ptr;
     LoopMark continues[LOOP_MARK_LENGTH];
     
     LZHTable *keywords;
