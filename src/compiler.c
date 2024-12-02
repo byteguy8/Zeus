@@ -15,7 +15,7 @@ static void error(Compiler *compiler, Token *token, char *msg, ...){
     va_list args;
     va_start(args, msg);
 
-    fprintf(stderr, "Compiler error at line %d:\n\t", token->line);
+    fprintf(stderr, "Compiler error at line %d in file '%s':\n\t", token->line, token->pathname);
     vfprintf(stderr, msg, args);
     fprintf(stderr, "\n");
 
@@ -930,6 +930,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 error(compiler, import_token, "File at '%s' is not a regular file.\n", source_path);
 
             RawStr *source = utils_read_source(source_path);
+            char *pathname = compile_clone_str(source_path);
             DynArrPtr *tokens = compile_dynarr_ptr();
             LZHTable *strings = compiler->strings;
 			DynArr *chunks = ((Function *)DYNARR_PTR_GET(0, compiler->functions))->chunks;
@@ -942,7 +943,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 	        Parser *parser = parser_create();
             Compiler *import_compiler = compiler_create();
 
-            if(lexer_scan(source, tokens, strings, keywords, lexer)) return;
+            if(lexer_scan(source, tokens, strings, keywords, pathname, lexer)) return;
             if(parser_parse(tokens, stmts, parser)) return;
             if(compiler_import(compiler->symbols, keywords, constants, strings, chunks, functions, stmts, import_compiler)) return;
 

@@ -62,6 +62,7 @@ int main(int argc, char const *argv[]){
 	memory_init();
 
 	RawStr *source = utils_read_source(source_path);
+    char *pathname = compile_clone_str(source_path);
 	DynArrPtr *tokens = compile_dynarr_ptr();
 	LZHTable *strings = runtime_lzhtable();
 	LZHTable *keywords = compile_lzhtable();
@@ -98,24 +99,24 @@ int main(int argc, char const *argv[]){
     VM *vm = vm_create();
 
     if(args.lex){
-        if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
+        if(lexer_scan(source, tokens, strings, keywords, pathname, lexer)) goto CLEAN_UP;
 		printf("No errors in lexer phase\n");
     }else if(args.parse){
-        if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
+        if(lexer_scan(source, tokens, strings, keywords, pathname, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
 		printf("No errors in parse phase\n");
     }else if(args.compile){
-        if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
+        if(lexer_scan(source, tokens, strings, keywords, pathname, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
         if(compiler_compile(keywords, constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
 		printf("No errors in compile phase\n");
     }else if(args.dump){
-        if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
+        if(lexer_scan(source, tokens, strings, keywords, pathname, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
         if(compiler_compile(keywords, constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
         dumpper_dump(constants, strings, functions, dumpper);
     }else{
-        if(lexer_scan(source, tokens, strings, keywords, lexer)) goto CLEAN_UP;
+        if(lexer_scan(source, tokens, strings, keywords, pathname, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
         if(compiler_compile(keywords, constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
         memory_free_compile();

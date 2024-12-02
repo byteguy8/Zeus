@@ -14,6 +14,7 @@ typedef struct lexer{
 	DynArrPtr *tokens;
 	LZHTable *strings;
     LZHTable *keywords;
+    char *pathname;
 }Lexer;
 
 Lexer *lexer_create();
@@ -22,6 +23,7 @@ int lexer_scan(
 	DynArrPtr *tokens,
 	LZHTable *strings,
 	LZHTable *keywords,
+    char *pathname,
 	Lexer *lexer
 );
 

@@ -45,6 +45,7 @@ typedef struct token{
 	void *literal;
 	size_t literal_size;
 	TokenType type;
+    char *pathname;
 }Token;
 
 #endif

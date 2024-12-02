@@ -14,7 +14,7 @@ static void error(Parser *parser, Token *token, char *msg, ...){
     va_list args;
 	va_start(args, msg);
 
-	fprintf(stderr, "Parser error at line %d:\n\t", token->line);
+	fprintf(stderr, "Parser error at line %d in file '%s':\n\t", token->line, token->pathname);
 	vfprintf(stderr, msg, args);
     fprintf(stderr, "\n");
 
@@ -90,7 +90,7 @@ Token *consume(Parser *parser, TokenType type, char *err_msg, ...){
     va_list args;
 	va_start(args, err_msg);
 
-	fprintf(stderr, "Parser error at line %d:\n\t", token->line);
+	fprintf(stderr, "Parser error at line %d in file '%s':\n\t", token->line, token->pathname);
 	vfprintf(stderr, err_msg, args);
     fprintf(stderr, "\n");
 

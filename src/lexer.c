@@ -152,6 +152,7 @@ static void add_token_raw(
     token->literal = literal;
     token->literal_size = literal_size;
     token->type = type;
+    token->pathname = lexer->pathname;
 
     dynarr_ptr_insert(token, lexer->tokens);
 }
@@ -365,6 +366,7 @@ int lexer_scan(
 	DynArrPtr *tokens,
 	LZHTable *strings,
 	LZHTable *keywords,
+    char *pathname,
 	Lexer *lexer
 ){
     lexer->line = 1;
@@ -374,6 +376,7 @@ int lexer_scan(
     lexer->tokens = tokens;
 	lexer->strings = strings;
     lexer->keywords = keywords;
+    lexer->pathname = pathname;
 
     while (!is_at_end(lexer)){
         scan_token(lexer);
