@@ -20,29 +20,31 @@ static int is_dict(Value *value, LZHTable **dict);
 static int is_function(Value *value, Function **out_fn);
 static int is_native_function(Value *value, NativeFunction **out_native_fn);
 
+static char *clone_range_buff(size_t from, size_t to, char *buff, size_t *out_len, VM *vm);
 static Value *clone_value(Value *value, VM *vm);
+static Str *create_str(char *buff, char core, VM *vm);
+static Str *create_range_str(size_t from, size_t to, char *buff, VM *vm);
+static Obj *create_range_str_obj(size_t from, size_t to, char *buff, Value *out_value, VM *vm);
 static Obj *create_obj(ObjType type, VM *vm);
-static void destroy_dict_values(void *ptr);
-static void destroy_obj(Obj *obj, VM *vm);
 static NativeFunction *create_native_function(
     int arity,
     char *name,
     void *target,
     void(native)(void *target, VM *vm), VM *vm
 );
-static void clean_up(VM *vm);
-static char *clone_range_buff(size_t from, size_t to, char *buff, size_t *out_len, VM *vm);
-static Str *create_str(char *buff, char core, VM *vm);
-static Str *create_range_str(size_t from, size_t to, char *buff, VM *vm);
-static Obj *create_range_str_obj(size_t from, size_t to, char *buff, Value *out_value, VM *vm);
 static DynArr *create_dyarr(VM *vm);
 static LZHTable *create_table(VM *vm);
+static void destroy_dict_values(void *ptr);
+static void destroy_obj(Obj *obj, VM *vm);
+static void clean_up(VM *vm);
+
 #define INSERT_VALUE(value, list, vm) \
     if(dynarr_insert(value, list)) error(vm, "Out of memory");
-static uint32_t hash_obj(Obj *obj);
-static uint32_t hash_value(Value *value);
 #define PUT_VALUE(key, value, table, vm) \
     {uint32_t hash = hash_value(key); if(lzhtable_hash_put(hash, value, table)) error(vm, "Out of memory");}
+
+static uint32_t hash_obj(Obj *obj);
+static uint32_t hash_value(Value *value);
 //< VALUE RELATED
 //> STACK RELATED
 static void push(Value value, VM *vm);
@@ -554,112 +556,6 @@ int is_native_function(Value *value, NativeFunction **out_native_fn){
 	return 0;
 }
 
-Value *clone_value(Value *value, VM *vm){
-    Value *clone = (Value *)malloc(sizeof(Value));
-    if(!clone) error(vm, "Out of memory");
-    memcpy(clone, value, sizeof(Value));
-    return clone;
-}
-
-Obj *create_obj(ObjType type, VM *vm){
-    Obj *obj = malloc(sizeof(Obj));
-    
-    if(!obj) error(vm, "Failed to allocate object: out of memory.");
-
-    memset(obj, 0, sizeof(Obj));
-    obj->type = type;
-    
-    if(vm->tail){
-        obj->prev = vm->tail;
-        vm->tail->next = obj;
-    }else vm->head = obj;
-
-    vm->tail = obj;
-
-    return obj;
-}
-
-void destroy_dict_values(void *ptr){
-    free(ptr);
-}
-
-void destroy_obj(Obj *obj, VM *vm){
-    Obj *prev = obj->prev;
-    Obj *next = obj->next;
-
-    if(prev) prev->next = next;
-	if(next) next->prev = prev;
-
-	if(vm->head == obj) vm->head = next;
-	if(vm->tail == obj) vm->tail = prev;
-
-	switch(obj->type){
-		case STRING_OTYPE:{
-			Str *str = obj->value.str;
-			if(!str->core) free(str->buff);
-            free(str);
-			break;
-		}
-		case LIST_OTYPE:{
-			DynArr *list = obj->value.list;
-			dynarr_destroy(list);
-			break;
-		}
-        case DICT_OTYPE:{
-            LZHTable *table = obj->value.dict;
-            lzhtable_destroy(destroy_dict_values, table);
-            break;
-        }
-        case NATIVE_FN_OTYPE:{
-            NativeFunction *native_fn = obj->value.native_fn;
-            free(native_fn);
-            break;
-        }
-		default:{
-			assert("Illegal object type");
-		}
-	}
-
-	free(obj);
-}
-
-NativeFunction *create_native_function(
-    int arity,
-    char *name,
-    void *target,
-    void(native)(void *target, VM *vm), VM *vm
-){
-    size_t name_len = strlen(name);
-    assert(name_len < NAME_LEN - 1);
-
-    NativeFunction *native_fn = (NativeFunction *)malloc(sizeof(NativeFunction));
-    
-    if(!native_fn)
-        error(vm, "Failed to create native function: out of memory");
-
-    native_fn->arity = arity;
-    memcpy(native_fn->name, name, name_len);
-    native_fn->name[name_len] = '\0';
-    native_fn->name_len = name_len;
-    native_fn->target = target;
-    native_fn->native = native;
-
-    return native_fn;
-}
-
-void clean_up(VM *vm){
-    LZHTableNode *node = vm->globals->nodes;
-    
-    while (node){
-        LZHTableNode *next = node->next_table_node;
-        free(node->value);
-        node = next;
-    }
-    
-    while (vm->head)
-        destroy_obj(vm->head, vm);
-}
-
 char *clone_range_buff(size_t from, size_t to, char *buff, size_t *out_len, VM *vm){
     size_t len = to - from + 1;
     char *rstr = (char *)malloc(len + 1);
@@ -670,6 +566,13 @@ char *clone_range_buff(size_t from, size_t to, char *buff, size_t *out_len, VM *
     rstr[len] = '\0';
     
     return rstr;
+}
+
+Value *clone_value(Value *value, VM *vm){
+    Value *clone = (Value *)malloc(sizeof(Value));
+    if(!clone) error(vm, "Out of memory");
+    memcpy(clone, value, sizeof(Value));
+    return clone;
 }
 
 Str *create_str(char *buff, char core, VM *vm){
@@ -719,6 +622,48 @@ Obj *create_range_str_obj(
     return str_obj;
 }
 
+Obj *create_obj(ObjType type, VM *vm){
+    Obj *obj = malloc(sizeof(Obj));
+    
+    if(!obj) error(vm, "Failed to allocate object: out of memory.");
+
+    memset(obj, 0, sizeof(Obj));
+    obj->type = type;
+    
+    if(vm->tail){
+        obj->prev = vm->tail;
+        vm->tail->next = obj;
+    }else vm->head = obj;
+
+    vm->tail = obj;
+
+    return obj;
+}
+
+NativeFunction *create_native_function(
+    int arity,
+    char *name,
+    void *target,
+    void(native)(void *target, VM *vm), VM *vm
+){
+    size_t name_len = strlen(name);
+    assert(name_len < NAME_LEN - 1);
+
+    NativeFunction *native_fn = (NativeFunction *)malloc(sizeof(NativeFunction));
+    
+    if(!native_fn)
+        error(vm, "Failed to create native function: out of memory");
+
+    native_fn->arity = arity;
+    memcpy(native_fn->name, name, name_len);
+    native_fn->name[name_len] = '\0';
+    native_fn->name_len = name_len;
+    native_fn->target = target;
+    native_fn->native = native;
+
+    return native_fn;
+}
+
 DynArr *create_dyarr(VM *vm){
     DynArr *dynarr = dynarr_create(sizeof(Value), NULL);
     if(!dynarr) error(vm, "Out of memory");
@@ -729,6 +674,63 @@ LZHTable *create_table(VM *vm){
     LZHTable *table = lzhtable_create(17, NULL);
     if(!table) error(vm, "Out of memory");
     return table;
+}
+
+void destroy_dict_values(void *ptr){
+    free(ptr);
+}
+
+void destroy_obj(Obj *obj, VM *vm){
+    Obj *prev = obj->prev;
+    Obj *next = obj->next;
+
+    if(prev) prev->next = next;
+	if(next) next->prev = prev;
+
+	if(vm->head == obj) vm->head = next;
+	if(vm->tail == obj) vm->tail = prev;
+
+	switch(obj->type){
+		case STRING_OTYPE:{
+			Str *str = obj->value.str;
+			if(!str->core) free(str->buff);
+            free(str);
+			break;
+		}
+		case LIST_OTYPE:{
+			DynArr *list = obj->value.list;
+			dynarr_destroy(list);
+			break;
+		}
+        case DICT_OTYPE:{
+            LZHTable *table = obj->value.dict;
+            lzhtable_destroy(destroy_dict_values, table);
+            break;
+        }
+        case NATIVE_FN_OTYPE:{
+            NativeFunction *native_fn = obj->value.native_fn;
+            free(native_fn);
+            break;
+        }
+		default:{
+			assert("Illegal object type");
+		}
+	}
+
+	free(obj);
+}
+
+void clean_up(VM *vm){
+    LZHTableNode *node = vm->globals->nodes;
+    
+    while (node){
+        LZHTableNode *next = node->next_table_node;
+        free(node->value);
+        node = next;
+    }
+    
+    while (vm->head)
+        destroy_obj(vm->head, vm);
 }
 
 uint32_t hash_obj(Obj *obj){
@@ -761,18 +763,18 @@ uint32_t hash_value(Value *value){
 }
 
 void push(Value value, VM *vm){
-    if(vm->stack_ptr >= STACK_LENGTH) error(vm, "StackOverFlow");
+    if(vm->stack_ptr >= STACK_LENGTH) error(vm, "Stack over flow");
     Value *current_value = &vm->stack[vm->stack_ptr++];
     memcpy(current_value, &value, sizeof(Value));
 }
 
 Value *pop(VM *vm){
-    if(vm->stack_ptr == 0) error(vm, "StackUnderFlow");
+    if(vm->stack_ptr == 0) error(vm, "Stack under flow");
     return &vm->stack[--vm->stack_ptr];
 }
 
 Value *peek(VM *vm){
-    if(vm->stack_ptr == 0) error(vm, "StackUnderFlow");
+    if(vm->stack_ptr == 0) error(vm, "Stack is empty");
     return &vm->stack[vm->stack_ptr - 1];
 }
 
