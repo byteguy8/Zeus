@@ -46,6 +46,11 @@ static void clean_up(VM *vm);
 static uint32_t hash_obj(Obj *obj);
 static uint32_t hash_value(Value *value);
 //< VALUE RELATED
+//> GC RELATED
+static void mark_objs(VM *vm);
+static void sweep_objs(VM *vm);
+static void gc(VM *vm);
+//< GC RELATED
 //> STACK RELATED
 static void push(Value value, VM *vm);
 static Value *pop(VM *vm);
@@ -623,6 +628,9 @@ Obj *create_range_str_obj(
 }
 
 Obj *create_obj(ObjType type, VM *vm){
+    if(vm->objs_size >= 67108864)
+        gc(vm);
+
     Obj *obj = malloc(sizeof(Obj));
     
     if(!obj) error(vm, "Failed to allocate object: out of memory.");
@@ -636,6 +644,7 @@ Obj *create_obj(ObjType type, VM *vm){
     }else vm->head = obj;
 
     vm->tail = obj;
+    vm->objs_size += sizeof(Obj);
 
     return obj;
 }
@@ -760,6 +769,70 @@ uint32_t hash_value(Value *value){
             return hash_obj(obj);
         }
     }   
+}
+
+void mark_objs(VM *vm){
+    // globals
+    LZHTableNode *node = vm->globals->nodes;
+    
+    while (node){
+        LZHTableNode *next = node->next_table_node;
+        Value *value = (Value *)node->value;
+        if(value->type != OBJ_VTYPE) continue;
+        
+        Obj *obj = value->literal.obj;
+        if(obj->marked) continue;
+        
+        obj->marked = 1;
+        node = next;
+    }
+    
+    // locals
+    for (size_t frame_ptr = 0; frame_ptr < vm->frame_ptr; frame_ptr++){
+        Frame *frame = &vm->frame_stack[frame_ptr];
+        
+        for (size_t local_ptr = 0; local_ptr < LOCALS_LENGTH; local_ptr++){
+            Value *value = &frame->locals[local_ptr];
+            if(value->type != OBJ_VTYPE) continue;
+            
+            Obj *obj = value->literal.obj;
+            if(obj->marked) continue;
+            
+            obj->marked = 1;
+        }
+    }
+}
+
+void sweep_objs(VM *vm){
+    Obj *obj = vm->head;
+    Obj *prev = NULL;
+
+    while (obj){
+        Obj *next = obj->next;
+
+        if(obj->marked){
+            obj->marked = 0;
+            prev = obj;
+            obj = next;
+            continue;
+        }
+        
+        if(obj == vm->head) 
+            vm->head = next;
+        if(obj == vm->tail)
+            vm->tail = prev;
+        if(prev)
+            prev->next = next;
+            
+        destroy_obj(obj, vm);
+
+        obj = next;
+    }    
+}
+
+void gc(VM *vm){
+    mark_objs(vm);
+    sweep_objs(vm);
 }
 
 void push(Value value, VM *vm){

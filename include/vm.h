@@ -30,6 +30,7 @@ typedef struct vm{
 //> garbage collector
     Obj *head;
     Obj *tail;
+    size_t objs_size;
 //< garbage collector
 }VM;
 
