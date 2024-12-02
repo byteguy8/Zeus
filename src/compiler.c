@@ -876,6 +876,11 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             DynArrPtr *params = function_stmt->params;
             DynArrPtr *stmts = function_stmt->stmts;
 
+            Scope *previous_scope = inside_function(compiler);
+            
+            if(previous_scope && previous_scope->depth > 1)
+                error(compiler, name_token, "Can not declare a function inside another function.");
+
             Function *fn = NULL;
 
             declare(FN_SYMTYPE, name_token, compiler);
