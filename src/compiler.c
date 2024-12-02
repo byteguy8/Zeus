@@ -557,8 +557,13 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			if(symbol->type == IMUT_SYMTYPE)
 				error(compiler, identifier_token, "'%s' declared as constant. Can't change its value.", identifier_token->lexeme);
 			
-			write_chunk(LGET_OPCODE, compiler);
-			write_chunk(symbol->local, compiler);
+			if(symbol->depth == 1){
+                write_chunk(GGET_OPCODE, compiler);
+			    write_str(identifier_token->lexeme, compiler);
+            }else{
+                write_chunk(LGET_OPCODE, compiler);
+			    write_chunk(symbol->local, compiler);
+            }
 
 			compile_expr(right, compiler);			
 
@@ -584,8 +589,13 @@ void compile_expr(Expr *expr, Compiler *compiler){
 				}
 			}
 
-			write_chunk(LSET_OPCODE, compiler);
-			write_chunk(symbol->local, compiler);
+			if(symbol->depth == 1){
+                write_chunk(GSET_OPCODE, compiler);
+			    write_str(identifier_token->lexeme, compiler);
+            }else{
+                write_chunk(LSET_OPCODE, compiler);
+			    write_chunk(symbol->local, compiler);
+            }
 	
 			break;
 		}

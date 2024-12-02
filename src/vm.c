@@ -648,6 +648,14 @@ NativeFunction *create_native_function(
 }
 
 void clean_up(VM *vm){
+    LZHTableNode *node = vm->globals->nodes;
+    
+    while (node){
+        LZHTableNode *next = node->next_table_node;
+        free(node->value);
+        node = next;
+    }
+    
     while (vm->head)
         destroy_obj(vm->head, vm);
 }
@@ -1080,8 +1088,8 @@ void execute(uint8_t chunk, VM *vm){
             break;
         }
         case GSET_OPCODE:{
-            uint32_t hash = (uint32_t)read_i32(vm);
             Value *value = peek(vm);
+            uint32_t hash = (uint32_t)read_i32(vm);
 
             LZHTableNode *node = NULL;
 
