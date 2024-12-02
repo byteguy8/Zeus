@@ -921,11 +921,13 @@ void execute(uint8_t chunk, VM *vm){
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
-            if(is_str(va, NULL)){
-                Str *astr = TO_STR(va);
-                Str *bstr = NULL;
+            Str *bstr = NULL;
+            Str *astr = NULL;
 
-                if(!is_str(vb, &bstr))
+            if(is_str(va, &astr) || is_str(vb, &bstr)){
+                if(!astr)
+                    error(vm, "Expect string at left side of string concatenation.");
+                if(!bstr)
                     error(vm, "Expect string at right side of string concatenation.");
 
                 char *buff = join_buff(astr->buff, astr->len, bstr->buff, bstr->len, vm);
@@ -937,14 +939,14 @@ void execute(uint8_t chunk, VM *vm){
             }
 
             if(!is_i64(va, NULL))
-                error(vm, "Expect int at left side of string sum.");
+                error(vm, "Expect int at left side of sum.");
 
             if(!is_i64(vb, NULL))
-                error(vm, "Expect int at right side of string sum.");
+                error(vm, "Expect int at right side of sum.");
 
             int64_t right = vb->literal.i64;
             int64_t left = va->literal.i64;
-            
+
             push_i64(left + right, vm);
             
             break;
@@ -959,48 +961,43 @@ void execute(uint8_t chunk, VM *vm){
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
-            if(is_str(va, NULL)){
+            Str *bstr = NULL;
+            Str *astr = NULL;
+
+            if(is_str(va, &astr) || is_str(vb, &bstr)){
                 int64_t by = -1;
-                Str *in_str = TO_STR(va);
+                char *in_buff = NULL;
+                size_t in_buff_len = 0;
 
-                if(!is_i64(vb, &by))
-                    error(vm, "Expect integer at right side of string multiplication.");
+                if(astr){
+                    in_buff = astr->buff;
+                    in_buff_len = astr->len;
+                    
+                    if(!is_i64(vb, &by))
+                        error(vm, "Expect integer at right side of string multiplication.");
+                }
 
-				if(by < 0)
-					error(vm, "Negative values not allowed in string multiplication.");
+                if(bstr){
+                    in_buff = bstr->buff;
+                    in_buff_len = bstr->len;
 
-                char *buff = multiply_buff(in_str->buff, in_str->len, (size_t)by, vm);
+                    if(!is_i64(va, &by))
+                        error(vm, "Expect integer at left side of string multiplication.");
+                }
+
+                char *buff = multiply_buff(in_buff, in_buff_len, (size_t)by, vm);
                 Str *out_str = create_str(buff, 0, vm);
                 
                 push_str(out_str, vm);
 
                 break;
             }
-
-			if(is_str(vb, NULL)){
-                int64_t by = -1;
-                Str *in_str = TO_STR(vb);
-
-                if(!is_i64(va, &by))
-                    error(vm, "Expect integer at left side of string multiplication.");
-
-				if(by < 0)
-					error(vm, "Negative values not allowed in string multiplication.");
-
-                char *buff = multiply_buff(in_str->buff, in_str->len, (size_t)by, vm);
-                Str *out_str = create_str(buff, 0, vm);
-                
-                push_str(out_str, vm);
-
-                break;
-            }
-
 
             if(!is_i64(va, NULL))
-                error(vm, "Expect int at left side of string sum.");
+                error(vm, "Expect integer at left side of multiplication.");
 
             if(!is_i64(vb, NULL))
-                error(vm, "Expect int at right side of string sum.");
+                error(vm, "Expect integer at right side of multiplication.");
 
             int64_t right = vb->literal.i64;
             int64_t left = va->literal.i64;
