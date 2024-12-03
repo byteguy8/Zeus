@@ -1,42 +1,9 @@
 #ifndef VALUE_H
 #define VALUE_H
 
-#include "dynarr.h"
-#include "lzhtable.h"
-#include "function.h"
-#include "native_function.h"
+#include "obj.h"
 #include <stddef.h>
 #include <stdint.h>
-
-typedef enum obj_type{
-	STRING_OTYPE,
-	LIST_OTYPE,
-    DICT_OTYPE,
-    FN_OTYPE,
-    NATIVE_FN_OTYPE,
-}ObjType;
-
-typedef struct str{
-	char core;
-	size_t len;
-	char *buff;
-}Str;
-
-typedef struct obj{    
-    char marked;
-    struct obj *prev;
-    struct obj *next;
-	
-    ObjType type;
-
-    union{
-		Str *str;
-		DynArr *list;
-        LZHTable *dict;
-        Function *fn;
-        NativeFunction *native_fn;
-	}value;
-}Obj;
 
 typedef enum value_type{
     EMPTY_VTYPE,
@@ -45,8 +12,7 @@ typedef enum value_type{
 	OBJ_VTYPE
 }ValueType;
 
-typedef struct value
-{
+typedef struct value{
     ValueType type;
     union{
         uint8_t bool;

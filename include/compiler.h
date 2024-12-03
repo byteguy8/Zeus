@@ -3,7 +3,7 @@
 
 #include "dynarr.h"
 #include "token.h"
-#include "function.h"
+#include "types.h"
 #include "lzhtable.h"
 #include <setjmp.h>
 
@@ -42,8 +42,7 @@ typedef struct scope{
     Symbol symbols[SYMBOLS_LENGTH];
 }Scope;
 
-typedef struct loop_mark
-{
+typedef struct loop_mark{
     uint8_t id;
     size_t len;
     size_t index;

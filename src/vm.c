@@ -1,7 +1,7 @@
 #include "vm.h"
 #include "memory.h"
 #include "opcode.h"
-#include "function.h"
+#include "types.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>

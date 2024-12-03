@@ -33,8 +33,7 @@ typedef struct print_stmt{
     Token *print_token;
 }PrintStmt;
 
-typedef struct var_decl_stmt
-{
+typedef struct var_decl_stmt{
     char is_const;
     char is_initialized;
     Token *identifier_token;
@@ -60,8 +59,7 @@ typedef struct stop_stmt{
 	Token *stop_token;
 }StopStmt;
 
-typedef struct continue_stmt
-{
+typedef struct continue_stmt{
     Token *continue_token;
 }ContinueStmt;
 
@@ -76,8 +74,7 @@ typedef struct return_stmt{
     Expr *value;
 }ReturnStmt;
 
-typedef struct import_stmt
-{
+typedef struct import_stmt{
     Token *import_token;
     Token *path_token;
 }ImportStmt;

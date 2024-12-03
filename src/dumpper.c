@@ -1,6 +1,6 @@
 #include "dumpper.h"
 #include "memory.h"
-#include "function.h"
+#include "types.h"
 #include "opcode.h"
 #include <stdio.h>
 #include <assert.h>

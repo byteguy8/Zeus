@@ -28,13 +28,11 @@ typedef struct expr{
 	void *sub_expr;
 }Expr;
 
-typedef struct empty_expr
-{
+typedef struct empty_expr{
     Token *empty_token;
 }EmptyExpr;
 
-typedef struct bool_expr
-{
+typedef struct bool_expr{
     uint8_t value;
     Token *bool_token;
 }BoolExpr;
@@ -48,14 +46,12 @@ typedef struct string_expr{
 	Token *string_token;
 }StringExpr;
 
-typedef struct group_expr
-{
+typedef struct group_expr{
     Token *left_paren_token;
     Expr *expr;
 }GroupExpr;
 
-typedef struct identifier_expr
-{
+typedef struct identifier_expr{
     Token *identifier_token;
 }IdentifierExpr;
 
@@ -71,8 +67,7 @@ typedef struct access_expr{
 	Token *symbol_token;
 }AccessExpr;
 
-typedef struct unary_expr
-{
+typedef struct unary_expr{
     Token *operator;
     Expr *right;
 }UnaryExpr;
@@ -95,8 +90,7 @@ typedef struct logical_expr{
 	Expr *right;
 }LogicalExpr;
 
-typedef struct assign_expr
-{
+typedef struct assign_expr{
     Token *identifier_token;
     Expr *value_expr;
 }AssignExpr;
@@ -117,8 +111,7 @@ typedef struct dict_key_value{
     Expr *value;
 }DictKeyValue;
 
-typedef struct dict_expr
-{
+typedef struct dict_expr{
     Token *dict_token;
     DynArrPtr *key_values;
 }DictExpr;
