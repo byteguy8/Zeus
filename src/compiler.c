@@ -969,7 +969,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             Scope *scope = &import_compiler->scopes[0];
             
-            for (size_t i = 0; i < scope->symbols_len; i++){
+            for (size_t i = compiler->natives->n; i < scope->symbols_len; i++){
                 Symbol *symbol = &scope->symbols[i];
                 declare(symbol->type, symbol->identifier_token, compiler);
             }
