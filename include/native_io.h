@@ -14,10 +14,24 @@ Value native_readln(uint8_t argc, Value *values, void *target, VM *vm){
 	if(!out_buff)
 		vm_utils_error(vm, "Failed to read input");
 
-	Value value = {0};
-
-	if(!vm_utils_clone_str_obj(buff, &value, vm))
-		vm_utils_error(vm, "Out of memory");
+    Value value = {0};
+    size_t out_buff_len = strlen(out_buff);
+    
+    if(out_buff_len == 0){
+        if(!vm_utils_empty_str_obj(&value, vm))
+            vm_utils_error(vm, "Out of memory");
+    }if(out_buff_len == 1 &&  out_buff[out_buff_len - 1] == '\n'){
+        if(!vm_utils_empty_str_obj(&value, vm))
+            vm_utils_error(vm, "Out of memory");
+    }else{
+        if(out_buff[out_buff_len - 1] == '\n'){
+            if(!vm_utils_range_str_obj(0, out_buff_len - 2, buff, &value, vm))
+                vm_utils_error(vm, "Out of memory");
+        }else{
+            if(!vm_utils_clone_str_obj(buff, &value, vm))
+		        vm_utils_error(vm, "Out of memory");
+        }
+    }
 
 	return value;
 }
