@@ -1,5 +1,9 @@
 #include "memory.h"
 #include "utils.h"
+
+#include "vm_utils.h"
+#include "native_time.h"
+
 #include "lzhtable.h"
 #include "token.h"
 #include "lexer.h"
@@ -38,6 +42,21 @@ void add_keyword(char *name, TokenType type, LZHTable *keywords){
     lzhtable_put((uint8_t *)name, strlen(name), ctype, keywords, NULL);
 }
 
+void add_native(char *name, int arity, RawNativeFunction raw_native, LZHTable *natives){
+    size_t name_len = strlen(name);
+    NativeFunction *native = (NativeFunction *)A_RUNTIME_ALLOC(sizeof(NativeFunction));
+
+    native->unique = 1;
+    native->arity = arity;
+    memcpy(native->name, name, name_len);
+    native->name[name_len] = '\0';
+    native->name_len = name_len;
+    native->target = NULL;
+    native->native = raw_native;
+
+    lzhtable_put((uint8_t *)name, name_len, native, natives, NULL);
+}
+
 int main(int argc, char const *argv[]){
 	Args args = {0};
 	get_args(argc, argv, &args);
@@ -60,6 +79,10 @@ int main(int argc, char const *argv[]){
 	}
 
 	memory_init();
+
+    LZHTable *natives = runtime_lzhtable();
+    add_native("time", 0, native_time, natives);
+    add_native("sleep", 1, native_sleep, natives);
 
 	RawStr *source = utils_read_source(source_path);
     char *pathname = compile_clone_str(source_path);
@@ -108,19 +131,19 @@ int main(int argc, char const *argv[]){
     }else if(args.compile){
         if(lexer_scan(source, tokens, strings, keywords, pathname, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
-        if(compiler_compile(keywords, constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
+        if(compiler_compile(keywords, natives, constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
 		printf("No errors in compile phase\n");
     }else if(args.dump){
         if(lexer_scan(source, tokens, strings, keywords, pathname, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
-        if(compiler_compile(keywords, constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
+        if(compiler_compile(keywords, natives, constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
         dumpper_dump(constants, strings, functions, dumpper);
     }else{
         if(lexer_scan(source, tokens, strings, keywords, pathname, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
-        if(compiler_compile(keywords, constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
+        if(compiler_compile(keywords, natives, constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
         memory_free_compile();
-        if(vm_execute(constants, strings, functions, globals, vm)) goto CLEAN_UP;
+        if(vm_execute(constants, strings, natives, functions, globals, vm)) goto CLEAN_UP;
     }
 
 	if(args.memuse) memory_report();

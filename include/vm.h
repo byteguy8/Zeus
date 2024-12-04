@@ -4,6 +4,7 @@
 #include "value.h"
 #include "dynarr.h"
 #include "lzhtable.h"
+#include <setjmp.h>
 
 #define STACK_LENGTH 255
 #define LOCALS_LENGTH 255
@@ -17,6 +18,7 @@ typedef struct frame{
 }Frame;
 
 typedef struct vm{
+    jmp_buf err_jmp;
     int stack_ptr;
     Value stack[STACK_LENGTH];
 
@@ -25,6 +27,7 @@ typedef struct vm{
 
     DynArr *constants;
 	LZHTable *strings;
+    LZHTable *natives;
     DynArrPtr *functions;
     LZHTable *globals;
 //> garbage collector
@@ -39,6 +42,7 @@ void vm_print_stack(VM *vm);
 int vm_execute(
     DynArr *constants,
     LZHTable *strings,
+    LZHTable *natives,
     DynArrPtr *functions,
     LZHTable *globals,
     VM *vm

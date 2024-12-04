@@ -197,6 +197,22 @@ Symbol *get(Token *identifier_token, Compiler *compiler){
     return NULL;
 }
 
+Symbol *declare_native(char *identifier, Compiler *compiler){
+    size_t identifier_len = strlen(identifier);
+    Scope *scope = current_scope(compiler);
+    Symbol *symbol = &scope->symbols[scope->symbols_len++];
+    
+    symbol->depth = scope->depth;
+    symbol->local = -1;
+    symbol->type = NATIVE_FN_SYMTYPE;
+    symbol->name_len = identifier_len;
+    memcpy(symbol->name, identifier, identifier_len);
+    symbol->name[identifier_len] = '\0';
+    symbol->identifier_token = NULL;
+
+    return symbol;
+}
+
 Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler){
     char *identifier = identifier_token->lexeme;
     size_t identifier_len = strlen(identifier);
@@ -341,7 +357,10 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             Symbol *symbol = get(identifier_token, compiler);
 
-            if(symbol->type == MUT_SYMTYPE || symbol->type == IMUT_SYMTYPE){
+            if(symbol->type == NATIVE_FN_SYMTYPE){
+                write_chunk(NGET_OPCODE, compiler);
+                write_str(identifier_token->lexeme, compiler);
+            }else if(symbol->type == MUT_SYMTYPE || symbol->type == IMUT_SYMTYPE){
                 if(symbol->depth == 1){
                     write_chunk(GGET_OPCODE, compiler);
                     write_str(identifier_token->lexeme, compiler);
@@ -937,6 +956,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             LZHTable *keywords = compiler->keywords;
             DynArrPtr *stmts = compile_dynarr_ptr();
             DynArr *constants = compiler->constants;
+            LZHTable *natives = compiler->natives;
             DynArrPtr *functions = compiler->functions;
 
             Lexer *lexer = lexer_create();
@@ -945,7 +965,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             if(lexer_scan(source, tokens, strings, keywords, pathname, lexer)) return;
             if(parser_parse(tokens, stmts, parser)) return;
-            if(compiler_import(compiler->symbols, keywords, constants, strings, chunks, functions, stmts, import_compiler)) return;
+            if(compiler_import(compiler->symbols, keywords, natives, constants, strings, chunks, functions, stmts, import_compiler)) return;
 
             Scope *scope = &import_compiler->scopes[0];
             
@@ -963,6 +983,18 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
     }
 }
 
+void define_natives(Compiler *compiler){
+    assert(compiler->depth > 0);
+    LZHTableNode *node = compiler->natives->nodes;
+    
+    while (node){
+        LZHTableNode *prev = node->previous_table_node;
+        NativeFunction *native = (NativeFunction *)node->value;
+        declare_native(native->name, compiler);
+        node = prev;
+    }
+}
+
 Compiler *compiler_create(){
     Compiler *compiler = (Compiler *)A_COMPILE_ALLOC(sizeof(Compiler));
     memset(compiler, 0, sizeof(Compiler));
@@ -971,6 +1003,7 @@ Compiler *compiler_create(){
 
 int compiler_compile(
     LZHTable *keywords,
+    LZHTable *natives,
     DynArr *constants,
     LZHTable *strings,
     DynArrPtr *functions,
@@ -983,12 +1016,14 @@ int compiler_compile(
     else{
         compiler->symbols = 1;
         compiler->keywords = keywords;
+        compiler->natives = natives;
         compiler->constants = constants;
         compiler->strings = strings;
         compiler->functions = functions;
         compiler->stmts = stmts;
 
         scope_in_fn("main", compiler, NULL);
+        define_natives(compiler);
 
         for (size_t i = 0; i < stmts->used; i++){
             Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
@@ -1004,6 +1039,7 @@ int compiler_compile(
 int compiler_import(
 	size_t symbols,
     LZHTable *keywords,
+    LZHTable *natives,
     DynArr *constants,
     LZHTable *strings,
 	DynArr *chunks,
@@ -1018,6 +1054,7 @@ int compiler_import(
 		compiler->import = 1;
         compiler->symbols = symbols;
         compiler->keywords = keywords;
+        compiler->natives = natives;
         compiler->constants = constants;
         compiler->strings = strings;
 		compiler->chunks = chunks;
@@ -1025,6 +1062,7 @@ int compiler_import(
         compiler->stmts = stmts;
 
 		scope_in(BLOCK_SCOPE, compiler);
+        define_natives(compiler);
 
         for (size_t i = 0; i < stmts->used; i++){
             Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);

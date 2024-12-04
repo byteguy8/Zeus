@@ -17,6 +17,7 @@ typedef enum symbol_type{
     MUT_SYMTYPE,
     IMUT_SYMTYPE,
     FN_SYMTYPE,
+    NATIVE_FN_SYMTYPE,
 }SymbolType;
 
 typedef struct symbol{
@@ -68,6 +69,7 @@ typedef struct compiler{
     LoopMark continues[LOOP_MARK_LENGTH];
     
     LZHTable *keywords;
+    LZHTable *natives;
     DynArr *constants;
     LZHTable *strings;
 	DynArr *chunks;
@@ -78,6 +80,7 @@ typedef struct compiler{
 Compiler *compiler_create();
 int compiler_compile(
     LZHTable *keywords,
+    LZHTable *natives,
     DynArr *constants,
     LZHTable *strings,
     DynArrPtr *functions,
@@ -88,6 +91,7 @@ int compiler_compile(
 int compiler_import(
 	size_t symbols,
     LZHTable *keywords,
+    LZHTable *natives,
     DynArr *constants,
     LZHTable *strings,
 	DynArr *chunks,

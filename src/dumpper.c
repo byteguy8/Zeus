@@ -133,6 +133,12 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf("GGET_OPCODE hash: '%u' value: '%s'\n", hash, str);
             break;
         }
+        case NGET_OPCODE:{
+            uint32_t hash = 0;
+            char *value = read_str(dumpper, &hash);
+            printf("NGET_OPCODE hash: %d value: '%s'\n", hash, value);
+            break;
+        }
         case SGET_OPCODE:{
             int32_t index = read_i32(dumpper);
             printf("SGET_OPCODE index: %d\n", index);

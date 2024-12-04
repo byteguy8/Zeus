@@ -7,12 +7,14 @@ dynarr.o lzhtable.o \
 memory.o utils.o \
 lexer.o parser.o \
 compiler.o dumpper.o \
-vm.o
+vm_utils.o vm.o
 
 zeus: $(OBJS)
 	$(COMPILER) -o $(OUT_DIR)/zeus $(CFLAGS) $(OUT_DIR)/*.o $(SRC)/zeus.c
 vm.o:
 	$(COMPILER) -c -o $(OUT_DIR)/vm.o $(CFLAGS) $(SRC)/vm.c
+vm_utils.o:
+	$(COMPILER) -c -o $(OUT_DIR)/vm_utils.o $(CFLAGS) $(SRC)/vm_utils.c
 dumpper.o:
 	$(COMPILER) -c -o $(OUT_DIR)/dumpper.o $(CFLAGS) $(SRC)/dumpper.c
 compiler.o:
