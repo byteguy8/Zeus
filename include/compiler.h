@@ -50,6 +50,7 @@ typedef struct loop_mark{
 }LoopMark;
 
 typedef struct compiler{
+	char is_err;
     jmp_buf err_jmp;
 	char import;
 

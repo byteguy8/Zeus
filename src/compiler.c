@@ -963,9 +963,31 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 	        Parser *parser = parser_create();
             Compiler *import_compiler = compiler_create();
 
-            if(lexer_scan(source, tokens, strings, keywords, pathname, lexer)) return;
-            if(parser_parse(tokens, stmts, parser)) return;
-            if(compiler_import(compiler->symbols, keywords, natives, constants, strings, chunks, functions, stmts, import_compiler)) return;
+            if(lexer_scan(source, tokens, strings, keywords, pathname, lexer)){
+				compiler->is_err = 1;
+				break;
+			}
+
+            if(parser_parse(tokens, stmts, parser)){
+				compiler->is_err = 1;
+				break;
+			}
+
+            if(compiler_import(
+				compiler->symbols,
+				keywords,
+				natives,
+				constants,
+				strings,
+				chunks,
+				functions,
+				stmts,
+				import_compiler
+			)){
+				compiler->is_err = 1;
+				break;
+			}
+
 
             Scope *scope = &import_compiler->scopes[0];
             
@@ -1032,7 +1054,7 @@ int compiler_compile(
 
         scope_out_fn(compiler);
         
-        return 0;
+        return compiler->is_err;
     }
 }
 
@@ -1071,6 +1093,6 @@ int compiler_import(
 
 		scope_out(compiler);
         
-        return 0;
+        return compiler->is_err;
     }
 }
