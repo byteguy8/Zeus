@@ -17,6 +17,7 @@ Obj *vm_utils_create_obj(ObjType type, VM *vm);
 Str *vm_utils_create_str(char *buff, char core, VM *vm);
 
 Obj *vm_utils_empty_str_obj(Value *out_value, VM *vm);
+Obj *vm_utils_clone_str_obj(char *buff, Value *out_value, VM *vm);
 Obj *vm_utils_range_str_obj(size_t from, size_t to, char *buff, Value *out_value, VM *vm);
 
 NativeFunction *vm_utils_native_function(

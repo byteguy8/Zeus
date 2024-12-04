@@ -3,6 +3,7 @@
 
 #include "vm_utils.h"
 #include "native_time.h"
+#include "native_io.h"
 
 #include "lzhtable.h"
 #include "token.h"
@@ -83,6 +84,7 @@ int main(int argc, char const *argv[]){
     LZHTable *natives = runtime_lzhtable();
     add_native("time", 0, native_time, natives);
     add_native("sleep", 1, native_sleep, natives);
+	add_native("readln", 0, native_readln, natives);
 
 	RawStr *source = utils_read_source(source_path);
     char *pathname = compile_clone_str(source_path);
