@@ -353,10 +353,13 @@ void execute(uint8_t chunk, VM *vm){
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
-            Str *bstr = NULL;
             Str *astr = NULL;
+            Str *bstr = NULL;
 
-            if(vm_utils_is_str(va, &astr) || vm_utils_is_str(vb, &bstr)){
+            vm_utils_is_str(va, &astr);
+            vm_utils_is_str(vb, &bstr);
+
+            if(astr || bstr){
                 if(!astr)
                     vm_utils_error(vm, "Expect string at left side of string concatenation.");
                 if(!bstr)
@@ -396,7 +399,10 @@ void execute(uint8_t chunk, VM *vm){
             Str *bstr = NULL;
             Str *astr = NULL;
 
-            if(vm_utils_is_str(va, &astr) || vm_utils_is_str(vb, &bstr)){
+            vm_utils_is_str(va, &astr);
+            vm_utils_is_str(vb, &bstr);
+
+            if(astr || bstr){
                 int64_t by = -1;
                 char *in_buff = NULL;
                 size_t in_buff_len = 0;
