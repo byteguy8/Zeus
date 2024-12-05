@@ -2,6 +2,7 @@
 #include "utils.h"
 
 #include "vm_utils.h"
+#include "native.h"
 #include "native_time.h"
 #include "native_io.h"
 
@@ -82,6 +83,9 @@ int main(int argc, char const *argv[]){
 	memory_init();
 
     LZHTable *natives = runtime_lzhtable();
+	add_native("is_str_int", 1, native_fn_is_str_int, natives);
+	add_native("str_to_int", 1, native_fn_str_to_int, natives);
+    add_native("int_to_str", 1, native_fn_int_to_str, natives);
     add_native("time", 0, native_time, natives);
     add_native("sleep", 1, native_sleep, natives);
 	add_native("readln", 0, native_readln, natives);

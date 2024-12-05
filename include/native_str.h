@@ -5,7 +5,6 @@
 #include "value.h"
 #include "vm_utils.h"
 
-//> Native functions related to strings
 Value native_fn_char_at(uint8_t argc, Value *values, void *target, VM *vm){
     int64_t index = -1;
     Str *in_str = (Str *)target;
