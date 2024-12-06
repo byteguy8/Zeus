@@ -1,6 +1,6 @@
 SRC = ./src
 OUT_DIR = ./build
-CFLAGS = -I./include -Wall -Wextra -g2 -Wno-unused-parameter
+CFLAGS = -fsanitize=address -I./include -Wall -Wextra -g2 -Wno-unused-parameter
 COMPILER = gcc
 OBJS = lzarena.o lzdynalloc.o \
 dynarr.o lzhtable.o \

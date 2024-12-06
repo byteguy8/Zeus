@@ -254,7 +254,7 @@ void push_i64(int64_t i64, VM *vm){
 }
 
 void push_str(Str *str, VM *vm){
-    Obj *str_obj = vm_utils_create_obj(STRING_OTYPE, vm);
+    Obj *str_obj = vm_utils_obj(STRING_OTYPE, vm);
     str_obj->value.str = str;
 
     Value value = {0};
@@ -265,7 +265,7 @@ void push_str(Str *str, VM *vm){
 }
 
 void push_list(DynArr *list, VM *vm){
-    Obj *obj = vm_utils_create_obj(LIST_OTYPE, vm);
+    Obj *obj = vm_utils_obj(LIST_OTYPE, vm);
     obj->value.list = list;
 
     Value value = {0};
@@ -276,7 +276,7 @@ void push_list(DynArr *list, VM *vm){
 }
 
 void push_native_fn(NativeFunction *native, VM *vm){
-    Obj *obj = vm_utils_create_obj(NATIVE_FN_OTYPE, vm);
+    Obj *obj = vm_utils_obj(NATIVE_FN_OTYPE, vm);
     obj->value.native_fn = native;
 
     Value value = {0};
@@ -343,7 +343,7 @@ void execute(uint8_t chunk, VM *vm){
 		case STRING_OPCODE:{
 			uint32_t hash = 0;
             char *buff = read_str(vm, &hash);
-            Str *str = vm_utils_create_str(buff, 1, vm);
+            Str *str = vm_utils_core_str(buff, hash, vm);
             
             push_str(str, vm);
 			
@@ -366,7 +366,7 @@ void execute(uint8_t chunk, VM *vm){
                     vm_utils_error(vm, "Expect string at right side of string concatenation.");
 
                 char *buff = join_buff(astr->buff, astr->len, bstr->buff, bstr->len, vm);
-                Str *out_str = vm_utils_create_str(buff, 0, vm);
+                Str *out_str = vm_utils_uncore_alloc_str(buff, vm);
 
                 push_str(out_str, vm);
 
@@ -424,7 +424,7 @@ void execute(uint8_t chunk, VM *vm){
                 }
 
                 char *buff = multiply_buff(in_buff, in_buff_len, (size_t)by, vm);
-                Str *out_str = vm_utils_create_str(buff, 0, vm);
+                Str *out_str = vm_utils_uncore_alloc_str(buff, vm);
                 
                 push_str(out_str, vm);
 
@@ -569,7 +569,7 @@ void execute(uint8_t chunk, VM *vm){
             DynArrPtr *functions = vm->functions;
             Function *function = (Function *)DYNARR_PTR_GET((size_t)index, functions);
 
-            Obj *fn_obj = vm_utils_create_obj(FN_OTYPE, vm);
+            Obj *fn_obj = vm_utils_obj(FN_OTYPE, vm);
             fn_obj->value.fn = function;
 
             Value value = {0};
@@ -655,7 +655,7 @@ void execute(uint8_t chunk, VM *vm){
 					vm_utils_error(vm, "Failed to insert value at list: out of memory\n");		
 			}
 
-			Obj *obj = vm_utils_create_obj(LIST_OTYPE, vm);
+			Obj *obj = vm_utils_obj(LIST_OTYPE, vm);
 			obj->value.list = list;
 
 			Value value = {0};
@@ -676,7 +676,7 @@ void execute(uint8_t chunk, VM *vm){
                 PUT_VALUE(key, vm_utils_clone_value(value, vm), dict, vm);
             }
             
-            Obj *obj = vm_utils_create_obj(DICT_OTYPE, vm);
+            Obj *obj = vm_utils_obj(DICT_OTYPE, vm);
             obj->value.dict = dict;
 
             Value value = {0};

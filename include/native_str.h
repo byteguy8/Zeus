@@ -94,7 +94,7 @@ Value native_fn_split(uint8_t argc, Value *values, void *target, VM *vm){
 		if(dynarr_insert(&str_value, list)) goto FAIL;
 	}
 
-    Obj *obj_list = vm_utils_create_obj(LIST_OTYPE, vm);
+    Obj *obj_list = vm_utils_obj(LIST_OTYPE, vm);
 	if(!obj_list) goto FAIL;
 
     obj_list->value.list = list;

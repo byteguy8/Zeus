@@ -226,10 +226,10 @@ Obj *vm_utils_empty_str_obj(Value *out_value, VM *vm){
 	if(!buff) goto FAIL;
 	buff[0] = '\0';
 
-	str = vm_utils_create_str(buff, 0, vm);
+	str = vm_utils_uncore_alloc_str(buff, vm);
 	if(!str) goto FAIL;
 
-	str_obj = vm_utils_create_obj(STRING_OTYPE, vm);
+	str_obj = vm_utils_obj(STRING_OTYPE, vm);
 	if(!str_obj) goto FAIL;
 
 	str_obj->value.str = str;
@@ -251,10 +251,10 @@ Obj *vm_utils_clone_str_obj(char *buff, Value *out_value, VM *vm){
 	Str *str = NULL;
 	Obj *str_obj = NULL;
 
-	str = vm_utils_create_str(buff, 0, vm);
+	str = vm_utils_uncore_alloc_str(buff, vm);
 	if(!str) goto FAIL;
 
-	str_obj = vm_utils_create_obj(STRING_OTYPE, vm);
+	str_obj = vm_utils_obj(STRING_OTYPE, vm);
 	if(!str_obj) goto FAIL;
 
 	str_obj->value.str = str;
@@ -278,17 +278,17 @@ Obj *vm_utils_range_str_obj(size_t from, size_t to, char *buff, Value *out_value
 	char *range_buff = NULL;
 	Str *str = NULL;
 	Obj *str_obj = NULL;
-
-	range_buff = (char *)malloc(range_buff_len + 1);
-	if(!range_buff) goto FAIL;
 	
+    range_buff = (char *)malloc(range_buff_len + 1);
+    if(!range_buff) goto FAIL;
+
 	memcpy(range_buff, buff + from, range_buff_len);
 	range_buff[range_buff_len] = '\0';
 
-	str = vm_utils_create_str(range_buff, 0, vm);
+	str = vm_utils_uncore_str(range_buff, vm);
 	if(!str) goto FAIL;
 
-	str_obj = vm_utils_create_obj(STRING_OTYPE, vm);
+	str_obj = vm_utils_obj(STRING_OTYPE, vm);
 	if(!str_obj) goto FAIL;
 
 	str_obj->value.str = str;
@@ -296,7 +296,7 @@ Obj *vm_utils_range_str_obj(size_t from, size_t to, char *buff, Value *out_value
 	goto OK;
 
 FAIL:
-	free(range_buff);
+    free(range_buff);
 	free(str);
 	free(str_obj);
 	return NULL;
@@ -313,11 +313,39 @@ Value *vm_utils_clone_value(Value *value, VM *vm){
     return clone;
 }
 
-Str *vm_utils_create_str(char *buff, char core, VM *vm){
+Str *vm_utils_core_str(char *buff, uint32_t hash, VM *vm){
+    assert(lzhtable_hash_contains(hash, vm->strings, NULL));
+
+    size_t buff_len = strlen(buff);
+    Str *str = (Str *)malloc(sizeof(Str));
+    
+    if(!str) return NULL;
+
+    str->core = 1;
+    str->len = buff_len;
+    str->buff = buff;
+
+    return str;
+}
+
+Str *vm_utils_uncore_str(char *buff, VM *vm){
+    size_t buff_len = strlen(buff);
+    Str *str = (Str *)malloc(sizeof(Str));
+
+    if(!str) return NULL;
+
+    str->core = 0;
+    str->len = buff_len;
+    str->buff = buff;
+
+    return str;
+}
+
+Str *vm_utils_uncore_alloc_str(char *buff, VM *vm){
     size_t buff_len = strlen(buff);
 	char *new_buff = (char *)malloc(buff_len + 1);
-
-	if(!new_buff) return NULL;
+        
+    if(!new_buff) return NULL;
 	memcpy(new_buff, buff, buff_len);
 	new_buff[buff_len] = '\0';
 
@@ -328,14 +356,14 @@ Str *vm_utils_create_str(char *buff, char core, VM *vm){
 		return NULL;
 	}
 
-    str->core = core;
+    str->core = 0;
     str->len = buff_len;
     str->buff = new_buff;
 
     return str;
 }
 
-Obj *vm_utils_create_obj(ObjType type, VM *vm){
+Obj *vm_utils_obj(ObjType type, VM *vm){
     if(vm->objs_size >= 67108864)
         gc(vm);
 

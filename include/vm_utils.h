@@ -13,8 +13,10 @@ int vm_utils_is_function(Value *value, Function **out_fn);
 int vm_utils_is_native_function(Value *value, NativeFunction **out_native_fn);
 
 Value *vm_utils_clone_value(Value *value, VM *vm);
-Obj *vm_utils_create_obj(ObjType type, VM *vm);
-Str *vm_utils_create_str(char *buff, char core, VM *vm);
+Obj *vm_utils_obj(ObjType type, VM *vm);
+Str *vm_utils_core_str(char *buff, uint32_t hash, VM *vm);
+Str *vm_utils_uncore_str(char *buff, VM *vm);
+Str *vm_utils_uncore_alloc_str(char *buff, VM *vm);
 
 Obj *vm_utils_empty_str_obj(Value *out_value, VM *vm);
 Obj *vm_utils_clone_str_obj(char *buff, Value *out_value, VM *vm);
