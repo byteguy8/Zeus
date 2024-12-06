@@ -777,7 +777,13 @@ void execute(uint8_t chunk, VM *vm){
 				}else if(strcmp(symbol, "title") == 0){
 					NativeFunction *native_fn = assert_ptr(vm_utils_native_function(0, "title", str, native_fn_title, vm), vm);
 					push_native_fn(native_fn, vm);
-				}else{
+				}else if(strcmp(symbol, "compare") == 0){
+                    NativeFunction *native_fn = assert_ptr(vm_utils_native_function(1, "compare", str, native_fn_cmp, vm), vm);
+                    push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "compare_ignore") == 0){
+                    NativeFunction *native_fn = assert_ptr(vm_utils_native_function(1, "compare_ignore", str, native_fn_cmp_ic, vm), vm);
+                    push_native_fn(native_fn, vm);
+                }else{
                     vm_utils_error(vm, "string do not have symbol named as '%s'", symbol);
                 }
 

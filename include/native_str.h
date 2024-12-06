@@ -248,4 +248,40 @@ Value native_fn_title(uint8_t argsc, Value *values, void *target, VM *vm){
     return value;
 }
 
+Value native_fn_cmp(uint8_t argsc, Value *values, void *target, VM *vm){
+	Str *s0 = (Str *)target;
+	Str *s1 = NULL;
+
+	if(!vm_utils_is_str(&values[0], &s1))
+		vm_utils_error(vm, "Expect a string, but got something else");
+
+	return INT_VALUE((int64_t)strcmp(s0->buff, s1->buff));
+}
+
+Value native_fn_cmp_ic(uint8_t argsc, Value *values, void *target, VM *vm){
+	Str *s0 = (Str *)target;
+	Str *s1 = NULL;
+
+	if(!vm_utils_is_str(&values[0], &s1))
+		vm_utils_error(vm, "Expect a string, but got something else");
+
+	if(s0->len < s1->len) return INT_VALUE(-1);
+	else if(s0->len > s1->len) return INT_VALUE(1);
+
+	for(size_t i = 0; i < s0->len; i++){
+		char ca = s0->buff[i];
+		char cb = s1->buff[i];
+		
+		if(ca >= 'A' && ca <= 'Z') ca = ca - 65 + 97;
+		if(cb >= 'A' && cb <= 'Z') cb = cb - 65 + 97;
+
+		if(ca == cb) continue;
+
+		if(ca > cb) return INT_VALUE(1);
+		else if(ca < cb) return INT_VALUE(-1);
+	}
+
+	return INT_VALUE(0);
+}
+
 #endif
