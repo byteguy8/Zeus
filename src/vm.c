@@ -774,6 +774,9 @@ void execute(uint8_t chunk, VM *vm){
 				}else if(strcmp(symbol, "upper") == 0){
 					NativeFunction *native_fn = assert_ptr(vm_utils_native_function(0, "upper", str, native_fn_upper, vm), vm);
 					push_native_fn(native_fn, vm);
+				}else if(strcmp(symbol, "title") == 0){
+					NativeFunction *native_fn = assert_ptr(vm_utils_native_function(0, "title", str, native_fn_title, vm), vm);
+					push_native_fn(native_fn, vm);
 				}else{
                     vm_utils_error(vm, "string do not have symbol named as '%s'", symbol);
                 }

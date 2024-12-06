@@ -201,7 +201,7 @@ Value native_fn_lower(uint8_t argsc, Value *values, void *target, VM *vm){
 
 	for(size_t i = 0; i < out_str->len; i++){
 		char c = out_str->buff[i];
-		if(c <= 'A' && c >= 'Z') continue;
+		if(c < 'A' || c > 'Z') continue;
 		out_str->buff[i] = c - 65 + 97;
 	}
 
@@ -219,11 +219,33 @@ Value native_fn_upper(uint8_t argsc, Value *values, void *target, VM *vm){
 
 	for(size_t i = 0; i < out_str->len; i++){
 		char c = out_str->buff[i];
-		if(c <= 'a' && c >= 'z') continue;
+		if(c < 'a' || c > 'z') continue;
 		out_str->buff[i] = c - 97 + 65;
 	}
 
 	return value;
+}
+
+Value native_fn_title(uint8_t argsc, Value *values, void *target, VM *vm){
+    Str *str = (Str *)target;
+    Value value = {0};
+
+    if(!vm_utils_clone_str_obj(str->buff, &value, vm))
+		vm_utils_error(vm, "Out of memory");
+
+    Str *out_str = value.literal.obj->value.str;
+
+    for (size_t i = 0; i < out_str->len; i++){
+        char c = out_str->buff[i];
+        char before = i == 0 ? '\0' : out_str->buff[i - 1];
+
+        if(c < 'a' || c > 'z') continue;
+        
+        if(before == ' ' || before == '\t' || i == 0)
+            out_str->buff[i] = c - 97 + 65;
+    }
+    
+    return value;
 }
 
 #endif
