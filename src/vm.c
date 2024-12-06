@@ -366,7 +366,7 @@ void execute(uint8_t chunk, VM *vm){
                     vm_utils_error(vm, "Expect string at right side of string concatenation.");
 
                 char *buff = join_buff(astr->buff, astr->len, bstr->buff, bstr->len, vm);
-                Str *out_str = vm_utils_uncore_alloc_str(buff, vm);
+                Str *out_str = vm_utils_uncore_str(buff, vm);
 
                 push_str(out_str, vm);
 
@@ -424,7 +424,7 @@ void execute(uint8_t chunk, VM *vm){
                 }
 
                 char *buff = multiply_buff(in_buff, in_buff_len, (size_t)by, vm);
-                Str *out_str = vm_utils_uncore_alloc_str(buff, vm);
+                Str *out_str = vm_utils_uncore_str(buff, vm);
                 
                 push_str(out_str, vm);
 
