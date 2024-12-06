@@ -759,7 +759,22 @@ void execute(uint8_t chunk, VM *vm){
                 }else if(strcmp(symbol, "split") == 0){
                     NativeFunction *native_fn = assert_ptr(vm_utils_native_function(1, "split", str, native_fn_split, vm), vm);
                     push_native_fn(native_fn, vm);
-                }else{
+                }else if(strcmp(symbol, "lstrip") == 0){
+					NativeFunction *native_fn = assert_ptr(vm_utils_native_function(0, "lstrip", str, native_fn_lstrip, vm), vm);
+					push_native_fn(native_fn, vm);
+				}else if(strcmp(symbol, "rstrip") == 0){
+					NativeFunction *native_fn = assert_ptr(vm_utils_native_function(0, "rstrip", str, native_fn_rstrip, vm), vm);
+					push_native_fn(native_fn, vm);
+				}else if(strcmp(symbol, "strip") == 0){
+					NativeFunction *native_fn = assert_ptr(vm_utils_native_function(0, "strip", str, native_fn_strip, vm), vm);
+					push_native_fn(native_fn, vm);
+				}else if(strcmp(symbol, "lower") == 0){
+					NativeFunction *native_fn = assert_ptr(vm_utils_native_function(0, "lower", str, native_fn_lower, vm), vm);
+					push_native_fn(native_fn, vm);
+				}else if(strcmp(symbol, "upper") == 0){
+					NativeFunction *native_fn = assert_ptr(vm_utils_native_function(0, "upper", str, native_fn_upper, vm), vm);
+					push_native_fn(native_fn, vm);
+				}else{
                     vm_utils_error(vm, "string do not have symbol named as '%s'", symbol);
                 }
 

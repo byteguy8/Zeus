@@ -109,4 +109,121 @@ OK:
     return OBJ_VALUE(obj_list);
 }
 
+Value native_fn_lstrip(uint8_t argsc, Value *values, void *target, VM *vm){
+	Str *str = (Str *)target;
+
+	if(str->len == 0)
+		vm_utils_error(vm, "Expect a not empty string");
+
+	size_t from = 0;
+
+	while(1){
+		char cs = str->buff[from++];
+		if(cs != ' ' && cs != '\t') break;
+		if(from >= str->len) break;
+	}
+
+	Value value = {0};
+
+	if(!vm_utils_range_str_obj(from - 1, str->len - 1, str->buff, &value, vm))
+		vm_utils_error(vm, "Out of memory");
+
+	return value;
+}
+
+Value native_fn_rstrip(uint8_t argsc, Value *values, void *target, VM *vm){
+	Str *str = (Str *)target;
+
+	if(str->len == 0)
+		vm_utils_error(vm, "Expect a not empty string");
+
+	size_t to = str->len;
+	
+	while(1){
+		char cs = str->buff[--to];
+		if(to == 0) break;
+		if(cs != ' ' && cs != '\t') break;
+	}
+
+	Value value = {0};
+
+	if(!vm_utils_range_str_obj(0, to, str->buff, &value, vm))
+		vm_utils_error(vm, "Out of memory");
+
+	return value;
+}
+
+Value native_fn_strip(uint8_t argsc, Value *values, void *target, VM *vm){
+	Str *str = (Str *)target;
+
+	if(str->len == 0)
+		vm_utils_error(vm, "Expect a not empty string");
+
+	char from_set = 0;
+	size_t from = 0;
+	char to_set = 0;
+	size_t to = str->len - 1;
+	
+	for(size_t i = 0, o = str->len - 1; i < str->len; i++, o--){
+		char cs = str->buff[i];
+		char ce = str->buff[o];
+
+		if((cs != ' ' && cs != '\t') && !from_set){
+			from = i;
+			from_set = 1;
+		}
+
+		if((ce != ' ' && ce != '\t') && !to_set){
+			to = o;
+			to_set = 1;
+		}
+
+		if(from_set && to_set) break;
+		if(from == to) break;
+	}
+
+	Value value = {0};
+
+	if(!vm_utils_range_str_obj(from, to, str->buff, &value, vm))
+		vm_utils_error(vm, "Out of memory");
+
+	return value;
+}
+
+Value native_fn_lower(uint8_t argsc, Value *values, void *target, VM *vm){
+	Str *str = (Str *)target;
+	Value value = {0};
+
+	if(!vm_utils_clone_str_obj(str->buff, &value, vm))
+		vm_utils_error(vm, "Out of memory");
+
+	Str *out_str = value.literal.obj->value.str;
+
+	for(size_t i = 0; i < out_str->len; i++){
+		char c = out_str->buff[i];
+		if(c <= 'A' && c >= 'Z') continue;
+		out_str->buff[i] = c - 65 + 97;
+	}
+
+	return value;
+}
+
+Value native_fn_upper(uint8_t argsc, Value *values, void *target, VM *vm){
+	Str *str = (Str *)target;
+	Value value = {0};
+
+	if(!vm_utils_clone_str_obj(str->buff, &value, vm))
+		vm_utils_error(vm, "Out of memory");
+
+	Str *out_str = value.literal.obj->value.str;
+
+	for(size_t i = 0; i < out_str->len; i++){
+		char c = out_str->buff[i];
+		if(c <= 'a' && c >= 'z') continue;
+		out_str->buff[i] = c - 97 + 65;
+	}
+
+	return value;
+}
+
 #endif
