@@ -46,7 +46,7 @@ Value native_dict_put(uint8_t argc, Value *values, void *target, VM *vm){
         if(!key_clone || !value_clone)
             vm_utils_error(vm, "Out of memory");
 
-        if(lzhtable_hash_put_key(key, hash, value_clone, dict))
+        if(lzhtable_hash_put_key(key_clone, hash, value_clone, dict))
             vm_utils_error(vm, "Out of memory");
 	}
 
