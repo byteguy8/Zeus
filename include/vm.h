@@ -12,24 +12,21 @@
 
 typedef struct frame{
     size_t ip;
-    char *name;
-    DynArr *chunks;
+    Fn *fn;
     Value locals[LOCALS_LENGTH];
 }Frame;
 
 typedef struct vm{
     jmp_buf err_jmp;
+    
     int stack_ptr;
     Value stack[STACK_LENGTH];
 
     size_t frame_ptr;
     Frame frame_stack[FRAME_LENGTH];
 
-    DynArr *constants;
-	LZHTable *strings;
     LZHTable *natives;
-    DynArrPtr *functions;
-    LZHTable *globals;
+    Module *module;
 //> garbage collector
     Obj *head;
     Obj *tail;
@@ -40,11 +37,9 @@ typedef struct vm{
 VM *vm_create();
 void vm_print_stack(VM *vm);
 int vm_execute(
-    DynArr *constants,
-    LZHTable *strings,
     LZHTable *natives,
-    DynArrPtr *functions,
     LZHTable *globals,
+    Module *module,
     VM *vm
 );
 

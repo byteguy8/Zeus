@@ -176,3 +176,37 @@ char *runtime_clone_str(char *str){
 
     return cstr;
 }
+
+Fn *runtime_fn(char *name, Module *module){
+    char *fn_name = runtime_clone_str(name);
+    DynArrPtr *params = runtime_dynarr_ptr();
+    DynArr *chunks = runtime_dynarr(sizeof(uint8_t));
+    Fn *fn = (Fn *)A_RUNTIME_ALLOC(sizeof(Fn));
+    
+    fn->name = fn_name;
+    fn->params = params;
+    fn->chunks = chunks;
+    fn->module = module;
+
+    return fn;
+}
+
+Module *runtime_module(char *name, char *filepath){
+    char *module_name = runtime_clone_str(name);
+    char *module_filepath = runtime_clone_str(filepath);
+    DynArr *constants = runtime_dynarr(sizeof(int64_t));
+    LZHTable *strings = runtime_lzhtable();
+	LZHTable *symbols = runtime_lzhtable();
+    LZHTable *globals = runtime_lzhtable();
+    Module *module = (Module *)A_RUNTIME_ALLOC(sizeof(Module));
+    
+    module->to_resolve = 0;
+    module->name = module_name;
+    module->filepath = module_filepath;
+    module->constants = constants;
+    module->strings = strings;
+    module->symbols = symbols;
+    module->globals = globals;
+
+    return module;
+}

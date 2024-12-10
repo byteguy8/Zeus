@@ -44,9 +44,9 @@ void add_keyword(char *name, TokenType type, LZHTable *keywords){
     lzhtable_put((uint8_t *)name, strlen(name), ctype, keywords, NULL);
 }
 
-void add_native(char *name, int arity, RawNativeFunction raw_native, LZHTable *natives){
+void add_native(char *name, int arity, RawNativeFn raw_native, LZHTable *natives){
     size_t name_len = strlen(name);
-    NativeFunction *native = (NativeFunction *)A_RUNTIME_ALLOC(sizeof(NativeFunction));
+    NativeFn *native = (NativeFn *)A_RUNTIME_ALLOC(sizeof(NativeFn));
 
     native->unique = 1;
     native->arity = arity;
@@ -91,13 +91,15 @@ int main(int argc, char const *argv[]){
 	add_native("readln", 0, native_readln, natives);
 
 	RawStr *source = utils_read_source(source_path);
-    char *pathname = compile_clone_str(source_path);
+    char *module_path = compile_clone_str(source_path);
+    LZHTable *keywords = compile_lzhtable();
+    
+    Module *module = runtime_module("main", module_path);
+    LZHTable *modules = compile_lzhtable();
+    LZHTable *strings = module->strings;
+
 	DynArrPtr *tokens = compile_dynarr_ptr();
-	LZHTable *strings = runtime_lzhtable();
-	LZHTable *keywords = compile_lzhtable();
 	DynArrPtr *stmts = compile_dynarr_ptr();
-    DynArr *constants = runtime_dynarr(sizeof(int64_t));
-    DynArrPtr *functions = runtime_dynarr_ptr();
     LZHTable *globals = runtime_lzhtable();
 
 	add_keyword("mod", MOD_TOKTYPE, keywords);
@@ -120,6 +122,7 @@ int main(int argc, char const *argv[]){
     add_keyword("proc", PROC_TOKTYPE, keywords);
     add_keyword("ret", RET_TOKTYPE, keywords);
     add_keyword("import", IMPORT_TOKTYPE, keywords);
+    add_keyword("as", AS_TOKTYPE, keywords);
 
 	Lexer *lexer = lexer_create();
 	Parser *parser = parser_create();
@@ -128,28 +131,28 @@ int main(int argc, char const *argv[]){
     VM *vm = vm_create();
 
     if(args.lex){
-        if(lexer_scan(source, tokens, strings, keywords, pathname, lexer)) goto CLEAN_UP;
+        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)) goto CLEAN_UP;
 		printf("No errors in lexer phase\n");
     }else if(args.parse){
-        if(lexer_scan(source, tokens, strings, keywords, pathname, lexer)) goto CLEAN_UP;
+        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
 		printf("No errors in parse phase\n");
     }else if(args.compile){
-        if(lexer_scan(source, tokens, strings, keywords, pathname, lexer)) goto CLEAN_UP;
+        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
-        if(compiler_compile(keywords, natives, constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
+        if(compiler_compile(keywords, natives, stmts, module, modules, compiler)) goto CLEAN_UP;
 		printf("No errors in compile phase\n");
     }else if(args.dump){
-        if(lexer_scan(source, tokens, strings, keywords, pathname, lexer)) goto CLEAN_UP;
+        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
-        if(compiler_compile(keywords, natives, constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
-        dumpper_dump(constants, strings, functions, dumpper);
+        if(compiler_compile(keywords, natives, stmts, module, modules, compiler)) goto CLEAN_UP;
+        dumpper_dump(module, dumpper);
     }else{
-        if(lexer_scan(source, tokens, strings, keywords, pathname, lexer)) goto CLEAN_UP;
+        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
-        if(compiler_compile(keywords, natives, constants, strings, functions, stmts, compiler)) goto CLEAN_UP;
+        if(compiler_compile(keywords, natives, stmts, module, modules, compiler)) goto CLEAN_UP;
         memory_free_compile();
-        if(vm_execute(constants, strings, natives, functions, globals, vm)) goto CLEAN_UP;
+        if(vm_execute(natives, globals, module, vm)) goto CLEAN_UP;
     }
 
 	if(args.memuse) memory_report();

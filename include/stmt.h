@@ -77,6 +77,7 @@ typedef struct return_stmt{
 typedef struct import_stmt{
     Token *import_token;
     Token *path_token;
+    Token *name_token;
 }ImportStmt;
 
 #endif

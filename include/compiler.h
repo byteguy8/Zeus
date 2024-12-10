@@ -18,6 +18,7 @@ typedef enum symbol_type{
     IMUT_SYMTYPE,
     FN_SYMTYPE,
     NATIVE_FN_SYMTYPE,
+    MODULE_SYMTYPE
 }SymbolType;
 
 typedef struct symbol{
@@ -52,7 +53,6 @@ typedef struct loop_mark{
 typedef struct compiler{
 	char is_err;
     jmp_buf err_jmp;
-	char import;
 
     int symbols;
     
@@ -60,7 +60,7 @@ typedef struct compiler{
     Scope scopes[SCOPES_LENGTH];
     
     uint8_t fn_ptr;
-    Function *fn_stack[FUNCTIONS_LENGTH];
+    Fn *fn_stack[FUNCTIONS_LENGTH];
 
 	uint8_t while_counter;
 	uint8_t stop_ptr;
@@ -71,33 +71,30 @@ typedef struct compiler{
     
     LZHTable *keywords;
     LZHTable *natives;
-    DynArr *constants;
-    LZHTable *strings;
-	DynArr *chunks;
-    DynArrPtr *functions;
     DynArrPtr *stmts;
+    Module *previos_module;
+    Module *module;
+    LZHTable *modules;
 }Compiler;
 
 Compiler *compiler_create();
+
 int compiler_compile(
     LZHTable *keywords,
     LZHTable *natives,
-    DynArr *constants,
-    LZHTable *strings,
-    DynArrPtr *functions,
     DynArrPtr *stmts,
+    Module *module,
+    LZHTable *modules,
     Compiler *compiler
 );
 
 int compiler_import(
-	size_t symbols,
     LZHTable *keywords,
     LZHTable *natives,
-    DynArr *constants,
-    LZHTable *strings,
-	DynArr *chunks,
-    DynArrPtr *functions,
     DynArrPtr *stmts,
+    Module *previous_module,
+    Module *module,
+    LZHTable *modules,
     Compiler *compiler
 );
 

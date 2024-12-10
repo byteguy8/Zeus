@@ -3,6 +3,7 @@
 
 #include "dynarr.h"
 #include "lzhtable.h"
+#include "types.h"
 #include <stddef.h>
 
 #define COMPILE_ARENA 0
@@ -27,5 +28,7 @@ DynArr *runtime_dynarr(size_t size);
 DynArrPtr *runtime_dynarr_ptr();
 LZHTable *runtime_lzhtable();
 char *runtime_clone_str(char *str);
+Fn *runtime_fn(char *name, Module *module);
+Module *runtime_module(char *name, char *filepath);
 
 #endif

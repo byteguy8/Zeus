@@ -6,11 +6,12 @@
 #include "types.h"
 
 typedef enum obj_type{
-	STRING_OTYPE,
+	STR_OTYPE,
 	LIST_OTYPE,
     DICT_OTYPE,
     FN_OTYPE,
     NATIVE_FN_OTYPE,
+    MODULE_OTYPE,
 }ObjType;
 
 typedef struct obj{    
@@ -24,8 +25,9 @@ typedef struct obj{
 		Str *str;
 		DynArr *list;
         LZHTable *dict;
-        Function *fn;
-        NativeFunction *native_fn;
+        Fn *fn;
+        NativeFn *native_fn;
+        Module *module;
 	}value;
 }Obj;
 

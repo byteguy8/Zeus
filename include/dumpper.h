@@ -3,19 +3,18 @@
 
 #include "dynarr.h"
 #include "lzhtable.h"
+#include "types.h"
 
 typedef struct dumpper{
     size_t ip;
-	DynArr *constants;
-    LZHTable *strings;
+	Module *module;
+    Module *current_module;
     DynArr *chunks;
 }Dumpper;
 
 Dumpper *dumpper_create();
 void dumpper_dump(
-    DynArr *constants,
-    LZHTable *strings,
-    DynArrPtr *functions,
+    Module *module,
     Dumpper *dumpper
 );
 

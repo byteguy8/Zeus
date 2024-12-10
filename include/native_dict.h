@@ -34,7 +34,17 @@ Value native_dict_put(uint8_t argc, Value *values, void *target, VM *vm){
     Value *value = &values[1];
 
     uint32_t hash = vm_utils_hash_value(key);
-    lzhtable_hash_put(hash, vm_utils_clone_value(value, vm), dict);
+	LZHTableNode *node = NULL;
+
+	if(lzhtable_hash_contains(hash, dict, &node)){
+		Value *dict_value = (Value *)node->value;
+		memcpy(dict_value, value, sizeof(Value));
+	}else{
+		Value *clone_value = vm_utils_clone_value(value, vm);
+
+		if(!clone_value) vm_utils_error(vm, "Out of memory");
+	    lzhtable_hash_put(hash, clone_value, dict);
+	}
 
     return EMPTY_VALUE;
 }

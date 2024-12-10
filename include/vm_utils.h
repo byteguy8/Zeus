@@ -9,8 +9,9 @@ int vm_utils_is_i64(Value *value, int64_t *i64);
 int vm_utils_is_str(Value *value, Str **str);
 int vm_utils_is_list(Value *value, DynArr **list);
 int vm_utils_is_dict(Value *value, LZHTable **dict);
-int vm_utils_is_function(Value *value, Function **out_fn);
-int vm_utils_is_native_function(Value *value, NativeFunction **out_native_fn);
+int vm_utils_is_function(Value *value, Fn **out_fn);
+int vm_utils_is_native_function(Value *value, NativeFn **out_native_fn);
+int vm_utils_is_module(Value *value, Module **out_module);
 
 Value *vm_utils_clone_value(Value *value, VM *vm);
 Obj *vm_utils_obj(ObjType type, VM *vm);
@@ -22,11 +23,11 @@ Obj *vm_utils_empty_str_obj(Value *out_value, VM *vm);
 Obj *vm_utils_clone_str_obj(char *buff, Value *out_value, VM *vm);
 Obj *vm_utils_range_str_obj(size_t from, size_t to, char *buff, Value *out_value, VM *vm);
 
-NativeFunction *vm_utils_native_function(
+NativeFn *vm_utils_native_function(
     int arity,
     char *name,
     void *target,
-    RawNativeFunction native,
+    RawNativeFn native,
     VM *vm
 );
 DynArr *vm_utils_dyarr(VM *vm);

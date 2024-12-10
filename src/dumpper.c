@@ -29,15 +29,17 @@ static int32_t read_i32(Dumpper *dumpper){
 }
 
 static int64_t read_i64_const(Dumpper *dumpper){
-    DynArr *constants = dumpper->constants;
+    Module *module = dumpper->current_module;
+    DynArr *constants = module->constants;
     int32_t index = read_i32(dumpper);
     return *(int64_t *)dynarr_get(index, constants);
 }
 
 static char *read_str(Dumpper *dumpper, uint32_t *out_hash){
+    Module *module = dumpper->current_module;
     uint32_t hash = (uint32_t)read_i32(dumpper);
     if(out_hash) *out_hash = hash;
-    return lzhtable_hash_get(hash, dumpper->strings);
+    return lzhtable_hash_get(hash, module->strings);
 }
 
 static void execute(uint8_t chunk, Dumpper *dumpper){
@@ -136,12 +138,13 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
         case NGET_OPCODE:{
             uint32_t hash = 0;
             char *value = read_str(dumpper, &hash);
-            printf("NGET_OPCODE hash: %d value: '%s'\n", hash, value);
+            printf("NGET_OPCODE hash: %u value: '%s'\n", hash, value);
             break;
         }
         case SGET_OPCODE:{
-            int32_t index = read_i32(dumpper);
-            printf("SGET_OPCODE index: %d\n", index);
+            uint32_t hash = 0;
+            char *value = read_str(dumpper, &hash);
+            printf("SGET_OPCODE hash: %u value: '%s'\n", hash, value);
             break;
         }
         case OR_OPCODE:{
@@ -234,7 +237,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
     }
 }
 
-static void dump_function(Function *function, Dumpper *dumpper){
+static void dump_function(Fn *function, Dumpper *dumpper){
     DynArr *chunks = function->chunks;
     
     dumpper->ip = 0;
@@ -246,23 +249,46 @@ static void dump_function(Function *function, Dumpper *dumpper){
 		execute(advance(dumpper), dumpper);
 }
 
+static void dump_module(Module *module, Dumpper *dumpper){
+    printf("Dumpping Module '%s'\n", module->name);
+
+    Module *prev = dumpper->current_module;
+    dumpper->current_module = module;
+
+    LZHTableNode *node = module->symbols->nodes;
+    
+    while (node){
+        LZHTableNode *prev = node->previous_table_node;
+        ModuleSymbol *symbol = (ModuleSymbol *)node->value;
+        
+        if(symbol->type == FUNCTION_MSYMTYPE){
+            Fn *fn = symbol->value.fn;
+            dump_function(fn, dumpper);
+        }
+
+        if(symbol->type == MODULE_MSYMTYPE){
+            Module *m = symbol->value.module;
+            dump_module(m, dumpper);
+        }
+
+        node = prev;
+    }
+
+    dumpper->current_module = prev;
+}
+
 Dumpper *dumpper_create(){
 	Dumpper *dumpper = (Dumpper *)A_COMPILE_ALLOC(sizeof(Dumpper));
 	memset(dumpper, 0, sizeof(Dumpper));
 	return dumpper;
 }
 
-void dumpper_dump(DynArr *constants, LZHTable *strings, DynArrPtr *functions, Dumpper *dumpper){
-	dumpper->ip = 0;
-	dumpper->constants = constants;
-    dumpper->strings = strings;
+void dumpper_dump(Module *module, Dumpper *dumpper){
+	memset(dumpper, 0, sizeof(Dumpper));
 
-    for (size_t i = 0; i < functions->used; i++)
-    {
-        Function *function = (Function *)DYNARR_PTR_GET(i, functions);
-        dump_function(function, dumpper);
-        
-        if(i + 1 < functions->used)
-            printf("\n");
-    }
+    dumpper->ip = 0;
+    dumpper->module = module;
+    dumpper->current_module = module;
+
+    dump_module(module, dumpper);
 }

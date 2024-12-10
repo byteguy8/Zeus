@@ -32,7 +32,7 @@ void destroy_obj(Obj *obj, VM *vm){
 	if(vm->tail == obj) vm->tail = prev;
 
 	switch(obj->type){
-		case STRING_OTYPE:{
+		case STR_OTYPE:{
 			Str *str = obj->value.str;
 			if(!str->core) free(str->buff);
             free(str);
@@ -49,8 +49,11 @@ void destroy_obj(Obj *obj, VM *vm){
             break;
         }
         case NATIVE_FN_OTYPE:{
-            NativeFunction *native_fn = obj->value.native_fn;
+            NativeFn *native_fn = obj->value.native_fn;
             if(!native_fn->unique) free(native_fn);
+            break;
+        }
+        case MODULE_OTYPE:{
             break;
         }
 		default:{
@@ -63,7 +66,8 @@ void destroy_obj(Obj *obj, VM *vm){
 
 void mark_objs(VM *vm){
     // globals
-    LZHTableNode *node = vm->globals->nodes;
+    Frame *frame = &vm->frame_stack[vm->frame_ptr - 1];
+    LZHTableNode *node = frame->fn->module->globals->nodes;
     
     while (node){
         LZHTableNode *next = node->next_table_node;
@@ -151,7 +155,7 @@ int vm_utils_is_str(Value *value, Str **str){
     
     Obj *obj = value->literal.obj;
 
-    if(obj->type == STRING_OTYPE){
+    if(obj->type == STR_OTYPE){
         Str *ostr = obj->value.str;
         if(str) *str = ostr;
     
@@ -189,13 +193,13 @@ int vm_utils_is_dict(Value *value, LZHTable **dict){
 	return 0;
 }
 
-int vm_utils_is_function(Value *value, Function **out_fn){
+int vm_utils_is_function(Value *value, Fn **out_fn){
 	if(value->type != OBJ_VTYPE) return 0;
 	
 	Obj *obj = value->literal.obj;
 
 	if(obj->type == FN_OTYPE){
-		Function *ofn = obj->value.fn;
+		Fn *ofn = obj->value.fn;
 		if(out_fn) *out_fn = ofn;
 		return 1;
 	}
@@ -203,13 +207,27 @@ int vm_utils_is_function(Value *value, Function **out_fn){
 	return 0;
 }
 
-int vm_utils_is_native_function(Value *value, NativeFunction **out_native_fn){
+int vm_utils_is_module(Value *value, Module **out_module){
+	if(value->type != OBJ_VTYPE) return 0;
+	
+	Obj *obj = value->literal.obj;
+
+	if(obj->type == MODULE_OTYPE){
+		Module *module_obj = obj->value.module;
+		if(out_module) *out_module = module_obj;
+		return 1;
+	}
+
+	return 0;
+}
+
+int vm_utils_is_native_function(Value *value, NativeFn **out_native_fn){
 	if(value->type != OBJ_VTYPE) return 0;
 	
 	Obj *obj = value->literal.obj;
 
 	if(obj->type == NATIVE_FN_OTYPE){
-		NativeFunction *ofn = obj->value.native_fn;
+		NativeFn *ofn = obj->value.native_fn;
 		if(out_native_fn) *out_native_fn = ofn;
 		return 1;
 	}
@@ -229,7 +247,7 @@ Obj *vm_utils_empty_str_obj(Value *out_value, VM *vm){
 	str = vm_utils_uncore_alloc_str(buff, vm);
 	if(!str) goto FAIL;
 
-	str_obj = vm_utils_obj(STRING_OTYPE, vm);
+	str_obj = vm_utils_obj(STR_OTYPE, vm);
 	if(!str_obj) goto FAIL;
 
 	str_obj->value.str = str;
@@ -254,7 +272,7 @@ Obj *vm_utils_clone_str_obj(char *buff, Value *out_value, VM *vm){
 	str = vm_utils_uncore_alloc_str(buff, vm);
 	if(!str) goto FAIL;
 
-	str_obj = vm_utils_obj(STRING_OTYPE, vm);
+	str_obj = vm_utils_obj(STR_OTYPE, vm);
 	if(!str_obj) goto FAIL;
 
 	str_obj->value.str = str;
@@ -288,7 +306,7 @@ Obj *vm_utils_range_str_obj(size_t from, size_t to, char *buff, Value *out_value
 	str = vm_utils_uncore_str(range_buff, vm);
 	if(!str) goto FAIL;
 
-	str_obj = vm_utils_obj(STRING_OTYPE, vm);
+	str_obj = vm_utils_obj(STR_OTYPE, vm);
 	if(!str_obj) goto FAIL;
 
 	str_obj->value.str = str;
@@ -308,14 +326,12 @@ OK:
 
 Value *vm_utils_clone_value(Value *value, VM *vm){
     Value *clone = (Value *)malloc(sizeof(Value));
-    if(!clone) vm_utils_error(vm, "Out of memory");
+    if(!clone) return NULL;
     memcpy(clone, value, sizeof(Value));
     return clone;
 }
 
 Str *vm_utils_core_str(char *buff, uint32_t hash, VM *vm){
-    assert(lzhtable_hash_contains(hash, vm->strings, NULL));
-
     size_t buff_len = strlen(buff);
     Str *str = (Str *)malloc(sizeof(Str));
     
@@ -384,17 +400,17 @@ Obj *vm_utils_obj(ObjType type, VM *vm){
     return obj;
 }
 
-NativeFunction *vm_utils_native_function(
+NativeFn *vm_utils_native_function(
     int arity,
     char *name,
     void *target,
-    RawNativeFunction native,
+    RawNativeFn native,
     VM *vm
 ){
     size_t name_len = strlen(name);
     assert(name_len < NAME_LEN - 1);
 
-    NativeFunction *native_fn = (NativeFunction *)malloc(sizeof(NativeFunction));
+    NativeFn *native_fn = (NativeFn *)malloc(sizeof(NativeFn));
     if(!native_fn) return NULL;
 
     native_fn->unique = 0;
@@ -428,7 +444,7 @@ void *assert_ptr(void *ptr, VM *vm){
 
 uint32_t vm_utils_hash_obj(Obj *obj){
     switch (obj->type){
-        case STRING_OTYPE :{
+        case STR_OTYPE :{
             Str *str = obj->value.str;
             uint32_t hash = lzhtable_hash((uint8_t *)str->buff, str->len);
             return hash;
@@ -455,15 +471,45 @@ uint32_t vm_utils_hash_value(Value *value){
     }   
 }
 
-void vm_utils_clean_up(VM *vm){
-    LZHTableNode *node = vm->globals->nodes;
+void clean_up_module(Module *module){
+	LZHTable *globals = module->globals;
+	// Due to the same module can be imported in others modules
+	// we need to make sure we already handled its globals in order
+	// to no make a double free on them.
+	if(globals){
+		LZHTableNode *global_node = module->globals->nodes;
+
+		while(global_node){
+			LZHTableNode *prev = global_node->previous_table_node;
+			free(global_node->value);
+			global_node = prev;
+		}
+
+		module->globals = NULL;
+	}
+
+	LZHTableNode *symbol_node = module->symbols->nodes;
     
-    while (node){
-        LZHTableNode *prev = node->previous_table_node;
-        free(node->value);
-        node = prev;
+    while (symbol_node){
+        LZHTableNode *prev = symbol_node->previous_table_node;
+		ModuleSymbol *symbol = (ModuleSymbol *)symbol_node->value;
+
+        if(symbol->type == MODULE_MSYMTYPE)
+			clean_up_module(symbol->value.module);
+
+        symbol_node = prev;
     }
-    
-    while (vm->head)
-        destroy_obj(vm->head, vm);
+
+}
+
+void vm_utils_clean_up(VM *vm){
+	Obj *obj = vm->head;
+
+	while(obj){
+		Obj *next = obj->next;
+		destroy_obj(obj, vm);
+		obj = next;
+	}
+
+    clean_up_module(vm->module);
 }

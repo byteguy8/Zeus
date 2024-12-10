@@ -709,15 +709,20 @@ Stmt *parse_function_stmt(Parser *parser){
 Stmt *parse_import_stmt(Parser *parser){
     Token *import_token = NULL;
     Token *path_token = NULL;
+    Token *name_token = NULL;
 
     import_token = previous(parser);
-    path_token = consume(parser, STRING_TOKTYPE, "Expect string path.");
-    
+    path_token = consume(parser, STRING_TOKTYPE, "Expect string module path.");
+    consume(parser, AS_TOKTYPE, "Expect 'as' keyword after module path.");
+    name_token = consume(parser, IDENTIFIER_TOKTYPE, "Expect import name after 'as' keyworkd.");
+
     consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of import statement.");
 
     ImportStmt *import_stmt = (ImportStmt *)A_COMPILE_ALLOC(sizeof(ImportStmt));
+    
     import_stmt->import_token = import_token;
     import_stmt->path_token = path_token;
+    import_stmt->name_token = name_token;
 
     return create_stmt(IMPORT_STMTTYPE, import_stmt);
 }

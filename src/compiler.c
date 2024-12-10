@@ -105,20 +105,20 @@ Scope *scope_in_soft(ScopeType type, Compiler *compiler){
     return scope;
 }
 
-Scope *scope_in_fn(char *name, Compiler *compiler, Function **out_function){
+Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function){
     assert(compiler->fn_ptr < FUNCTIONS_LENGTH);
 
-    char *fn_name = runtime_clone_str(name);
-    DynArr *chunks = runtime_dynarr(sizeof(uint8_t));
-    DynArrPtr *params = runtime_dynarr_ptr();
-    Function *fn = A_RUNTIME_ALLOC(sizeof(Function));
-
-    fn->name = fn_name;
-    fn->chunks = chunks;
-    fn->params = params;
-
+    Fn *fn = runtime_fn(name, compiler->module);
     compiler->fn_stack[compiler->fn_ptr++] = fn;
-    dynarr_ptr_insert(fn, compiler->functions);
+    
+    Module *module = compiler->module;
+	LZHTable *symbols = module->symbols;
+	ModuleSymbol *symbol = (ModuleSymbol *)A_RUNTIME_ALLOC(sizeof(ModuleSymbol));
+
+	symbol->type = FUNCTION_MSYMTYPE;
+	symbol->value.fn = fn;
+    
+    lzhtable_put((uint8_t *)name, strlen(name), symbol, symbols, NULL);
 
     if(out_function) *out_function = fn;
 
@@ -226,15 +226,8 @@ Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler){
     Scope *scope = current_scope(compiler);
     Symbol *symbol = &scope->symbols[scope->symbols_len++];
 
-    if(type == FN_SYMTYPE){
-        assert(compiler->functions->used > 0);
-        local = compiler->symbols++;
-    }else{
-        // symbols declared in the global scope(1) must have
-        // a local value of -1, because globals use a hash table
-        // instead of a index for the frame locals slots
-        local = scope->depth == 1 ? -1 : scope->locals++;
-    }
+	if(type == MUT_SYMTYPE || type == IMUT_SYMTYPE)
+		local = scope->depth == 1 ? -1 : scope->locals++;
     
     symbol->depth = scope->depth;
     symbol->local = local;
@@ -248,13 +241,8 @@ Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler){
 }
 
 DynArr *current_chunks(Compiler *compiler){
-	if(compiler->import && compiler->depth == 1){ 
-		assert(compiler->chunks);
-		return compiler->chunks;
-	}
-   	
 	assert(compiler->fn_ptr > 0 && compiler->fn_ptr < FUNCTIONS_LENGTH);
-	Function *fn = compiler->fn_stack[compiler->fn_ptr - 1];
+	Fn *fn = compiler->fn_stack[compiler->fn_ptr - 1];
 
     return fn->chunks;
 }
@@ -298,7 +286,8 @@ void update_i32(size_t index, int32_t i32, Compiler *compiler){
 }
 
 size_t write_i64_const(int64_t i64, Compiler *compiler){
-    DynArr *constants = compiler->constants;
+    Module *module = compiler->module;
+    DynArr *constants = module->constants;
     int32_t index = (int32_t) constants->used;
 
     dynarr_insert(&i64, constants);
@@ -310,9 +299,12 @@ void write_str(char *rstr, Compiler *compiler){
     size_t key_size = strlen(rstr);
     uint32_t hash = lzhtable_hash(key, key_size);
 
-    if(!lzhtable_hash_contains(hash, compiler->strings, NULL)){
+    Module *module = compiler->module;
+    LZHTable *strings = module->strings;
+
+    if(!lzhtable_hash_contains(hash, strings, NULL)){
         char *str = runtime_clone_str(rstr);
-        lzhtable_hash_put(hash, str, compiler->strings);
+        lzhtable_hash_put(hash, str, strings);
     }
 
     write_i32((int32_t)hash, compiler);
@@ -357,10 +349,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             Symbol *symbol = get(identifier_token, compiler);
 
-            if(symbol->type == NATIVE_FN_SYMTYPE){
-                write_chunk(NGET_OPCODE, compiler);
-                write_str(identifier_token->lexeme, compiler);
-            }else if(symbol->type == MUT_SYMTYPE || symbol->type == IMUT_SYMTYPE){
+            if(symbol->type == MUT_SYMTYPE || symbol->type == IMUT_SYMTYPE){
                 if(symbol->depth == 1){
                     write_chunk(GGET_OPCODE, compiler);
                     write_str(identifier_token->lexeme, compiler);
@@ -368,11 +357,16 @@ void compile_expr(Expr *expr, Compiler *compiler){
                     write_chunk(LGET_OPCODE, compiler);
                     write_chunk((uint8_t)symbol->local, compiler);
                 }
-            }else if(symbol->type == FN_SYMTYPE){
+            }
+
+			if(symbol->type == NATIVE_FN_SYMTYPE){
+                write_chunk(NGET_OPCODE, compiler);
+                write_str(identifier_token->lexeme, compiler);
+            }
+
+			if(symbol->type == FN_SYMTYPE || symbol->type == MODULE_SYMTYPE){
                 write_chunk(SGET_OPCODE, compiler);
-                write_i32(symbol->local, compiler);
-            }else{
-                assert("Illegal symbol type");
+                write_str(identifier_token->lexeme, compiler);
             }
 
             break;
@@ -665,6 +659,13 @@ void compile_expr(Expr *expr, Compiler *compiler){
     }
 }
 
+void add_module_symbol(char *key, size_t key_size, Module *module, LZHTable *symbols){
+	ModuleSymbol *symbol = (ModuleSymbol *)A_RUNTIME_ALLOC(sizeof(ModuleSymbol));
+	symbol->type = MODULE_MSYMTYPE;
+	symbol->value.module = module;
+    lzhtable_put((uint8_t *)key, key_size, symbol, symbols, NULL);
+}
+
 void compile_stmt(Stmt *stmt, Compiler *compiler){
     switch (stmt->type){
         case EXPR_STMTTYPE:{
@@ -823,8 +824,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 					continue;
 				}
 
-				unmark_stop(ptr, compiler);
 				update_i32(loop_mark->index, af_header - loop_mark->len + 1, compiler);
+				unmark_stop(ptr, compiler);
 			}
 
             ptr = 0;
@@ -837,8 +838,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 					continue;
 				}
 
-                unmark_continue(ptr, compiler);
 				update_i32(loop_mark->index, len_af_body - loop_mark->len + 1, compiler);
+                unmark_continue(ptr, compiler);
 			}
 		
 			break;
@@ -900,7 +901,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             if(previous_scope && previous_scope->depth > 1)
                 error(compiler, name_token, "Can not declare a function inside another function.");
 
-            Function *fn = NULL;
+            Fn *fn = NULL;
 
             declare(FN_SYMTYPE, name_token, compiler);
             scope_in_fn(name_token->lexeme, compiler, &fn);
@@ -938,32 +939,60 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             ImportStmt *import_stmt = (ImportStmt *)stmt->sub_stmt;
             Token *import_token = import_stmt->import_token;
             Token *path_token = import_stmt->path_token;
+            Token *name_token = import_stmt->name_token;
 
-            uint32_t hash = *(uint32_t *) path_token->literal;
-            char *source_path = lzhtable_hash_get(hash, compiler->strings);
+            LZHTable *modules = compiler->modules;
+            Module *current_module = compiler->module;
+            LZHTable *current_strings = current_module->strings;
+            LZHTable *current_symbols = current_module->symbols;
+            
+            uint32_t module_path_hash = *(uint32_t *) path_token->literal;
+            char *module_name = name_token->lexeme;
+            size_t module_name_size = strlen(module_name);
+            char *module_path = (char *)lzhtable_hash_get(module_path_hash, current_strings);
+            char *clone_module_path = compile_clone_str(module_path);
+            size_t module_path_size = strlen(clone_module_path);
 
-            if(!UTILS_EXISTS_FILE(source_path))
-                error(compiler, import_token, "File at '%s' do not exists.\n", source_path);
+            if(compiler->previos_module){
+                if(strcmp(clone_module_path, current_module->filepath) == 0)
+				    error(compiler, import_token, "You are trying to import module '%s' from the module '%s'.", clone_module_path, current_module->filepath);
 
-            if(!utils_is_reg(source_path))
-                error(compiler, import_token, "File at '%s' is not a regular file.\n", source_path);
+                Module *previous_module = compiler->previos_module;
+                
+                if(strcmp(clone_module_path, previous_module->filepath) == 0)
+                    error(compiler, import_token, "Module '%s' import this module '%s', but this module also import '%s'.", previous_module->filepath, clone_module_path, previous_module->filepath);
+            }
 
-            RawStr *source = utils_read_source(source_path);
-            char *pathname = compile_clone_str(source_path);
-            DynArrPtr *tokens = compile_dynarr_ptr();
-            LZHTable *strings = compiler->strings;
-			DynArr *chunks = ((Function *)DYNARR_PTR_GET(0, compiler->functions))->chunks;
+            if(!UTILS_EXISTS_FILE(clone_module_path))
+                error(compiler, import_token, "File at '%s' do not exists.\n", clone_module_path);
+
+            if(!utils_is_reg(clone_module_path))
+                error(compiler, import_token, "File at '%s' is not a regular file.\n", clone_module_path);
+
+            LZHTableNode *node = NULL;
+
+            if(lzhtable_contains((uint8_t *)clone_module_path, module_path_size, modules, &node)){
+                Module *imported_module = (Module *)node->value;
+                add_module_symbol(module_name, module_name_size, imported_module, current_symbols);
+                declare(MODULE_SYMTYPE, name_token, compiler);
+                break;
+            }
+
+            RawStr *source = utils_read_source(clone_module_path);
+            
             LZHTable *keywords = compiler->keywords;
-            DynArrPtr *stmts = compile_dynarr_ptr();
-            DynArr *constants = compiler->constants;
             LZHTable *natives = compiler->natives;
-            DynArrPtr *functions = compiler->functions;
+
+            DynArrPtr *tokens = compile_dynarr_ptr();
+            DynArrPtr *stmts = compile_dynarr_ptr();
+            
+            Module *module = runtime_module(module_name, clone_module_path);
 
             Lexer *lexer = lexer_create();
 	        Parser *parser = parser_create();
             Compiler *import_compiler = compiler_create();
 
-            if(lexer_scan(source, tokens, strings, keywords, pathname, lexer)){
+            if(lexer_scan(source, tokens, module->strings, keywords, clone_module_path, lexer)){
 				compiler->is_err = 1;
 				break;
 			}
@@ -974,27 +1003,21 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			}
 
             if(compiler_import(
-				compiler->symbols,
-				keywords,
-				natives,
-				constants,
-				strings,
-				chunks,
-				functions,
-				stmts,
-				import_compiler
-			)){
-				compiler->is_err = 1;
+                keywords,
+                natives,
+                stmts,
+                current_module,
+                module,
+                modules,
+                import_compiler
+            )){
+                compiler->is_err = 1;
 				break;
-			}
-
-
-            Scope *scope = &import_compiler->scopes[0];
-            
-            for (size_t i = compiler->natives->n; i < scope->symbols_len; i++){
-                Symbol *symbol = &scope->symbols[i];
-                declare(symbol->type, symbol->identifier_token, compiler);
             }
+
+            add_module_symbol(module_name, module_name_size, module, current_symbols);
+            lzhtable_put((uint8_t *)clone_module_path, module_path_size, module, modules, NULL);
+            declare(MODULE_SYMTYPE, name_token, compiler);
             
             break;
         }
@@ -1011,7 +1034,7 @@ void define_natives(Compiler *compiler){
     
     while (node){
         LZHTableNode *prev = node->previous_table_node;
-        NativeFunction *native = (NativeFunction *)node->value;
+        NativeFn *native = (NativeFn *)node->value;
         declare_native(native->name, compiler);
         node = prev;
     }
@@ -1026,10 +1049,9 @@ Compiler *compiler_create(){
 int compiler_compile(
     LZHTable *keywords,
     LZHTable *natives,
-    DynArr *constants,
-    LZHTable *strings,
-    DynArrPtr *functions,
-    DynArrPtr *stmts, 
+    DynArrPtr *stmts,
+    Module *module,
+    LZHTable *modules,
     Compiler *compiler
 ){
     memset(compiler, 0, sizeof(Compiler));
@@ -1039,9 +1061,8 @@ int compiler_compile(
         compiler->symbols = 1;
         compiler->keywords = keywords;
         compiler->natives = natives;
-        compiler->constants = constants;
-        compiler->strings = strings;
-        compiler->functions = functions;
+        compiler->module = module;
+        compiler->modules = modules;
         compiler->stmts = stmts;
 
         scope_in_fn("main", compiler, NULL);
@@ -1059,31 +1080,26 @@ int compiler_compile(
 }
 
 int compiler_import(
-	size_t symbols,
     LZHTable *keywords,
     LZHTable *natives,
-    DynArr *constants,
-    LZHTable *strings,
-	DynArr *chunks,
-    DynArrPtr *functions,
     DynArrPtr *stmts,
+    Module *previous_module,
+    Module *module,
+    LZHTable *modules,
     Compiler *compiler
 ){
     memset(compiler, 0, sizeof(Compiler));
     
     if(setjmp(compiler->err_jmp) == 1) return 1;
     else{
-		compiler->import = 1;
-        compiler->symbols = symbols;
         compiler->keywords = keywords;
         compiler->natives = natives;
-        compiler->constants = constants;
-        compiler->strings = strings;
-		compiler->chunks = chunks;
-        compiler->functions = functions;
         compiler->stmts = stmts;
+        compiler->previos_module = previous_module;
+        compiler->module = module;
+        compiler->modules = modules;
 
-		scope_in(BLOCK_SCOPE, compiler);
+        scope_in_fn("import", compiler, NULL);
         define_natives(compiler);
 
         for (size_t i = 0; i < stmts->used; i++){

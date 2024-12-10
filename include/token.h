@@ -31,6 +31,7 @@ typedef enum token_type{
     LIST_TOKTYPE, TO_TOKTYPE,
     DICT_TOKTYPE, PROC_TOKTYPE,
     RET_TOKTYPE, IMPORT_TOKTYPE,
+    AS_TOKTYPE,
     
     //types
     INT_TOKTYPE, STRING_TOKTYPE,
