@@ -4,7 +4,7 @@
 #include <assert.h>
 
 //> Private Interface
-void destroy_dict_values(void *ptr);
+void destroy_dict_values(void *key, void *value);
 void destroy_globals_values(void *ptr);
 void destroy_obj(Obj *obj, VM *vm);
 void mark_objs(VM *vm);
@@ -13,8 +13,9 @@ void gc(VM *vm);
 //< Private Interface
 
 //> Private Implementation
-void destroy_dict_values(void *ptr){
-    free(ptr);
+void destroy_dict_values(void *key, void *value){
+    free(key);
+    free(value);
 }
 
 void destroy_globals_values(void *ptr){
@@ -67,7 +68,7 @@ void destroy_obj(Obj *obj, VM *vm){
 void mark_objs(VM *vm){
     // globals
     Frame *frame = &vm->frame_stack[vm->frame_ptr - 1];
-    LZHTableNode *node = frame->fn->module->globals->nodes;
+    LZHTableNode *node = frame->fn->module->globals->head;
     
     while (node){
         LZHTableNode *next = node->next_table_node;
@@ -430,10 +431,42 @@ DynArr *vm_utils_dyarr(VM *vm){
     return dynarr;
 }
 
-LZHTable *vm_utils_table(VM *vm){
+Obj *vm_utils_list_obj(VM *vm){
+    DynArr *list = dynarr_create(sizeof(Value), NULL);
+    if(!list) return NULL;
+
+    Obj *list_obj = vm_utils_obj(LIST_OTYPE, vm);
+    
+    if(!list_obj){
+        dynarr_destroy(list);
+        return NULL;
+    }
+
+    list_obj->value.list = list;
+
+    return list_obj;
+}
+
+LZHTable *vm_utils_dict(VM *vm){
     LZHTable *table = lzhtable_create(17, NULL);
     if(!table) return NULL;
     return table;
+}
+
+Obj *vm_utils_dict_obj(VM *vm){
+    LZHTable *dict = lzhtable_create(17, NULL);
+    if(!dict) return NULL;
+
+    Obj *dict_obj = vm_utils_obj(DICT_OTYPE, vm);
+    
+    if(!dict_obj){
+        lzhtable_destroy(NULL, dict);
+        return NULL;
+    }
+
+    dict_obj->value.dict = dict;
+
+    return dict_obj;
 }
 
 void *assert_ptr(void *ptr, VM *vm){
@@ -461,7 +494,7 @@ uint32_t vm_utils_hash_value(Value *value){
         case EMPTY_VTYPE:
         case BOOL_VTYPE:
         case INT_VTYPE:{
-            uint32_t hash = lzhtable_hash((uint8_t *)&value->literal, sizeof(value->literal));
+            uint32_t hash = lzhtable_hash((uint8_t *)&value->literal.i64, sizeof(int64_t));
             return hash;
         }
         default:{
@@ -477,27 +510,27 @@ void clean_up_module(Module *module){
 	// we need to make sure we already handled its globals in order
 	// to no make a double free on them.
 	if(globals){
-		LZHTableNode *global_node = module->globals->nodes;
+		LZHTableNode *global_node = module->globals->head;
 
 		while(global_node){
-			LZHTableNode *prev = global_node->previous_table_node;
+			LZHTableNode *next = global_node->next_table_node;
 			free(global_node->value);
-			global_node = prev;
+			global_node = next;
 		}
 
 		module->globals = NULL;
 	}
 
-	LZHTableNode *symbol_node = module->symbols->nodes;
+	LZHTableNode *symbol_node = module->symbols->head;
     
     while (symbol_node){
-        LZHTableNode *prev = symbol_node->previous_table_node;
+        LZHTableNode *next = symbol_node->next_table_node;
 		ModuleSymbol *symbol = (ModuleSymbol *)symbol_node->value;
 
         if(symbol->type == MODULE_MSYMTYPE)
 			clean_up_module(symbol->value.module);
 
-        symbol_node = prev;
+        symbol_node = next;
     }
 
 }

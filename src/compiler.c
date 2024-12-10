@@ -636,7 +636,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             DynArrPtr *key_values = dict_expr->key_values;
 
             if(key_values){
-                for (size_t i = 0; i < key_values->used; i++){
+                for (int i = key_values->used - 1; i >= 0; i--){
                     DictKeyValue *key_value = (DictKeyValue *)DYNARR_PTR_GET(i, key_values);
                     Expr *key = key_value->key;
                     Expr *value = key_value->value;
@@ -1030,13 +1030,13 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
 void define_natives(Compiler *compiler){
     assert(compiler->depth > 0);
-    LZHTableNode *node = compiler->natives->nodes;
+    LZHTableNode *node = compiler->natives->head;
     
     while (node){
-        LZHTableNode *prev = node->previous_table_node;
+        LZHTableNode *next = node->next_table_node;
         NativeFn *native = (NativeFn *)node->value;
         declare_native(native->name, compiler);
-        node = prev;
+        node = next;
     }
 }
 

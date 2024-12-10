@@ -40,10 +40,14 @@ Value native_dict_put(uint8_t argc, Value *values, void *target, VM *vm){
 		Value *dict_value = (Value *)node->value;
 		memcpy(dict_value, value, sizeof(Value));
 	}else{
-		Value *clone_value = vm_utils_clone_value(value, vm);
+        Value *key_clone = vm_utils_clone_value(key, vm);
+		Value *value_clone = vm_utils_clone_value(value, vm);
 
-		if(!clone_value) vm_utils_error(vm, "Out of memory");
-	    lzhtable_hash_put(hash, clone_value, dict);
+        if(!key_clone || !value_clone)
+            vm_utils_error(vm, "Out of memory");
+
+        if(lzhtable_hash_put_key(key, hash, value_clone, dict))
+            vm_utils_error(vm, "Out of memory");
 	}
 
     return EMPTY_VALUE;
@@ -52,17 +56,65 @@ Value native_dict_put(uint8_t argc, Value *values, void *target, VM *vm){
 Value native_fn_dict_remove(uint8_t argsc, Value *values, void *target, VM *vm){
     LZHTable *dict = (LZHTable *)target;
     Value *key = &values[0];
-    uint32_t value_hash = vm_utils_hash_value(key);
+    uint32_t key_hash = vm_utils_hash_value(key);
+    LZHTableNode *node = NULL;
 
-    if(!lzhtable_hash_contains(value_hash, dict, NULL))
+    if(!lzhtable_hash_contains(key_hash, dict, &node))
 		vm_utils_error(vm, "Unknown dictionary key");
 
-    Value *value = NULL;
-    lzhtable_hash_remove(value_hash, dict, (void **)&value);
+    Value *bucket_key = node->key;
+    Value *bucket_value = NULL;
 
-    free(value);
+    lzhtable_hash_remove(key_hash, dict, (void **)&bucket_value);
+
+    free(bucket_key);
+    free(bucket_value);
 
     return EMPTY_VALUE;
+}
+
+Value native_fn_dict_keys(uint8_t argsc, Value *values, void *target, VM *vm){
+    LZHTable *dict = (LZHTable *)target;
+    Obj *list_obj = vm_utils_list_obj(vm);
+    
+    if(!list_obj)
+        vm_utils_error(vm, "Out of memory");
+
+    DynArr *list = list_obj->value.list;
+    LZHTableNode *node = dict->head;
+
+    while (node){
+        LZHTableNode *next = node->next_table_node;
+        
+        if(dynarr_insert(node->key, list))
+            vm_utils_error(vm, "Out of memory");
+
+        node = next;
+    }
+    
+    return OBJ_VALUE(list_obj);
+}
+
+Value native_fn_dict_values(uint8_t argsc, Value *values, void *target, VM *vm){
+    LZHTable *dict = (LZHTable *)target;
+    Obj *list_obj = vm_utils_list_obj(vm);
+    
+    if(!list_obj)
+        vm_utils_error(vm, "Out of memory");
+
+    DynArr *list = list_obj->value.list;
+    LZHTableNode *node = dict->head;
+
+    while (node){
+        LZHTableNode *next = node->next_table_node;
+        
+        if(dynarr_insert(node->value, list))
+            vm_utils_error(vm, "Out of memory");
+
+        node = next;
+    }
+    
+    return OBJ_VALUE(list_obj);
 }
 
 #endif

@@ -31,7 +31,9 @@ NativeFn *vm_utils_native_function(
     VM *vm
 );
 DynArr *vm_utils_dyarr(VM *vm);
-LZHTable *vm_utils_table(VM *vm);
+Obj *vm_utils_list_obj(VM *vm);
+LZHTable *vm_utils_dict(VM *vm);
+Obj *vm_utils_dict_obj(VM *vm);
 
 void *assert_ptr(void *ptr, VM *vm);
 
@@ -51,11 +53,6 @@ void *assert_ptr(void *ptr, VM *vm);
 #define INT_VALUE(value)((Value){.type = INT_VTYPE, .literal.i64 = value})
 #define BOOL_VALUE(value)((Value){.type = BOOL_VTYPE, .literal.bool = value})
 #define OBJ_VALUE(value)((Value){.type = OBJ_VTYPE, .literal.obj = value})
-
-#define INSERT_VALUE(value, list, vm) \
-    if(dynarr_insert(value, list)) vm_utils_error(vm, "Out of memory");
-#define PUT_VALUE(key, value, table, vm) \
-    {uint32_t hash = vm_utils_hash_value(key); if(lzhtable_hash_put(hash, value, table)) vm_utils_error(vm, "Out of memory");}
 
 uint32_t vm_utils_hash_obj(Obj *obj);
 uint32_t vm_utils_hash_value(Value *value);

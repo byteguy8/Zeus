@@ -255,10 +255,10 @@ static void dump_module(Module *module, Dumpper *dumpper){
     Module *prev = dumpper->current_module;
     dumpper->current_module = module;
 
-    LZHTableNode *node = module->symbols->nodes;
+    LZHTableNode *node = module->symbols->head;
     
     while (node){
-        LZHTableNode *prev = node->previous_table_node;
+        LZHTableNode *next = node->next_table_node;
         ModuleSymbol *symbol = (ModuleSymbol *)node->value;
         
         if(symbol->type == FUNCTION_MSYMTYPE){
@@ -271,7 +271,7 @@ static void dump_module(Module *module, Dumpper *dumpper){
             dump_module(m, dumpper);
         }
 
-        node = prev;
+        node = next;
     }
 
     dumpper->current_module = prev;

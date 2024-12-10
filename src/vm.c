@@ -717,22 +717,32 @@ void execute(uint8_t chunk, VM *vm){
 		}
         case DICT_OPCODE:{
             int32_t len = read_i32(vm);
-            LZHTable *dict = assert_ptr(vm_utils_table(vm), vm);
+            
+            Obj *dict_obj = vm_utils_dict_obj(vm);
+            if(!dict_obj) vm_utils_error(vm, "Out of memory");
+
+            LZHTable *dict = dict_obj->value.dict;
 
             for (int32_t i = 0; i < len; i++){
                 Value *value = pop(vm);
                 Value *key = pop(vm);
-                PUT_VALUE(key, vm_utils_clone_value(value, vm), dict, vm);
+                
+                Value *key_clone = vm_utils_clone_value(key, vm);
+                Value *value_clone = vm_utils_clone_value(value, vm);
+
+                if(!key_clone || !value_clone){
+                    free(key_clone);
+                    free(value_clone);
+                    vm_utils_error(vm, "Out of memory");
+                }
+
+                uint32_t hash = vm_utils_hash_value(key_clone);
+                
+                if(lzhtable_hash_put_key(key_clone, hash, value_clone, dict))
+                    vm_utils_error(vm, "Out of memory");
             }
-            
-            Obj *obj = vm_utils_obj(DICT_OTYPE, vm);
-            obj->value.dict = dict;
 
-            Value value = {0};
-            value.type = OBJ_VTYPE;
-            value.literal.obj = obj;
-
-            push(value, vm);
+            push(OBJ_VALUE(dict_obj), vm);
 
             break;
         }
@@ -891,6 +901,12 @@ void execute(uint8_t chunk, VM *vm){
                     push_native_fn(native_fn, vm);
                 }else if(strcmp(symbol, "remove") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "remove", dict, native_fn_dict_remove, vm), vm);
+                    push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "keys") == 0){
+                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "keys", dict, native_fn_dict_keys, vm), vm);
+                    push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "values") == 0){
+                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "values", dict, native_fn_dict_values, vm), vm);
                     push_native_fn(native_fn, vm);
                 }else{
                     vm_utils_error(vm, "Dictionary do not have symbol named as '%s'", symbol);
