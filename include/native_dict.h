@@ -49,4 +49,20 @@ Value native_dict_put(uint8_t argc, Value *values, void *target, VM *vm){
     return EMPTY_VALUE;
 }
 
+Value native_fn_dict_remove(uint8_t argsc, Value *values, void *target, VM *vm){
+    LZHTable *dict = (LZHTable *)target;
+    Value *key = &values[0];
+    uint32_t value_hash = vm_utils_hash_value(key);
+
+    if(!lzhtable_hash_contains(value_hash, dict, NULL))
+		vm_utils_error(vm, "Unknown dictionary key");
+
+    Value *value = NULL;
+    lzhtable_hash_remove(value_hash, dict, (void **)&value);
+
+    free(value);
+
+    return EMPTY_VALUE;
+}
+
 #endif

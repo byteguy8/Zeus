@@ -889,8 +889,11 @@ void execute(uint8_t chunk, VM *vm){
                 }else if(strcmp(symbol, "put") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(2, "put", dict, native_dict_put, vm), vm);
                     push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "remove") == 0){
+                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "remove", dict, native_fn_dict_remove, vm), vm);
+                    push_native_fn(native_fn, vm);
                 }else{
-                    vm_utils_error(vm, "dictionary do not have symbol named as '%s'", symbol);
+                    vm_utils_error(vm, "Dictionary do not have symbol named as '%s'", symbol);
                 }
 
                 break;

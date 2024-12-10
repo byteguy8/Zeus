@@ -8,7 +8,7 @@
 static LZArena *compile_arena = NULL;
 static LZDynAllocNode *compile_dynalloc = NULL;
 static DynArrAllocator compile_dynarr_allocator = {0};
-static LZHTableAllocator compile_lzhtable_allocator = {0};
+static LZHTableAllocator lzhtable_allocator = {0};
 
 static LZArena *runtime_arena = NULL;
 static LZDynAllocNode *runtime_dynalloc = NULL;
@@ -82,10 +82,10 @@ int memory_init(){
 	compile_dynarr_allocator.dealloc = dyn_dealloc;
 	compile_dynarr_allocator.ctx = compile_dynalloc;
 
-    compile_lzhtable_allocator.alloc = dyn_alloc;
-	compile_lzhtable_allocator.realloc = dyn_realloc;
-	compile_lzhtable_allocator.dealloc = dyn_dealloc;
-	compile_lzhtable_allocator.ctx = compile_dynalloc;
+    lzhtable_allocator.alloc = dyn_alloc;
+	lzhtable_allocator.realloc = dyn_realloc;
+	lzhtable_allocator.dealloc = dyn_dealloc;
+	lzhtable_allocator.ctx = compile_dynalloc;
 
     runtime_arena = lzarena_create();
     runtime_dynalloc = lzdynalloc_node_raw(32768, LZARENA_ALLOC(32768, runtime_arena));
@@ -142,7 +142,7 @@ DynArrPtr *compile_dynarr_ptr(){
 }
 
 LZHTable *compile_lzhtable(){
-    return lzhtable_create(17, &compile_lzhtable_allocator);
+    return lzhtable_create(17, &lzhtable_allocator);
 }
 
 char *compile_clone_str(char *str){

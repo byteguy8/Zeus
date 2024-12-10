@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct compile_lzhtable_allocator
+typedef struct lzhtable_allocator
 {
     void *(*alloc)(size_t byes, void *ctx);
     void *(*realloc)(void *ptr, size_t old_size, size_t new_size, void *ctx);
@@ -40,11 +40,11 @@ typedef struct lzhtable
     size_t n; // count of distinct elements in the table
     struct lzhtable_bucket *buckets;
     struct lzhtable_node *nodes;
-    struct compile_lzhtable_allocator *allocator;
+    struct lzhtable_allocator *allocator;
 } LZHTable;
 
 // interface
-struct lzhtable *lzhtable_create(size_t length, struct compile_lzhtable_allocator *allocator);
+struct lzhtable *lzhtable_create(size_t length, struct lzhtable_allocator *allocator);
 void lzhtable_destroy(void (*destroy_value)(void *value), struct lzhtable *table);
 
 uint32_t lzhtable_hash(uint8_t *key, size_t key_size);
