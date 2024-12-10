@@ -879,6 +879,9 @@ void execute(uint8_t chunk, VM *vm){
                 }else if(strcmp(symbol, "append") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "append", list, native_fn_list_append, vm), vm);
                     push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "append_new") == 0){
+                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "append_new", list, native_fn_list_append_new, vm), vm);
+                    push_native_fn(native_fn, vm);
                 }else if(strcmp(symbol, "clear") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "clear", list, native_fn_list_clear, vm), vm);
                     push_native_fn(native_fn, vm);

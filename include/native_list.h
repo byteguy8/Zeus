@@ -85,6 +85,37 @@ Value native_fn_list_append(uint8_t argc, Value *values, void *target, VM *vm){
     return INT_VALUE(from_len);
 }
 
+Value native_fn_list_append_new(uint8_t argsc, Value *values, void *target, VM *vm){
+    DynArr *to = (DynArr *)target;
+    Value *list_value = &values[0];
+    DynArr *from = NULL;
+
+    if(!vm_utils_is_list(list_value, &from)){
+        vm_utils_error(vm, "Failed to append list: expect another list, but got something else");
+	}
+
+	Obj *list_obj = vm_utils_list_obj(vm);
+	if(!list_obj) vm_utils_error(vm, "Out of memory");
+
+	DynArr *list = list_obj->value.list;
+
+	for(size_t i = 0; i < to->used; i++){
+		Value *value = dynarr_get(i, to);
+	
+		if(dynarr_insert(value, list))
+			vm_utils_error(vm, "Out of memory");
+	}
+
+	for(size_t i = 0; i < from->used; i++){
+		Value *value = dynarr_get(i, from);
+	
+		if(dynarr_insert(value, list))
+			vm_utils_error(vm, "Out of memory");
+	}
+
+    return OBJ_VALUE(list_obj);
+}
+
 Value native_fn_list_clear(uint8_t argc, Value *values, void *target, VM *vm){
     DynArr *list = (DynArr *)target;
     int64_t list_len = (int64_t)list->used;
