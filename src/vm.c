@@ -356,6 +356,7 @@ uint8_t pop_bool_assert(VM *vm, char *err_msg, ...){
 
 	va_end(args);
 
+    vm_utils_clean_up(vm);
     longjmp(vm->err_jmp, 1);
 }
 
@@ -373,6 +374,7 @@ int64_t pop_i64_assert(VM *vm, char *err_msg, ...){
 
 	va_end(args);
 
+    vm_utils_clean_up(vm);
     longjmp(vm->err_jmp, 1);
 }
 
