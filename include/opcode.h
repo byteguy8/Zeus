@@ -39,6 +39,7 @@ typedef enum opcode{
     CALL_OPCODE,
     RET_OPCODE,
     ACCESS_OPCODE,
+	IS_OPCODE,
 }OPCode;
 
 #endif

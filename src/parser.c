@@ -100,6 +100,7 @@ Token *consume(Parser *parser, TokenType type, char *err_msg, ...){
 }
 
 Expr *parse_expr(Parser *paser);
+Expr *parse_is_expr(Parser *parser);
 Expr *parse_assign(Parser *parser);
 Expr *parse_dict(Parser *parser);
 Expr *parse_list(Parser *parser);
@@ -125,7 +126,40 @@ Stmt *parse_function_stmt(Parser *parser);
 Stmt *parse_import_stmt(Parser *parser);
 
 Expr *parse_expr(Parser *parser){
-	return parse_assign(parser);
+	return parse_is_expr(parser);
+}
+
+Expr *parse_is_expr(Parser *parser){
+	Expr *left = parse_assign(parser);
+
+	if(match(parser, 1, IS_TOKTYPE)){
+		Token *is_token = NULL;
+		Token *type_token = NULL;
+
+		is_token = previous(parser);
+
+		if(match(parser, 6, 
+			           EMPTY_TOKTYPE,
+					   BOOL_TOKTYPE,
+					   INT_TOKTYPE,
+					   STR_TOKTYPE,
+					   LIST_TOKTYPE,
+					   DICT_TOKTYPE)){
+			type_token = previous(parser);
+		}
+
+		if(!type_token)
+			error(parser, is_token, "Expect type after 'is' keyword.");
+
+		IsExpr *is_expr = (IsExpr *)A_COMPILE_ALLOC(sizeof(IsExpr));
+		is_expr->left_expr = left;
+		is_expr->is_token = is_token;
+		is_expr->type_token = type_token;
+
+		return create_expr(IS_EXPRTYPE, is_expr);
+	}
+
+	return left;
 }
 
 Expr *parse_assign(Parser *parser){
@@ -435,7 +469,7 @@ Expr *parse_literal(Parser *parser){
         return create_expr(BOOL_EXPRTYPE, bool_expr);
     }
 
-	if(match(parser, 1, INT_TOKTYPE)){
+	if(match(parser, 1, INT_TYPE_TOKTYPE)){
 		Token *int_token = previous(parser);
 
         IntExpr *int_expr = (IntExpr *)A_COMPILE_ALLOC(sizeof(IntExpr));
@@ -444,7 +478,7 @@ Expr *parse_literal(Parser *parser){
         return create_expr(INT_EXPRTYPE, int_expr);
 	}
 
-	if(match(parser, 1, STRING_TOKTYPE)){
+	if(match(parser, 1, STR_TYPE_TOKTYPE)){
 		Token *string_token = previous(parser);
 		size_t literal_size = string_token->literal_size;
 		
@@ -712,7 +746,7 @@ Stmt *parse_import_stmt(Parser *parser){
     Token *name_token = NULL;
 
     import_token = previous(parser);
-    path_token = consume(parser, STRING_TOKTYPE, "Expect string module path.");
+    path_token = consume(parser, STR_TYPE_TOKTYPE, "Expect string module path.");
     consume(parser, AS_TOKTYPE, "Expect 'as' keyword after module path.");
     name_token = consume(parser, IDENTIFIER_TOKTYPE, "Expect import name after 'as' keyworkd.");
 

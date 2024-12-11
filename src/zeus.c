@@ -123,6 +123,10 @@ int main(int argc, char const *argv[]){
     add_keyword("ret", RET_TOKTYPE, keywords);
     add_keyword("import", IMPORT_TOKTYPE, keywords);
     add_keyword("as", AS_TOKTYPE, keywords);
+	add_keyword("bool", BOOL_TOKTYPE, keywords);
+	add_keyword("int", INT_TOKTYPE, keywords);
+	add_keyword("str", STR_TOKTYPE, keywords);
+	add_keyword("is", IS_TOKTYPE, keywords);
 
 	Lexer *lexer = lexer_create();
 	Parser *parser = parser_create();

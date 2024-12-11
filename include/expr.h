@@ -21,6 +21,7 @@ typedef enum expr_type{
 	COMPOUND_EXPRTYPE,
 	LIST_EXPRTYPE,
     DICT_EXPRTYPE,
+	IS_EXPRTYPE,
 }ExprType;
 
 typedef struct expr{
@@ -115,5 +116,11 @@ typedef struct dict_expr{
     Token *dict_token;
     DynArrPtr *key_values;
 }DictExpr;
+
+typedef struct is_expr{
+	Expr *left_expr;
+	Token *is_token;
+	Token *type_token;
+}IsExpr;
 
 #endif

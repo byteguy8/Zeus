@@ -195,7 +195,7 @@ static void number(Lexer *lexer){
         lexeme,
         value,
         sizeof(int64_t),
-        INT_TOKTYPE,
+        INT_TYPE_TOKTYPE,
         lexer
     );
 }
@@ -260,7 +260,7 @@ static void string(Lexer *lexer){
 		lzhtable_hash_put(*hash, literal, lexer->strings);
 	}
 
-	add_token_literal(hash, sizeof(uint32_t), STRING_TOKTYPE, lexer);
+	add_token_literal(hash, sizeof(uint32_t), STR_TYPE_TOKTYPE, lexer);
 	lexer->line += lines;
 }
 

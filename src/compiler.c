@@ -653,6 +653,41 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             break;
         }
+		case IS_EXPRTYPE:{
+			IsExpr *is_expr = (IsExpr *)expr->sub_expr;
+			Expr *left_expr = is_expr->left_expr;
+			Token *is_token = is_expr->is_token;
+			Token *type_token = is_expr->type_token;
+
+			compile_expr(left_expr, compiler);
+			write_chunk(IS_OPCODE, compiler);
+
+			switch(type_token->type){
+				case EMPTY_TOKTYPE:{
+					write_chunk(0, compiler);
+					break;
+				}case BOOL_TOKTYPE:{
+					write_chunk(1, compiler);
+					break;
+				}case INT_TOKTYPE:{
+					write_chunk(2, compiler);
+					break;
+				}case STR_TOKTYPE:{
+					write_chunk(3, compiler);
+					break;
+				}case LIST_TOKTYPE:{
+					write_chunk(4, compiler);
+					break;
+				}case DICT_TOKTYPE:{
+					write_chunk(5, compiler);
+					break;
+				}default:{
+					assert("Illegal type value");
+				}
+			}
+
+			break;
+		}
         default:{
             assert("Illegal expression type");
         }

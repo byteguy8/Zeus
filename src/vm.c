@@ -933,6 +933,46 @@ void execute(uint8_t chunk, VM *vm){
             frame_down(vm);
             break;
         }
+		case IS_OPCODE:{
+			Value *value = pop(vm);
+			uint8_t type = advance(vm);
+
+			if(value->type == OBJ_VTYPE){
+				Obj *obj = value->literal.obj;
+
+				switch(obj->type){
+					case STR_OTYPE:{
+						push(BOOL_VALUE(type == 3), vm);
+						break;
+					}case LIST_OTYPE:{
+						push(BOOL_VALUE(type == 4), vm);
+						break;
+					}case DICT_OTYPE:{
+						push(BOOL_VALUE(type == 5), vm);
+						break;
+					}default:{
+						assert("Illegal object type");
+					}
+				}
+			}else{
+				switch(value->type){
+					case EMPTY_VTYPE:{
+						push(BOOL_VALUE(type == 0), vm);
+						break;
+					}case BOOL_VTYPE:{
+						push(BOOL_VALUE(type == 1), vm);
+						break;
+					}case INT_VTYPE:{
+						push(BOOL_VALUE(type == 2), vm);
+						break;
+					}default:{
+						assert("Illegal value type");
+					}
+				}
+			}
+
+			break;
+		}
         default:{
             assert("Illegal opcode");
         }
