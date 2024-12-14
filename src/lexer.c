@@ -318,6 +318,10 @@ static void scan_token(Lexer *lexer){
             else add_token(EXCLAMATION_TOKTYPE, lexer);
             break;
         }
+		case ':':{
+			add_token(COLON_TOKTYPE, lexer);
+			break;
+		}
         case ';':{
             add_token(SEMICOLON_TOKTYPE, lexer);
             break;

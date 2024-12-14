@@ -13,6 +13,7 @@ int vm_utils_is_function(Value *value, Fn **out_fn);
 int vm_utils_is_native_function(Value *value, NativeFn **out_native_fn);
 int vm_utils_is_module(Value *value, Module **out_module);
 
+char *vm_utils_clone_buff(char *buff, VM *vm);
 Value *vm_utils_clone_value(Value *value, VM *vm);
 Obj *vm_utils_obj(ObjType type, VM *vm);
 Str *vm_utils_core_str(char *buff, uint32_t hash, VM *vm);
@@ -34,6 +35,7 @@ DynArr *vm_utils_dyarr(VM *vm);
 Obj *vm_utils_list_obj(VM *vm);
 LZHTable *vm_utils_dict(VM *vm);
 Obj *vm_utils_dict_obj(VM *vm);
+Obj *vm_utils_record_obj(char empty, VM *vm);
 
 void *assert_ptr(void *ptr, VM *vm);
 

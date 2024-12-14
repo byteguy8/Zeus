@@ -104,6 +104,7 @@ Expr *parse_is_expr(Parser *parser);
 Expr *parse_assign(Parser *parser);
 Expr *parse_dict(Parser *parser);
 Expr *parse_list(Parser *parser);
+Expr *parse_record(Parser *parser);
 Expr *parse_or(Parser *parser);
 Expr *parse_and(Parser *parser);
 Expr *parse_comparison(Parser *parser);
@@ -165,7 +166,7 @@ Expr *parse_is_expr(Parser *parser){
 }
 
 Expr *parse_assign(Parser *parser){
-    Expr *expr = parse_dict(parser);
+    Expr *expr = parse_record(parser);
 	
 	if(match(parser, 4, 
 			 COMPOUND_ADD_TOKTYPE, 
@@ -210,6 +211,51 @@ Expr *parse_assign(Parser *parser){
     }
 
     return expr;
+}
+
+DynArrPtr *record_key_values(Token *record_token, Parser *parser){
+	DynArrPtr *key_values = runtime_dynarr_ptr();
+
+	do{
+		if(key_values->used >= 255)
+			error(parser, record_token, "Records can have more than 255 key values.");
+
+		Token *key = consume(parser, IDENTIFIER_TOKTYPE, "Expect record key.");
+		consume(parser, COLON_TOKTYPE, "Expect ':' after record key.");
+		Expr *value = parse_expr(parser);
+
+		RecordExprValue *key_value = (RecordExprValue *)A_COMPILE_ALLOC(sizeof(RecordExprValue));
+		key_value->key = key;
+		key_value->value = value;
+
+		dynarr_ptr_insert(key_value, key_values);
+	}while(match(parser, 1, COMMA_TOKTYPE));
+
+	return key_values;
+}
+
+
+Expr *parse_record(Parser *parser){
+	if(match(parser, 1, RECORD_TOKTYPE)){
+		Token *record_token = NULL;
+		DynArrPtr *key_values = NULL;
+
+		record_token = previous(parser);
+		consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' after 'record' keyword at start of record body.");
+
+		if(!check(parser, RIGHT_BRACKET_TOKTYPE))
+			key_values = record_key_values(record_token, parser);
+
+		consume(parser, RIGHT_BRACKET_TOKTYPE, "Expect '}' at end of record body.");
+		
+		RecordExpr *record_expr = (RecordExpr *)A_COMPILE_ALLOC(sizeof(RecordExpr));
+		record_expr->record_token = record_token;
+		record_expr->key_values = key_values;
+
+		return create_expr(RECORD_EXPRTYPE, record_expr);
+	}
+
+	return parse_dict(parser);
 }
 
 Expr *parse_dict(Parser *parser){

@@ -139,6 +139,11 @@ void print_obj(Obj *object){
             printf("<dict %ld %p>\n", table->n, table);
             break;
         }
+		case RECORD_OTYPE:{
+			Record *record = object->value.record;
+			printf("<record at %p>\n", record);
+			break;
+		}
         case FN_OTYPE:{
             Fn *fn = (Fn *)object->value.fn;
             printf("<fn '%s' - %d at %p>\n", fn->name, (uint8_t)(fn->params ? fn->params->used : 0), fn);
@@ -748,6 +753,47 @@ void execute(uint8_t chunk, VM *vm){
 
             break;
         }
+		case RECORD_OPCODE:{
+			uint8_t len = advance(vm);
+			Obj *record_obj = vm_utils_record_obj(len == 0, vm);
+
+			if(!record_obj) vm_utils_error(vm, "Out of memory");
+
+			if(len == 0){
+				push(OBJ_VALUE(record_obj), vm);
+				break;
+			}
+
+			Record *record = record_obj->value.record;
+	
+			for(size_t i = 0; i < len; i++){
+				char *key = read_str(vm, NULL);
+				Value *value = pop(vm);
+
+				char *cloned_key = vm_utils_clone_buff(key, vm);
+				Value *cloned_value = vm_utils_clone_value(value, vm);
+
+				if(!cloned_key || !cloned_value){
+					free(cloned_key);
+					free(cloned_value);
+					vm_utils_error(vm, "Out of memory");
+				}
+
+				uint8_t *k = (uint8_t *)key;
+				size_t k_size = strlen(key);
+				uint8_t hash = lzhtable_hash(k, k_size);
+
+				if(lzhtable_hash_put_key(cloned_key, hash, cloned_value, record->key_values)){
+					free(cloned_key);
+					free(cloned_value);
+					vm_utils_error(vm, "Out of memory");
+				}
+			}
+
+			push(OBJ_VALUE(record_obj), vm);	
+
+			break;
+		}
         case CALL_OPCODE:{
             Fn *fn = NULL;
             NativeFn *native_fn = NULL;

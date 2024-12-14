@@ -49,6 +49,12 @@ void destroy_obj(Obj *obj, VM *vm){
             lzhtable_destroy(destroy_dict_values, table);
             break;
         }
+		case RECORD_OTYPE:{
+			Record *record = obj->value.record;
+			lzhtable_destroy(destroy_dict_values, record->key_values);
+			free(record);
+			break;
+		}
         case NATIVE_FN_OTYPE:{
             NativeFn *native_fn = obj->value.native_fn;
             if(!native_fn->unique) free(native_fn);
@@ -266,6 +272,18 @@ OK:
 	return str_obj;
 }
 
+char *vm_utils_clone_buff(char *buff, VM *vm){
+	size_t buff_len = strlen(buff);
+	char *cloned_buff = (char *)malloc(buff_len + 1);
+	
+	if(!cloned_buff) return NULL;
+
+	memcpy(cloned_buff, buff, buff_len);
+	cloned_buff[buff_len] = '\0';
+
+	return cloned_buff;
+}
+
 Obj *vm_utils_clone_str_obj(char *buff, Value *out_value, VM *vm){
 	Str *str = NULL;
 	Obj *str_obj = NULL;
@@ -467,6 +485,33 @@ Obj *vm_utils_dict_obj(VM *vm){
     dict_obj->value.dict = dict;
 
     return dict_obj;
+}
+
+Obj *vm_utils_record_obj(char empty, VM *vm){
+	Record *record = (Record *)malloc(sizeof(record));
+	Obj *record_obj = vm_utils_obj(RECORD_OTYPE, vm);
+
+	if(!record || !record_obj){
+		free(record);
+		return NULL;
+	}
+
+	if(empty){
+		record->key_values = NULL;
+	}else{
+		LZHTable *key_values = lzhtable_create(17, NULL);
+
+		if(!key_values){
+			free(record);
+			return NULL;
+		}
+
+		record->key_values= key_values;
+	}
+
+	record_obj->value.record = record;
+
+	return record_obj;
 }
 
 void *assert_ptr(void *ptr, VM *vm){

@@ -119,6 +119,7 @@ int main(int argc, char const *argv[]){
 	add_keyword("list", LIST_TOKTYPE, keywords);
     add_keyword("to", TO_TOKTYPE, keywords);
     add_keyword("dict", DICT_TOKTYPE, keywords);
+	add_keyword("record", RECORD_TOKTYPE, keywords);
     add_keyword("proc", PROC_TOKTYPE, keywords);
     add_keyword("ret", RET_TOKTYPE, keywords);
     add_keyword("import", IMPORT_TOKTYPE, keywords);

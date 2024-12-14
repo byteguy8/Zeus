@@ -22,6 +22,13 @@ typedef struct str{
 	char *buff;
 }Str;
 
+typedef struct try_block{
+    size_t try;
+    size_t catch;
+	uint8_t local;
+    struct try_block *outer;
+}TryBlock;
+
 typedef struct fn{
     char *name;
     DynArr *chunks;
@@ -40,12 +47,9 @@ typedef struct native_fn{
     RawNativeFn native;
 }NativeFn;
 
-typedef struct try_block{
-    size_t try;
-    size_t catch;
-	uint8_t local;
-    struct try_block *outer;
-}TryBlock;
+typedef struct record{
+	LZHTable *key_values;
+}Record;
 
 typedef struct module{
     char to_resolve;

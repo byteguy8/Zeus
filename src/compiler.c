@@ -662,6 +662,29 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             break;
         }
+		case RECORD_EXPRTYPE:{
+			RecordExpr *record_expr = (RecordExpr *)expr->sub_expr;
+			DynArrPtr *key_values = record_expr->key_values;
+
+			if(key_values){
+				for(size_t i = 0; i < key_values->used; i++){
+					RecordExprValue *key_value = (RecordExprValue *)DYNARR_PTR_GET(i, key_values);
+					compile_expr(key_value->value, compiler);
+				}
+			}
+
+			write_chunk(RECORD_OPCODE, compiler);
+			write_chunk((uint8_t)(key_values ? key_values->used : 0), compiler);
+
+			if(key_values){
+				for(size_t i = 0; i < key_values->used; i++){
+					RecordExprValue *key_value = (RecordExprValue *)DYNARR_PTR_GET(i, key_values);
+					write_str(key_value->key->lexeme, compiler);
+				}
+			}
+
+			break;
+		}
 		case IS_EXPRTYPE:{
 			IsExpr *is_expr = (IsExpr *)expr->sub_expr;
 			Expr *left_expr = is_expr->left_expr;
