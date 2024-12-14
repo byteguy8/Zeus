@@ -141,7 +141,7 @@ void print_obj(Obj *object){
         }
 		case RECORD_OTYPE:{
 			Record *record = object->value.record;
-			printf("<record at %p>\n", record);
+			printf("<record %ld at %p>\n", record->key_values->n, record);
 			break;
 		}
         case FN_OTYPE:{
@@ -779,9 +779,9 @@ void execute(uint8_t chunk, VM *vm){
 					vm_utils_error(vm, "Out of memory");
 				}
 
-				uint8_t *k = (uint8_t *)key;
-				size_t k_size = strlen(key);
-				uint8_t hash = lzhtable_hash(k, k_size);
+				uint8_t *k = (uint8_t *)cloned_key;
+				size_t k_size = strlen(cloned_key);
+				uint32_t hash = lzhtable_hash(k, k_size);
 
 				if(lzhtable_hash_put_key(cloned_key, hash, cloned_value, record->key_values)){
 					free(cloned_key);
@@ -846,6 +846,7 @@ void execute(uint8_t chunk, VM *vm){
             Str *str = NULL;
             DynArr *list = NULL;
             LZHTable *dict = NULL;
+			Record *record = NULL;
 			Module *module = NULL;
             char *symbol = read_str(vm, NULL);
             Value *value = pop(vm);
@@ -965,6 +966,22 @@ void execute(uint8_t chunk, VM *vm){
 
                 break;
             }
+
+			if(vm_utils_is_record(value, &record)){
+				uint8_t *key = (uint8_t *)symbol;
+				size_t key_size = strlen(symbol);
+				uint32_t hash = lzhtable_hash(key, key_size);
+				LZHTableNode *node = NULL;
+
+				if(!lzhtable_hash_contains(hash, record->key_values, &node))
+					vm_utils_error(vm, "Record do not constains key '%s'", symbol);
+
+				Value *value = (Value *)node->value;
+
+				push(*value, vm);
+
+				break;
+			}
 
 			if(vm_utils_is_module(value, &module)){
 				push_module_symbol(symbol, module, vm);

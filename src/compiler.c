@@ -667,7 +667,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			DynArrPtr *key_values = record_expr->key_values;
 
 			if(key_values){
-				for(size_t i = 0; i < key_values->used; i++){
+				for(int i = (int)(key_values->used - 1); i >= 0; i--){
 					RecordExprValue *key_value = (RecordExprValue *)DYNARR_PTR_GET(i, key_values);
 					compile_expr(key_value->value, compiler);
 				}

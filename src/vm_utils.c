@@ -200,6 +200,20 @@ int vm_utils_is_dict(Value *value, LZHTable **dict){
 	return 0;
 }
 
+int vm_utils_is_record(Value *value, Record **out_record){
+	if(value->type != OBJ_VTYPE) return 0;
+
+	Obj *obj = value->literal.obj;
+
+	if(obj->type == RECORD_OTYPE){
+		Record *record = obj->value.record;
+		if(out_record) *out_record = record;
+		return 1;
+	}
+
+	return 0;
+}
+
 int vm_utils_is_function(Value *value, Fn **out_fn){
 	if(value->type != OBJ_VTYPE) return 0;
 	

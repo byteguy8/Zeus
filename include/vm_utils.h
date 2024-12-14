@@ -9,6 +9,7 @@ int vm_utils_is_i64(Value *value, int64_t *i64);
 int vm_utils_is_str(Value *value, Str **str);
 int vm_utils_is_list(Value *value, DynArr **list);
 int vm_utils_is_dict(Value *value, LZHTable **dict);
+int vm_utils_is_record(Value *value, Record **record);
 int vm_utils_is_function(Value *value, Fn **out_fn);
 int vm_utils_is_native_function(Value *value, NativeFn **out_native_fn);
 int vm_utils_is_module(Value *value, Module **out_module);
