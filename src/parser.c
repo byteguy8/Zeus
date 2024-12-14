@@ -104,7 +104,6 @@ Expr *parse_is_expr(Parser *parser);
 Expr *parse_assign(Parser *parser);
 Expr *parse_dict(Parser *parser);
 Expr *parse_list(Parser *parser);
-Expr *parse_struct(Parser *parser);
 Expr *parse_or(Parser *parser);
 Expr *parse_and(Parser *parser);
 Expr *parse_comparison(Parser *parser);
@@ -117,11 +116,14 @@ Expr *parse_literal(Parser *parser);
 Stmt *parse_stmt(Parser *parser);
 Stmt *parse_expr_stmt(Parser *parser);
 Stmt *parse_print_stmt(Parser *parser);
-Stmt *parse_var_decl_stmt(Parser *parser);
 DynArrPtr *parse_block_stmt(Parser *parser);
 Stmt *parse_if_stmt(Parser *parser);
 Stmt *parse_while_stmt(Parser *parser);
+Stmt *parse_throw_stmt(Parser *parser);
+Stmt *parse_try_stmt(Parser *parser);
 Stmt *parse_return_stmt(Parser *parser);
+
+Stmt *parse_var_decl_stmt(Parser *parser);
 Stmt *parse_function_stmt(Parser *parser);
 Stmt *parse_import_stmt(Parser *parser);
 
@@ -139,12 +141,12 @@ Expr *parse_is_expr(Parser *parser){
 		is_token = previous(parser);
 
 		if(match(parser, 6, 
-			           EMPTY_TOKTYPE,
-					   BOOL_TOKTYPE,
-					   INT_TOKTYPE,
-					   STR_TOKTYPE,
-					   LIST_TOKTYPE,
-					   DICT_TOKTYPE)){
+			             EMPTY_TOKTYPE,
+					     BOOL_TOKTYPE,
+					     INT_TOKTYPE,
+					     STR_TOKTYPE,
+					     LIST_TOKTYPE,
+					     DICT_TOKTYPE)){
 			type_token = previous(parser);
 		}
 
@@ -574,6 +576,12 @@ Stmt *parse_stmt(Parser *parser){
     if(match(parser, 1, IMPORT_TOKTYPE))
         return parse_import_stmt(parser);
 
+    if(match(parser, 1, THROW_TOKTYPE))
+        return parse_throw_stmt(parser);
+
+    if(match(parser, 1, TRY_TOKTYPE))
+        return parse_try_stmt(parser);
+
     return parse_expr_stmt(parser);
 }
 
@@ -602,38 +610,6 @@ Stmt *parse_print_stmt(Parser *parser){
     print_stmt->print_token = print_token;
 
     return create_stmt(PRINT_STMTTYPE, print_stmt);
-}
-
-Stmt *parse_var_decl_stmt(Parser *parser){
-    char is_const = 0;
-    char is_initialized = 0;
-    Token *identifier_token = NULL;
-    Expr *initializer_expr = NULL;
-
-    is_const = previous(parser)->type == IMUT_TOKTYPE;
-
-    identifier_token = consume(
-        parser, 
-        IDENTIFIER_TOKTYPE, 
-        "Expect symbol name after 'var' keyword.");
-    
-    if(match(parser, 1, EQUALS_TOKTYPE)){
-        is_initialized = 1;
-        initializer_expr = parse_expr(parser);
-    }
-
-    consume(
-        parser, 
-        SEMICOLON_TOKTYPE, 
-        "Expect ';' at end of symbol declaration.");
-
-    VarDeclStmt *var_decl_stmt = (VarDeclStmt *)A_COMPILE_ALLOC(sizeof(VarDeclStmt));
-    var_decl_stmt->is_const = is_const;
-    var_decl_stmt->is_initialized = is_initialized;
-    var_decl_stmt->identifier_token = identifier_token;
-    var_decl_stmt->initializer_expr = initializer_expr;
-
-    return create_stmt(VAR_DECL_STMTTYPE, var_decl_stmt);
 }
 
 DynArrPtr *parse_block_stmt(Parser *parser){
@@ -693,6 +669,52 @@ Stmt *parse_while_stmt(Parser *parser){
 	return create_stmt(WHILE_STMTTYPE, while_stmt);
 }
 
+Stmt *parse_throw_stmt(Parser *parser){
+    Token *throw_token = NULL;
+	Expr *value = NULL;
+
+    throw_token = previous(parser);
+  
+	if(!check(parser, SEMICOLON_TOKTYPE))
+		value = parse_expr(parser);
+
+    consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of throw statement.");
+
+    ThrowStmt *throw_stmt = (ThrowStmt *)A_COMPILE_ALLOC(sizeof(ThrowStmt));
+    throw_stmt->throw_token = throw_token;
+	throw_stmt->value = value;
+
+    return create_stmt(THROW_STMTTYPE, throw_stmt);
+}
+
+Stmt *parse_try_stmt(Parser *parser){
+    Token *try_token = NULL;
+    DynArrPtr *try_stmts = NULL;
+	Token *catch_token = NULL;
+	Token *err_identifier = NULL;
+	DynArrPtr *catch_stmts;
+
+    try_token = previous(parser);
+    consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' after 'try' keyword.");
+    try_stmts = parse_block_stmt(parser);
+
+	if(match(parser, 1, CATCH_TOKTYPE)){
+		catch_token = previous(parser);
+		err_identifier = consume(parser, IDENTIFIER_TOKTYPE, "Expect error identifier after 'catch' keyword");
+		consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' after 'catch' keyword.");
+		catch_stmts = parse_block_stmt(parser);
+	}
+
+    TryStmt *try_stmt = (TryStmt *)A_COMPILE_ALLOC(sizeof(TryStmt));
+    try_stmt->try_token = try_token;
+    try_stmt->try_stmts = try_stmts;
+	try_stmt->catch_token = catch_token;
+	try_stmt->err_identifier = err_identifier;
+	try_stmt->catch_stmts = catch_stmts;
+
+    return create_stmt(TRY_STMTTYPE, try_stmt);
+}
+
 Stmt *parse_return_stmt(Parser *parser){
     Token *return_token = NULL;
     Expr *value = NULL;
@@ -709,6 +731,38 @@ Stmt *parse_return_stmt(Parser *parser){
     return_stmt->value = value;
     
     return create_stmt(RETURN_STMTTYPE, return_stmt);
+}
+
+Stmt *parse_var_decl_stmt(Parser *parser){
+    char is_const = 0;
+    char is_initialized = 0;
+    Token *identifier_token = NULL;
+    Expr *initializer_expr = NULL;
+
+    is_const = previous(parser)->type == IMUT_TOKTYPE;
+
+    identifier_token = consume(
+        parser, 
+        IDENTIFIER_TOKTYPE, 
+        "Expect symbol name after 'var' keyword.");
+    
+    if(match(parser, 1, EQUALS_TOKTYPE)){
+        is_initialized = 1;
+        initializer_expr = parse_expr(parser);
+    }
+
+    consume(
+        parser, 
+        SEMICOLON_TOKTYPE, 
+        "Expect ';' at end of symbol declaration.");
+
+    VarDeclStmt *var_decl_stmt = (VarDeclStmt *)A_COMPILE_ALLOC(sizeof(VarDeclStmt));
+    var_decl_stmt->is_const = is_const;
+    var_decl_stmt->is_initialized = is_initialized;
+    var_decl_stmt->identifier_token = identifier_token;
+    var_decl_stmt->initializer_expr = initializer_expr;
+
+    return create_stmt(VAR_DECL_STMTTYPE, var_decl_stmt);
 }
 
 Stmt *parse_function_stmt(Parser *parser){

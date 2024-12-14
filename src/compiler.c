@@ -87,6 +87,7 @@ Scope *scope_in(ScopeType type, Compiler *compiler){
     
     scope->depth = compiler->depth;
     scope->locals = 0;
+    scope->try = NULL;
 	scope->type = type;
     scope->symbols_len = 0;
     
@@ -153,7 +154,10 @@ Scope *inside_function(Compiler *compiler){
 
 	for(int i = (int)compiler->depth - 1; i >= 0; i--){
 		Scope *scope = compiler->scopes + i;
-		if(scope->type == FUNCTION_SCOPE) return scope;
+		if(scope->type == FUNCTION_SCOPE){
+            if(i == 0) return NULL;
+            return scope;
+        }
 	}
 
 	return NULL;
@@ -163,6 +167,11 @@ Scope *inside_function(Compiler *compiler){
 Scope *current_scope(Compiler *compiler){
     assert(compiler->depth > 0);
     return &compiler->scopes[compiler->depth - 1];
+}
+
+Scope *previous_scope(Scope *scope, Compiler *compiler){
+    if(scope->depth == 1) return NULL;
+    return &compiler->scopes[scope->depth - 1];
 }
 
 Symbol *exists_scope(char *name, Scope *scope, Compiler *compiler){
@@ -915,6 +924,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             Expr *value = return_stmt->value;
 
 			Scope *scope = inside_function(compiler);
+
 			if(!scope || scope->depth == 1)
 				error(compiler, return_token, "Can't use 'return' statement outside functions.");
 
@@ -1056,9 +1066,100 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             
             break;
         }
+        case THROW_STMTTYPE:{
+            ThrowStmt *throw_stmt = (ThrowStmt *)stmt->sub_stmt;
+            Token *throw_token = throw_stmt->throw_token;
+			Expr *value = throw_stmt->value;
+
+            Scope *scope = current_scope(compiler);
+            
+            if(!inside_function(compiler))
+                error(compiler, throw_token, "Can not use 'throw' statement in global scope.");
+            if(scope->type == CATCH_SCOPE)
+                error(compiler, throw_token, "Can not use 'throw' statement inside catch blocks.");
+
+			if(value) compile_expr(value, compiler);
+			else write_chunk(EMPTY_OPCODE, compiler);
+
+            write_chunk(THROW_OPCODE, compiler);
+
+            break;
+        }
+        case TRY_STMTTYPE:{
+            TryStmt *try_stmt = (TryStmt *)stmt->sub_stmt;
+            DynArrPtr *try_stmts = try_stmt->try_stmts;
+			Token *err_identifier = try_stmt->err_identifier;
+			DynArrPtr *catch_stmts = try_stmt->catch_stmts;
+
+            size_t try_jmp_index = 0;
+            TryBlock *try_block = (TryBlock *)A_RUNTIME_ALLOC(sizeof(TryBlock));
+			memset(try_block, 0, sizeof(TryBlock));
+
+            if(try_stmts){
+                size_t start = chunks_len(compiler);
+                try_block->try = start;
+
+                Scope *scope = scope_in(TRY_SCOPE, compiler);
+                scope->try = try_block;
+
+                Scope *previous = previous_scope(scope, compiler);
+                
+                if(previous && previous->try)
+                    try_block->outer = previous->try;
+
+                for (size_t i = 0; i < try_stmts->used; i++){
+                    Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, try_stmts);
+                    compile_stmt(stmt, compiler);
+                }
+
+                scope_out(compiler);
+
+				write_chunk(JMP_OPCODE, compiler);
+				try_jmp_index = write_i32(0, compiler);
+            }
+
+			if(catch_stmts){
+				size_t start = chunks_len(compiler);
+                try_block->catch = start;
+
+                Scope *scope = scope_in(CATCH_SCOPE, compiler);
+				Symbol *symbol = declare(IMUT_SYMTYPE, err_identifier, compiler);
+
+				try_block->local = symbol->local;
+
+				for (size_t i = 0; i < catch_stmts->used; i++){
+                    Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, catch_stmts);
+                    compile_stmt(stmt, compiler);
+                }
+                
+                scope_out(compiler);
+
+				size_t end = chunks_len(compiler);
+				update_i32(try_jmp_index, end - start + 1, compiler);
+			}
+
+            Module *module = compiler->module;
+            LZHTable *fn_tries = module->tries;
+            Fn *fn = compiler->fn_stack[compiler->fn_ptr - 1];
+
+			uint8_t *key = (uint8_t *)fn;
+			size_t key_size = sizeof(Fn);
+			LZHTableNode *node = NULL;
+			DynArrPtr *tries = NULL;
+
+			if(lzhtable_contains(key, key_size, fn_tries, &node)){
+				tries = (DynArrPtr *)node->value;
+			}else{
+				tries = (DynArrPtr *)runtime_dynarr_ptr();
+				lzhtable_put(key, key_size, tries, fn_tries, NULL);
+			}
+
+			dynarr_ptr_insert(try_block, tries);
+
+            break;
+        }
         default:{
             assert("Illegal stmt type");
-            break;
         }
     }
 }

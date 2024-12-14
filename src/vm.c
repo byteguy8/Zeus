@@ -973,6 +973,57 @@ void execute(uint8_t chunk, VM *vm){
 
 			break;
 		}
+        case THROW_OPCODE:{
+			if(vm->frame_ptr == 0)
+				vm_utils_error(vm, "Can not throw in a empty frame stack");
+
+			char throw = 1;
+            int ptr = (int)vm->frame_ptr;
+            
+            while(ptr > 0){
+                Frame *frame = &vm->frame_stack[--ptr];
+                Fn *fn = frame->fn;
+                Module *module = fn->module;
+                LZHTable *fn_tries = module->tries;
+                LZHTableNode *node = NULL;
+
+				uint8_t *key = (uint8_t *)fn;
+				size_t key_size = sizeof(Fn);
+                
+                if(lzhtable_contains(key, key_size, fn_tries, &node)){
+					TryBlock *try = NULL;
+					DynArrPtr *tries = (DynArrPtr *)node->value;
+
+					for(size_t i = 0; i < tries->used; i++){
+						TryBlock *try_block = (TryBlock *)DYNARR_PTR_GET(i, tries);
+                        size_t start = try_block->try;
+                        size_t end = try_block->catch;
+                        size_t ip = frame->ip;
+
+						if(ip < start || ip > end) continue;
+
+						try = try_block;
+
+                        break;
+					}
+
+					if(try){
+						Value *value = pop(vm);
+
+						throw = 0;
+						frame->ip = try->catch;
+						vm->frame_ptr = ptr + 1;
+						memcpy(&frame->locals[try->local], value, sizeof(Value));
+
+						break;
+					}
+                }
+            }
+
+            if(throw) vm_utils_error(vm, "No catch");
+            
+            break;
+        }
         default:{
             assert("Illegal opcode");
         }

@@ -40,6 +40,7 @@ typedef enum opcode{
     RET_OPCODE,
     ACCESS_OPCODE,
 	IS_OPCODE,
+    THROW_OPCODE,
 }OPCode;
 
 #endif

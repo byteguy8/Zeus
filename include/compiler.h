@@ -33,12 +33,15 @@ typedef struct symbol{
 typedef enum scope_type{
     BLOCK_SCOPE,
 	WHILE_SCOPE,
+    TRY_SCOPE,
+    CATCH_SCOPE,
     FUNCTION_SCOPE
 }ScopeType;
 
 typedef struct scope{
     int depth;
     int locals;
+    TryBlock *try;
     ScopeType type;
     size_t symbols_len;
     Symbol symbols[SYMBOLS_LENGTH];

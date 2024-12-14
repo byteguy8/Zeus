@@ -197,6 +197,7 @@ Module *runtime_module(char *name, char *filepath){
     DynArr *constants = runtime_dynarr(sizeof(int64_t));
     LZHTable *strings = runtime_lzhtable();
 	LZHTable *symbols = runtime_lzhtable();
+    LZHTable *tries = runtime_lzhtable();
     LZHTable *globals = runtime_lzhtable();
     Module *module = (Module *)A_RUNTIME_ALLOC(sizeof(Module));
     
@@ -206,6 +207,7 @@ Module *runtime_module(char *name, char *filepath){
     module->constants = constants;
     module->strings = strings;
     module->symbols = symbols;
+    module->tries = tries;
     module->globals = globals;
 
     return module;

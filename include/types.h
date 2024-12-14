@@ -40,6 +40,13 @@ typedef struct native_fn{
     RawNativeFn native;
 }NativeFn;
 
+typedef struct try_block{
+    size_t try;
+    size_t catch;
+	uint8_t local;
+    struct try_block *outer;
+}TryBlock;
+
 typedef struct module{
     char to_resolve;
     char *name;
@@ -47,6 +54,7 @@ typedef struct module{
     LZHTable *strings;
     DynArr *constants;
 	LZHTable *symbols;
+    LZHTable *tries;
     LZHTable *globals;
 }Module;
 

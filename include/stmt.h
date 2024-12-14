@@ -8,15 +8,18 @@
 typedef enum stmt_type{
     EXPR_STMTTYPE,
     PRINT_STMTTYPE,
-    VAR_DECL_STMTTYPE,
     BLOCK_STMTTYPE,
-	IF_STMTTYPE,
-	WHILE_STMTTYPE,
-	STOP_STMTTYPE,
+    IF_STMTTYPE,
+    STOP_STMTTYPE,
     CONTINUE_STMTTYPE,
-    FUNCTION_STMTTYPE,
+    WHILE_STMTTYPE,
+    THROW_STMTTYPE,
+    TRY_STMTTYPE,
     RETURN_STMTTYPE,
-    IMPORT_STMTTYPE
+
+    VAR_DECL_STMTTYPE,
+    FUNCTION_STMTTYPE,
+    IMPORT_STMTTYPE,
 }StmtType;
 
 typedef struct stmt{
@@ -33,13 +36,6 @@ typedef struct print_stmt{
     Token *print_token;
 }PrintStmt;
 
-typedef struct var_decl_stmt{
-    char is_const;
-    char is_initialized;
-    Token *identifier_token;
-    Expr *initializer_expr;
-}VarDeclStmt;
-
 typedef struct block_stmt{
     DynArrPtr *stmts;
 }BlockStmt;
@@ -50,11 +46,6 @@ typedef struct if_stmt{
 	DynArrPtr *else_stmts;
 }IfStmt;
 
-typedef struct while_stmt{
-	Expr *condition;
-	DynArrPtr *stmts;
-}WhileStmt;
-
 typedef struct stop_stmt{
 	Token *stop_token;
 }StopStmt;
@@ -63,16 +54,41 @@ typedef struct continue_stmt{
     Token *continue_token;
 }ContinueStmt;
 
-typedef struct function_stmt{
-    Token *name_token;
-    DynArrPtr *params;
-    DynArrPtr *stmts;
-}FunctionStmt;
+typedef struct while_stmt{
+	Expr *condition;
+	DynArrPtr *stmts;
+}WhileStmt;
+
+typedef struct throw_stmt{
+    Token *throw_token;
+	Expr *value;
+}ThrowStmt;
+
+typedef struct try_stmt{
+    Token *try_token;
+    DynArrPtr *try_stmts;
+	Token *catch_token;
+	Token *err_identifier;
+	DynArrPtr *catch_stmts;
+}TryStmt;
 
 typedef struct return_stmt{
     Token *return_token;
     Expr *value;
 }ReturnStmt;
+
+typedef struct var_decl_stmt{
+    char is_const;
+    char is_initialized;
+    Token *identifier_token;
+    Expr *initializer_expr;
+}VarDeclStmt;
+
+typedef struct function_stmt{
+    Token *name_token;
+    DynArrPtr *params;
+    DynArrPtr *stmts;
+}FunctionStmt;
 
 typedef struct import_stmt{
     Token *import_token;

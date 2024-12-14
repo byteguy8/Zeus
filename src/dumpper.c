@@ -236,6 +236,10 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 			printf("IS_OPCODE value: %d\n", type);
 			break;
 		}
+        case THROW_OPCODE:{
+            printf("THROW_OPCODE\n");
+            break;
+        }
         default:{
             assert("Illegal opcode\n");
         }
