@@ -193,18 +193,12 @@ Expr *parse_assign(Parser *parser){
 	}
 
     if(match(parser, 1, EQUALS_TOKTYPE)){
-        if(expr->type != IDENTIFIER_EXPRTYPE)
-            error(
-                parser, 
-                peek(parser), 
-                "Expect identifier in left side of assignment expression.");
-
-        IdentifierExpr *idenfifier_expr = (IdentifierExpr *)expr->sub_expr;
-        Token *identifier_token = idenfifier_expr->identifier_token;
+		Token *equals_token = previous(parser);
         Expr *value_expr = parse_assign(parser);
 
         AssignExpr *assign_expr = (AssignExpr *)A_COMPILE_ALLOC(sizeof(AssignExpr));
-        assign_expr->identifier_token = identifier_token;
+        assign_expr->left = expr;
+		assign_expr->equals_token = equals_token;
         assign_expr->value_expr = value_expr;
 
         return create_expr(ASSIGN_EXPRTYPE, assign_expr);

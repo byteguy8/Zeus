@@ -147,6 +147,11 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf("SGET_OPCODE hash: %u value: '%s'\n", hash, value);
             break;
         }
+		case PUT_OPCODE:{
+			char *target = read_str(dumpper, NULL);
+			printf("PUT_OPCODE target: %s\n", target);
+			break;
+		}
         case OR_OPCODE:{
 			printf("OR_OPCODE\n");
            	break;

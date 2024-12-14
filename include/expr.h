@@ -93,7 +93,8 @@ typedef struct logical_expr{
 }LogicalExpr;
 
 typedef struct assign_expr{
-    Token *identifier_token;
+	Expr *left;
+	Token *equals_token;
     Expr *value_expr;
 }AssignExpr;
 

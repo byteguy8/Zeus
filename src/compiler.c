@@ -548,23 +548,46 @@ void compile_expr(Expr *expr, Compiler *compiler){
         }
         case ASSIGN_EXPRTYPE:{
             AssignExpr *assign_expr = (AssignExpr *)expr->sub_expr;
-            Token *identifier_token = assign_expr->identifier_token;
+			Expr *left = assign_expr->left;
+			Token *equals_token = assign_expr->equals_token;
             Expr *value_expr = assign_expr->value_expr;
 
-            Symbol *symbol = get(identifier_token, compiler);
+			if(left->type == IDENTIFIER_EXPRTYPE){
+				IdentifierExpr *identifier_expr = (IdentifierExpr *)left->sub_expr;
+				Token *identifier_token = identifier_expr->identifier_token;
+	            Symbol *symbol = get(identifier_token, compiler);
             
-            if(symbol->type == IMUT_SYMTYPE)
-                error(compiler, identifier_token, "'%s' declared as constant. Can't change its value.", identifier_token->lexeme);
+    	        if(symbol->type == IMUT_SYMTYPE)
+        	        error(compiler, identifier_token, "'%s' declared as constant. Can't change its value.", identifier_token->lexeme);
             
-            compile_expr(value_expr, compiler);
+            	compile_expr(value_expr, compiler);
 
-            if(symbol->depth == 1){
-                write_chunk(GSET_OPCODE, compiler);
-                write_str(identifier_token->lexeme, compiler);
-            }else{
-                write_chunk(LSET_OPCODE, compiler);
-                write_chunk(symbol->local, compiler);
-            }
+	            if(symbol->depth == 1){
+                	write_chunk(GSET_OPCODE, compiler);
+                	write_str(identifier_token->lexeme, compiler);
+            	}else{
+                	write_chunk(LSET_OPCODE, compiler);
+                	write_chunk(symbol->local, compiler);
+            	}
+
+				break;
+			}
+
+			if(left->type == ACCESS_EXPRTYPE){
+				AccessExpr *access_expr = (AccessExpr *)left->sub_expr;
+				Expr *left = access_expr->left;
+				Token *symbol_token = access_expr->symbol_token;
+	
+				compile_expr(value_expr, compiler);
+				compile_expr(left, compiler);
+				
+				write_chunk(PUT_OPCODE, compiler);
+				write_str(symbol_token->lexeme, compiler);
+
+				break;
+			}
+
+			error(compiler, equals_token, "Illegal assign target");
 
             break;
         }

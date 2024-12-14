@@ -636,6 +636,28 @@ void execute(uint8_t chunk, VM *vm){
 			push_module_symbol(key, module, vm);
 			break;
 		}
+		case PUT_OPCODE:{
+			Value *target = pop(vm);
+			Value *value = peek(vm);
+			char *symbol = read_str(vm, NULL);
+			Record *record = NULL;
+	
+			if(!vm_utils_is_record(target, &record))
+				vm_utils_error(vm, "Expect a record, but got something else");
+
+			uint8_t *key = (uint8_t *)symbol;
+			size_t key_size = strlen(symbol);
+			uint32_t hash = lzhtable_hash(key, key_size);
+			LZHTableNode *node = NULL;
+
+			if(!lzhtable_hash_contains(hash, record->key_values, &node))
+				vm_utils_error(vm, "Record do not contains key '%s'", symbol);
+
+			Value *to = (Value *)node->value;
+			memcpy(to, value, sizeof(Value));
+
+			break;
+		}
         case OR_OPCODE:{
             uint8_t right = pop_bool_assert(vm, "Expect bool at right side.");
             uint8_t left = pop_bool_assert(vm, "Expect bool at left side.");
