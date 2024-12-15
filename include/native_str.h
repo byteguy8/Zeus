@@ -5,7 +5,7 @@
 #include "value.h"
 #include "vm_utils.h"
 
-Value native_fn_char_at(uint8_t argc, Value *values, void *target, VM *vm){
+Value native_fn_str_char_at(uint8_t argc, Value *values, void *target, VM *vm){
     int64_t index = -1;
     Str *in_str = (Str *)target;
 
@@ -19,7 +19,7 @@ Value native_fn_char_at(uint8_t argc, Value *values, void *target, VM *vm){
     return value;
 }
 
-Value native_fn_sub_str(uint8_t argc, Value *values, void *target, VM *vm){
+Value native_fn_str_sub_str(uint8_t argc, Value *values, void *target, VM *vm){
     Str *in_str = (Str *)target;
     int64_t from = -1;
     int64_t to = -1;
@@ -38,7 +38,7 @@ Value native_fn_sub_str(uint8_t argc, Value *values, void *target, VM *vm){
     return value;
 }
 
-Value native_fn_char_code(uint8_t argc, Value *values, void *target, VM *vm){
+Value native_fn_str_char_code(uint8_t argc, Value *values, void *target, VM *vm){
     Str *str = (Str *)target;
     int64_t index = -1;
 
@@ -48,7 +48,7 @@ Value native_fn_char_code(uint8_t argc, Value *values, void *target, VM *vm){
     return INT_VALUE(code);
 }
 
-Value native_fn_split(uint8_t argc, Value *values, void *target, VM *vm){
+Value native_fn_str_split(uint8_t argc, Value *values, void *target, VM *vm){
     Str *str = (Str *)target;
     Str *by = NULL;
 
@@ -109,7 +109,7 @@ OK:
     return OBJ_VALUE(obj_list);
 }
 
-Value native_fn_lstrip(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_str_lstrip(uint8_t argsc, Value *values, void *target, VM *vm){
 	Str *str = (Str *)target;
 
 	if(str->len == 0)
@@ -131,7 +131,7 @@ Value native_fn_lstrip(uint8_t argsc, Value *values, void *target, VM *vm){
 	return value;
 }
 
-Value native_fn_rstrip(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_str_rstrip(uint8_t argsc, Value *values, void *target, VM *vm){
 	Str *str = (Str *)target;
 
 	if(str->len == 0)
@@ -153,7 +153,7 @@ Value native_fn_rstrip(uint8_t argsc, Value *values, void *target, VM *vm){
 	return value;
 }
 
-Value native_fn_strip(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_str_strip(uint8_t argsc, Value *values, void *target, VM *vm){
 	Str *str = (Str *)target;
 
 	if(str->len == 0)
@@ -190,7 +190,7 @@ Value native_fn_strip(uint8_t argsc, Value *values, void *target, VM *vm){
 	return value;
 }
 
-Value native_fn_lower(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_str_lower(uint8_t argsc, Value *values, void *target, VM *vm){
 	Str *str = (Str *)target;
 	Value value = {0};
 
@@ -208,7 +208,7 @@ Value native_fn_lower(uint8_t argsc, Value *values, void *target, VM *vm){
 	return value;
 }
 
-Value native_fn_upper(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_str_upper(uint8_t argsc, Value *values, void *target, VM *vm){
 	Str *str = (Str *)target;
 	Value value = {0};
 
@@ -226,7 +226,7 @@ Value native_fn_upper(uint8_t argsc, Value *values, void *target, VM *vm){
 	return value;
 }
 
-Value native_fn_title(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_str_title(uint8_t argsc, Value *values, void *target, VM *vm){
     Str *str = (Str *)target;
     Value value = {0};
 
@@ -248,7 +248,7 @@ Value native_fn_title(uint8_t argsc, Value *values, void *target, VM *vm){
     return value;
 }
 
-Value native_fn_cmp(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_str_cmp(uint8_t argsc, Value *values, void *target, VM *vm){
 	Str *s0 = (Str *)target;
 	Str *s1 = NULL;
 
@@ -258,7 +258,7 @@ Value native_fn_cmp(uint8_t argsc, Value *values, void *target, VM *vm){
 	return INT_VALUE((int64_t)strcmp(s0->buff, s1->buff));
 }
 
-Value native_fn_cmp_ic(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_str_cmp_ic(uint8_t argsc, Value *values, void *target, VM *vm){
 	Str *s0 = (Str *)target;
 	Str *s1 = NULL;
 

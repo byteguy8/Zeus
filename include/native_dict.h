@@ -5,7 +5,7 @@
 #include "value.h"
 #include "vm_utils.h"
 
-Value native_dict_contains(uint8_t argc, Value *values, void *target, VM *vm){
+Value native_fn_dict_contains(uint8_t argsc, Value *values, void *target, VM *vm){
     LZHTable *dict = (LZHTable *)target;
     Value *value = &values[0];
 
@@ -15,7 +15,7 @@ Value native_dict_contains(uint8_t argc, Value *values, void *target, VM *vm){
     return BOOL_VALUE(contains);
 }
 
-Value native_dict_get(uint8_t argc, Value *values, void *target, VM *vm){
+Value native_fn_dict_get(uint8_t argsc, Value *values, void *target, VM *vm){
     LZHTable *dict = (LZHTable *)target;
     Value *key = &values[0];
 
@@ -28,7 +28,7 @@ Value native_dict_get(uint8_t argc, Value *values, void *target, VM *vm){
     else return EMPTY_VALUE;
 }
 
-Value native_dict_put(uint8_t argc, Value *values, void *target, VM *vm){
+Value native_fn_dict_put(uint8_t argsc, Value *values, void *target, VM *vm){
     LZHTable *dict = (LZHTable *)target;
     Value *key = &values[0];
     Value *value = &values[1];

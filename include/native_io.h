@@ -6,7 +6,7 @@
 #include "vm_utils.h"
 #include <stdio.h>
 
-Value native_readln(uint8_t argc, Value *values, void *target, VM *vm){
+Value native_fn_io_readln(uint8_t argsc, Value *values, void *target, VM *vm){
 	size_t buff_len = 1024;
 	char buff[buff_len];
 	char *out_buff = fgets(buff, buff_len, stdin);

@@ -5,7 +5,7 @@
 #include "value.h"
 #include "vm_utils.h"
 
-Value native_fn_list_get(uint8_t argc, Value *values, void *target, VM *vm){
+Value native_fn_list_get(uint8_t argsc, Value *values, void *target, VM *vm){
     int64_t index = -1;
     DynArr *list = (DynArr *)target;
 
@@ -14,7 +14,7 @@ Value native_fn_list_get(uint8_t argc, Value *values, void *target, VM *vm){
     return DYNARR_GET_AS(Value, (size_t)index, list);
 }
 
-Value native_fn_list_insert(uint8_t argc, Value *values, void *target, VM *vm){
+Value native_fn_list_insert(uint8_t argsc, Value *values, void *target, VM *vm){
     Value *value = &values[0];
     DynArr *list = (DynArr *)target;
 
@@ -24,7 +24,7 @@ Value native_fn_list_insert(uint8_t argc, Value *values, void *target, VM *vm){
     return EMPTY_VALUE;
 }
 
-Value native_fn_list_insert_at(uint8_t argc, Value *values, void *target, VM *vm){
+Value native_fn_list_insert_at(uint8_t argsc, Value *values, void *target, VM *vm){
     DynArr *list = (DynArr *)target;
     Value *index_value = &values[0];
     Value *value = &values[1];
@@ -40,7 +40,7 @@ Value native_fn_list_insert_at(uint8_t argc, Value *values, void *target, VM *vm
     return out_value;
 }
 
-Value native_fn_list_set(uint8_t argc, Value *values, void *target, VM *vm){
+Value native_fn_list_set(uint8_t argsc, Value *values, void *target, VM *vm){
     DynArr *list = (DynArr *)target;
     Value *index_value = &values[0];
     Value *value = &values[1];
@@ -55,7 +55,7 @@ Value native_fn_list_set(uint8_t argc, Value *values, void *target, VM *vm){
     return out_value;
 }
 
-Value native_fn_list_remove(uint8_t argc, Value *values, void *target, VM *vm){
+Value native_fn_list_remove(uint8_t argsc, Value *values, void *target, VM *vm){
     DynArr *list = (DynArr *)target;
     Value *index_value = &values[0];
     int64_t index = -1;
@@ -69,7 +69,7 @@ Value native_fn_list_remove(uint8_t argc, Value *values, void *target, VM *vm){
     return out_value;
 }
 
-Value native_fn_list_append(uint8_t argc, Value *values, void *target, VM *vm){
+Value native_fn_list_append(uint8_t argsc, Value *values, void *target, VM *vm){
     DynArr *to = (DynArr *)target;
     Value *list_value = &values[0];
     DynArr *from = NULL;
@@ -116,7 +116,7 @@ Value native_fn_list_append_new(uint8_t argsc, Value *values, void *target, VM *
     return OBJ_VALUE(list_obj);
 }
 
-Value native_fn_list_clear(uint8_t argc, Value *values, void *target, VM *vm){
+Value native_fn_list_clear(uint8_t argsc, Value *values, void *target, VM *vm){
     DynArr *list = (DynArr *)target;
     int64_t list_len = (int64_t)list->used;
 

@@ -86,9 +86,10 @@ int main(int argc, char const *argv[]){
 	add_native("is_str_int", 1, native_fn_is_str_int, natives);
 	add_native("str_to_int", 1, native_fn_str_to_int, natives);
     add_native("int_to_str", 1, native_fn_int_to_str, natives);
-    add_native("time", 0, native_time, natives);
-    add_native("sleep", 1, native_sleep, natives);
-	add_native("readln", 0, native_readln, natives);
+    add_native("time", 0, native_fn_time, natives);
+    add_native("millis", 0, native_fn_time_millis, natives);
+    add_native("sleep", 1, native_fn_time_sleep, natives);
+	add_native("readln", 0, native_fn_io_readln, natives);
 
 	RawStr *source = utils_read_source(source_path);
     char *module_path = compile_clone_str(source_path);

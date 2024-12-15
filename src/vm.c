@@ -864,40 +864,40 @@ void execute(uint8_t chunk, VM *vm){
                 }else if(strcmp(symbol, "is_core") == 0){
                     push_bool((uint8_t)str->core, vm);
                 }else if(strcmp(symbol, "char_at") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "char_at", str, native_fn_char_at, vm), vm);
+                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "char_at", str, native_fn_str_char_at, vm), vm);
                     push_native_fn(native_fn, vm);
                 }else if(strcmp(symbol, "sub_str") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(2, "sub_str", str, native_fn_sub_str, vm), vm);
+                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(2, "sub_str", str, native_fn_str_sub_str, vm), vm);
                     push_native_fn(native_fn, vm);
                 }else if(strcmp(symbol, "char_code") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "char_code", str, native_fn_char_code, vm), vm);
+                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "char_code", str, native_fn_str_char_code, vm), vm);
                     push_native_fn(native_fn, vm);
                 }else if(strcmp(symbol, "split") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "split", str, native_fn_split, vm), vm);
+                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "split", str, native_fn_str_split, vm), vm);
                     push_native_fn(native_fn, vm);
                 }else if(strcmp(symbol, "lstrip") == 0){
-					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "lstrip", str, native_fn_lstrip, vm), vm);
+					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "lstrip", str, native_fn_str_lstrip, vm), vm);
 					push_native_fn(native_fn, vm);
 				}else if(strcmp(symbol, "rstrip") == 0){
-					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "rstrip", str, native_fn_rstrip, vm), vm);
+					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "rstrip", str, native_fn_str_rstrip, vm), vm);
 					push_native_fn(native_fn, vm);
 				}else if(strcmp(symbol, "strip") == 0){
-					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "strip", str, native_fn_strip, vm), vm);
+					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "strip", str, native_fn_str_strip, vm), vm);
 					push_native_fn(native_fn, vm);
 				}else if(strcmp(symbol, "lower") == 0){
-					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "lower", str, native_fn_lower, vm), vm);
+					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "lower", str, native_fn_str_lower, vm), vm);
 					push_native_fn(native_fn, vm);
 				}else if(strcmp(symbol, "upper") == 0){
-					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "upper", str, native_fn_upper, vm), vm);
+					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "upper", str, native_fn_str_upper, vm), vm);
 					push_native_fn(native_fn, vm);
 				}else if(strcmp(symbol, "title") == 0){
-					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "title", str, native_fn_title, vm), vm);
+					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "title", str, native_fn_str_title, vm), vm);
 					push_native_fn(native_fn, vm);
 				}else if(strcmp(symbol, "compare") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "compare", str, native_fn_cmp, vm), vm);
+                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "compare", str, native_fn_str_cmp, vm), vm);
                     push_native_fn(native_fn, vm);
                 }else if(strcmp(symbol, "compare_ignore") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "compare_ignore", str, native_fn_cmp_ic, vm), vm);
+                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "compare_ignore", str, native_fn_str_cmp_ic, vm), vm);
                     push_native_fn(native_fn, vm);
                 }else{
                     vm_utils_error(vm, "string do not have symbol named as '%s'", symbol);
@@ -955,13 +955,13 @@ void execute(uint8_t chunk, VM *vm){
 
             if(vm_utils_is_dict(value, &dict)){
                 if(strcmp(symbol, "contains") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "contains", dict, native_dict_contains, vm), vm);
+                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "contains", dict, native_fn_dict_contains, vm), vm);
                     push_native_fn(native_fn, vm);
                 }else if(strcmp(symbol, "get") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "get", dict, native_dict_get, vm), vm);
+                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "get", dict, native_fn_dict_get, vm), vm);
                     push_native_fn(native_fn, vm);
                 }else if(strcmp(symbol, "put") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(2, "put", dict, native_dict_put, vm), vm);
+                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(2, "put", dict, native_fn_dict_put, vm), vm);
                     push_native_fn(native_fn, vm);
                 }else if(strcmp(symbol, "remove") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "remove", dict, native_fn_dict_remove, vm), vm);
