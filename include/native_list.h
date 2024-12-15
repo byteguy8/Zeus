@@ -11,7 +11,7 @@ Value native_fn_list_get(uint8_t argc, Value *values, void *target, VM *vm){
 
     VALIDATE_INDEX(&values[0], index, list->used)
 
-    return *(Value *)dynarr_get((size_t)index, list);
+    return DYNARR_GET_AS(Value, (size_t)index, list);
 }
 
 Value native_fn_list_insert(uint8_t argc, Value *values, void *target, VM *vm){
@@ -32,7 +32,7 @@ Value native_fn_list_insert_at(uint8_t argc, Value *values, void *target, VM *vm
 
     VALIDATE_INDEX(index_value, index, list->used)
 
-    Value out_value = *(Value *)dynarr_get((size_t)index, list);
+    Value out_value = DYNARR_GET_AS(Value, (size_t)index, list);
 
     if(dynarr_insert_at((size_t) index, value, list))
         vm_utils_error(vm, "Failed to insert value in list: out of memory");
@@ -48,9 +48,9 @@ Value native_fn_list_set(uint8_t argc, Value *values, void *target, VM *vm){
 
     VALIDATE_INDEX(index_value, index, list->used)
 
-    Value out_value = *(Value *)dynarr_get((size_t)index, list);
+    Value out_value = DYNARR_GET_AS(Value, (size_t)index, list);
 
-    dynarr_set(value, (size_t)index, list);
+    DYNARR_SET(value, (size_t)index, list);
 
     return out_value;
 }
@@ -62,7 +62,7 @@ Value native_fn_list_remove(uint8_t argc, Value *values, void *target, VM *vm){
 
     VALIDATE_INDEX(index_value, index, list->used)
 
-    Value out_value = *(Value *)dynarr_get((size_t)index, list);
+    Value out_value = DYNARR_GET_AS(Value, (size_t)index, list);
 
     dynarr_remove_index((size_t)index, list);
     
@@ -100,16 +100,16 @@ Value native_fn_list_append_new(uint8_t argsc, Value *values, void *target, VM *
 	DynArr *list = list_obj->value.list;
 
 	for(size_t i = 0; i < to->used; i++){
-		Value *value = dynarr_get(i, to);
+		Value value = DYNARR_GET_AS(Value, i, to);
 	
-		if(dynarr_insert(value, list))
+		if(dynarr_insert(&value, list))
 			vm_utils_error(vm, "Out of memory");
 	}
 
 	for(size_t i = 0; i < from->used; i++){
-		Value *value = dynarr_get(i, from);
+		Value value = DYNARR_GET_AS(Value, i, from);
 	
-		if(dynarr_insert(value, list))
+		if(dynarr_insert(&value, list))
 			vm_utils_error(vm, "Out of memory");
 	}
 

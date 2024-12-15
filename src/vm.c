@@ -63,14 +63,10 @@ char *multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm){
 	return b;
 }
 
-Frame *current_frame(VM *vm){
-    if(vm->frame_ptr == 0)
-        vm_utils_error(vm, "Frame stack is empty");
-
-    return &vm->frame_stack[vm->frame_ptr - 1];
-}
-
-#define CURRENT_LOCALS(vm)(current_frame(vm)->locals)
+#define CURRENT_FRAME(vm)(&vm->frame_stack[vm->frame_ptr - 1])
+#define CURRENT_LOCALS(vm)(CURRENT_FRAME(vm)->locals)
+#define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
+#define CURRENT_CHUNKS(vm)(CURRENT_FN(vm)->chunks)
 
 Frame *frame_up(char *name, VM *vm){
     if(vm->frame_ptr >= FRAME_LENGTH)
@@ -198,36 +194,27 @@ void print_stack(VM *vm){
     }
 }
 
-int is_at_end(VM *vm){
-    Frame *frame = current_frame(vm);
-    DynArr *chunks = frame->fn->chunks;
-    return frame->ip >= chunks->used;
-}
-
-uint8_t advance(VM *vm){
-    Frame *frame = current_frame(vm);
-    DynArr *chunks = frame->fn->chunks;
-    return *(uint8_t *)dynarr_get(frame->ip++, chunks);
-}
+#define IS_AT_END(vm)(CURRENT_FRAME(vm)->ip >= CURRENT_CHUNKS(vm)->used)
+#define ADVANCE(vm)(DYNARR_GET_AS(uint8_t, CURRENT_FRAME(vm)->ip++, CURRENT_CHUNKS(vm)))
 
 int32_t read_i32(VM *vm){
 	uint8_t bytes[4];
 
 	for(size_t i = 0; i < 4; i++)
-		bytes[i] = advance(vm);
+		bytes[i] = ADVANCE(vm);
 
 	return compose_i32(bytes);
 }
 
 int64_t read_i64_const(VM *vm){
-    Module *module = current_frame(vm)->fn->module;
+    Module *module = CURRENT_FRAME(vm)->fn->module;
     DynArr *constants = module->constants;
     int32_t index = read_i32(vm);
-    return *(int64_t *)dynarr_get(index, constants);
+    return DYNARR_GET_AS(int64_t, index, constants);
 }
 
 char *read_str(VM *vm, uint32_t *out_hash){
-    Module *module = current_frame(vm)->fn->module;
+    Module *module = CURRENT_FRAME(vm)->fn->module;
     LZHTable *strings = module->strings;
     uint32_t hash = (uint32_t)read_i32(vm);
     if(out_hash) *out_hash = hash;
@@ -574,20 +561,20 @@ void execute(uint8_t chunk, VM *vm){
         }
         case LSET_OPCODE:{
             Value *value = peek(vm);
-            uint8_t index = advance(vm);
-            current_frame(vm)->locals[index] = *value;
+            uint8_t index = ADVANCE(vm);
+            CURRENT_FRAME(vm)->locals[index] = *value;
             break;
         }
         case LGET_OPCODE:{
-            uint8_t index = advance(vm);
-            Value value = current_frame(vm)->locals[index];
+            uint8_t index = ADVANCE(vm);
+            Value value = CURRENT_FRAME(vm)->locals[index];
             push(value, vm);
             break;
         }
         case GSET_OPCODE:{
             Value *value = peek(vm);
             uint32_t hash = (uint32_t)read_i32(vm);
-            Module *module = current_frame(vm)->fn->module;
+            Module *module = CURRENT_FRAME(vm)->fn->module;
             LZHTable *globals = module->globals;
             LZHTableNode *node = NULL;
 
@@ -603,7 +590,7 @@ void execute(uint8_t chunk, VM *vm){
         case GGET_OPCODE:{
             uint32_t hash = 0;
             char *symbol = read_str(vm, &hash);
-            Module *module = current_frame(vm)->fn->module;
+            Module *module = CURRENT_FRAME(vm)->fn->module;
             LZHTable *globals = module->globals;
             LZHTableNode *node = NULL;
 
@@ -631,7 +618,7 @@ void execute(uint8_t chunk, VM *vm){
         }
 		case SGET_OPCODE:{
 			char *key = read_str(vm, NULL);
-            Module *module = current_frame(vm)->fn->module;
+            Module *module = CURRENT_FRAME(vm)->fn->module;
 			push_module_symbol(key, module, vm);
 			break;
 		}
@@ -691,8 +678,8 @@ void execute(uint8_t chunk, VM *vm){
             int32_t jmp_value = read_i32(vm);
             if(jmp_value == 0) break;
             
-            if(jmp_value > 0) current_frame(vm)->ip += jmp_value - 1;
-            else current_frame(vm)->ip += jmp_value - 5;
+            if(jmp_value > 0) CURRENT_FRAME(vm)->ip += jmp_value - 1;
+            else CURRENT_FRAME(vm)->ip += jmp_value - 5;
 
             break;
         }
@@ -702,8 +689,8 @@ void execute(uint8_t chunk, VM *vm){
 			if(jmp_value == 0) break;
 
             if(!condition){
-                if(jmp_value > 0) current_frame(vm)->ip += jmp_value - 1;
-                else current_frame(vm)->ip += jmp_value - 5;
+                if(jmp_value > 0) CURRENT_FRAME(vm)->ip += jmp_value - 1;
+                else CURRENT_FRAME(vm)->ip += jmp_value - 5;
             }
 
 			break;
@@ -714,8 +701,8 @@ void execute(uint8_t chunk, VM *vm){
 			if(jmp_value == 0) break;
 
 			if(condition){
-                if(jmp_value > 0) current_frame(vm)->ip += jmp_value - 1;
-                else current_frame(vm)->ip += jmp_value - 5;
+                if(jmp_value > 0) CURRENT_FRAME(vm)->ip += jmp_value - 1;
+                else CURRENT_FRAME(vm)->ip += jmp_value - 5;
             }
 
 			break;
@@ -774,7 +761,7 @@ void execute(uint8_t chunk, VM *vm){
             break;
         }
 		case RECORD_OPCODE:{
-			uint8_t len = advance(vm);
+			uint8_t len = ADVANCE(vm);
 			Obj *record_obj = vm_utils_record_obj(len == 0, vm);
 
 			if(!record_obj) vm_utils_error(vm, "Out of memory");
@@ -817,7 +804,7 @@ void execute(uint8_t chunk, VM *vm){
         case CALL_OPCODE:{
             Fn *fn = NULL;
             NativeFn *native_fn = NULL;
-            uint8_t args_count = advance(vm);
+            uint8_t args_count = ADVANCE(vm);
 
             if(vm_utils_is_function(peek_at(args_count, vm), &fn)){
                 uint8_t params_count = fn->params ? fn->params->used : 0;
@@ -831,7 +818,7 @@ void execute(uint8_t chunk, VM *vm){
                     int from = (int)(args_count == 0 ? 0 : args_count - 1);
 
                     for (int i = from; i >= 0; i--)
-                        current_frame(vm)->locals[i] = *pop(vm);
+                        CURRENT_FRAME(vm)->locals[i] = *pop(vm);
                 }
 
                 pop(vm);
@@ -926,10 +913,10 @@ void execute(uint8_t chunk, VM *vm){
                     push_i64((int64_t)(list->count - DYNARR_LEN(list)), vm);
                 }else if(strcmp(symbol, "first") == 0){
                     if(DYNARR_LEN(list) == 0) push_empty(vm);
-                    else push(*(Value *)dynarr_get(0, list), vm);
+                    else push(DYNARR_GET_AS(Value, 0, list), vm);
                 }else if(strcmp(symbol, "last") == 0){
                     if(DYNARR_LEN(list) == 0) push_empty(vm);
-                    else push(*(Value *)dynarr_get(DYNARR_LEN(list) - 1, list), vm);
+                    else push(DYNARR_GET_AS(Value, DYNARR_LEN(list) - 1, list), vm);
                 }else if(strcmp(symbol, "get") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "get", list, native_fn_list_get, vm), vm);
                     push_native_fn(native_fn, vm);
@@ -1018,7 +1005,7 @@ void execute(uint8_t chunk, VM *vm){
         }
 		case IS_OPCODE:{
 			Value *value = pop(vm);
-			uint8_t type = advance(vm);
+			uint8_t type = ADVANCE(vm);
 
 			if(IS_OBJ(value)){
 				Obj *obj = GET_OBJ(value);
@@ -1124,8 +1111,8 @@ void resolve_module(Module *module, VM *vm){
     vm->module = module;
     frame_up("import", vm);
 
-    while (!is_at_end(vm)){
-        uint8_t chunk = advance(vm);
+    while (!IS_AT_END(vm)){
+        uint8_t chunk = ADVANCE(vm);
         execute(chunk, vm);
     }
 
@@ -1160,8 +1147,8 @@ int vm_execute(
 
         frame_up("main", vm);
 
-        while (!is_at_end(vm)){
-            uint8_t chunk = advance(vm);
+        while (!IS_AT_END(vm)){
+            uint8_t chunk = ADVANCE(vm);
             execute(chunk, vm);
         }
 

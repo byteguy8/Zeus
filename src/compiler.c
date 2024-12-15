@@ -269,7 +269,7 @@ size_t write_chunk(uint8_t chunk, Compiler *compiler){
 
 void update_chunk(size_t index, uint8_t chunk, Compiler *compiler){
 	DynArr *chunks = current_chunks(compiler);
-	dynarr_set(&chunk, index, chunks);
+    DYNARR_SET(&chunk, index, chunks);
 }
 
 size_t write_i32(int32_t i32, Compiler *compiler){
@@ -291,7 +291,7 @@ void update_i32(size_t index, int32_t i32, Compiler *compiler){
 	descompose_i32(i32, bytes);
 
 	for(size_t i = 0; i < 4; i++)
-		dynarr_set(bytes + i, index + i, chunks);
+        DYNARR_SET(bytes + i, index + i, chunks);
 }
 
 size_t write_i64_const(int64_t i64, Compiler *compiler){

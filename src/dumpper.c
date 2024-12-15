@@ -16,7 +16,7 @@ static int is_at_end(Dumpper *dumpper){
 
 static uint8_t advance(Dumpper *dumpper){
     DynArr *chunks = dumpper->chunks;
-    return *(uint8_t *)dynarr_get(dumpper->ip++, chunks);
+    return DYNARR_GET_AS(uint8_t, dumpper->ip++, chunks);
 }
 
 static int32_t read_i32(Dumpper *dumpper){
@@ -32,7 +32,7 @@ static int64_t read_i64_const(Dumpper *dumpper){
     Module *module = dumpper->current_module;
     DynArr *constants = module->constants;
     int32_t index = read_i32(dumpper);
-    return *(int64_t *)dynarr_get(index, constants);
+    return DYNARR_GET_AS(int64_t, index, constants);
 }
 
 static char *read_str(Dumpper *dumpper, uint32_t *out_hash){
