@@ -1020,8 +1020,8 @@ void execute(uint8_t chunk, VM *vm){
 			Value *value = pop(vm);
 			uint8_t type = advance(vm);
 
-			if(value->type == OBJ_VTYPE){
-				Obj *obj = value->literal.obj;
+			if(IS_OBJ(value)){
+				Obj *obj = GET_OBJ(value);
 
 				switch(obj->type){
 					case STR_OTYPE:{
@@ -1033,8 +1033,12 @@ void execute(uint8_t chunk, VM *vm){
 					}case DICT_OTYPE:{
 						push(BOOL_VALUE(type == 5), vm);
 						break;
+					}case RECORD_OTYPE:{
+						push(BOOL_VALUE(type == 6), vm);
+						break;
 					}default:{
-						assert("Illegal object type");
+						vm_utils_error(vm, "Illegal object type");
+                        break;
 					}
 				}
 			}else{
@@ -1049,7 +1053,8 @@ void execute(uint8_t chunk, VM *vm){
 						push(BOOL_VALUE(type == 2), vm);
 						break;
 					}default:{
-						assert("Illegal value type");
+						vm_utils_error(vm, "Illegal value type");
+                        break;
 					}
 				}
 			}

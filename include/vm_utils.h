@@ -52,6 +52,10 @@ void *assert_ptr(void *ptr, VM *vm);
     if(index < 0 || index >= (int64_t)len)\
         vm_utils_error(vm, "'%s' out of bounds. Must be 0 >= index(%ld) < len(%ld)", name, index, len);
 
+#define IS_OBJ(value)(value->type == OBJ_VTYPE)
+
+#define GET_OBJ(value)(value->literal.obj)
+
 #define EMPTY_VALUE ((Value){.type = EMPTY_VTYPE})
 #define INT_VALUE(value)((Value){.type = INT_VTYPE, .literal.i64 = value})
 #define BOOL_VALUE(value)((Value){.type = BOOL_VTYPE, .literal.bool = value})

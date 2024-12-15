@@ -141,13 +141,14 @@ Expr *parse_is_expr(Parser *parser){
 
 		is_token = previous(parser);
 
-		if(match(parser, 6, 
+		if(match(parser, 7, 
 			             EMPTY_TOKTYPE,
 					     BOOL_TOKTYPE,
 					     INT_TOKTYPE,
 					     STR_TOKTYPE,
 					     LIST_TOKTYPE,
-					     DICT_TOKTYPE)){
+					     DICT_TOKTYPE,
+                         RECORD_TOKTYPE)){
 			type_token = previous(parser);
 		}
 

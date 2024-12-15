@@ -736,7 +736,10 @@ void compile_expr(Expr *expr, Compiler *compiler){
 				}case DICT_TOKTYPE:{
 					write_chunk(5, compiler);
 					break;
-				}default:{
+				}case RECORD_TOKTYPE:{
+                    write_chunk(6, compiler);
+					break;
+                } default:{
 					assert("Illegal type value");
 				}
 			}
