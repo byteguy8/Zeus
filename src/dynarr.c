@@ -70,8 +70,8 @@ struct dynarr *dynarr_create(size_t item_size, struct dynarr_allocator *allocato
 
     dynarr->used = 0;
     dynarr->count = 0;
-    dynarr->padding = padding_size(item_size);
     dynarr->size = item_size;
+    dynarr->padding = padding_size(item_size);
     dynarr->items = NULL;
     dynarr->allocator = allocator;
 
@@ -89,12 +89,20 @@ void dynarr_destroy(struct dynarr *dynarr){
     lzdealloc(dynarr, DYNARR_SIZE, allocator);
 }
 
-void *dynarr_get(size_t index, struct dynarr *dynarr){
-    return DYNARR_POSITION(index, dynarr);
-}
+void dynarr_reverse(struct dynarr *dynarr){
+    size_t until = DYNARR_LEN(dynarr) / 2;
 
-void dynarr_set(void *item, size_t index, struct dynarr *dynarr){
-    memmove(DYNARR_POSITION(index, dynarr), item, dynarr->size);
+    for (size_t left_index = 0; left_index < until; left_index++){
+        size_t right_index = dynarr->used - 1 - left_index;
+        char *left = DYNARR_POSITION(left_index, dynarr);
+        char *right = DYNARR_POSITION(right_index, dynarr);
+        char foo[DYNARR_ITEM_SIZE(dynarr)];
+
+        memcpy(foo, left, DYNARR_ITEM_SIZE(dynarr));
+        
+        DYNARR_SET(right, left_index, dynarr);
+        DYNARR_SET(foo, right_index, dynarr);
+    }
 }
 
 int dynarr_insert(void *item, struct dynarr *dynarr){
@@ -163,9 +171,10 @@ void dynarr_remove_index(size_t index, struct dynarr *dynarr){
     dynarr->used--;
 }
 
-void dynarr_remove_all(struct dynarr *dynarr){
-    dynarr_resize(DYNARR_DEFAULT_GROW_SIZE, dynarr);
-    dynarr->used = 0;
+int dynarr_remove_all(struct dynarr *dynarr){
+    if(!dynarr_resize(DYNARR_DEFAULT_GROW_SIZE, dynarr))
+        dynarr->used = 0;
+    return 1;
 }
 
 struct dynarr_ptr *dynarr_ptr_create(struct dynarr_allocator *allocator){

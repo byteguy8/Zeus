@@ -137,7 +137,7 @@ void print_obj(Obj *object){
         }
 		case RECORD_OTYPE:{
 			Record *record = object->value.record;
-			printf("<record %ld at %p>\n", record->key_values->n, record);
+			printf("<record %ld at %p>\n", record->key_values ? record->key_values->n : 0, record);
 			break;
 		}
         case FN_OTYPE:{
@@ -910,7 +910,9 @@ void execute(uint8_t chunk, VM *vm){
                 if(strcmp(symbol, "size") == 0){
                     push_i64((int64_t)list->used, vm);
                 }else if(strcmp(symbol, "capacity") == 0){
-                    push_i64((int64_t)(list->count - DYNARR_LEN(list)), vm);
+                    push_i64((int64_t)(list->count), vm);
+                }else if(strcmp(symbol, "available") == 0){
+                    push_i64((int64_t)DYNARR_AVAILABLE(list), vm);
                 }else if(strcmp(symbol, "first") == 0){
                     if(DYNARR_LEN(list) == 0) push_empty(vm);
                     else push(DYNARR_GET_AS(Value, 0, list), vm);
@@ -940,6 +942,9 @@ void execute(uint8_t chunk, VM *vm){
                     push_native_fn(native_fn, vm);
                 }else if(strcmp(symbol, "clear") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "clear", list, native_fn_list_clear, vm), vm);
+                    push_native_fn(native_fn, vm);
+                }else if(strcmp(symbol, "reverse") == 0){
+                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "reverse", list, native_fn_list_reverse, vm), vm);
                     push_native_fn(native_fn, vm);
                 }else{
                     vm_utils_error(vm, "list do not have symbol named as '%s'", symbol);

@@ -120,9 +120,16 @@ Value native_fn_list_clear(uint8_t argc, Value *values, void *target, VM *vm){
     DynArr *list = (DynArr *)target;
     int64_t list_len = (int64_t)list->used;
 
-    dynarr_remove_all(list);
+    if(!dynarr_remove_all(list))
+        vm_utils_error(vm, "Failed to clear list. Memory error");
 
     return INT_VALUE(list_len);
+}
+
+Value native_fn_list_reverse(uint8_t argsc, Value *values, void *target, VM *vm){
+    DynArr *list = (DynArr *)target;
+    dynarr_reverse(list);
+    return EMPTY_VALUE;
 }
 
 #endif
