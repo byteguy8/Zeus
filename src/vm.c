@@ -241,8 +241,7 @@ Value *peek(VM *vm){
 
 void push(Value value, VM *vm){
     if(vm->stack_ptr >= STACK_LENGTH) vm_utils_error(vm, "Stack over flow");
-    Value *current_value = &vm->stack[vm->stack_ptr++];
-    memcpy(current_value, &value, sizeof(Value));
+    vm->stack[vm->stack_ptr++] = value;
 }
 
 Value *peek_at(int offset, VM *vm){
@@ -576,7 +575,7 @@ void execute(uint8_t chunk, VM *vm){
         case LSET_OPCODE:{
             Value *value = peek(vm);
             uint8_t index = advance(vm);
-            memcpy(&current_frame(vm)->locals[index], value, sizeof(Value));
+            current_frame(vm)->locals[index] = *value;
             break;
         }
         case LGET_OPCODE:{
@@ -593,7 +592,7 @@ void execute(uint8_t chunk, VM *vm){
             LZHTableNode *node = NULL;
 
             if(lzhtable_hash_contains(hash, globals, &node))
-                memcpy(node->value, value, sizeof(Value));
+                *(Value *)node->value = *value;
             else{
                 Value *new_value = vm_utils_clone_value(value, vm);
                 lzhtable_hash_put(hash, new_value, globals);
@@ -653,8 +652,7 @@ void execute(uint8_t chunk, VM *vm){
 			if(!lzhtable_hash_contains(hash, record->key_values, &node))
 				vm_utils_error(vm, "Record do not contains key '%s'", symbol);
 
-			Value *to = (Value *)node->value;
-			memcpy(to, value, sizeof(Value));
+            *(Value *)node->value = *value;
 
 			break;
 		}
@@ -825,7 +823,7 @@ void execute(uint8_t chunk, VM *vm){
                 uint8_t params_count = fn->params ? fn->params->used : 0;
 
                 if(params_count != args_count)
-                    vm_utils_error(vm, "Failed to call function '%s'.\n\tDeclared with %d parameter(s), but got %d argument(s).", fn->name, params_count, args_count);
+                    vm_utils_error(vm, "Failed to call function '%s'. Declared with %d parameter(s), but got %d argument(s)", fn->name, params_count, args_count);
 
                 frame_up_fn(fn, vm);
 
@@ -833,7 +831,7 @@ void execute(uint8_t chunk, VM *vm){
                     int from = (int)(args_count == 0 ? 0 : args_count - 1);
 
                     for (int i = from; i >= 0; i--)
-                        memcpy(current_frame(vm)->locals + i, pop(vm), sizeof(Value));
+                        current_frame(vm)->locals[i] = *pop(vm);
                 }
 
                 pop(vm);
@@ -853,7 +851,7 @@ void execute(uint8_t chunk, VM *vm){
                 Value values[args_count];
                 
                 for (int i = args_count; i > 0; i--)
-                    memcpy(values + (i - 1), pop(vm), sizeof(Value));
+                    values[i - 1] = *pop(vm);
                 
                 pop(vm);
 
@@ -1098,7 +1096,7 @@ void execute(uint8_t chunk, VM *vm){
 						throw = 0;
 						frame->ip = try->catch;
 						vm->frame_ptr = ptr + 1;
-						memcpy(&frame->locals[try->local], value, sizeof(Value));
+                        frame->locals[try->local] = *value;
 
 						break;
 					}

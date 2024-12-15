@@ -360,7 +360,7 @@ OK:
 Value *vm_utils_clone_value(Value *value, VM *vm){
     Value *clone = (Value *)malloc(sizeof(Value));
     if(!clone) return NULL;
-    memcpy(clone, value, sizeof(Value));
+    *clone = *value;
     return clone;
 }
 
