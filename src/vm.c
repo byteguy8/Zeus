@@ -370,6 +370,9 @@ int64_t pop_i64_assert(VM *vm, char *err_msg, ...){
 }
 
 void execute(uint8_t chunk, VM *vm){
+    Frame *frame = CURRENT_FRAME(vm);
+    frame->last_offset = frame->ip - 1;
+
     switch (chunk){
         case EMPTY_OPCODE:{
             Value value = {0};

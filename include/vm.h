@@ -12,6 +12,7 @@
 
 typedef struct frame{
     size_t ip;
+    size_t last_offset;
     Fn *fn;
     Value locals[LOCALS_LENGTH];
 }Frame;

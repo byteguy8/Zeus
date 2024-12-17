@@ -29,10 +29,17 @@ typedef struct try_block{
     struct try_block *outer;
 }TryBlock;
 
+typedef struct opcode_location{
+	size_t offset;
+	int line;
+    char *filepath;
+}OPCodeLocation;
+
 typedef struct fn{
     char *name;
     DynArr *chunks;
     DynArrPtr *params;
+	DynArr *locations;
     Module *module;
 }Fn;
 

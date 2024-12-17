@@ -41,6 +41,7 @@ typedef struct block_stmt{
 }BlockStmt;
 
 typedef struct if_stmt{
+    Token *if_token;
 	Expr *if_condition;
 	DynArrPtr *if_stmts;
 	DynArrPtr *else_stmts;
@@ -55,6 +56,7 @@ typedef struct continue_stmt{
 }ContinueStmt;
 
 typedef struct while_stmt{
+    Token *while_token;
 	Expr *condition;
 	DynArrPtr *stmts;
 }WhileStmt;

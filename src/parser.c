@@ -668,9 +668,12 @@ DynArrPtr *parse_block_stmt(Parser *parser){
 }
 
 Stmt *parse_if_stmt(Parser *parser){
+    Token *if_token = NULL;
 	Expr *if_condition = NULL;
 	DynArrPtr *if_stmts = NULL;
 	DynArrPtr *else_stmts = NULL;
+
+    if_token = previous(parser);
 
 	consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'if' keyword.");
 	if_condition = parse_expr(parser);
@@ -685,6 +688,7 @@ Stmt *parse_if_stmt(Parser *parser){
 	}
 
 	IfStmt *if_stmt = (IfStmt *)A_COMPILE_ALLOC(sizeof(IfStmt));
+    if_stmt->if_token = if_token;
 	if_stmt->if_condition = if_condition;
 	if_stmt->if_stmts = if_stmts;
 	if_stmt->else_stmts = else_stmts;
@@ -693,7 +697,8 @@ Stmt *parse_if_stmt(Parser *parser){
 }
 
 Stmt *parse_while_stmt(Parser *parser){
-	Expr *condition = NULL;
+	Token *while_token = NULL;
+    Expr *condition = NULL;
 	DynArrPtr *stmts = NULL;
 
 	consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'while' keyword.");
@@ -704,6 +709,7 @@ Stmt *parse_while_stmt(Parser *parser){
 	stmts = parse_block_stmt(parser);
 
 	WhileStmt *while_stmt = (WhileStmt *)A_COMPILE_ALLOC(sizeof(WhileStmt));
+    while_stmt->while_token = while_token;
 	while_stmt->condition = condition;
 	while_stmt->stmts = stmts;
 

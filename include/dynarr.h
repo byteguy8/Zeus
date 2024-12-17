@@ -46,6 +46,8 @@ void dynarr_destroy(struct dynarr *dynarr);
 #define DYNARR_LEN(dynarr)(dynarr->used)
 #define DYNARR_AVAILABLE(dynarr)(dynarr->count - dynarr->used)
 void dynarr_reverse(struct dynarr *dyarr);
+void dynarr_sort(int (*comparator)(void *a, void *b), struct dynarr *dynarr);
+int dynarr_find(void *b, int (*comparator)(void *a, void *b), struct dynarr *dynarr);
 
 #define DYNARR_GET(index, dynarr)(dynarr->items + ((dynarr->padding + dynarr->size) * index))
 #define DYNARR_GET_AS(as, index, arr)(*(as *)(DYNARR_GET(index, arr)))
