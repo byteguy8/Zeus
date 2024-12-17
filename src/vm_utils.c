@@ -146,20 +146,31 @@ int compare_locations(void *a, void *b){
 	else return 0;
 }
 
+#define CURRENT_FRAME(vm)(&vm->frame_stack[vm->frame_ptr - 1])
+#define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
+#define CURRENT_LOCATIONS(vm)(CURRENT_FN(vm)->locations)
 #define FIND_LOCATION(index, arr)(dynarr_find(&((OPCodeLocation){.offset = index, .line = -1}), compare_locations, arr))
 
 void vm_utils_error(VM *vm, char *msg, ...){
-	Frame *frame = &vm->frame_stack[vm->frame_ptr - 1];
-	Fn *fn = frame->fn;
-	DynArr *locations = fn->locations;
+	Frame *frame = CURRENT_FRAME(vm);
+	DynArr *locations = CURRENT_LOCATIONS(vm);
 	int index = FIND_LOCATION(frame->last_offset, locations);
-
-	OPCodeLocation *location = (OPCodeLocation *)DYNARR_GET((size_t)index, locations);
+	OPCodeLocation *location = index == -1 ?
+		NULL : (OPCodeLocation *)DYNARR_GET((size_t)index, locations);
 
     va_list args;
 	va_start(args, msg);
+	
+	if(location)
+		fprintf(
+			stderr,
+			"Runtime error at '%s' in line %d:\n\t",
+			location->filepath,
+			location->line
+		);
+	else
+		fprintf(stderr, "Runtime error (underterminated location):\n\t");
 
-	fprintf(stderr, "Runtime error at '%s' in line %d:\n\t", location->filepath, location->line);
 	vfprintf(stderr, msg, args);
     fprintf(stderr, "\n");
 

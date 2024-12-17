@@ -21,7 +21,6 @@ static void push_bool(uint8_t bool, VM *vm);
 static void push_empty(VM *vm);
 static void push_i64(int64_t i64, VM *vm);
 static void push_str(Str *str, VM *vm);
-static void push_list(DynArr *list, VM *vm);
 static void push_native_fn(NativeFn *native, VM *vm);
 static void push_module(Module *module, VM *vm);
 static void push_module_symbol(char *name, Module *module, VM *vm);
@@ -267,17 +266,6 @@ void push_str(Str *str, VM *vm){
     Value value = {0};
     value.type = OBJ_VTYPE;
     value.literal.obj = str_obj;
-
-    push(value, vm);
-}
-
-void push_list(DynArr *list, VM *vm){
-    Obj *obj = vm_utils_obj(LIST_OTYPE, vm);
-    obj->value.list = list;
-
-    Value value = {0};
-    value.type = OBJ_VTYPE;
-    value.literal.obj = obj;
 
     push(value, vm);
 }

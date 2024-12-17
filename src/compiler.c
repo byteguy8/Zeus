@@ -1262,7 +1262,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 				size_t start = chunks_len(compiler);
                 try_block->catch = start;
 
-                Scope *scope = scope_in(CATCH_SCOPE, compiler);
+                scope_in(CATCH_SCOPE, compiler);
 				Symbol *symbol = declare(IMUT_SYMTYPE, err_identifier, compiler);
 
 				try_block->local = symbol->local;
