@@ -39,7 +39,6 @@ VM *vm_create();
 void vm_print_stack(VM *vm);
 int vm_execute(
     LZHTable *natives,
-    LZHTable *globals,
     Module *module,
     VM *vm
 );
