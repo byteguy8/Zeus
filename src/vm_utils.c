@@ -99,7 +99,7 @@ void mark_objs(VM *vm){
     }
     
     // locals
-    for (size_t frame_ptr = 0; frame_ptr < vm->frame_ptr; frame_ptr++){
+    for (int frame_ptr = 0; frame_ptr < vm->frame_ptr; frame_ptr++){
         Frame *frame = &vm->frame_stack[frame_ptr];
         
         for (size_t local_ptr = 0; local_ptr < LOCALS_LENGTH; local_ptr++){

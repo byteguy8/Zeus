@@ -23,7 +23,7 @@ typedef struct vm{
     int stack_ptr;
     Value stack[STACK_LENGTH];
 
-    size_t frame_ptr;
+    int frame_ptr;
     Frame frame_stack[FRAME_LENGTH];
 
     LZHTable *natives;
@@ -37,10 +37,6 @@ typedef struct vm{
 
 VM *vm_create();
 void vm_print_stack(VM *vm);
-int vm_execute(
-    LZHTable *natives,
-    Module *module,
-    VM *vm
-);
+int vm_execute(LZHTable *natives, Module *module, VM *vm);
 
 #endif
