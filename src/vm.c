@@ -1004,7 +1004,7 @@ void execute(uint8_t chunk, VM *vm){
 			uint8_t type = ADVANCE(vm);
 
 			if(IS_OBJ(value)){
-				Obj *obj = GET_OBJ(value);
+				Obj *obj = TO_OBJ(value);
 
 				switch(obj->type){
 					case STR_OTYPE:{
@@ -1047,10 +1047,37 @@ void execute(uint8_t chunk, VM *vm){
         case THROW_OPCODE:{
 			if(vm->frame_ptr == 0)
 				vm_utils_error(vm, "Can not throw in a empty frame stack");
-
-			char throw = 1;
-            int ptr = (int)vm->frame_ptr;
             
+            Value *value = pop(vm);
+            Str *throw_message = NULL;
+
+            if(IS_STR(value)){
+                throw_message = TO_STR(value);
+            }else if(IS_RECORD(value)){
+                Record *record = TO_RECORD(value);
+
+                if(record->key_values){
+                    char *key = "message";
+                    
+                    uint8_t *k = (uint8_t *)key;
+                    size_t ks = strlen(key);
+                    
+                    LZHTableNode *message_node = NULL;
+
+                    if(lzhtable_contains(k, ks, record->key_values, &message_node)){
+                        Value *value = (Value *)message_node->value;
+
+                        if(!IS_STR(value))
+                            vm_utils_error(vm, "Expect record attribute 'message' to be of type string");
+
+                        throw_message = TO_STR(value);   
+                    }
+                }
+            }
+            
+            char throw = 1;
+            int ptr = (int)vm->frame_ptr;
+
             while(ptr > 0){
                 Frame *frame = &vm->frame_stack[--ptr];
                 Fn *fn = frame->fn;
@@ -1079,8 +1106,6 @@ void execute(uint8_t chunk, VM *vm){
 					}
 
 					if(try){
-						Value *value = pop(vm);
-
 						throw = 0;
 						frame->ip = try->catch;
 						vm->frame_ptr = ptr + 1;
@@ -1091,7 +1116,12 @@ void execute(uint8_t chunk, VM *vm){
                 }
             }
 
-            if(throw) vm_utils_error(vm, "No catch");
+            if(throw){
+                if(throw_message)
+                    vm_utils_error(vm, throw_message->buff);
+                else
+                    vm_utils_error(vm, "");
+            }
             
             break;
         }

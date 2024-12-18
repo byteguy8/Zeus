@@ -1,7 +1,14 @@
 #include "vm_utils.h"
+#include "bstr.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
+
+#define CURRENT_FRAME(vm)(&vm->frame_stack[vm->frame_ptr - 1])
+#define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
+#define CURRENT_LOCATIONS(vm)(CURRENT_FN(vm)->locations)
+#define FIND_LOCATION(index, arr)(dynarr_find(&((OPCodeLocation){.offset = index, .line = -1}), compare_locations, arr))
+#define FRAME_AT(at, vm)(&vm->frame_stack[at])
 
 //> Private Interface
 void destroy_dict_values(void *key, void *value);
@@ -10,6 +17,9 @@ void destroy_obj(Obj *obj, VM *vm);
 void mark_objs(VM *vm);
 void sweep_objs(VM *vm);
 void gc(VM *vm);
+
+int compare_locations(void *a, void *b);
+BStr *prepare_stacktrace(unsigned int spaces, VM *vm);
 //< Private Interface
 
 //> Private Implementation
@@ -135,7 +145,6 @@ void gc(VM *vm){
     mark_objs(vm);
     sweep_objs(vm);
 }
-//< Private Implementation
 
 int compare_locations(void *a, void *b){
 	OPCodeLocation *al = (OPCodeLocation *)a;
@@ -146,35 +155,47 @@ int compare_locations(void *a, void *b){
 	else return 0;
 }
 
-#define CURRENT_FRAME(vm)(&vm->frame_stack[vm->frame_ptr - 1])
-#define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
-#define CURRENT_LOCATIONS(vm)(CURRENT_FN(vm)->locations)
-#define FIND_LOCATION(index, arr)(dynarr_find(&((OPCodeLocation){.offset = index, .line = -1}), compare_locations, arr))
+BStr *prepare_stacktrace(unsigned int spaces, VM *vm){
+	BStr *st = bstr_create_empty();
 
+	for(int i = vm->frame_ptr - 1; i >= 0; i--){
+		Frame *frame = FRAME_AT(i, vm);
+		Fn *fn = frame->fn;
+		DynArr *locations = fn->locations;
+		int index = FIND_LOCATION(frame->last_offset, locations);
+		OPCodeLocation *location = index == -1 ? NULL : (OPCodeLocation *)DYNARR_GET(index, locations);
+
+		if(location)
+			bstr_append_args(
+				st,
+				"%*sin file: '%s' at %s:%d\n",
+                spaces,
+                "",
+                location->filepath,
+				frame->fn->name,
+				location->line
+			);
+		else
+			bstr_append_args(st, "inside function '%s'\n", fn->name);
+
+	}
+
+	return st;
+}
+//< Private Implementation
 void vm_utils_error(VM *vm, char *msg, ...){
-	Frame *frame = CURRENT_FRAME(vm);
-	DynArr *locations = CURRENT_LOCATIONS(vm);
-	int index = FIND_LOCATION(frame->last_offset, locations);
-	OPCodeLocation *location = index == -1 ?
-		NULL : (OPCodeLocation *)DYNARR_GET((size_t)index, locations);
+	BStr *st = prepare_stacktrace(4, vm);
 
     va_list args;
 	va_start(args, msg);
-	
-	if(location)
-		fprintf(
-			stderr,
-			"Runtime error at '%s' in line %d:\n\t",
-			location->filepath,
-			location->line
-		);
-	else
-		fprintf(stderr, "Runtime error (underterminated location):\n\t");
 
+    fprintf(stderr, "Runtime error: ");
 	vfprintf(stderr, msg, args);
     fprintf(stderr, "\n");
+	if(st) fprintf(stderr, "%s", (char *)st->buff);
 
 	va_end(args);
+	bstr_destroy(st);
     vm_utils_clean_up(vm);
 
     longjmp(vm->err_jmp, 1);
