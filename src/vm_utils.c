@@ -14,6 +14,7 @@
 void destroy_dict_values(void *key, void *value);
 void destroy_globals_values(void *ptr);
 void destroy_obj(Obj *obj, VM *vm);
+void mark_value(Value *value);
 void mark_objs(VM *vm);
 void sweep_objs(VM *vm);
 void gc(VM *vm);
@@ -79,39 +80,135 @@ void destroy_obj(Obj *obj, VM *vm){
 	}
 
 	free(obj);
+	vm->objs_size -= sizeof(Obj);
+}
+
+void mark_value(Value *value){
+	if(value-> type != OBJ_VTYPE) return;
+	
+	Obj *obj = value->literal.obj;
+	if(obj->marked) return;
+	
+	switch(obj->type){
+		case STR_OTYPE:{
+			break;
+		}case LIST_OTYPE:{
+			DynArr *list = obj->value.list;
+			Value *value = NULL;
+			
+			for(size_t i = 0; i < DYNARR_LEN(list); i++){
+				value = (Value *)DYNARR_GET(i, list);
+				if(value->type != OBJ_VTYPE) continue;
+				mark_value(value);
+			}
+			
+			break;
+		}case DICT_OTYPE:{
+            LZHTable *dict = obj->value.dict;
+            LZHTableNode *node = dict->head;
+			LZHTableNode *next = NULL;
+			Value *value = NULL;
+			
+			while (node){
+				next = node->next_table_node;
+				value = (Value *)node->value;
+				
+				if(value->type != OBJ_VTYPE){
+					node = next;
+					continue;
+				}
+				
+				mark_value(value);
+				node = next;
+			}
+			
+            break;
+        }case RECORD_OTYPE:{
+			Record *record = obj->value.record;
+			LZHTable *key_values = record->key_values;
+			
+			if(!key_values) break;
+			
+			LZHTableNode *node = key_values->head;
+			LZHTableNode *next = NULL;
+			Value *value = NULL;
+			
+			while (node){
+				next = node->next_table_node;
+				value = (Value *)node->value;
+				
+				if(value->type != OBJ_VTYPE){
+					node = next;
+					continue;
+				}
+				
+				mark_value(value);
+				node = next;
+			}
+			
+			break;
+		}case NATIVE_FN_OTYPE:{
+            break;
+        }case MODULE_OTYPE:{
+			Module *module = obj->value.module;
+			LZHTableNode *node = module->globals->head;
+			LZHTableNode *next = NULL;
+			Value *value = NULL;
+			
+			while (node){
+				next = node->next_table_node;
+				value = (Value *)node->value;
+				
+				if(value->type != OBJ_VTYPE){
+					node = next;
+					continue;
+				}
+				
+				mark_value(value);
+				node = next;
+			}
+    
+            break;
+        }default:{
+			assert("Illegal object type");
+		}
+	}
+	
+	obj->marked = 1;
 }
 
 void mark_objs(VM *vm){
     // globals
-    Frame *frame = &vm->frame_stack[vm->frame_ptr - 1];
-    LZHTableNode *node = frame->fn->module->globals->head;
+    LZHTableNode *node = vm->module->globals->head;
+    LZHTableNode *next = NULL;
     
     while (node){
-        LZHTableNode *next = node->next_table_node;
+        next = node->next_table_node;
         Value *value = (Value *)node->value;
-        if(value->type != OBJ_VTYPE) continue;
-        
-        Obj *obj = value->literal.obj;
-        if(obj->marked) continue;
-        
-        obj->marked = 1;
+        mark_value(value);
         node = next;
     }
     
     // locals
+    Frame *frame = NULL;
+    Value *frame_value = NULL;
+    
     for (int frame_ptr = 0; frame_ptr < vm->frame_ptr; frame_ptr++){
-        Frame *frame = &vm->frame_stack[frame_ptr];
+        frame = &vm->frame_stack[frame_ptr];
         
         for (size_t local_ptr = 0; local_ptr < LOCALS_LENGTH; local_ptr++){
-            Value *value = &frame->locals[local_ptr];
-            if(value->type != OBJ_VTYPE) continue;
-            
-            Obj *obj = value->literal.obj;
-            if(obj->marked) continue;
-            
-            obj->marked = 1;
+            frame_value = &frame->locals[local_ptr];
+            mark_value(frame_value);
         }
     }
+    
+    //stack
+    Value *stack_value = NULL;
+    
+    for(int i = 0; i < vm->stack_ptr; i++){
+		stack_value = &vm->stack[i];
+		mark_value(stack_value);
+	}
 }
 
 void sweep_objs(VM *vm){
@@ -463,8 +560,7 @@ Str *vm_utils_uncore_alloc_str(char *buff, VM *vm){
 }
 
 Obj *vm_utils_obj(ObjType type, VM *vm){
-    if(vm->objs_size >= 67108864)
-        gc(vm);
+    if(vm->objs_size >= 67108864) gc(vm);
 
     Obj *obj = malloc(sizeof(Obj));
     if(!obj) return NULL;
@@ -475,7 +571,9 @@ Obj *vm_utils_obj(ObjType type, VM *vm){
     if(vm->tail){
         obj->prev = vm->tail;
         vm->tail->next = obj;
-    }else vm->head = obj;
+    }else{
+		vm->head = obj;
+	}
 
     vm->tail = obj;
     vm->objs_size += sizeof(Obj);
@@ -641,7 +739,6 @@ void clean_up_module(Module *module){
 
         symbol_node = next;
     }
-
 }
 
 void vm_utils_clean_up(VM *vm){

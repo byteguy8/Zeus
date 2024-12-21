@@ -701,6 +701,7 @@ Stmt *parse_while_stmt(Parser *parser){
     Expr *condition = NULL;
 	DynArrPtr *stmts = NULL;
 
+	while_token = previous(parser);
 	consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'while' keyword.");
 	condition = parse_expr(parser);
 	consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' at end of while statement condition.");
