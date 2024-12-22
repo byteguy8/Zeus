@@ -87,7 +87,9 @@ void mark_value(Value *value){
 	if(value-> type != OBJ_VTYPE) return;
 	
 	Obj *obj = value->literal.obj;
-	if(obj->marked) return;
+	
+    if(obj->marked) return;
+    obj->marked = 1;
 	
 	switch(obj->type){
 		case STR_OTYPE:{
@@ -173,8 +175,6 @@ void mark_value(Value *value){
 			assert("Illegal object type");
 		}
 	}
-	
-	obj->marked = 1;
 }
 
 void mark_objs(VM *vm){
