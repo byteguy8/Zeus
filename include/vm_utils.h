@@ -21,6 +21,8 @@ Str *vm_utils_core_str(char *buff, uint32_t hash, VM *vm);
 Str *vm_utils_uncore_str(char *buff, VM *vm);
 Str *vm_utils_uncore_alloc_str(char *buff, VM *vm);
 
+Obj *vm_utils_core_str_obj(char *buff, VM *vm);
+Obj *vm_utils_uncore_str_obj(char *buff, VM *vm);
 Obj *vm_utils_empty_str_obj(Value *out_value, VM *vm);
 Obj *vm_utils_clone_str_obj(char *buff, Value *out_value, VM *vm);
 Obj *vm_utils_range_str_obj(size_t from, size_t to, char *buff, Value *out_value, VM *vm);

@@ -16,11 +16,39 @@
 //> Private Interface
 static Value *peek(VM *vm);
 
+#define PUSH(value, vm) \
+    if(vm->stack_ptr >= STACK_LENGTH) \
+        vm_utils_error(vm, "Stack over flow"); \
+    vm->stack[vm->stack_ptr++] = value; \
+
+#define PUSH_EMPTY(vm) { \
+    Value empty_value = EMPTY_VALUE; \
+    PUSH(empty_value, vm) \
+}
+
+#define PUSH_BOOL(value, vm) { \
+    Value bool_value = BOOL_VALUE(value); \
+    PUSH(bool_value, vm) \
+}
+
+#define PUSH_INT(value, vm) { \
+    Value int_value = INT_VALUE(value); \
+    PUSH(int_value, vm) \
+}
+
+#define PUSH_CORE_STR(buff, vm){ \
+    Obj *str_obj = vm_utils_core_str_obj(buff, vm); \
+    Value obj_value = OBJ_VALUE(str_obj); \
+    PUSH(obj_value, vm); \
+}
+
+#define PUSH_UNCORE_STR(buff, vm){ \
+    Obj *str_obj = vm_utils_uncore_str_obj(buff, vm); \
+    Value obj_value = OBJ_VALUE(str_obj); \
+    PUSH(obj_value, vm); \
+}
+
 static void push(Value value, VM *vm);
-static void push_bool(uint8_t bool, VM *vm);
-static void push_empty(VM *vm);
-static void push_i64(int64_t i64, VM *vm);
-static void push_str(Str *str, VM *vm);
 static void push_native_fn(NativeFn *native, VM *vm);
 static void push_module(Module *module, VM *vm);
 static void push_module_symbol(char *name, Module *module, VM *vm);
@@ -236,40 +264,6 @@ Value *peek_at(int offset, VM *vm){
     return &vm->stack[at];
 }
 
-void push_bool(uint8_t bool, VM *vm){
-    Value value = {0};
-    value.type = BOOL_VTYPE;
-    value.literal.bool = bool;
-    
-    push(value, vm);
-}
-
-void push_empty(VM *vm){
-    Value value = {0};
-    value.type = EMPTY_VTYPE;
-    
-    push(value, vm);   
-}
-
-void push_i64(int64_t i64, VM *vm){
-    Value value = {0};
-    value.type = INT_VTYPE;
-    value.literal.i64 = i64;
-    
-    push(value, vm);
-}
-
-void push_str(Str *str, VM *vm){
-    Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
-    str_obj->value.str = str;
-
-    Value value = {0};
-    value.type = OBJ_VTYPE;
-    value.literal.obj = str_obj;
-
-    push(value, vm);
-}
-
 void push_fn(Fn *fn, VM *vm){
 	Obj *obj = vm_utils_obj(FN_OTYPE, vm);
 	if(!obj) vm_utils_error(vm, "Out of memory");
@@ -363,30 +357,25 @@ void execute(uint8_t chunk, VM *vm){
 
     switch (chunk){
         case EMPTY_OPCODE:{
-            Value value = {0};
-            push(value, vm);
+            PUSH_EMPTY(vm)
             break;
         }
         case FALSE_OPCODE:{
-            push_bool(0, vm);
+            PUSH_BOOL(0, vm);
             break;
         }
         case TRUE_OPCODE:{
-            push_bool(1, vm);
+            PUSH_BOOL(1, vm);
             break;
         }
         case INT_OPCODE:{
             int64_t i64 = read_i64_const(vm);
-            push_i64(i64, vm);
+            PUSH_INT(i64, vm);
             break;
         }
 		case STRING_OPCODE:{
-			uint32_t hash = 0;
-            char *buff = read_str(vm, &hash);
-            Str *str = vm_utils_core_str(buff, hash, vm);
-            
-            push_str(str, vm);
-			
+            char *buff = read_str(vm, NULL);
+            PUSH_CORE_STR(buff, vm)
             break;
 		}
         case ADD_OPCODE:{
@@ -406,9 +395,7 @@ void execute(uint8_t chunk, VM *vm){
                     vm_utils_error(vm, "Expect string at right side of string concatenation.");
 
                 char *buff = join_buff(astr->buff, astr->len, bstr->buff, bstr->len, vm);
-                Str *out_str = vm_utils_uncore_str(buff, vm);
-
-                push_str(out_str, vm);
+                PUSH_UNCORE_STR(buff, vm);
 
                 break;
             }
@@ -422,14 +409,14 @@ void execute(uint8_t chunk, VM *vm){
             int64_t right = vb->literal.i64;
             int64_t left = va->literal.i64;
 
-            push_i64(left + right, vm);
+            PUSH_INT(left + right, vm)
             
             break;
         }
         case SUB_OPCODE:{
             int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
             int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
-            push_i64(left - right, vm);
+            PUSH_INT(left - right, vm)
             break;
         }
         case MUL_OPCODE:{
@@ -464,9 +451,7 @@ void execute(uint8_t chunk, VM *vm){
                 }
 
                 char *buff = multiply_buff(in_buff, in_buff_len, (size_t)by, vm);
-                Str *out_str = vm_utils_uncore_str(buff, vm);
-                
-                push_str(out_str, vm);
+                PUSH_UNCORE_STR(buff, vm);
 
                 break;
             }
@@ -480,7 +465,7 @@ void execute(uint8_t chunk, VM *vm){
             int64_t right = vb->literal.i64;
             int64_t left = va->literal.i64;
             
-            push_i64(left * right, vm);
+            PUSH_INT(left * right, vm);
             
             break;
 
@@ -488,38 +473,38 @@ void execute(uint8_t chunk, VM *vm){
         case DIV_OPCODE:{
             int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
             int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
-            push_i64(left / right, vm);
+            PUSH_INT(left / right, vm)
             break;
         }
 		case MOD_OPCODE:{
 			int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
             int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
-            push_i64(left % right, vm);
+            PUSH_INT(left % right, vm)
             break;
 
 		}
         case LT_OPCODE:{
             int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
             int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
-            push_bool(left < right, vm);
+            PUSH_BOOL(left < right, vm)
             break;
         }
         case GT_OPCODE:{
             int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
             int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
-            push_bool(left > right, vm);
+            PUSH_BOOL(left > right, vm)
             break;
         }
         case LE_OPCODE:{
             int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
             int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
-            push_bool(left <= right, vm);
+            PUSH_BOOL(left <= right, vm)
             break;
         }
         case GE_OPCODE:{
             int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
             int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
-            push_bool(left >= right, vm);
+            PUSH_BOOL(left >= right, vm)
             break;
         }
         case EQ_OPCODE:{
@@ -527,8 +512,8 @@ void execute(uint8_t chunk, VM *vm){
             Value *right_value = pop(vm);
 
             if((left_value->type == BOOL_VTYPE && right_value->type == BOOL_VTYPE) ||
-            (left_value->type == INT_VTYPE && right_value->type == INT_VTYPE)){
-                push_bool(left_value->literal.i64 == right_value->literal.i64, vm);
+               (left_value->type == INT_VTYPE && right_value->type == INT_VTYPE)){
+                PUSH_BOOL(left_value->literal.i64 == right_value->literal.i64, vm)
                 break;
             }
 
@@ -541,8 +526,8 @@ void execute(uint8_t chunk, VM *vm){
             Value *right_value = pop(vm);
 
             if((left_value->type == BOOL_VTYPE && right_value->type == BOOL_VTYPE) ||
-            (left_value->type == INT_VTYPE && right_value->type == INT_VTYPE)){
-                push_bool(left_value->literal.i64 != right_value->literal.i64, vm);
+               (left_value->type == INT_VTYPE && right_value->type == INT_VTYPE)){
+                PUSH_BOOL(left_value->literal.i64 != right_value->literal.i64, vm)
                 break;
             }
 
@@ -637,23 +622,23 @@ void execute(uint8_t chunk, VM *vm){
         case OR_OPCODE:{
             uint8_t right = pop_bool_assert(vm, "Expect bool at right side.");
             uint8_t left = pop_bool_assert(vm, "Expect bool at left side.");
-            push_bool(left || right, vm);
+            PUSH_BOOL(left || right, vm)
             break;
         }
         case AND_OPCODE:{
             uint8_t right = pop_bool_assert(vm, "Expect bool at right side.");
             uint8_t left = pop_bool_assert(vm, "Expect bool at left side.");
-            push_bool(left && right, vm);
+            PUSH_BOOL(left && right, vm)
             break;
         }
         case NNOT_OPCODE:{
             int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
-            push_i64(-right, vm);
+            PUSH_INT(-right, vm)
             break;
         }
         case NOT_OPCODE:{
             uint8_t right = pop_bool_assert(vm, "Expect bool at right side.");
-            push_bool(!right, vm);
+            PUSH_BOOL(!right, vm)
             break;
         }
         case PRT_OPCODE:{
@@ -851,9 +836,9 @@ void execute(uint8_t chunk, VM *vm){
 
             if(vm_utils_is_str(value, &str)){
                 if(strcmp(symbol, "len") == 0){
-                    push_i64((int64_t)str->len, vm);
+                    PUSH_INT((int64_t)str->len, vm)
                 }else if(strcmp(symbol, "is_core") == 0){
-                    push_bool((uint8_t)str->core, vm);
+                    PUSH_BOOL((uint8_t)str->core, vm)
                 }else if(strcmp(symbol, "char_at") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "char_at", str, native_fn_str_char_at, vm), vm);
                     push_native_fn(native_fn, vm);
@@ -899,16 +884,16 @@ void execute(uint8_t chunk, VM *vm){
 
             if(vm_utils_is_list(value, &list)){
                 if(strcmp(symbol, "size") == 0){
-                    push_i64((int64_t)list->used, vm);
+                    PUSH_INT((int64_t)list->used, vm)
                 }else if(strcmp(symbol, "capacity") == 0){
-                    push_i64((int64_t)(list->count), vm);
+                    PUSH_INT((int64_t)(list->count), vm)
                 }else if(strcmp(symbol, "available") == 0){
-                    push_i64((int64_t)DYNARR_AVAILABLE(list), vm);
+                    PUSH_INT((int64_t)DYNARR_AVAILABLE(list), vm)
                 }else if(strcmp(symbol, "first") == 0){
-                    if(DYNARR_LEN(list) == 0) push_empty(vm);
+                    if(DYNARR_LEN(list) == 0) PUSH_EMPTY(vm)
                     else push(DYNARR_GET_AS(Value, 0, list), vm);
                 }else if(strcmp(symbol, "last") == 0){
-                    if(DYNARR_LEN(list) == 0) push_empty(vm);
+                    if(DYNARR_LEN(list) == 0) PUSH_EMPTY(vm)
                     else push(DYNARR_GET_AS(Value, DYNARR_LEN(list) - 1, list), vm);
                 }else if(strcmp(symbol, "get") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "get", list, native_fn_list_get, vm), vm);

@@ -403,6 +403,46 @@ int vm_utils_is_native_function(Value *value, NativeFn **out_native_fn){
 	return 0;
 }
 
+Obj *vm_utils_core_str_obj(char *buff, VM *vm){
+    size_t buff_len = strlen(buff);
+    Str *str = (Str *)malloc(sizeof(Str));
+    Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
+
+    if(!str || !str_obj){
+        free(str);
+        vm_utils_error(vm, "Failed to create core string: out of memory");
+        return NULL;
+    }
+
+    str->core = 1;
+    str->len = buff_len;
+    str->buff = buff;
+
+    str_obj->value.str = str;
+
+    return str_obj;
+}
+
+Obj *vm_utils_uncore_str_obj(char *buff, VM *vm){
+    size_t buff_len = strlen(buff);
+    Str *str = (Str *)malloc(sizeof(Str));
+    Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
+
+    if(!str || !str_obj){
+        free(str);
+        vm_utils_error(vm, "Failed to create core string: out of memory");
+        return NULL;
+    }
+
+    str->core = 0;
+    str->len = buff_len;
+    str->buff = buff;
+
+    str_obj->value.str = str;
+
+    return str_obj;
+}
+
 Obj *vm_utils_empty_str_obj(Value *out_value, VM *vm){
 	char *buff = NULL;
 	Str *str = NULL;
