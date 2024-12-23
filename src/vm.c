@@ -48,8 +48,23 @@ static Value *peek(VM *vm);
     PUSH(obj_value, vm); \
 }
 
+#define PUSH_NON_NATIVE_FN(fn, vm) {\
+    Obj *obj = vm_utils_obj(FN_OTYPE, vm); \
+    if(!obj) vm_utils_error(vm, "Out of memory"); \
+    obj->value.f##n = fn; \
+    Value fn_value = OBJ_VALUE(obj); \
+    PUSH(fn_value, vm) \
+}
+
+#define PUSH_NATIVE_FN(fn, vm) {\
+    Obj *obj = vm_utils_obj(NATIVE_FN_OTYPE, vm); \
+    if(!obj) vm_utils_error(vm, "Out of memory"); \
+    obj->value.native_fn = fn; \
+    Value fn_value = OBJ_VALUE(obj); \
+    PUSH(fn_value, vm) \
+}
+
 static void push(Value value, VM *vm);
-static void push_native_fn(NativeFn *native, VM *vm);
 static void push_module(Module *module, VM *vm);
 static void push_module_symbol(char *name, Module *module, VM *vm);
 
@@ -269,17 +284,6 @@ void push_fn(Fn *fn, VM *vm){
 	if(!obj) vm_utils_error(vm, "Out of memory");
 	obj->value.fn = fn;
 	push(OBJ_VALUE(obj), vm);
-}
-
-void push_native_fn(NativeFn *native, VM *vm){
-    Obj *obj = vm_utils_obj(NATIVE_FN_OTYPE, vm);
-    obj->value.native_fn = native;
-
-    Value value = {0};
-    value.type = OBJ_VTYPE;
-    value.literal.obj = obj;
-
-    push(value, vm);
 }
 
 void push_module(Module *module, VM *vm){
@@ -584,7 +588,7 @@ void execute(uint8_t chunk, VM *vm){
 
             if(lzhtable_contains((uint8_t *)key, key_size, vm->natives, &node)){
                 NativeFn *native = (NativeFn *)node->value;
-                push_native_fn(native, vm);
+                PUSH_NATIVE_FN(native, vm);
                 break;
             }
 
@@ -841,40 +845,40 @@ void execute(uint8_t chunk, VM *vm){
                     PUSH_BOOL((uint8_t)str->core, vm)
                 }else if(strcmp(symbol, "char_at") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "char_at", str, native_fn_str_char_at, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else if(strcmp(symbol, "sub_str") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(2, "sub_str", str, native_fn_str_sub_str, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else if(strcmp(symbol, "char_code") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "char_code", str, native_fn_str_char_code, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else if(strcmp(symbol, "split") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "split", str, native_fn_str_split, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else if(strcmp(symbol, "lstrip") == 0){
 					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "lstrip", str, native_fn_str_lstrip, vm), vm);
-					push_native_fn(native_fn, vm);
+					PUSH_NATIVE_FN(native_fn, vm);
 				}else if(strcmp(symbol, "rstrip") == 0){
 					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "rstrip", str, native_fn_str_rstrip, vm), vm);
-					push_native_fn(native_fn, vm);
+					PUSH_NATIVE_FN(native_fn, vm);
 				}else if(strcmp(symbol, "strip") == 0){
 					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "strip", str, native_fn_str_strip, vm), vm);
-					push_native_fn(native_fn, vm);
+					PUSH_NATIVE_FN(native_fn, vm);
 				}else if(strcmp(symbol, "lower") == 0){
 					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "lower", str, native_fn_str_lower, vm), vm);
-					push_native_fn(native_fn, vm);
+					PUSH_NATIVE_FN(native_fn, vm);
 				}else if(strcmp(symbol, "upper") == 0){
 					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "upper", str, native_fn_str_upper, vm), vm);
-					push_native_fn(native_fn, vm);
+					PUSH_NATIVE_FN(native_fn, vm);
 				}else if(strcmp(symbol, "title") == 0){
 					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "title", str, native_fn_str_title, vm), vm);
-					push_native_fn(native_fn, vm);
+					PUSH_NATIVE_FN(native_fn, vm);
 				}else if(strcmp(symbol, "compare") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "compare", str, native_fn_str_cmp, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else if(strcmp(symbol, "compare_ignore") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "compare_ignore", str, native_fn_str_cmp_ic, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else{
                     vm_utils_error(vm, "string do not have symbol named as '%s'", symbol);
                 }
@@ -897,31 +901,31 @@ void execute(uint8_t chunk, VM *vm){
                     else push(DYNARR_GET_AS(Value, DYNARR_LEN(list) - 1, list), vm);
                 }else if(strcmp(symbol, "get") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "get", list, native_fn_list_get, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else if(strcmp(symbol, "insert") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "insert", list, native_fn_list_insert, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else if(strcmp(symbol, "insert_at") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(2, "insert_at", list, native_fn_list_insert_at, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else if(strcmp(symbol, "set") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(2, "set", list, native_fn_list_set, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else if(strcmp(symbol, "remove") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "remove", list, native_fn_list_remove, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else if(strcmp(symbol, "append") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "append", list, native_fn_list_append, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else if(strcmp(symbol, "append_new") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "append_new", list, native_fn_list_append_new, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else if(strcmp(symbol, "clear") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "clear", list, native_fn_list_clear, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else if(strcmp(symbol, "reverse") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "reverse", list, native_fn_list_reverse, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else{
                     vm_utils_error(vm, "list do not have symbol named as '%s'", symbol);
                 }
@@ -932,22 +936,22 @@ void execute(uint8_t chunk, VM *vm){
             if(vm_utils_is_dict(value, &dict)){
                 if(strcmp(symbol, "contains") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "contains", dict, native_fn_dict_contains, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else if(strcmp(symbol, "get") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "get", dict, native_fn_dict_get, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else if(strcmp(symbol, "put") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(2, "put", dict, native_fn_dict_put, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else if(strcmp(symbol, "remove") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "remove", dict, native_fn_dict_remove, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else if(strcmp(symbol, "keys") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "keys", dict, native_fn_dict_keys, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else if(strcmp(symbol, "values") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "values", dict, native_fn_dict_values, vm), vm);
-                    push_native_fn(native_fn, vm);
+                    PUSH_NATIVE_FN(native_fn, vm);
                 }else{
                     vm_utils_error(vm, "Dictionary do not have symbol named as '%s'", symbol);
                 }
