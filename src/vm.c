@@ -174,7 +174,7 @@ void print_obj(Obj *object){
 		}
         case DICT_OTYPE:{
             LZHTable *table = object->value.dict;
-            printf("<dict %ld %p>\n", table->n, table);
+            printf("<dict %ld at %p>\n", table->n, table);
             break;
         }
 		case RECORD_OTYPE:{
@@ -184,12 +184,12 @@ void print_obj(Obj *object){
 		}
         case FN_OTYPE:{
             Fn *fn = (Fn *)object->value.fn;
-            printf("<fn '%s' - %d at %p>\n", fn->name, (uint8_t)(fn->params ? fn->params->used : 0), fn);
+            printf("<function '%s' - %d at %p>\n", fn->name, (uint8_t)(fn->params ? fn->params->used : 0), fn);
             break;
         }
         case NATIVE_FN_OTYPE:{
             NativeFn *native_fn = object->value.native_fn;
-            printf("<native fn '%s' - %d at %p>\n", native_fn->name, native_fn->arity, native_fn);
+            printf("<native function '%s' - %d at %p>\n", native_fn->name, native_fn->arity, native_fn);
             break;
         }
         case MODULE_OTYPE:{
