@@ -1181,11 +1181,11 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             char *clone_module_path = compile_clone_str(module_path);
             size_t module_path_size = strlen(clone_module_path);
 
-            if(compiler->previos_module){
+            if(compiler->previous_module){
                 if(strcmp(clone_module_path, current_module->filepath) == 0)
 				    error(compiler, import_token, "You are trying to import module '%s' from the module '%s'.", clone_module_path, current_module->filepath);
 
-                Module *previous_module = compiler->previos_module;
+                Module *previous_module = compiler->previous_module;
                 
                 if(strcmp(clone_module_path, previous_module->filepath) == 0)
                     error(compiler, import_token, "Module '%s' import this module '%s', but this module also import '%s'.", previous_module->filepath, clone_module_path, previous_module->filepath);
@@ -1419,7 +1419,7 @@ int compiler_import(
         compiler->keywords = keywords;
         compiler->natives = natives;
         compiler->stmts = stmts;
-        compiler->previos_module = previous_module;
+        compiler->previous_module = previous_module;
         compiler->module = module;
         compiler->modules = modules;
 
