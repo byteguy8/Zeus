@@ -16,61 +16,80 @@
 //> Private Interface
 static Value *peek(VM *vm);
 
-#define PUSH(value, vm) \
-    if(vm->stack_ptr >= STACK_LENGTH) \
+#define PUSH(value, vm) {                      \
+    if(vm->stack_ptr >= STACK_LENGTH)          \
         vm_utils_error(vm, "Stack over flow"); \
-    vm->stack[vm->stack_ptr++] = value; \
+    vm->stack[vm->stack_ptr++] = value;        \
+}
 
-#define PUSH_EMPTY(vm) { \
+#define PUSH_EMPTY(vm) {             \
     Value empty_value = EMPTY_VALUE; \
-    PUSH(empty_value, vm) \
+    PUSH(empty_value, vm)            \
 }
 
-#define PUSH_BOOL(value, vm) { \
+#define PUSH_BOOL(value, vm) {            \
     Value bool_value = BOOL_VALUE(value); \
-    PUSH(bool_value, vm) \
+    PUSH(bool_value, vm)                  \
 }
 
-#define PUSH_INT(value, vm) { \
+#define PUSH_INT(value, vm) {           \
     Value int_value = INT_VALUE(value); \
-    PUSH(int_value, vm) \
+    PUSH(int_value, vm)                 \
 }
 
-#define PUSH_CORE_STR(buff, vm){ \
+#define PUSH_CORE_STR(buff, vm){                    \
     Obj *str_obj = vm_utils_core_str_obj(buff, vm); \
-    Value obj_value = OBJ_VALUE(str_obj); \
-    PUSH(obj_value, vm); \
+    Value obj_value = OBJ_VALUE(str_obj);           \
+    PUSH(obj_value, vm);                            \
 }
 
-#define PUSH_UNCORE_STR(buff, vm){ \
+#define PUSH_UNCORE_STR(buff, vm){                    \
     Obj *str_obj = vm_utils_uncore_str_obj(buff, vm); \
-    Value obj_value = OBJ_VALUE(str_obj); \
-    PUSH(obj_value, vm); \
+    Value obj_value = OBJ_VALUE(str_obj);             \
+    PUSH(obj_value, vm);                              \
 }
 
-#define PUSH_NON_NATIVE_FN(fn, vm) {\
-    Obj *obj = vm_utils_obj(FN_OTYPE, vm); \
+#define PUSH_NON_NATIVE_FN(fn, vm) {              \
+    Obj *obj = vm_utils_obj(FN_OTYPE, vm);        \
     if(!obj) vm_utils_error(vm, "Out of memory"); \
-    obj->value.f##n = fn; \
-    Value fn_value = OBJ_VALUE(obj); \
-    PUSH(fn_value, vm) \
+    obj->value.f##n = fn;                         \
+    Value fn_value = OBJ_VALUE(obj);              \
+    PUSH(fn_value, vm)                            \
 }
 
-#define PUSH_NATIVE_FN(fn, vm) {\
+#define PUSH_NATIVE_FN(fn, vm) {                  \
     Obj *obj = vm_utils_obj(NATIVE_FN_OTYPE, vm); \
     if(!obj) vm_utils_error(vm, "Out of memory"); \
-    obj->value.native_fn = fn; \
-    Value fn_value = OBJ_VALUE(obj); \
-    PUSH(fn_value, vm) \
+    obj->value.native_fn = fn;                    \
+    Value fn_value = OBJ_VALUE(obj);              \
+    PUSH(fn_value, vm)                            \
 }
 
-static void push(Value value, VM *vm);
-static void push_module(Module *module, VM *vm);
-static void push_module_symbol(char *name, Module *module, VM *vm);
+#define PUSH_MODULE(m, vm) {                      \
+    Obj *obj = vm_utils_obj(MODULE_OTYPE, vm);    \
+	if(!obj) vm_utils_error(vm, "Out of memory"); \
+	obj->value.module = m;                        \
+	PUSH(OBJ_VALUE(obj), vm);                     \
+}
+
+#define PUSH_MODULE_SYMBOL(n, m, vm) {                                                    \
+    if(!module->to_resolve){                                                              \
+        resolve_module(m, vm);                                                            \
+        module->to_resolve = 1;                                                           \
+    }                                                                                     \
+   	size_t key_size = strlen(n);                                                          \
+   	LZHTable *symbols = module->symbols;                                                  \
+	LZHTableNode *node = NULL;                                                            \
+	if(!lzhtable_contains((uint8_t *)n, key_size, symbols, &node))                        \
+		vm_utils_error(vm, "Module '%s' do not contains a symbol '%s'", module->name, n); \
+	ModuleSymbol *symbol = (ModuleSymbol *)node->value;                                   \
+	if(symbol->type == FUNCTION_MSYMTYPE)                                                 \
+		push_fn(symbol->value.fn, vm);                                                    \
+	if(symbol->type == MODULE_MSYMTYPE)                                                   \
+		PUSH_MODULE(symbol->value.module, vm);                                            \
+}
 
 static Value *pop(VM *vm);
-static uint8_t pop_bool_assert(VM *vm, char *err_msg, ...);
-static int64_t pop_i64_assert(VM *vm, char *err_msg, ...);
 
 static void execute(uint8_t chunk, VM *vm);
 static void resolve_module(Module *module, VM *vm);
@@ -95,7 +114,7 @@ char *multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm){
 	char *b = malloc(sz + 1);
 
 	if(!b)
-		vm_utils_error(vm, "failed to create buffer: out of memory.");
+		vm_utils_error(vm, "failed to create buffer: out of memory");
 
 	for(size_t i = 0; i < by; i++)
 		memcpy(b + (i * szbuff), buff, szbuff);
@@ -109,10 +128,11 @@ char *multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm){
 #define CURRENT_LOCALS(vm)(CURRENT_FRAME(vm)->locals)
 #define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
 #define CURRENT_CHUNKS(vm)(CURRENT_FN(vm)->chunks)
+#define CURRENT_CONSTANTS(vm)(CURRENT_FN(vm)->constants)
 
 Frame *frame_up(char *name, VM *vm){
     if(vm->frame_ptr >= FRAME_LENGTH)
-        vm_utils_error(vm, "FrameOverFlow");
+        vm_utils_error(vm, "Frame over flow");
 
     Module *module = vm->module;
 	LZHTable *symbols = module->symbols;
@@ -154,7 +174,9 @@ void frame_down(VM *vm){
     vm->frame_ptr--;
 }
 
-#define TO_STR(v)(v->literal.obj->value.str)
+int16_t compose_i16(uint8_t *bytes){
+    return ((int16_t)bytes[1] << 8) | ((int16_t)bytes[0]);
+}
 
 int32_t compose_i32(uint8_t *bytes){
     return ((int32_t)bytes[3] << 24) | ((int32_t)bytes[2] << 16) | ((int32_t)bytes[1] << 8) | ((int32_t)bytes[0]);
@@ -239,6 +261,15 @@ void print_stack(VM *vm){
 #define IS_AT_END(vm)(CURRENT_FRAME(vm)->ip >= CURRENT_CHUNKS(vm)->used)
 #define ADVANCE(vm)(DYNARR_GET_AS(uint8_t, CURRENT_FRAME(vm)->ip++, CURRENT_CHUNKS(vm)))
 
+int16_t read_i16(VM *vm){
+    uint8_t bytes[2];
+
+	for(size_t i = 0; i < 2; i++)
+		bytes[i] = ADVANCE(vm);
+
+	return compose_i16(bytes);
+}
+
 int32_t read_i32(VM *vm){
 	uint8_t bytes[4];
 
@@ -249,9 +280,8 @@ int32_t read_i32(VM *vm){
 }
 
 int64_t read_i64_const(VM *vm){
-    Module *module = CURRENT_FRAME(vm)->fn->module;
-    DynArr *constants = module->constants;
-    int32_t index = read_i32(vm);
+    DynArr *constants = CURRENT_CONSTANTS(vm);
+    int16_t index = read_i16(vm);
     return DYNARR_GET_AS(int64_t, index, constants);
 }
 
@@ -268,11 +298,6 @@ Value *peek(VM *vm){
     return &vm->stack[vm->stack_ptr - 1];
 }
 
-void push(Value value, VM *vm){
-    if(vm->stack_ptr >= STACK_LENGTH) vm_utils_error(vm, "Stack over flow");
-    vm->stack[vm->stack_ptr++] = value;
-}
-
 Value *peek_at(int offset, VM *vm){
     if(1 + offset > vm->stack_ptr) vm_utils_error(vm, "Illegal offset");
     size_t at = vm->stack_ptr - 1 - offset;
@@ -283,76 +308,12 @@ void push_fn(Fn *fn, VM *vm){
 	Obj *obj = vm_utils_obj(FN_OTYPE, vm);
 	if(!obj) vm_utils_error(vm, "Out of memory");
 	obj->value.fn = fn;
-	push(OBJ_VALUE(obj), vm);
-}
-
-void push_module(Module *module, VM *vm){
-	Obj *obj = vm_utils_obj(MODULE_OTYPE, vm);
-	if(!obj) vm_utils_error(vm, "Out of memory");
-	obj->value.module = module;
-	push(OBJ_VALUE(obj), vm);
-}
-
-void push_module_symbol(char *name, Module *module, VM *vm){
-    if(!module->to_resolve){
-        resolve_module(module, vm);
-        module->to_resolve = 1;
-    }
-
-   	size_t key_size = strlen(name);
-   	LZHTable *symbols = module->symbols;
-	LZHTableNode *node = NULL;
-
-	if(!lzhtable_contains((uint8_t *)name, key_size, symbols, &node))
-		vm_utils_error(vm, "Module '%s' do not contains a symbol '%s'", module->name, name);
-
-	ModuleSymbol *symbol = (ModuleSymbol *)node->value;
-			
-	if(symbol->type == FUNCTION_MSYMTYPE)
-		push_fn(symbol->value.fn, vm);
-	if(symbol->type == MODULE_MSYMTYPE)
-		push_module(symbol->value.module, vm);
+	PUSH(OBJ_VALUE(obj), vm);
 }
 
 Value *pop(VM *vm){
     if(vm->stack_ptr == 0) vm_utils_error(vm, "Stack under flow");
     return &vm->stack[--vm->stack_ptr];
-}
-
-uint8_t pop_bool_assert(VM *vm, char *err_msg, ...){
-    Value *value = pop(vm);
-    
-    if(value->type == BOOL_VTYPE) return value->literal.bool;
-
-    va_list args;
-	va_start(args, err_msg);
-
-	fprintf(stderr, "Runtime error:\n\t");
-	vfprintf(stderr, err_msg, args);
-    fprintf(stderr, "\n");
-
-	va_end(args);
-
-    vm_utils_clean_up(vm);
-    longjmp(vm->err_jmp, 1);
-}
-
-int64_t pop_i64_assert(VM *vm, char *err_msg, ...){
-    Value *value = pop(vm);
-    
-    if(value->type == INT_VTYPE) return value->literal.i64;
-
-    va_list args;
-	va_start(args, err_msg);
-
-	fprintf(stderr, "Runtime error:\n\t");
-	vfprintf(stderr, err_msg, args);
-    fprintf(stderr, "\n");
-
-	va_end(args);
-
-    vm_utils_clean_up(vm);
-    longjmp(vm->err_jmp, 1);
 }
 
 void execute(uint8_t chunk, VM *vm){
@@ -372,6 +333,11 @@ void execute(uint8_t chunk, VM *vm){
             PUSH_BOOL(1, vm);
             break;
         }
+        case CINT_OPCODE:{
+            int64_t i64 = (int64_t)ADVANCE(vm);
+            PUSH_INT(i64, vm);
+            break;
+        }
         case INT_OPCODE:{
             int64_t i64 = read_i64_const(vm);
             PUSH_INT(i64, vm);
@@ -386,17 +352,15 @@ void execute(uint8_t chunk, VM *vm){
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
-            Str *astr = NULL;
-            Str *bstr = NULL;
+            if(IS_STR(va) || IS_STR(vb)){
+                if(!IS_STR(va))
+                     vm_utils_error(vm, "Expect string at left side of string concatenation");
 
-            vm_utils_is_str(va, &astr);
-            vm_utils_is_str(vb, &bstr);
+                if(!IS_STR(vb))
+                    vm_utils_error(vm, "Expect string at right side of string concatenation");
 
-            if(astr || bstr){
-                if(!astr)
-                    vm_utils_error(vm, "Expect string at left side of string concatenation.");
-                if(!bstr)
-                    vm_utils_error(vm, "Expect string at right side of string concatenation.");
+                Str *astr = TO_STR(va) ;
+                Str *bstr = TO_STR(vb);
 
                 char *buff = join_buff(astr->buff, astr->len, bstr->buff, bstr->len, vm);
                 PUSH_UNCORE_STR(buff, vm);
@@ -404,54 +368,65 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            if(!vm_utils_is_i64(va, NULL))
-                vm_utils_error(vm, "Expect int at left side of sum.");
+            if(!IS_INT(va))
+                vm_utils_error(vm, "Expect int at left side of sum");
 
-            if(!vm_utils_is_i64(vb, NULL))
-                vm_utils_error(vm, "Expect int at right side of sum.");
+            if(!IS_INT(vb))
+                vm_utils_error(vm, "Expect int at right side of sum");
 
-            int64_t right = vb->literal.i64;
-            int64_t left = va->literal.i64;
+            int64_t right = TO_INT(vb);
+            int64_t left = TO_INT(va);
 
             PUSH_INT(left + right, vm)
             
             break;
         }
         case SUB_OPCODE:{
-            int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
-            int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
+            Value *vb = pop(vm);
+            Value *va = pop(vm);
+
+            if(!IS_INT(va))
+                vm_utils_error(vm, "Expect integer at left side");
+
+            if(!IS_INT(vb))
+                vm_utils_error(vm, "Expect integer at right side");
+
+            int64_t left = TO_INT(va);
+            int64_t right = TO_INT(vb);
+
             PUSH_INT(left - right, vm)
+
             break;
         }
         case MUL_OPCODE:{
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
-            Str *bstr = NULL;
-            Str *astr = NULL;
-
-            vm_utils_is_str(va, &astr);
-            vm_utils_is_str(vb, &bstr);
-
-            if(astr || bstr){
-                int64_t by = -1;
+            if(IS_STR(va) || IS_STR(vb)){
+                int64_t by = 0;
                 char *in_buff = NULL;
                 size_t in_buff_len = 0;
 
-                if(astr){
+                if(IS_STR(va)){
+                    Str *astr = TO_STR(va);
                     in_buff = astr->buff;
                     in_buff_len = astr->len;
                     
-                    if(!vm_utils_is_i64(vb, &by))
-                        vm_utils_error(vm, "Expect integer at right side of string multiplication.");
+                    if(!IS_INT(vb))
+                        vm_utils_error(vm, "Expect integer at right side of string multiplication");
+
+                    by = TO_INT(vb);
                 }
 
-                if(bstr){
+                if(IS_STR(vb)){
+                    Str *bstr = TO_STR(vb);
                     in_buff = bstr->buff;
                     in_buff_len = bstr->len;
 
-                    if(!vm_utils_is_i64(va, &by))
-                        vm_utils_error(vm, "Expect integer at left side of string multiplication.");
+                    if(!IS_INT(va))
+                        vm_utils_error(vm, "Expect integer at left side of string multiplication");
+
+                    by = TO_INT(va);
                 }
 
                 char *buff = multiply_buff(in_buff, in_buff_len, (size_t)by, vm);
@@ -460,14 +435,14 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            if(!vm_utils_is_i64(va, NULL))
-                vm_utils_error(vm, "Expect integer at left side of multiplication.");
+            if(!IS_INT(va))
+                vm_utils_error(vm, "Expect integer at left side of multiplication");
 
-            if(!vm_utils_is_i64(vb, NULL))
-                vm_utils_error(vm, "Expect integer at right side of multiplication.");
+            if(!IS_INT(vb))
+                vm_utils_error(vm, "Expect integer at right side of multiplication");
 
-            int64_t right = vb->literal.i64;
-            int64_t left = va->literal.i64;
+            int64_t left = TO_INT(va);
+            int64_t right = TO_INT(vb);
             
             PUSH_INT(left * right, vm);
             
@@ -475,67 +450,156 @@ void execute(uint8_t chunk, VM *vm){
 
         }
         case DIV_OPCODE:{
-            int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
-            int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
+            Value *vb = pop(vm);
+            Value *va = pop(vm);
+
+            if(!IS_INT(va))
+                vm_utils_error(vm, "Expect integer at left side");
+        
+            if(!IS_INT(vb))
+                vm_utils_error(vm, "Expect integer at right side");
+
+            int64_t left = TO_INT(va);
+            int64_t right = TO_INT(vb);
+
             PUSH_INT(left / right, vm)
+
             break;
         }
 		case MOD_OPCODE:{
-			int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
-            int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
-            PUSH_INT(left % right, vm)
-            break;
+			Value *vb = pop(vm);
+            Value *va = pop(vm);
 
+            if(!IS_INT(va))
+                vm_utils_error(vm, "Expect integer at left side");
+        
+            if(!IS_INT(vb))
+                vm_utils_error(vm, "Expect integer at right side");
+
+            int64_t left = TO_INT(va);
+            int64_t right = TO_INT(vb);
+
+            PUSH_INT(left % right, vm)
+
+            break;
 		}
         case LT_OPCODE:{
-            int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
-            int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
+			Value *vb = pop(vm);
+            Value *va = pop(vm);
+
+            if(!IS_INT(va))
+                vm_utils_error(vm, "Expect integer at left side");
+        
+            if(!IS_INT(vb))
+                vm_utils_error(vm, "Expect integer at right side");
+
+            int64_t left = TO_INT(va);
+            int64_t right = TO_INT(vb);
+
             PUSH_BOOL(left < right, vm)
+
             break;
         }
         case GT_OPCODE:{
-            int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
-            int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
+   			Value *vb = pop(vm);
+            Value *va = pop(vm);
+
+            if(!IS_INT(va))
+                vm_utils_error(vm, "Expect integer at left side");
+        
+            if(!IS_INT(vb))
+                vm_utils_error(vm, "Expect integer at right side");
+
+            int64_t left = TO_INT(va);
+            int64_t right = TO_INT(vb);
+
             PUSH_BOOL(left > right, vm)
+
             break;
         }
         case LE_OPCODE:{
-            int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
-            int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
+            Value *vb = pop(vm);
+            Value *va = pop(vm);
+
+            if(!IS_INT(va))
+                vm_utils_error(vm, "Expect integer at left side");
+        
+            if(!IS_INT(vb))
+                vm_utils_error(vm, "Expect integer at right side");
+
+            int64_t left = TO_INT(va);
+            int64_t right = TO_INT(vb);
+
             PUSH_BOOL(left <= right, vm)
+
             break;
         }
         case GE_OPCODE:{
-            int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
-            int64_t left = pop_i64_assert(vm, "Expect integer at left side.");
+            Value *vb = pop(vm);
+            Value *va = pop(vm);
+
+            if(!IS_INT(va))
+                vm_utils_error(vm, "Expect integer at left side");
+        
+            if(!IS_INT(vb))
+                vm_utils_error(vm, "Expect integer at right side");
+
+            int64_t left = TO_INT(va);
+            int64_t right = TO_INT(vb);
+
             PUSH_BOOL(left >= right, vm)
+
             break;
         }
         case EQ_OPCODE:{
-            Value *left_value = pop(vm);
-            Value *right_value = pop(vm);
+            Value *vb = pop(vm);
+            Value *va = pop(vm);
 
-            if((left_value->type == BOOL_VTYPE && right_value->type == BOOL_VTYPE) ||
-               (left_value->type == INT_VTYPE && right_value->type == INT_VTYPE)){
-                PUSH_BOOL(left_value->literal.i64 == right_value->literal.i64, vm)
+            if(IS_BOOL(va) && IS_BOOL(vb)){
+                uint8_t left = TO_BOOL(va);
+                uint8_t right = TO_BOOL(vb);
+
+                PUSH_BOOL(left == right, vm);
+
                 break;
             }
 
-            vm_utils_error(vm, "Illegal type in equals comparison expression.");
+            if(IS_INT(va) && IS_INT(vb)){
+                int64_t left = TO_INT(va);
+                int64_t right = TO_INT(vb);
+
+                PUSH_BOOL(left == right, vm);
+
+                break;
+            }
+
+            vm_utils_error(vm, "Illegal type in comparison expression");
 
             break;
         }
         case NE_OPCODE:{
-            Value *left_value = pop(vm);
-            Value *right_value = pop(vm);
+            Value *vb = pop(vm);
+            Value *va = pop(vm);
 
-            if((left_value->type == BOOL_VTYPE && right_value->type == BOOL_VTYPE) ||
-               (left_value->type == INT_VTYPE && right_value->type == INT_VTYPE)){
-                PUSH_BOOL(left_value->literal.i64 != right_value->literal.i64, vm)
+            if(IS_BOOL(va) && IS_BOOL(vb)){
+                uint8_t left = TO_BOOL(va);
+                uint8_t right = TO_BOOL(vb);
+
+                PUSH_BOOL(left != right, vm);
+
                 break;
             }
 
-            vm_utils_error(vm, "Illegal type in not equals comparison expression.");
+            if(IS_INT(va) && IS_INT(vb)){
+                int64_t left = TO_INT(va);
+                int64_t right = TO_INT(vb);
+
+                PUSH_BOOL(left != right, vm);
+
+                break;
+            }
+
+            vm_utils_error(vm, "Illegal type in comparison expression");
 
             break;
         }
@@ -548,7 +612,7 @@ void execute(uint8_t chunk, VM *vm){
         case LGET_OPCODE:{
             uint8_t index = ADVANCE(vm);
             Value value = CURRENT_FRAME(vm)->locals[index];
-            push(value, vm);
+            PUSH(value, vm);
             break;
         }
         case GSET_OPCODE:{
@@ -558,9 +622,9 @@ void execute(uint8_t chunk, VM *vm){
             LZHTable *globals = module->globals;
             LZHTableNode *node = NULL;
 
-            if(lzhtable_hash_contains(hash, globals, &node))
+            if(lzhtable_hash_contains(hash, globals, &node)){
                 *(Value *)node->value = *value;
-            else{
+            }else{
                 Value *new_value = vm_utils_clone_value(value, vm);
                 lzhtable_hash_put(hash, new_value, globals);
             }
@@ -577,7 +641,7 @@ void execute(uint8_t chunk, VM *vm){
             if(!lzhtable_hash_contains(hash, globals, &node))
                 vm_utils_error(vm, "Global symbol '%s' does not exists", symbol);
             
-            push(*(Value *)node->value, vm);
+            PUSH(*(Value *)node->value, vm);
 
             break;
         }
@@ -599,7 +663,7 @@ void execute(uint8_t chunk, VM *vm){
 		case SGET_OPCODE:{
 			char *key = read_str(vm, NULL);
             Module *module = CURRENT_FRAME(vm)->fn->module;
-			push_module_symbol(key, module, vm);
+            PUSH_MODULE_SYMBOL(key, module, vm);
 			break;
 		}
 		case PUT_OPCODE:{
@@ -624,25 +688,59 @@ void execute(uint8_t chunk, VM *vm){
 			break;
 		}
         case OR_OPCODE:{
-            uint8_t right = pop_bool_assert(vm, "Expect bool at right side.");
-            uint8_t left = pop_bool_assert(vm, "Expect bool at left side.");
+            Value *vb = pop(vm);
+            Value *va = pop(vm);
+
+            if(!IS_BOOL(va))
+                vm_utils_error(vm, "Expect boolean at left side");
+
+            if(!IS_BOOL(vb))
+                vm_utils_error(vm, "Expect boolean at right side");
+
+            uint8_t left = TO_BOOL(va);
+            uint8_t right = TO_BOOL(vb);
+
             PUSH_BOOL(left || right, vm)
+            
             break;
         }
         case AND_OPCODE:{
-            uint8_t right = pop_bool_assert(vm, "Expect bool at right side.");
-            uint8_t left = pop_bool_assert(vm, "Expect bool at left side.");
+            Value *vb = pop(vm);
+            Value *va = pop(vm);
+
+            if(!IS_BOOL(va))
+                vm_utils_error(vm, "Expect boolean at left side");
+
+            if(!IS_BOOL(vb))
+                vm_utils_error(vm, "Expect boolean at right side");
+
+            uint8_t left = TO_BOOL(va);
+            uint8_t right = TO_BOOL(vb);
+
             PUSH_BOOL(left && right, vm)
+            
             break;
         }
         case NNOT_OPCODE:{
-            int64_t right = pop_i64_assert(vm, "Expect integer at right side.");
+            Value *vb = pop(vm);
+
+            if(!IS_INT(vb))
+                vm_utils_error(vm, "Expect integer at right side");
+
+            int64_t right = TO_INT(vb);
             PUSH_INT(-right, vm)
+            
             break;
         }
         case NOT_OPCODE:{
-            uint8_t right = pop_bool_assert(vm, "Expect bool at right side.");
+            Value *vb = pop(vm);
+
+            if(!IS_BOOL(vb))
+                vm_utils_error(vm, "Expect boolean at right side");
+
+            uint8_t right = TO_BOOL(vb);
             PUSH_BOOL(!right, vm)
+
             break;
         }
         case PRT_OPCODE:{
@@ -655,7 +753,7 @@ void execute(uint8_t chunk, VM *vm){
             break;
         }
         case JMP_OPCODE:{
-            int32_t jmp_value = read_i32(vm);
+            int16_t jmp_value = read_i16(vm);
             if(jmp_value == 0) break;
             
             if(jmp_value > 0) CURRENT_FRAME(vm)->ip += jmp_value - 1;
@@ -664,9 +762,15 @@ void execute(uint8_t chunk, VM *vm){
             break;
         }
 		case JIF_OPCODE:{
-			uint8_t condition = pop_bool_assert(vm, "Expect 'bool' as conditional value.");
-			int32_t jmp_value = read_i32(vm);
-			if(jmp_value == 0) break;
+            Value *value = pop(vm);
+            
+            if(!IS_BOOL(value))
+                vm_utils_error(vm, "Expect boolean as conditional value");
+
+			uint8_t condition = TO_BOOL(value);
+			int16_t jmp_value = read_i16(vm);
+			
+            if(jmp_value == 0) break;
 
             if(!condition){
                 if(jmp_value > 0) CURRENT_FRAME(vm)->ip += jmp_value - 1;
@@ -676,8 +780,14 @@ void execute(uint8_t chunk, VM *vm){
 			break;
 		}
 		case JIT_OPCODE:{
-			uint8_t condition = pop_bool_assert(vm, "Expect 'bool' as conditional value.");
-			int32_t jmp_value = read_i32(vm);
+            Value *value = pop(vm);
+
+            if(!IS_BOOL(value))
+                vm_utils_error(vm, "Expect boolean as conditional value");
+
+			uint8_t condition = TO_BOOL(value);
+			int16_t jmp_value = read_i16(vm);
+
 			if(jmp_value == 0) break;
 
 			if(condition){
@@ -705,7 +815,7 @@ void execute(uint8_t chunk, VM *vm){
 			value.type = OBJ_VTYPE;
 			value.literal.obj = obj;
 
-			push(value, vm);
+            PUSH(value, vm);
 
 			break;
 		}
@@ -736,7 +846,7 @@ void execute(uint8_t chunk, VM *vm){
                     vm_utils_error(vm, "Out of memory");
             }
 
-            push(OBJ_VALUE(dict_obj), vm);
+            PUSH(OBJ_VALUE(dict_obj), vm);
 
             break;
         }
@@ -747,7 +857,7 @@ void execute(uint8_t chunk, VM *vm){
 			if(!record_obj) vm_utils_error(vm, "Out of memory");
 
 			if(len == 0){
-				push(OBJ_VALUE(record_obj), vm);
+                PUSH(OBJ_VALUE(record_obj), vm);
 				break;
 			}
 
@@ -776,8 +886,8 @@ void execute(uint8_t chunk, VM *vm){
 					vm_utils_error(vm, "Out of memory");
 				}
 			}
-
-			push(OBJ_VALUE(record_obj), vm);	
+	
+            PUSH(OBJ_VALUE(record_obj), vm);
 
 			break;
 		}
@@ -809,7 +919,7 @@ void execute(uint8_t chunk, VM *vm){
                 if(native_fn->arity != args_count)
                     vm_utils_error(
                         vm,
-                        "Failed to call function '%s'.\n\tDeclared with %d parameter(s), but got %d argument(s).",
+                        "Failed to call function '%s'.\n\tDeclared with %d parameter(s), but got %d argument(s)",
                         native_fn->name,
                         native_fn->arity,
                         args_count
@@ -823,9 +933,10 @@ void execute(uint8_t chunk, VM *vm){
                 pop(vm);
 
                 Value out_value = native(args_count, values, target, vm);
-                push(out_value, vm);
-            }else
-                vm_utils_error(vm, "Expect function after %d parameters count.", args_count);
+                PUSH(out_value, vm);
+            }else{
+                vm_utils_error(vm, "Expect function after %d parameters count", args_count);
+            }
 
             break;
         }
@@ -895,10 +1006,10 @@ void execute(uint8_t chunk, VM *vm){
                     PUSH_INT((int64_t)DYNARR_AVAILABLE(list), vm)
                 }else if(strcmp(symbol, "first") == 0){
                     if(DYNARR_LEN(list) == 0) PUSH_EMPTY(vm)
-                    else push(DYNARR_GET_AS(Value, 0, list), vm);
+                    else PUSH(DYNARR_GET_AS(Value, 0, list), vm);
                 }else if(strcmp(symbol, "last") == 0){
                     if(DYNARR_LEN(list) == 0) PUSH_EMPTY(vm)
-                    else push(DYNARR_GET_AS(Value, DYNARR_LEN(list) - 1, list), vm);
+                    else PUSH(DYNARR_GET_AS(Value, DYNARR_LEN(list) - 1, list), vm);
                 }else if(strcmp(symbol, "get") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "get", list, native_fn_list_get, vm), vm);
                     PUSH_NATIVE_FN(native_fn, vm);
@@ -970,17 +1081,17 @@ void execute(uint8_t chunk, VM *vm){
 
 				Value *value = (Value *)node->value;
 
-				push(*value, vm);
+				PUSH(*value, vm);
 
 				break;
 			}
 
 			if(vm_utils_is_module(value, &module)){
-				push_module_symbol(symbol, module, vm);
+                PUSH_MODULE_SYMBOL(symbol, module, vm);
 				break;
 			}
 
-            vm_utils_error(vm, "Illegal target to access.");
+            vm_utils_error(vm, "Illegal target to access");
 
             break;
         }
@@ -997,16 +1108,16 @@ void execute(uint8_t chunk, VM *vm){
 
 				switch(obj->type){
 					case STR_OTYPE:{
-						push(BOOL_VALUE(type == 3), vm);
+						PUSH(BOOL_VALUE(type == 3), vm);
 						break;
 					}case LIST_OTYPE:{
-						push(BOOL_VALUE(type == 4), vm);
+						PUSH(BOOL_VALUE(type == 4), vm);
 						break;
 					}case DICT_OTYPE:{
-						push(BOOL_VALUE(type == 5), vm);
+						PUSH(BOOL_VALUE(type == 5), vm);
 						break;
 					}case RECORD_OTYPE:{
-						push(BOOL_VALUE(type == 6), vm);
+						PUSH(BOOL_VALUE(type == 6), vm);
 						break;
 					}default:{
 						vm_utils_error(vm, "Illegal object type");
@@ -1016,13 +1127,13 @@ void execute(uint8_t chunk, VM *vm){
 			}else{
 				switch(value->type){
 					case EMPTY_VTYPE:{
-						push(BOOL_VALUE(type == 0), vm);
+						PUSH(BOOL_VALUE(type == 0), vm);
 						break;
 					}case BOOL_VTYPE:{
-						push(BOOL_VALUE(type == 1), vm);
+						PUSH(BOOL_VALUE(type == 1), vm);
 						break;
 					}case INT_VTYPE:{
-						push(BOOL_VALUE(type == 2), vm);
+						PUSH(BOOL_VALUE(type == 2), vm);
 						break;
 					}default:{
 						vm_utils_error(vm, "Illegal value type");

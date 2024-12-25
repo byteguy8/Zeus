@@ -23,12 +23,20 @@ static void error(Compiler *compiler, Token *token, char *msg, ...){
     longjmp(compiler->err_jmp, 1);
 }
 
-void descompose_i32(int32_t value, uint8_t *bytes)
-{
+void descompose_i16(int16_t value, uint8_t *bytes){
     uint8_t mask = 0b11111111;
 
-    for (size_t i = 0; i < 4; i++)
-    {
+    for (size_t i = 0; i < 2; i++){
+        uint8_t r = value & mask;
+        value = value >> 8;
+        bytes[i] = r;
+    }
+}
+
+void descompose_i32(int32_t value, uint8_t *bytes){
+    uint8_t mask = 0b11111111;
+
+    for (size_t i = 0; i < 4; i++){
         uint8_t r = value & mask;
         value = value >> 8;
         bytes[i] = r;
@@ -231,7 +239,7 @@ Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler){
     if(exists_local(identifier, compiler) != NULL)
         error(compiler, identifier_token, "Already exists a symbol named as '%s'.", identifier);
 
-    int local;
+    int local = 0;
     Scope *scope = current_scope(compiler);
     Symbol *symbol = &scope->symbols[scope->symbols_len++];
 
@@ -263,6 +271,12 @@ DynArr *current_locations(Compiler *compiler){
     return fn->locations;
 }
 
+DynArr *current_constants(Compiler *compiler){
+    assert(compiler->fn_ptr > 0 && compiler->fn_ptr < FUNCTIONS_LENGTH);
+    Fn *fn = compiler->fn_stack[compiler->fn_ptr - 1];
+    return fn->constants;
+}
+
 size_t chunks_len(Compiler *compiler){
 	return current_chunks(compiler)->used;
 }
@@ -291,6 +305,18 @@ void update_chunk(size_t index, uint8_t chunk, Compiler *compiler){
     DYNARR_SET(&chunk, index, chunks);
 }
 
+size_t write_i16(int16_t i16, Compiler *compiler){
+    size_t index = chunks_len(compiler);
+
+	uint8_t bytes[2];
+	descompose_i16(i16, bytes);
+
+	for(size_t i = 0; i < 2; i++)
+		write_chunk(bytes[i], compiler);
+
+	return index;
+}
+
 size_t write_i32(int32_t i32, Compiler *compiler){
 	size_t index = chunks_len(compiler);
 
@@ -301,6 +327,16 @@ size_t write_i32(int32_t i32, Compiler *compiler){
 		write_chunk(bytes[i], compiler);
 
 	return index;
+}
+
+void update_i16(size_t index, int32_t i16, Compiler *compiler){
+    uint8_t bytes[2];
+	DynArr *chunks = current_chunks(compiler);
+
+	descompose_i16(i16, bytes);
+
+	for(size_t i = 0; i < 2; i++)
+        DYNARR_SET(bytes + i, index + i, chunks);
 }
 
 void update_i32(size_t index, int32_t i32, Compiler *compiler){
@@ -314,12 +350,14 @@ void update_i32(size_t index, int32_t i32, Compiler *compiler){
 }
 
 size_t write_i64_const(int64_t i64, Compiler *compiler){
-    Module *module = compiler->module;
-    DynArr *constants = module->constants;
-    int32_t index = (int32_t) constants->used;
+    DynArr *constants = current_constants(compiler);
+    int32_t used = (int32_t) constants->used;
+
+    assert(used < 32767 && "Too many constants");
 
     dynarr_insert(&i64, constants);
-	return write_i32(index, compiler);
+
+	return write_i16(used, compiler);
 }
 
 void write_str(char *rstr, Compiler *compiler){
@@ -359,6 +397,16 @@ void compile_expr(Expr *expr, Compiler *compiler){
             IntExpr *int_expr = (IntExpr *)expr->sub_expr;
             Token *token = int_expr->token;
             int64_t value = *(int64_t *)token->literal;
+
+            if((value >= -128 && value <= 127) ||
+            (value >= 0 && value <= 255)){
+                write_chunk(CINT_OPCODE, compiler);
+                write_location(token, compiler);
+                
+                write_chunk((uint8_t)value, compiler);
+
+                break;
+            }
 
             write_chunk(INT_OPCODE, compiler);
 			write_location(token, compiler);
@@ -905,7 +953,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			
 			write_chunk(JIF_OPCODE, compiler);
             write_location(if_stmt->if_token, compiler);
-			size_t jif_index = write_i32(0, compiler);
+			size_t jif_index = write_i16(0, compiler);
 			
 			//> if branch body
 			size_t len_bef_if = chunks_len(compiler);
@@ -920,13 +968,13 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             
             write_chunk(JMP_OPCODE, compiler);
             write_location(if_stmt->if_token, compiler);
-            size_t jmp_index = write_i32(0, compiler);
+            size_t jmp_index = write_i16(0, compiler);
 
 			size_t len_af_if = chunks_len(compiler);
 			size_t if_len = len_af_if - len_bef_if;
 			//< if branch body
 			
-			update_i32(jif_index, (int32_t)if_len + 1, compiler);
+			update_i16(jif_index, (int32_t)if_len + 1, compiler);
 
             if(else_stmts){
 				//> else body
@@ -943,7 +991,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 size_t else_len = len_af_else - len_bef_else;
 				//< else body
 
-				update_i32(jmp_index, (int32_t)else_len + 1, compiler);
+				update_i16(jmp_index, (int16_t)else_len + 1, compiler);
             }
             
 			break;
@@ -955,7 +1003,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
 			write_chunk(JMP_OPCODE, compiler);
             write_location(while_stmt->while_token, compiler);
-			size_t jmp_index = write_i32(0, compiler);
+			size_t jmp_index = write_i16(0, compiler);
 
 			size_t len_bef_body = chunks_len(compiler);
 
@@ -973,7 +1021,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             size_t len_af_body = chunks_len(compiler);
 			size_t body_len = len_af_body - len_bef_body;
 
-            update_i32(jmp_index, (int32_t)body_len + 1, compiler);
+            update_i16(jmp_index, (int32_t)body_len + 1, compiler);
 
 			compile_expr(condition, compiler);
             size_t len_af_while = chunks_len(compiler);
@@ -981,7 +1029,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
 			write_chunk(JIT_OPCODE, compiler);
             write_location(while_stmt->while_token, compiler);
-			write_i32(-((int32_t)while_len), compiler);
+			write_i16(-((int16_t)while_len), compiler);
 
 			size_t af_header = chunks_len(compiler);
 			size_t ptr = 0;
@@ -994,7 +1042,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 					continue;
 				}
 
-				update_i32(loop_mark->index, af_header - loop_mark->len + 1, compiler);
+				update_i16(loop_mark->index, af_header - loop_mark->len + 1, compiler);
 				unmark_stop(ptr, compiler);
 			}
 
@@ -1008,7 +1056,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 					continue;
 				}
 
-				update_i32(loop_mark->index, len_af_body - loop_mark->len + 1, compiler);
+				update_i16(loop_mark->index, len_af_body - loop_mark->len + 1, compiler);
                 unmark_continue(ptr, compiler);
 			}
 		
@@ -1023,7 +1071,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
 			write_chunk(JMP_OPCODE, compiler);
             write_location(stop_token, compiler);
-			size_t index = write_i32(0, compiler);
+			size_t index = write_i16(0, compiler);
 
             size_t len = chunks_len(compiler);
 			mark_stop(len, index, compiler);
@@ -1039,7 +1087,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             write_chunk(JMP_OPCODE, compiler);
             write_location(continue_token, compiler);
-            size_t index = write_i32(0, compiler);
+            size_t index = write_i16(0, compiler);
 
             size_t len = chunks_len(compiler);
             mark_continue(len, index, compiler);
@@ -1255,7 +1303,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
 				write_chunk(JMP_OPCODE, compiler);
                 write_location(try_stmt->try_token, compiler);
-				try_jmp_index = write_i32(0, compiler);
+				try_jmp_index = write_i16(0, compiler);
             }
 
 			if(catch_stmts){
@@ -1275,7 +1323,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 scope_out(compiler);
 
 				size_t end = chunks_len(compiler);
-				update_i32(try_jmp_index, end - start + 1, compiler);
+				update_i16(try_jmp_index, end - start + 1, compiler);
 			}
 
             Module *module = compiler->module;

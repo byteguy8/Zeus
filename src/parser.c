@@ -740,7 +740,7 @@ Stmt *parse_try_stmt(Parser *parser){
     DynArrPtr *try_stmts = NULL;
 	Token *catch_token = NULL;
 	Token *err_identifier = NULL;
-	DynArrPtr *catch_stmts;
+	DynArrPtr *catch_stmts = NULL;
 
     try_token = previous(parser);
     consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' after 'try' keyword.");

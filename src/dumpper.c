@@ -5,6 +5,10 @@
 #include <stdio.h>
 #include <assert.h>
 
+static int16_t compose_i16(uint8_t *bytes){
+    return ((int32_t)bytes[1] << 8) | ((int32_t)bytes[0]);
+}
+
 static int32_t compose_i32(uint8_t *bytes){
     return ((int32_t)bytes[3] << 24) | ((int32_t)bytes[2] << 16) | ((int32_t)bytes[1] << 8) | ((int32_t)bytes[0]);
 }
@@ -17,6 +21,15 @@ static int is_at_end(Dumpper *dumpper){
 static uint8_t advance(Dumpper *dumpper){
     DynArr *chunks = dumpper->chunks;
     return DYNARR_GET_AS(uint8_t, dumpper->ip++, chunks);
+}
+
+static int16_t read_i16(Dumpper *dumpper){
+    uint8_t bytes[2];
+
+	for(size_t i = 0; i < 2; i++)
+		bytes[i] = advance(dumpper);
+
+	return compose_i16(bytes);
 }
 
 static int32_t read_i32(Dumpper *dumpper){
@@ -56,6 +69,11 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
         }
         case TRUE_OPCODE:{
             printf("TRUE_OPCODE\n");
+            break;
+        }
+        case CINT_OPCODE:{
+            int64_t i64 = (int64_t)advance(dumpper);
+            printf("CINT_OPCODE value: %ld\n", i64);
             break;
         }
         case INT_OPCODE:{
@@ -177,7 +195,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             break;
         }
         case JMP_OPCODE:{
-			int32_t jmp_value = read_i32(dumpper);
+			int16_t jmp_value = read_i16(dumpper);
 			size_t ip = dumpper->ip;
 
 			if(jmp_value == 0) ip -= 5;
@@ -189,7 +207,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             break;
         }
 		case JIF_OPCODE:{
-			int32_t jmp_value = read_i32(dumpper);
+			int16_t jmp_value = read_i16(dumpper);
 			size_t ip = dumpper->ip;
 
 			if(jmp_value == 0) ip -= 5;
@@ -201,7 +219,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 			break;
 		}
 		case JIT_OPCODE:{
-			int32_t jmp_value = read_i32(dumpper);
+			int16_t jmp_value = read_i16(dumpper);
 			size_t ip = dumpper->ip;
 
 			if(jmp_value == 0) ip -= 5;
@@ -213,12 +231,12 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 			break;
 		}
 		case LIST_OPCODE:{
-			int32_t len = read_i32(dumpper);
+			int16_t len = read_i16(dumpper);
 			printf("LIST_OPCODE len: %d\n", len);
 			break;
 		}
         case DICT_OPCODE:{
-            int32_t len = read_i32(dumpper);
+            int16_t len = read_i16(dumpper);
 			printf("DICT_OPCODE len: %d\n", len);
 			break;
         }

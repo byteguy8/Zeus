@@ -40,6 +40,7 @@ typedef struct fn{
     DynArr *chunks;
     DynArrPtr *params;
 	DynArr *locations;
+    DynArr *constants;
     Module *module;
 }Fn;
 

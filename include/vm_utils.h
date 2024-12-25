@@ -55,12 +55,17 @@ void *assert_ptr(void *ptr, VM *vm);
         vm_utils_error(vm, "'%s' out of bounds. Must be 0 >= index(%ld) < len(%ld)", name, index, len);
 
 #define IS_EMPTY(value)(value->type == EMPTY_VTYPE)
+#define IS_BOOL(v)(v->type == BOOL_VTYPE)
+#define IS_INT(v)(v->type == INT_VTYPE)
 #define IS_OBJ(value)(value->type == OBJ_VTYPE)
 #define IS_STR(value)(value->type == OBJ_VTYPE && value->literal.obj->type == STR_OTYPE)
 #define IS_RECORD(value)(value->type == OBJ_VTYPE && value->literal.obj->type == RECORD_OTYPE)
 
-#define TO_OBJ(value)(value->literal.obj)
-#define TO_RECORD(value)(value->literal.obj->value.record)
+#define TO_BOOL(v)(v->literal.bool)
+#define TO_INT(v)(v->literal.i64)
+#define TO_OBJ(v)(v->literal.obj)
+#define TO_STR(v)(v->literal.obj->value.str)
+#define TO_RECORD(v)(v->literal.obj->value.record)
 
 #define EMPTY_VALUE ((Value){.type = EMPTY_VTYPE})
 #define INT_VALUE(value)((Value){.type = INT_VTYPE, .literal.i64 = value})

@@ -182,12 +182,14 @@ Fn *runtime_fn(char *name, Module *module){
     DynArrPtr *params = runtime_dynarr_ptr();
     DynArr *chunks = runtime_dynarr(sizeof(uint8_t));
 	DynArr *locations = runtime_dynarr(sizeof(OPCodeLocation));
+    DynArr *constants = runtime_dynarr(sizeof(int64_t));
     Fn *fn = (Fn *)A_RUNTIME_ALLOC(sizeof(Fn));
     
     fn->name = fn_name;
     fn->params = params;
     fn->chunks = chunks;
 	fn->locations = locations;
+    fn->constants = constants;
     fn->module = module;
 
     return fn;
