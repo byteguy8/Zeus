@@ -677,8 +677,10 @@ void execute(uint8_t chunk, VM *vm){
 			char *symbol = read_str(vm, NULL);
 			Record *record = NULL;
 	
-			if(!vm_utils_is_record(target, &record))
+			if(!IS_RECORD(target))
 				vm_utils_error(vm, "Expect a record, but got something else");
+
+			record = TO_RECORD(target);
 
 			uint8_t *key = (uint8_t *)symbol;
 			size_t key_size = strlen(symbol);
@@ -897,11 +899,11 @@ void execute(uint8_t chunk, VM *vm){
 			break;
 		}
         case CALL_OPCODE:{
-            Fn *fn = NULL;
-            NativeFn *native_fn = NULL;
             uint8_t args_count = ADVANCE(vm);
-
-            if(vm_utils_is_function(peek_at(args_count, vm), &fn)){
+			Value *fn_value = peek_at(args_count, vm);
+			
+            if(IS_FN(fn_value)){
+				Fn *fn = TO_FN(fn_value);
                 uint8_t params_count = fn->params ? fn->params->used : 0;
 
                 if(params_count != args_count)
@@ -917,7 +919,8 @@ void execute(uint8_t chunk, VM *vm){
                 }
 
                 pop(vm);
-            }else if(vm_utils_is_native_function(peek_at(args_count, vm), &native_fn)){
+            }else if(IS_NATIVE_FN(fn_value)){
+				NativeFn *native_fn = TO_NATIVE_FN(fn_value);
                 void *target = native_fn->target;
                 RawNativeFn native = native_fn->native;
 
@@ -946,10 +949,6 @@ void execute(uint8_t chunk, VM *vm){
             break;
         }
         case ACCESS_OPCODE:{
-            DynArr *list = NULL;
-            LZHTable *dict = NULL;
-			Record *record = NULL;
-			Module *module = NULL;
             char *symbol = read_str(vm, NULL);
             Value *value = pop(vm);
 
@@ -1003,7 +1002,9 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            if(vm_utils_is_list(value, &list)){
+            if(IS_LIST(value)){
+				DynArr *list = TO_LIST(value);
+				
                 if(strcmp(symbol, "size") == 0){
                     PUSH_INT((int64_t)list->used, vm)
                 }else if(strcmp(symbol, "capacity") == 0){
@@ -1050,7 +1051,9 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            if(vm_utils_is_dict(value, &dict)){
+            if(IS_DICT(value)){
+				LZHTable *dict = TO_DICT(value);
+				
                 if(strcmp(symbol, "contains") == 0){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "contains", dict, native_fn_dict_contains, vm), vm);
                     PUSH_NATIVE_FN(native_fn, vm);
@@ -1076,7 +1079,9 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-			if(vm_utils_is_record(value, &record)){
+			if(IS_RECORD(value)){
+				Record *record = TO_RECORD(value);
+				
 				uint8_t *key = (uint8_t *)symbol;
 				size_t key_size = strlen(symbol);
 				uint32_t hash = lzhtable_hash(key, key_size);
@@ -1092,7 +1097,8 @@ void execute(uint8_t chunk, VM *vm){
 				break;
 			}
 
-			if(vm_utils_is_module(value, &module)){
+			if(IS_MODULE(value)){
+				Module *module = TO_MODULE(value);
                 PUSH_MODULE_SYMBOL(symbol, module, vm);
 				break;
 			}

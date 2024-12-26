@@ -5,12 +5,6 @@
 #include "vm.h"
 
 void vm_utils_error(VM *vm, char *msg, ...);
-int vm_utils_is_list(Value *value, DynArr **list);
-int vm_utils_is_dict(Value *value, LZHTable **dict);
-int vm_utils_is_record(Value *value, Record **record);
-int vm_utils_is_function(Value *value, Fn **out_fn);
-int vm_utils_is_native_function(Value *value, NativeFn **out_native_fn);
-int vm_utils_is_module(Value *value, Module **out_module);
 
 char *vm_utils_clone_buff(char *buff, VM *vm);
 Value *vm_utils_clone_value(Value *value, VM *vm);
@@ -44,18 +38,28 @@ void *assert_ptr(void *ptr, VM *vm);
 #define IS_BOOL(v)((v)->type == BOOL_VTYPE)
 #define IS_INT(v)((v)->type == INT_VTYPE)
 #define IS_OBJ(v)((v)->type == OBJ_VTYPE)
-#define IS_STR(v)((v)->type == OBJ_VTYPE && (v)->literal.obj->type == STR_OTYPE)
-#define IS_RECORD(v)((v)->type == OBJ_VTYPE && value->literal.obj->type == RECORD_OTYPE)
+#define IS_STR(v)(IS_OBJ(v) && (v)->literal.obj->type == STR_OTYPE)
+#define IS_LIST(v)(IS_OBJ(v) && (v)->literal.obj->type == LIST_OTYPE)
+#define IS_DICT(v)(IS_OBJ(v) && (v)->literal.obj->type == DICT_OTYPE)
+#define IS_RECORD(v)(IS_OBJ(v) && (v)->literal.obj->type == RECORD_OTYPE)
+#define IS_FN(v)(IS_OBJ(v) && (v)->literal.obj->type == FN_OTYPE)
+#define IS_NATIVE_FN(v)(IS_OBJ(v) && (v)->literal.obj->type == NATIVE_FN_OTYPE)
+#define IS_MODULE(v)(IS_OBJ(v) && (v)->literal.obj->type == MODULE_OTYPE)
 
 #define TO_BOOL(v)((v)->literal.bool)
 #define TO_INT(v)((v)->literal.i64)
 #define TO_OBJ(v)((v)->literal.obj)
 #define TO_STR(v)((v)->literal.obj->value.str)
+#define TO_LIST(v)((v)->literal.obj->value.list)
+#define TO_DICT(v)((v)->literal.obj->value.dict)
 #define TO_RECORD(v)((v)->literal.obj->value.record)
+#define TO_FN(v)((v)->literal.obj->value.fn)
+#define TO_NATIVE_FN(v)((v)->literal.obj->value.native_fn)
+#define TO_MODULE(v)((v)->literal.obj->value.module)
 
 #define EMPTY_VALUE ((Value){.type = EMPTY_VTYPE})
-#define INT_VALUE(value)((Value){.type = INT_VTYPE, .literal.i64 = value})
 #define BOOL_VALUE(value)((Value){.type = BOOL_VTYPE, .literal.bool = value})
+#define INT_VALUE(value)((Value){.type = INT_VTYPE, .literal.i64 = value})
 #define OBJ_VALUE(value)((Value){.type = OBJ_VTYPE, .literal.obj = value})
 
 #define VALIDATE_INDEX(value, index, len) \
@@ -71,7 +75,6 @@ void *assert_ptr(void *ptr, VM *vm);
     index = TO_INT((value)); \
     if(index < 0 || index >= (int64_t)len) \
         vm_utils_error(vm, "'%s' out of bounds. Must be 0 >= index(%ld) < len(%ld)", name, index, len);
-
 
 uint32_t vm_utils_hash_obj(Obj *obj);
 uint32_t vm_utils_hash_value(Value *value);

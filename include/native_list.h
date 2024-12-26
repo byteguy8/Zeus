@@ -71,12 +71,13 @@ Value native_fn_list_remove(uint8_t argsc, Value *values, void *target, VM *vm){
 
 Value native_fn_list_append(uint8_t argsc, Value *values, void *target, VM *vm){
     DynArr *to = (DynArr *)target;
-    Value *list_value = &values[0];
+    Value *vfrom = &values[0];
     DynArr *from = NULL;
 
-    if(!vm_utils_is_list(list_value, &from))
-        vm_utils_error(vm, "Failed to append list: expect another list, but got something else");
+    if(!IS_LIST(vfrom))
+		vm_utils_error(vm, "Failed to append list: expect another list, but got something else");
 
+	from = TO_LIST(vfrom);
     int64_t from_len = (int64_t)from->used;
 
     if(dynarr_append(from, to))
@@ -87,14 +88,15 @@ Value native_fn_list_append(uint8_t argsc, Value *values, void *target, VM *vm){
 
 Value native_fn_list_append_new(uint8_t argsc, Value *values, void *target, VM *vm){
     DynArr *to = (DynArr *)target;
-    Value *list_value = &values[0];
+    Value *vfrom = &values[0];
     DynArr *from = NULL;
 
-    if(!vm_utils_is_list(list_value, &from)){
-        vm_utils_error(vm, "Failed to append list: expect another list, but got something else");
-	}
-
+    if(!IS_LIST(vfrom))
+		vm_utils_error(vm, "Failed to append list: expect another list, but got something else");
+		
+	from = TO_LIST(vfrom);
 	Obj *list_obj = vm_utils_list_obj(vm);
+	
 	if(!list_obj) vm_utils_error(vm, "Out of memory");
 
 	DynArr *list = list_obj->value.list;
