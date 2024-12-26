@@ -28,11 +28,12 @@ Value native_fn_time_sleep(uint8_t argsc, Value *values, void *target, VM *vm){
     Value *raw_value = &values[0];
     int64_t value = -1;
 
-    if(!vm_utils_is_i64(raw_value, &value))
+    if(!IS_INT(raw_value))
         vm_utils_error(vm, "parameter 0(value) must be integer");
     if(value < 0)
         vm_utils_error(vm, "parameter 0(value) must be greater than 0");
     
+    value = TO_INT(raw_value);
     usleep(value * 1000);
     
     return EMPTY_VALUE;

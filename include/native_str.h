@@ -7,32 +7,35 @@
 
 Value native_fn_str_char_at(uint8_t argc, Value *values, void *target, VM *vm){
     int64_t index = -1;
-    Str *in_str = (Str *)target;
+    Value *vindex = &values[0];
+    Str *str = (Str *)target;
 
-    VALIDATE_INDEX(&values[0], index, in_str->len)
+    VALIDATE_INDEX(vindex, index, str->len)
     
     Value value = {0};
 
-    if(!vm_utils_range_str_obj(index, index, in_str->buff, &value, vm))
+    if(!vm_utils_range_str_obj(index, index, str->buff, &value, vm))
 		vm_utils_error(vm, "Out of memory");
     
     return value;
 }
 
 Value native_fn_str_sub_str(uint8_t argc, Value *values, void *target, VM *vm){
-    Str *in_str = (Str *)target;
+    Str *str = (Str *)target;
+    Value *vfrom = &values[0];
+    Value *vto = &values[1];
     int64_t from = -1;
     int64_t to = -1;
 
-    VALIDATE_INDEX_NAME(&values[0], from, in_str->len, "from")
-    VALIDATE_INDEX_NAME(&values[1], to, in_str->len, "to")
+    VALIDATE_INDEX_NAME(vfrom, from, str->len, "from")
+    VALIDATE_INDEX_NAME(vto, to, str->len, "to")
 
     if(from > to) 
         vm_utils_error(vm, "Illegal index 'from'(%ld). Must be less or equals to 'to'(%ld)", from, to);
 
     Value value = {0};
 
-    if(!vm_utils_range_str_obj(from, to, in_str->buff, &value, vm))
+    if(!vm_utils_range_str_obj(from, to, str->buff, &value, vm))
 		vm_utils_error(vm, "Out of memory");
 
     return value;
@@ -40,9 +43,11 @@ Value native_fn_str_sub_str(uint8_t argc, Value *values, void *target, VM *vm){
 
 Value native_fn_str_char_code(uint8_t argc, Value *values, void *target, VM *vm){
     Str *str = (Str *)target;
+    Value *vindex = &values[0];
     int64_t index = -1;
 
-    VALIDATE_INDEX(&values[0], index, str->len)
+    VALIDATE_INDEX(vindex, index, str->len)
+    
     int64_t code = (int64_t)str->buff[index];
 
     return INT_VALUE(code);
@@ -50,13 +55,15 @@ Value native_fn_str_char_code(uint8_t argc, Value *values, void *target, VM *vm)
 
 Value native_fn_str_split(uint8_t argc, Value *values, void *target, VM *vm){
     Str *str = (Str *)target;
+    Value *vby = &values[0];
     Str *by = NULL;
 
-    if(!vm_utils_is_str(&values[0], &by))
+    if(!IS_STR(vby))
         vm_utils_error(vm, "Expect string as 'by' to split");
     if(by->len != 1)
-        vm_utils_error(vm, "Expect string of length 1 as 'by' to split");
+		vm_utils_error(vm, "Expect string of length 1 as 'by' to split");
 
+	by = TO_STR(vby);
     DynArr *list = assert_ptr(vm_utils_dyarr(vm), vm);
 
 	char coincidence = 0;
@@ -250,20 +257,26 @@ Value native_fn_str_title(uint8_t argsc, Value *values, void *target, VM *vm){
 
 Value native_fn_str_cmp(uint8_t argsc, Value *values, void *target, VM *vm){
 	Str *s0 = (Str *)target;
+	Value *vs1 = &values[0];
 	Str *s1 = NULL;
 
-	if(!vm_utils_is_str(&values[0], &s1))
+	if(!IS_STR(vs1))
 		vm_utils_error(vm, "Expect a string, but got something else");
+
+	s1 = TO_STR(vs1);
 
 	return INT_VALUE((int64_t)strcmp(s0->buff, s1->buff));
 }
 
 Value native_fn_str_cmp_ic(uint8_t argsc, Value *values, void *target, VM *vm){
 	Str *s0 = (Str *)target;
+	Value *vs1 = &values[0];
 	Str *s1 = NULL;
 
-	if(!vm_utils_is_str(&values[0], &s1))
+	if(!IS_STR(vs1))
 		vm_utils_error(vm, "Expect a string, but got something else");
+
+	s1 = TO_STR(vs1);
 
 	if(s0->len < s1->len) return INT_VALUE(-1);
 	else if(s0->len > s1->len) return INT_VALUE(1);

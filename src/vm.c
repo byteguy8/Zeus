@@ -946,7 +946,6 @@ void execute(uint8_t chunk, VM *vm){
             break;
         }
         case ACCESS_OPCODE:{
-            Str *str = NULL;
             DynArr *list = NULL;
             LZHTable *dict = NULL;
 			Record *record = NULL;
@@ -954,7 +953,9 @@ void execute(uint8_t chunk, VM *vm){
             char *symbol = read_str(vm, NULL);
             Value *value = pop(vm);
 
-            if(vm_utils_is_str(value, &str)){
+            if(IS_STR(value)){
+				Str *str = TO_STR(value);
+				
                 if(strcmp(symbol, "len") == 0){
                     PUSH_INT((int64_t)str->len, vm)
                 }else if(strcmp(symbol, "is_core") == 0){

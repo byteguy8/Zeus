@@ -301,27 +301,6 @@ void vm_utils_error(VM *vm, char *msg, ...){
     longjmp(vm->err_jmp, 1);
 }
 
-int vm_utils_is_i64(Value *value, int64_t *i64){
-    if(value->type != INT_VTYPE) return 0;
-    if(i64) *i64 = value->literal.i64;
-    return 1;
-}
-
-int vm_utils_is_str(Value *value, Str **str){
-    if(value->type != OBJ_VTYPE) return 0;
-    
-    Obj *obj = value->literal.obj;
-
-    if(obj->type == STR_OTYPE){
-        Str *ostr = obj->value.str;
-        if(str) *str = ostr;
-    
-        return 1;
-    }
-
-    return 0;
-}
-
 int vm_utils_is_list(Value *value, DynArr **list){
 	if(value->type != OBJ_VTYPE) return 0;
 	
