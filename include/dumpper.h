@@ -7,14 +7,16 @@
 
 typedef struct dumpper{
     size_t ip;
-	Module *module;
+    LZHTable *modules;
+    Module *main_module;
     Module *current_module;
-    DynArr *chunks;
+    Fn *current_fn;
 }Dumpper;
 
 Dumpper *dumpper_create();
 void dumpper_dump(
-    Module *module,
+    LZHTable *modules,
+    Module *main_module,
     Dumpper *dumpper
 );
 

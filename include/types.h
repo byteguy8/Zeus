@@ -6,6 +6,10 @@
 #include <stddef.h>
 
 #define NAME_LEN 256
+#define MODULE_TRIES(m)(m->submodule->tries)
+#define MODULE_SYMBOLS(m)(m->submodule->symbols)
+#define MODULE_STRINGS(m)(m->submodule->strings)
+#define MODULE_GLOBALS(m)(m->submodule->globals)
 
 typedef struct value Value;
 typedef struct vm VM;
@@ -59,15 +63,19 @@ typedef struct record{
 	LZHTable *key_values;
 }Record;
 
+typedef struct submodule{
+    char resolve;
+    LZHTable *tries;
+	LZHTable *symbols;
+    LZHTable *strings;
+    LZHTable *globals;
+}SubModule;
+
 typedef struct module{
-    char to_resolve;
+    char shadow;
     char *name;
     char *filepath;
-    LZHTable *strings;
-    DynArr *constants;
-	LZHTable *symbols;
-    LZHTable *tries;
-    LZHTable *globals;
+    SubModule *submodule;
 }Module;
 
 typedef enum module_symbol_type{

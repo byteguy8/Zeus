@@ -153,7 +153,8 @@ void mark_value(Value *value){
             break;
         }case MODULE_OTYPE:{
 			Module *module = obj->value.module;
-			LZHTableNode *node = module->globals->head;
+            SubModule *submodule = module->submodule;
+			LZHTableNode *node = submodule->globals->head;
 			LZHTableNode *next = NULL;
 			Value *value = NULL;
 			
@@ -179,7 +180,9 @@ void mark_value(Value *value){
 
 void mark_objs(VM *vm){
     // globals
-    LZHTableNode *node = vm->module->globals->head;
+    Module *module = vm->module;
+    SubModule *submodule = module->submodule;
+    LZHTableNode *node = submodule->globals->head;
     LZHTableNode *next = NULL;
     
     while (node){
@@ -752,12 +755,15 @@ uint32_t vm_utils_hash_value(Value *value){
 }
 
 void clean_up_module(Module *module){
-	LZHTable *globals = module->globals;
+    if(module->shadow) return;
+
+    SubModule *submodule = module->submodule;
+	LZHTable *globals = submodule->globals;
 	// Due to the same module can be imported in others modules
 	// we need to make sure we already handled its globals in order
 	// to no make a double free on them.
 	if(globals){
-		LZHTableNode *global_node = module->globals->head;
+		LZHTableNode *global_node = submodule->globals->head;
 
 		while(global_node){
 			LZHTableNode *next = global_node->next_table_node;
@@ -765,10 +771,10 @@ void clean_up_module(Module *module){
 			global_node = next;
 		}
 
-		module->globals = NULL;
+		submodule->globals = NULL;
 	}
 
-	LZHTableNode *symbol_node = module->symbols->head;
+	LZHTableNode *symbol_node = submodule->symbols->head;
     
     while (symbol_node){
         LZHTableNode *next = symbol_node->next_table_node;

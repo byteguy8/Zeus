@@ -117,11 +117,12 @@ Scope *scope_in_soft(ScopeType type, Compiler *compiler){
 Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function){
     assert(compiler->fn_ptr < FUNCTIONS_LENGTH);
 
-    Fn *fn = runtime_fn(name, compiler->module);
+    Fn *fn = runtime_fn(name, compiler->current_module);
     compiler->fn_stack[compiler->fn_ptr++] = fn;
     
-    Module *module = compiler->module;
-	LZHTable *symbols = module->symbols;
+    Module *module = compiler->current_module;
+    SubModule *submodule = module->submodule;
+	LZHTable *symbols = submodule->symbols;
 	ModuleSymbol *symbol = (ModuleSymbol *)A_RUNTIME_ALLOC(sizeof(ModuleSymbol));
 
 	symbol->type = FUNCTION_MSYMTYPE;
@@ -365,8 +366,9 @@ void write_str(char *rstr, Compiler *compiler){
     size_t key_size = strlen(rstr);
     uint32_t hash = lzhtable_hash(key, key_size);
 
-    Module *module = compiler->module;
-    LZHTable *strings = module->strings;
+    Module *module = compiler->current_module;
+    SubModule *submodule = module->submodule;
+    LZHTable *strings = submodule->strings;
 
     if(!lzhtable_hash_contains(hash, strings, NULL)){
         char *str = runtime_clone_str(rstr);
@@ -1170,25 +1172,27 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             Token *name_token = import_stmt->name_token;
 
             LZHTable *modules = compiler->modules;
-            Module *current_module = compiler->module;
-            LZHTable *current_strings = current_module->strings;
-            LZHTable *current_symbols = current_module->symbols;
+            Module *current_module = compiler->current_module;
+            Module *previous_module = compiler->previous_module;
+            LZHTable *current_symbols = MODULE_SYMBOLS(current_module);
+            LZHTable *current_strings = MODULE_STRINGS(current_module);
             
-            uint32_t module_path_hash = *(uint32_t *) path_token->literal;
             char *module_name = name_token->lexeme;
             size_t module_name_size = strlen(module_name);
+            uint32_t module_path_hash = *(uint32_t *) path_token->literal;
             char *module_path = (char *)lzhtable_hash_get(module_path_hash, current_strings);
+
             char *clone_module_path = compile_clone_str(module_path);
             size_t module_path_size = strlen(clone_module_path);
 
-            if(compiler->previous_module){
-                if(strcmp(clone_module_path, current_module->filepath) == 0)
-				    error(compiler, import_token, "You are trying to import module '%s' from the module '%s'.", clone_module_path, current_module->filepath);
+            // detect self module import
+            if(strcmp(module_path, current_module->filepath) == 0)
+                error(compiler, import_token, "Trying to import the current module '%s'", module_path);
 
-                Module *previous_module = compiler->previous_module;
-                
-                if(strcmp(clone_module_path, previous_module->filepath) == 0)
-                    error(compiler, import_token, "Module '%s' import this module '%s', but this module also import '%s'.", previous_module->filepath, clone_module_path, previous_module->filepath);
+            if(previous_module){
+                // detect circular dependency
+                if(strcmp(module_path, previous_module->filepath) == 0)
+                    error(compiler, import_token, "Circular dependency between '%s' and '%s'", current_module->filepath, previous_module->filepath);
             }
 
             if(!UTILS_EXISTS_FILE(clone_module_path))
@@ -1199,10 +1203,13 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             LZHTableNode *node = NULL;
 
-            if(lzhtable_contains((uint8_t *)clone_module_path, module_path_size, modules, &node)){
+            if(lzhtable_contains((uint8_t *)module_path, module_path_size, modules, &node)){
                 Module *imported_module = (Module *)node->value;
-                add_module_symbol(module_name, module_name_size, imported_module, current_symbols);
+                Module *cloned_module = runtime_clone_module(module_name, module_path, imported_module);
+                
+                add_module_symbol(module_name, module_name_size, cloned_module, current_symbols);
                 declare(MODULE_SYMTYPE, name_token, compiler);
+                
                 break;
             }
 
@@ -1215,12 +1222,13 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             DynArrPtr *stmts = compile_dynarr_ptr();
             
             Module *module = runtime_module(module_name, clone_module_path);
+            SubModule *submodule = module->submodule;
 
             Lexer *lexer = lexer_create();
 	        Parser *parser = parser_create();
             Compiler *import_compiler = compiler_create();
 
-            if(lexer_scan(source, tokens, module->strings, keywords, clone_module_path, lexer)){
+            if(lexer_scan(source, tokens, submodule->strings, keywords, clone_module_path, lexer)){
 				compiler->is_err = 1;
 				break;
 			}
@@ -1230,15 +1238,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 				break;
 			}
 
-            if(compiler_import(
-                keywords,
-                natives,
-                stmts,
-                current_module,
-                module,
-                modules,
-                import_compiler
-            )){
+            if(compiler_import(keywords, natives, stmts, current_module, module, modules, import_compiler)){
                 compiler->is_err = 1;
 				break;
             }
@@ -1326,8 +1326,9 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 				update_i16(try_jmp_index, end - start + 1, compiler);
 			}
 
-            Module *module = compiler->module;
-            LZHTable *fn_tries = module->tries;
+            Module *module = compiler->current_module;
+            SubModule *submodule = module->submodule;
+            LZHTable *fn_tries = submodule->tries;
             Fn *fn = compiler->fn_stack[compiler->fn_ptr - 1];
 
 			uint8_t *key = (uint8_t *)fn;
@@ -1374,7 +1375,7 @@ int compiler_compile(
     LZHTable *keywords,
     LZHTable *natives,
     DynArrPtr *stmts,
-    Module *module,
+    Module *current_module,
     LZHTable *modules,
     Compiler *compiler
 ){
@@ -1385,7 +1386,7 @@ int compiler_compile(
         compiler->symbols = 1;
         compiler->keywords = keywords;
         compiler->natives = natives;
-        compiler->module = module;
+        compiler->current_module = current_module;
         compiler->modules = modules;
         compiler->stmts = stmts;
 
@@ -1408,7 +1409,7 @@ int compiler_import(
     LZHTable *natives,
     DynArrPtr *stmts,
     Module *previous_module,
-    Module *module,
+    Module *current_module,
     LZHTable *modules,
     Compiler *compiler
 ){
@@ -1420,7 +1421,7 @@ int compiler_import(
         compiler->natives = natives;
         compiler->stmts = stmts;
         compiler->previous_module = previous_module;
-        compiler->module = module;
+        compiler->current_module = current_module;
         compiler->modules = modules;
 
         scope_in_fn("import", compiler, NULL);

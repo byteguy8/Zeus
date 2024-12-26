@@ -76,7 +76,7 @@ typedef struct compiler{
     LZHTable *natives;
     DynArrPtr *stmts;
     Module *previous_module;
-    Module *module;
+    Module *current_module;
     LZHTable *modules;
 }Compiler;
 

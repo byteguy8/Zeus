@@ -30,5 +30,6 @@ LZHTable *runtime_lzhtable();
 char *runtime_clone_str(char *str);
 Fn *runtime_fn(char *name, Module *module);
 Module *runtime_module(char *name, char *filepath);
+Module *runtime_clone_module(char *new_name, char *filepath, Module *module);
 
 #endif

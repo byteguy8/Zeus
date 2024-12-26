@@ -97,7 +97,8 @@ int main(int argc, char const *argv[]){
     
     Module *module = runtime_module("main", module_path);
     LZHTable *modules = compile_lzhtable();
-    LZHTable *strings = module->strings;
+    SubModule *submodule = module->submodule;
+    LZHTable *strings = submodule->strings;
 
 	DynArrPtr *tokens = compile_dynarr_ptr();
 	DynArrPtr *stmts = compile_dynarr_ptr();
@@ -154,7 +155,7 @@ int main(int argc, char const *argv[]){
         if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
         if(compiler_compile(keywords, natives, stmts, module, modules, compiler)) goto CLEAN_UP;
-        dumpper_dump(module, dumpper);
+        dumpper_dump(modules, module, dumpper);
     }else{
         if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)) goto CLEAN_UP;
         if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;

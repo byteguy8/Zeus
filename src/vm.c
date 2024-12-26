@@ -73,12 +73,13 @@ static Value *peek(VM *vm);
 }
 
 #define PUSH_MODULE_SYMBOL(n, m, vm) {                                                    \
-    if(!module->to_resolve){                                                              \
+    SubModule *submodule = m->submodule;                                                  \
+    if(!submodule->resolve){                                                              \
         resolve_module(m, vm);                                                            \
-        module->to_resolve = 1;                                                           \
+        submodule->resolve = 1;                                                           \
     }                                                                                     \
    	size_t key_size = strlen(n);                                                          \
-   	LZHTable *symbols = module->symbols;                                                  \
+   	LZHTable *symbols = submodule->symbols;                                                  \
 	LZHTableNode *node = NULL;                                                            \
 	if(!lzhtable_contains((uint8_t *)n, key_size, symbols, &node))                        \
 		vm_utils_error(vm, "Module '%s' do not contains a symbol '%s'", module->name, n); \
@@ -135,7 +136,8 @@ Frame *frame_up(char *name, VM *vm){
         vm_utils_error(vm, "Frame over flow");
 
     Module *module = vm->module;
-	LZHTable *symbols = module->symbols;
+    SubModule *submodule = module->submodule;
+	LZHTable *symbols = submodule->symbols;
 	LZHTableNode *symbol_node = NULL;
     
 	if(!lzhtable_contains((uint8_t *)name, strlen(name), symbols, &symbol_node))
@@ -287,7 +289,8 @@ int64_t read_i64_const(VM *vm){
 
 char *read_str(VM *vm, uint32_t *out_hash){
     Module *module = CURRENT_FRAME(vm)->fn->module;
-    LZHTable *strings = module->strings;
+    SubModule *submodule = module->submodule;
+    LZHTable *strings = submodule->strings;
     uint32_t hash = (uint32_t)read_i32(vm);
     if(out_hash) *out_hash = hash;
     return lzhtable_hash_get(hash, strings);
@@ -619,7 +622,8 @@ void execute(uint8_t chunk, VM *vm){
             Value *value = peek(vm);
             uint32_t hash = (uint32_t)read_i32(vm);
             Module *module = CURRENT_FRAME(vm)->fn->module;
-            LZHTable *globals = module->globals;
+            SubModule *submodule = module->submodule;
+            LZHTable *globals = submodule->globals;
             LZHTableNode *node = NULL;
 
             if(lzhtable_hash_contains(hash, globals, &node)){
@@ -635,7 +639,8 @@ void execute(uint8_t chunk, VM *vm){
             uint32_t hash = 0;
             char *symbol = read_str(vm, &hash);
             Module *module = CURRENT_FRAME(vm)->fn->module;
-            LZHTable *globals = module->globals;
+            SubModule *submodule = module->submodule;
+            LZHTable *globals = submodule->globals;
             LZHTableNode *node = NULL;
 
             if(!lzhtable_hash_contains(hash, globals, &node))
@@ -1182,7 +1187,8 @@ void execute(uint8_t chunk, VM *vm){
                 Frame *frame = &vm->frame_stack[--ptr];
                 Fn *fn = frame->fn;
                 Module *module = fn->module;
-                LZHTable *fn_tries = module->tries;
+                SubModule *submodule = module->submodule;
+                LZHTable *fn_tries = submodule->tries;
                 LZHTableNode *node = NULL;
 
 				uint8_t *key = (uint8_t *)fn;
@@ -1264,7 +1270,8 @@ int vm_execute(
 ){
     if(setjmp(vm->err_jmp) == 1) return 1;
     else{
-        module->to_resolve = 1;
+        SubModule *submodule = module->submodule;
+        submodule->resolve = 1;
 
         vm->stack_ptr = 0;
         vm->natives = natives;
