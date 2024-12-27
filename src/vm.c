@@ -764,7 +764,7 @@ void execute(uint8_t chunk, VM *vm){
             if(jmp_value == 0) break;
             
             if(jmp_value > 0) CURRENT_FRAME(vm)->ip += jmp_value - 1;
-            else CURRENT_FRAME(vm)->ip += jmp_value - 5;
+            else CURRENT_FRAME(vm)->ip += jmp_value - 3;
 
             break;
         }
@@ -781,7 +781,7 @@ void execute(uint8_t chunk, VM *vm){
 
             if(!condition){
                 if(jmp_value > 0) CURRENT_FRAME(vm)->ip += jmp_value - 1;
-                else CURRENT_FRAME(vm)->ip += jmp_value - 5;
+                else CURRENT_FRAME(vm)->ip += jmp_value - 3;
             }
 
 			break;
@@ -799,7 +799,7 @@ void execute(uint8_t chunk, VM *vm){
 
 			if(condition){
                 if(jmp_value > 0) CURRENT_FRAME(vm)->ip += jmp_value - 1;
-                else CURRENT_FRAME(vm)->ip += jmp_value - 5;
+                else CURRENT_FRAME(vm)->ip += jmp_value - 3;
             }
 
 			break;

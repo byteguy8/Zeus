@@ -266,9 +266,9 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 			size_t to = dumpper->ip;
             size_t end = dumpper->ip;
 
-			if(value == 0) to -= 5;
+			if(value == 0) to -= 3;
 			else if(value > 0) to += value - 1;
-			else to += value - 5; 
+			else to += value - 3;
 
 			printf("%8.8s %.7ld", "JMP", end - start);
             printf(" | value: %d to: %ld\n", value, to);
@@ -280,9 +280,9 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 			size_t to = dumpper->ip;
             size_t end = dumpper->ip;
 
-			if(value == 0) to -= 5;
+			if(value == 0) to -= 3;
 			else if(value > 0) to += value - 1;
-			else to += value - 5;
+			else to += value - 3;
 
 			printf("%8.8s %.7ld", "JIF", end - start);
             printf(" | value: %d to: %ld\n", value, to);
@@ -290,13 +290,13 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 			break;
 		}
 		case JIT_OPCODE:{
-			int16_t value = read_i16(dumpper);
+            int16_t value = read_i16(dumpper);
 			size_t to = dumpper->ip;
             size_t end = dumpper->ip;
 
-			if(value == 0) to -= 5;
+			if(value == 0) to -= 3;
 			else if(value > 0) to += value - 1;
-			else to += value - 5;
+			else to += value - 3;
 
 			printf("%8.8s %.7ld", "JIT", end - start);
             printf(" | value: %d to: %ld\n", value, to);
