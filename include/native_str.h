@@ -6,11 +6,11 @@
 #include "vm_utils.h"
 
 Value native_fn_str_char_at(uint8_t argc, Value *values, void *target, VM *vm){
-    int64_t index = -1;
-    Value *vindex = &values[0];
     Str *str = (Str *)target;
+    Value *index_value = &values[0];
+    int64_t index = -1;
 
-    VALIDATE_INDEX(vindex, index, str->len)
+    VALIDATE_INDEX(index_value, index, str->len)
     
     Value value = {0};
 
@@ -22,13 +22,13 @@ Value native_fn_str_char_at(uint8_t argc, Value *values, void *target, VM *vm){
 
 Value native_fn_str_sub_str(uint8_t argc, Value *values, void *target, VM *vm){
     Str *str = (Str *)target;
-    Value *vfrom = &values[0];
-    Value *vto = &values[1];
+    Value *from_value = &values[0];
+    Value *to_value = &values[1];
     int64_t from = -1;
     int64_t to = -1;
 
-    VALIDATE_INDEX_NAME(vfrom, from, str->len, "from")
-    VALIDATE_INDEX_NAME(vto, to, str->len, "to")
+    VALIDATE_INDEX_NAME(from_value, from, str->len, "from")
+    VALIDATE_INDEX_NAME(to_value, to, str->len, "to")
 
     if(from > to) 
         vm_utils_error(vm, "Illegal index 'from'(%ld). Must be less or equals to 'to'(%ld)", from, to);
@@ -43,10 +43,10 @@ Value native_fn_str_sub_str(uint8_t argc, Value *values, void *target, VM *vm){
 
 Value native_fn_str_char_code(uint8_t argc, Value *values, void *target, VM *vm){
     Str *str = (Str *)target;
-    Value *vindex = &values[0];
+    Value *index_value = &values[0];
     int64_t index = -1;
 
-    VALIDATE_INDEX(vindex, index, str->len)
+    VALIDATE_INDEX(index_value, index, str->len)
     
     int64_t code = (int64_t)str->buff[index];
 
@@ -55,17 +55,21 @@ Value native_fn_str_char_code(uint8_t argc, Value *values, void *target, VM *vm)
 
 Value native_fn_str_split(uint8_t argc, Value *values, void *target, VM *vm){
     Str *str = (Str *)target;
-    Value *vby = &values[0];
+    Value *by_value = &values[0];
     Str *by = NULL;
 
-    if(!IS_STR(vby))
+    if(!IS_STR(by_value))
         vm_utils_error(vm, "Expect string as 'by' to split");
+    
+    by = TO_STR(by_value);
+
     if(by->len != 1)
 		vm_utils_error(vm, "Expect string of length 1 as 'by' to split");
 
-	by = TO_STR(vby);
-    DynArr *list = assert_ptr(vm_utils_dyarr(vm), vm);
+    Obj *list_obj = vm_utils_list_obj(vm);
+    if(!list_obj) vm_utils_error(vm, "Out of memory");
 
+    DynArr *list = list_obj->value.list;
 	char coincidence = 0;
     size_t from = 0;
     size_t to = 0;
@@ -83,12 +87,15 @@ Value native_fn_str_split(uint8_t argc, Value *values, void *target, VM *vm){
 			Value str_value = {0};
 
 			if(len == 0){
-				if(!vm_utils_empty_str_obj(&str_value, vm)) goto FAIL;
-			}else{
-				if(!vm_utils_range_str_obj(from, to - 1, str->buff, &str_value, vm)) goto FAIL;
-			}
+                if(!vm_utils_empty_str_obj(&str_value, vm))
+                    vm_utils_error(vm, "Out of memory");
+            }else{
+                if(!vm_utils_range_str_obj(from, to - 1, str->buff, &str_value, vm))
+                    vm_utils_error(vm, "Out of memory");
+            }
 
-			if(dynarr_insert(&str_value, list)) goto FAIL;
+			if(dynarr_insert(&str_value, list))
+                vm_utils_error(vm, "Out of memory");
 
             from = i;
         }
@@ -97,23 +104,14 @@ Value native_fn_str_split(uint8_t argc, Value *values, void *target, VM *vm){
 	if(coincidence){
 		Value str_value = {0};
 
-    	if(!vm_utils_range_str_obj(from, i - 1, str->buff, &str_value, vm)) goto FAIL;
-		if(dynarr_insert(&str_value, list)) goto FAIL;
+    	if(!vm_utils_range_str_obj(from, i - 1, str->buff, &str_value, vm))
+            vm_utils_error(vm, "Out of memory");
+
+		if(dynarr_insert(&str_value, list))
+            vm_utils_error(vm, "Out of memory");
 	}
 
-    Obj *obj_list = vm_utils_obj(LIST_OTYPE, vm);
-	if(!obj_list) goto FAIL;
-
-    obj_list->value.list = list;
-
-	goto OK;
-
-FAIL:
-	dynarr_destroy(list);
-	vm_utils_error(vm, "Out of memory");
-
-OK:
-    return OBJ_VALUE(obj_list);
+    return OBJ_VALUE(list_obj);
 }
 
 Value native_fn_str_lstrip(uint8_t argsc, Value *values, void *target, VM *vm){
@@ -204,7 +202,7 @@ Value native_fn_str_lower(uint8_t argsc, Value *values, void *target, VM *vm){
 	if(!vm_utils_clone_str_obj(str->buff, &value, vm))
 		vm_utils_error(vm, "Out of memory");
 
-	Str *out_str = value.literal.obj->value.str;
+	Str *out_str = TO_STR(&value);
 
 	for(size_t i = 0; i < out_str->len; i++){
 		char c = out_str->buff[i];

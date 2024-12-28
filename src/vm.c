@@ -806,13 +806,17 @@ void execute(uint8_t chunk, VM *vm){
 		}
 		case LIST_OPCODE:{
 			int32_t len = read_i32(vm);
-			DynArr *list = assert_ptr(vm_utils_dyarr(vm), vm);
+            
+            Obj *list_obj = vm_utils_list_obj(vm);
+            if(!list_obj) vm_utils_error(vm, "Out of memory");
+
+			DynArr *list = list_obj->value.list;
 
 			for(int32_t i = 0; i < len; i++){
 				Value *value = pop(vm);
 
 				if(dynarr_insert(value, list))
-					vm_utils_error(vm, "Failed to insert value at list: out of memory\n");		
+					vm_utils_error(vm, "Out of memory");		
 			}
 
 			Obj *obj = vm_utils_obj(LIST_OTYPE, vm);
@@ -859,8 +863,8 @@ void execute(uint8_t chunk, VM *vm){
         }
 		case RECORD_OPCODE:{
 			uint8_t len = ADVANCE(vm);
+            
 			Obj *record_obj = vm_utils_record_obj(len == 0, vm);
-
 			if(!record_obj) vm_utils_error(vm, "Out of memory");
 
 			if(len == 0){

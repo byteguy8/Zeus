@@ -5,14 +5,17 @@
 #include "vm.h"
 
 void vm_utils_error(VM *vm, char *msg, ...);
+void *assert_ptr(void *ptr, VM *vm);
+
+uint32_t vm_utils_hash_obj(Obj *obj);
+uint32_t vm_utils_hash_value(Value *value);
+
+void vm_utils_clean_up(VM *vm);
 
 char *vm_utils_clone_buff(char *buff, VM *vm);
 Value *vm_utils_clone_value(Value *value, VM *vm);
-Obj *vm_utils_obj(ObjType type, VM *vm);
-Str *vm_utils_core_str(char *buff, uint32_t hash, VM *vm);
-Str *vm_utils_uncore_str(char *buff, VM *vm);
-Str *vm_utils_uncore_alloc_str(char *buff, VM *vm);
 
+Obj *vm_utils_obj(ObjType type, VM *vm);
 Obj *vm_utils_core_str_obj(char *buff, VM *vm);
 Obj *vm_utils_uncore_str_obj(char *buff, VM *vm);
 Obj *vm_utils_empty_str_obj(Value *out_value, VM *vm);
@@ -26,13 +29,9 @@ NativeFn *vm_utils_native_function(
     RawNativeFn native,
     VM *vm
 );
-DynArr *vm_utils_dyarr(VM *vm);
 Obj *vm_utils_list_obj(VM *vm);
-LZHTable *vm_utils_dict(VM *vm);
 Obj *vm_utils_dict_obj(VM *vm);
 Obj *vm_utils_record_obj(char empty, VM *vm);
-
-void *assert_ptr(void *ptr, VM *vm);
 
 #define IS_EMPTY(v)((v)->type == EMPTY_VTYPE)
 #define IS_BOOL(v)((v)->type == BOOL_VTYPE)
@@ -75,10 +74,5 @@ void *assert_ptr(void *ptr, VM *vm);
     index = TO_INT((value)); \
     if(index < 0 || index >= (int64_t)len) \
         vm_utils_error(vm, "'%s' out of bounds. Must be 0 >= index(%ld) < len(%ld)", name, index, len);
-
-uint32_t vm_utils_hash_obj(Obj *obj);
-uint32_t vm_utils_hash_value(Value *value);
-
-void vm_utils_clean_up(VM *vm);
 
 #endif

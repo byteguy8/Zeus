@@ -11,6 +11,7 @@
 #define FRAME_AT(at, vm)(&vm->frame_stack[at])
 
 //> Private Interface
+void clean_up_module(Module *module);
 void destroy_dict_values(void *key, void *value);
 void destroy_globals_values(void *ptr);
 void destroy_obj(Obj *obj, VM *vm);
@@ -22,8 +23,40 @@ void gc(VM *vm);
 int compare_locations(void *a, void *b);
 BStr *prepare_stacktrace(unsigned int spaces, VM *vm);
 //< Private Interface
-
 //> Private Implementation
+void clean_up_module(Module *module){
+    if(module->shadow) return;
+
+    SubModule *submodule = module->submodule;
+	LZHTable *globals = submodule->globals;
+	// Due to the same module can be imported in others modules
+	// we need to make sure we already handled its globals in order
+	// to no make a double free on them.
+	if(globals){
+		LZHTableNode *global_node = submodule->globals->head;
+
+		while(global_node){
+			LZHTableNode *next = global_node->next_table_node;
+			free(global_node->value);
+			global_node = next;
+		}
+
+		submodule->globals = NULL;
+	}
+
+	LZHTableNode *symbol_node = submodule->symbols->head;
+    
+    while (symbol_node){
+        LZHTableNode *next = symbol_node->next_table_node;
+		ModuleSymbol *symbol = (ModuleSymbol *)symbol_node->value;
+
+        if(symbol->type == MODULE_MSYMTYPE)
+			clean_up_module(symbol->value.module);
+
+        symbol_node = next;
+    }
+}
+
 void destroy_dict_values(void *key, void *value){
     free(key);
     free(value);
@@ -301,74 +334,51 @@ void vm_utils_error(VM *vm, char *msg, ...){
     longjmp(vm->err_jmp, 1);
 }
 
-Obj *vm_utils_core_str_obj(char *buff, VM *vm){
-    size_t buff_len = strlen(buff);
-    Str *str = (Str *)malloc(sizeof(Str));
-    Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
-
-    if(!str || !str_obj){
-        free(str);
-        vm_utils_error(vm, "Failed to create core string: out of memory");
-        return NULL;
-    }
-
-    str->core = 1;
-    str->len = buff_len;
-    str->buff = buff;
-
-    str_obj->value.str = str;
-
-    return str_obj;
+void *assert_ptr(void *ptr, VM *vm){
+    if(ptr) return ptr;
+    vm_utils_error(vm, "Out of memory");
+    return NULL;
 }
 
-Obj *vm_utils_uncore_str_obj(char *buff, VM *vm){
-    size_t buff_len = strlen(buff);
-    Str *str = (Str *)malloc(sizeof(Str));
-    Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
-
-    if(!str || !str_obj){
-        free(str);
-        vm_utils_error(vm, "Failed to create core string: out of memory");
-        return NULL;
+uint32_t vm_utils_hash_obj(Obj *obj){
+    switch (obj->type){
+        case STR_OTYPE :{
+            Str *str = obj->value.str;
+            uint32_t hash = lzhtable_hash((uint8_t *)str->buff, str->len);
+            return hash;
+        }
+        default:{
+            uint32_t hash = lzhtable_hash((uint8_t *)&obj->value, sizeof(obj->value));
+            return hash;
+        }
     }
-
-    str->core = 0;
-    str->len = buff_len;
-    str->buff = buff;
-
-    str_obj->value.str = str;
-
-    return str_obj;
 }
 
-Obj *vm_utils_empty_str_obj(Value *out_value, VM *vm){
-	char *buff = NULL;
-	Str *str = NULL;
-	Obj *str_obj = NULL;
+uint32_t vm_utils_hash_value(Value *value){
+    switch (value->type){
+        case EMPTY_VTYPE:
+        case BOOL_VTYPE:
+        case INT_VTYPE:{
+            uint32_t hash = lzhtable_hash((uint8_t *)&value->literal.i64, sizeof(int64_t));
+            return hash;
+        }
+        default:{
+            Obj *obj = value->literal.obj;
+            return vm_utils_hash_obj(obj);
+        }
+    }   
+}
 
-	buff = (char *)malloc(1);
-	if(!buff) goto FAIL;
-	buff[0] = '\0';
+void vm_utils_clean_up(VM *vm){
+	Obj *obj = vm->head;
 
-	str = vm_utils_uncore_alloc_str(buff, vm);
-	if(!str) goto FAIL;
+	while(obj){
+		Obj *next = obj->next;
+		destroy_obj(obj, vm);
+		obj = next;
+	}
 
-	str_obj = vm_utils_obj(STR_OTYPE, vm);
-	if(!str_obj) goto FAIL;
-
-	str_obj->value.str = str;
-
-	goto OK;
-
-FAIL:
-	free(buff);
-	free(str);
-	free(str_obj);
-	return NULL;
-
-OK:
-	*out_value = (Value){.type = OBJ_VTYPE, .literal.obj = str_obj};
-	return str_obj;
+    clean_up_module(vm->module);
 }
 
 char *vm_utils_clone_buff(char *buff, VM *vm){
@@ -383,118 +393,11 @@ char *vm_utils_clone_buff(char *buff, VM *vm){
 	return cloned_buff;
 }
 
-Obj *vm_utils_clone_str_obj(char *buff, Value *out_value, VM *vm){
-	Str *str = NULL;
-	Obj *str_obj = NULL;
-
-	str = vm_utils_uncore_alloc_str(buff, vm);
-	if(!str) goto FAIL;
-
-	str_obj = vm_utils_obj(STR_OTYPE, vm);
-	if(!str_obj) goto FAIL;
-
-	str_obj->value.str = str;
-
-	goto OK;
-
-FAIL:
-	free(buff);
-	free(str);
-	free(str_obj);
-	return NULL;
-
-OK:
-	*out_value = (Value){.type = OBJ_VTYPE, .literal.obj = str_obj};
-	return str_obj;
-
-}
-
-Obj *vm_utils_range_str_obj(size_t from, size_t to, char *buff, Value *out_value, VM *vm){
-	size_t range_buff_len = to - from + 1;
-	char *range_buff = NULL;
-	Str *str = NULL;
-	Obj *str_obj = NULL;
-	
-    range_buff = (char *)malloc(range_buff_len + 1);
-    if(!range_buff) goto FAIL;
-
-	memcpy(range_buff, buff + from, range_buff_len);
-	range_buff[range_buff_len] = '\0';
-
-	str = vm_utils_uncore_str(range_buff, vm);
-	if(!str) goto FAIL;
-
-	str_obj = vm_utils_obj(STR_OTYPE, vm);
-	if(!str_obj) goto FAIL;
-
-	str_obj->value.str = str;
-
-	goto OK;
-
-FAIL:
-    free(range_buff);
-	free(str);
-	free(str_obj);
-	return NULL;
-
-OK:
-	*out_value = (Value){.type = OBJ_VTYPE, .literal.obj = str_obj};
-	return str_obj;
-}
-
 Value *vm_utils_clone_value(Value *value, VM *vm){
     Value *clone = (Value *)malloc(sizeof(Value));
     if(!clone) return NULL;
     *clone = *value;
     return clone;
-}
-
-Str *vm_utils_core_str(char *buff, uint32_t hash, VM *vm){
-    size_t buff_len = strlen(buff);
-    Str *str = (Str *)malloc(sizeof(Str));
-    
-    if(!str) return NULL;
-
-    str->core = 1;
-    str->len = buff_len;
-    str->buff = buff;
-
-    return str;
-}
-
-Str *vm_utils_uncore_str(char *buff, VM *vm){
-    size_t buff_len = strlen(buff);
-    Str *str = (Str *)malloc(sizeof(Str));
-
-    if(!str) return NULL;
-
-    str->core = 0;
-    str->len = buff_len;
-    str->buff = buff;
-
-    return str;
-}
-
-Str *vm_utils_uncore_alloc_str(char *buff, VM *vm){
-    size_t buff_len = strlen(buff);
-	char *new_buff = (char *)malloc(buff_len + 1);
-        
-    if(!new_buff) return NULL;
-	memcpy(new_buff, buff, buff_len);
-	new_buff[buff_len] = '\0';
-
-    Str *str = (Str *)malloc(sizeof(Str));
-
-    if(!str){
-		free(new_buff);
-		return NULL;
-	}
-
-    str->core = 0;
-    str->len = buff_len;
-    str->buff = new_buff;
-
-    return str;
 }
 
 Obj *vm_utils_obj(ObjType type, VM *vm){
@@ -517,6 +420,152 @@ Obj *vm_utils_obj(ObjType type, VM *vm){
     vm->objs_size += sizeof(Obj);
 
     return obj;
+}
+
+Obj *vm_utils_core_str_obj(char *buff, VM *vm){
+    size_t buff_len = strlen(buff);
+    Str *str = (Str *)malloc(sizeof(Str));
+    Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
+
+    if(!str || !str_obj){
+        free(str);
+        return NULL;
+    }
+
+    str->core = 1;
+    str->len = buff_len;
+    str->buff = buff;
+
+    str_obj->value.str = str;
+
+    return str_obj;
+}
+
+Obj *vm_utils_uncore_str_obj(char *buff, VM *vm){
+    size_t buff_len = strlen(buff);
+    Str *str = (Str *)malloc(sizeof(Str));
+    Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
+
+    if(!str || !str_obj){
+        free(str);
+        return NULL;
+    }
+
+    str->core = 0;
+    str->len = buff_len;
+    str->buff = buff;
+
+    str_obj->value.str = str;
+
+    return str_obj;
+}
+
+Obj *vm_utils_empty_str_obj(Value *out_value, VM *vm){
+	char *buff = (char *)malloc(1);
+	Str *str = str = (Str *)malloc(sizeof(Str));
+	Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
+
+	if(!buff || !str || !str_obj){
+        free(buff);
+        free(str);
+        return NULL;
+    }
+
+    str->core = 0;
+    str->len = 0;
+    str->buff = buff;
+
+    str_obj->value.str = str;
+	
+	return str_obj;
+}
+
+Obj *vm_utils_clone_str_obj(char *buff, Value *out_value, VM *vm){
+    size_t buff_len = strlen(buff);
+    char *new_buff = (char *)malloc(buff_len + 1);
+	Str *str = (Str *)malloc(sizeof(Str));
+	Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
+
+    if(!new_buff || !str || !str_obj){
+        free(new_buff);
+        free(str);
+        return NULL;
+    }
+
+    memcpy(new_buff, buff, buff_len);
+    new_buff[buff_len] = '\0';
+
+    str->core = 0;
+    str->len = buff_len;
+    str->buff = new_buff;
+
+    str_obj->value.str = str;
+
+    if(out_value)
+        *out_value = OBJ_VALUE(str_obj);
+
+    return str_obj;
+}
+
+Obj *vm_utils_range_str_obj(size_t from, size_t to, char *buff, Value *out_value, VM *vm){
+	size_t range_buff_len = to - from + 1;
+	char *range_buff = (char *)malloc(range_buff_len + 1);
+	Str *str = (Str *)malloc(sizeof(Str));
+	Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
+
+    if(!range_buff || !str || !str_obj){
+        free(range_buff);
+        free(str);
+        return NULL;
+    }
+
+	memcpy(range_buff, buff + from, range_buff_len);
+	range_buff[range_buff_len] = '\0';
+
+    str->core = 0;
+    str->len = range_buff_len;
+    str->buff = range_buff;
+
+	str_obj->value.str = str;
+
+    if(out_value)
+        *out_value = OBJ_VALUE(str_obj);
+
+    return str_obj;
+}
+
+Str *vm_utils_uncore_nalloc_str(char *buff, VM *vm){
+    size_t buff_len = strlen(buff);
+    Str *str = (Str *)malloc(sizeof(Str));
+
+    if(!str) return NULL;
+
+    str->core = 0;
+    str->len = buff_len;
+    str->buff = buff;
+
+    return str;
+}
+
+Str *vm_utils_uncore_alloc_str(char *buff, VM *vm){
+    size_t buff_len = strlen(buff);
+	char *new_buff = (char *)malloc(buff_len + 1);
+    Str *str = (Str *)malloc(sizeof(Str));
+        
+    if(!new_buff || !str){
+        free(new_buff);
+        free(str);
+        return NULL;
+    }
+
+    memcpy(new_buff, buff, buff_len);
+    new_buff[buff_len] = '\0';
+
+    str->core = 0;
+    str->len = buff_len;
+    str->buff = new_buff;
+
+    return str;
 }
 
 NativeFn *vm_utils_native_function(
@@ -543,12 +592,6 @@ NativeFn *vm_utils_native_function(
     return native_fn;
 }
 
-DynArr *vm_utils_dyarr(VM *vm){
-    DynArr *dynarr = dynarr_create(sizeof(Value), NULL);
-    if(!dynarr) return NULL;
-    return dynarr;
-}
-
 Obj *vm_utils_list_obj(VM *vm){
     DynArr *list = dynarr_create(sizeof(Value), NULL);
     if(!list) return NULL;
@@ -563,12 +606,6 @@ Obj *vm_utils_list_obj(VM *vm){
     list_obj->value.list = list;
 
     return list_obj;
-}
-
-LZHTable *vm_utils_dict(VM *vm){
-    LZHTable *table = lzhtable_create(17, NULL);
-    if(!table) return NULL;
-    return table;
 }
 
 Obj *vm_utils_dict_obj(VM *vm){
@@ -612,84 +649,4 @@ Obj *vm_utils_record_obj(char empty, VM *vm){
 	record_obj->value.record = record;
 
 	return record_obj;
-}
-
-void *assert_ptr(void *ptr, VM *vm){
-    if(ptr) return ptr;
-    vm_utils_error(vm, "Out of memory");
-    return NULL;
-}
-
-uint32_t vm_utils_hash_obj(Obj *obj){
-    switch (obj->type){
-        case STR_OTYPE :{
-            Str *str = obj->value.str;
-            uint32_t hash = lzhtable_hash((uint8_t *)str->buff, str->len);
-            return hash;
-        }
-        default:{
-            uint32_t hash = lzhtable_hash((uint8_t *)&obj->value, sizeof(obj->value));
-            return hash;
-        }
-    }
-}
-
-uint32_t vm_utils_hash_value(Value *value){
-    switch (value->type){
-        case EMPTY_VTYPE:
-        case BOOL_VTYPE:
-        case INT_VTYPE:{
-            uint32_t hash = lzhtable_hash((uint8_t *)&value->literal.i64, sizeof(int64_t));
-            return hash;
-        }
-        default:{
-            Obj *obj = value->literal.obj;
-            return vm_utils_hash_obj(obj);
-        }
-    }   
-}
-
-void clean_up_module(Module *module){
-    if(module->shadow) return;
-
-    SubModule *submodule = module->submodule;
-	LZHTable *globals = submodule->globals;
-	// Due to the same module can be imported in others modules
-	// we need to make sure we already handled its globals in order
-	// to no make a double free on them.
-	if(globals){
-		LZHTableNode *global_node = submodule->globals->head;
-
-		while(global_node){
-			LZHTableNode *next = global_node->next_table_node;
-			free(global_node->value);
-			global_node = next;
-		}
-
-		submodule->globals = NULL;
-	}
-
-	LZHTableNode *symbol_node = submodule->symbols->head;
-    
-    while (symbol_node){
-        LZHTableNode *next = symbol_node->next_table_node;
-		ModuleSymbol *symbol = (ModuleSymbol *)symbol_node->value;
-
-        if(symbol->type == MODULE_MSYMTYPE)
-			clean_up_module(symbol->value.module);
-
-        symbol_node = next;
-    }
-}
-
-void vm_utils_clean_up(VM *vm){
-	Obj *obj = vm->head;
-
-	while(obj){
-		Obj *next = obj->next;
-		destroy_obj(obj, vm);
-		obj = next;
-	}
-
-    clean_up_module(vm->module);
 }

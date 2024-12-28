@@ -169,7 +169,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             size_t end = dumpper->ip;
 
 			printf("%8.8s %.7ld", "LSET", end - start);
-            printf("| slot: %d\n", slot);
+            printf(" | slot: %d\n", slot);
            	
             break;
         }
@@ -323,11 +323,15 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
         }
 		case RECORD_OPCODE:{
 			uint8_t len = advance(dumpper);
+            
+            for (uint8_t i = 0; i < len; i++)
+                read_str(dumpper, NULL);
+
             size_t end = dumpper->ip;
 
 			printf("%8.8s %.7ld", "RECORD", end - start);
             printf(" | length: %d\n", len);
-			
+		
             break;
 		}
         case CALL_OPCODE:{
