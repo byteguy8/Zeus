@@ -824,7 +824,7 @@ void execute(uint8_t chunk, VM *vm){
 			break;
 		}
         case DICT_OPCODE:{
-            int32_t len = read_i32(vm);
+            int32_t len = read_i16(vm);
             
             Obj *dict_obj = vm_utils_dict_obj(vm);
             if(!dict_obj) vm_utils_error(vm, "Out of memory");

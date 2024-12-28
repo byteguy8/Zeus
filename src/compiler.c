@@ -793,7 +793,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             write_chunk(DICT_OPCODE, compiler);
 			write_location(dict_expr->dict_token, compiler);
 
-            write_i32(len, compiler);
+            write_i16(len, compiler);
 
             break;
         }
