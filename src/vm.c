@@ -805,7 +805,7 @@ void execute(uint8_t chunk, VM *vm){
 			break;
 		}
 		case LIST_OPCODE:{
-			int32_t len = read_i32(vm);
+			int32_t len = read_i16(vm);
             
             Obj *list_obj = vm_utils_list_obj(vm);
             if(!list_obj) vm_utils_error(vm, "Out of memory");
@@ -819,14 +819,7 @@ void execute(uint8_t chunk, VM *vm){
 					vm_utils_error(vm, "Out of memory");		
 			}
 
-			Obj *obj = vm_utils_obj(LIST_OTYPE, vm);
-			obj->value.list = list;
-
-			Value value = {0};
-			value.type = OBJ_VTYPE;
-			value.literal.obj = obj;
-
-            PUSH(value, vm);
+            PUSH(OBJ_VALUE(list_obj), vm);
 
 			break;
 		}

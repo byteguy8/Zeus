@@ -769,7 +769,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             write_chunk(LIST_OPCODE, compiler);
 			write_location(list_token, compiler);
 
-            write_i32(len, compiler);
+            write_i16(len, compiler);
 
 			break;
 		}
