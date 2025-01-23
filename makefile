@@ -1,6 +1,14 @@
 SRC = ./src
 OUT_DIR = ./build
-CFLAGS = -fsanitize=address -I./include -Wall -Wextra -g2 -Wno-unused-parameter
+
+BUILD := debug
+
+cflags.common := -I./include --std=gnu99
+cflags.debug := -g2 -O0 -Wall -Wextra -Wno-unused-parameter -fsanitize=address
+cflags.release := -O2 -Wall -Wextra
+
+CFLAGS := ${cflags.${BUILD}} ${cflags.common}
+
 COMPILER = gcc
 OBJS = lzarena.o \
 bstr.o \
