@@ -2,7 +2,7 @@ SRC = ./src
 OUT_DIR = ./build
 CFLAGS = -fsanitize=address -I./include -Wall -Wextra -g2 -Wno-unused-parameter
 COMPILER = gcc
-OBJS = lzarena.o lzdynalloc.o \
+OBJS = lzarena.o \
 bstr.o \
 dynarr.o lzhtable.o \
 memory.o utils.o \
@@ -34,7 +34,5 @@ dynarr.o:
 	$(COMPILER) -c -o $(OUT_DIR)/dynarr.o $(CFLAGS) $(SRC)/dynarr.c
 bstr.o:
 	$(COMPILER) -c -o $(OUT_DIR)/bstr.o $(CFLAGS) $(SRC)/bstr.c
-lzdynalloc.o:
-	$(COMPILER) -c -o $(OUT_DIR)/lzdynalloc.o $(CFLAGS) $(SRC)/lzdynalloc.c
 lzarena.o:
 	$(COMPILER) -c -o $(OUT_DIR)/lzarena.o  $(CFLAGS) $(SRC)/lzarena.c

@@ -1,17 +1,14 @@
 #include "memory.h"
 #include "lzarena.h"
-#include "lzdynalloc.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 
 static LZArena *compile_arena = NULL;
-static LZDynAllocNode *compile_dynalloc = NULL;
 static DynArrAllocator compile_dynarr_allocator = {0};
 static LZHTableAllocator lzhtable_allocator = {0};
 
 static LZArena *runtime_arena = NULL;
-static LZDynAllocNode *runtime_dynalloc = NULL;
 static DynArrAllocator runtime_dynarr_allocator = {0};
 static LZHTableAllocator runtime_lzhtable_allocator = {0};
 
@@ -28,7 +25,7 @@ void *arena_alloc(size_t size, void *ctx){
 }
 
 void *arena_realloc(void *ptr, size_t new_size, size_t old_size, void *ctx){
-    void *new_ptr = LZARENA_REALLOC(ptr, new_size, old_size, ctx);
+    void *new_ptr = LZARENA_REALLOC(ptr, old_size, new_size, ctx);
 
 	if(!new_ptr){
 		fprintf(stderr, "out of memory\n");
@@ -43,62 +40,32 @@ void arena_dealloc(void *ptr, size_t size, void *ctx){
 	// do nothing
 }
 
-void *dyn_alloc(size_t size, void *ctx){
-	void *ptr = lzdynalloc_node_alloc(size, ctx);
-
-	if(!ptr){
-		fprintf(stderr, "out of memory\n");
-		memory_deinit();
-		exit(EXIT_FAILURE);
-	}
-
-	return ptr;
-}
-
-void *dyn_realloc(void *ptr, size_t new_size, size_t old_size, void *ctx){
-	void *new_ptr = lzdynalloc_node_realloc(new_size, ptr, ctx);
-
-	if(!new_ptr){
-		fprintf(stderr, "out of memory\n");
-		memory_deinit();
-		exit(EXIT_FAILURE);
-	}
-
-	return new_ptr;
-
-}
-
-void dyn_dealloc(void *ptr, size_t size, void *ctx){
-	if(!ptr) return;
-	lzdynalloc_node_dealloc(ptr, ctx);
-}
-
 int memory_init(){
+    // compile time
 	compile_arena = lzarena_create();
-	compile_dynalloc = lzdynalloc_node_raw(32768, LZARENA_ALLOC(32768, compile_arena));
 
-	compile_dynarr_allocator.alloc = dyn_alloc;
-	compile_dynarr_allocator.realloc = dyn_realloc;
-	compile_dynarr_allocator.dealloc = dyn_dealloc;
-	compile_dynarr_allocator.ctx = compile_dynalloc;
+	compile_dynarr_allocator.alloc = arena_alloc;
+	compile_dynarr_allocator.realloc = arena_realloc;
+	compile_dynarr_allocator.dealloc = arena_dealloc;
+	compile_dynarr_allocator.ctx = compile_arena;
 
-    lzhtable_allocator.alloc = dyn_alloc;
-	lzhtable_allocator.realloc = dyn_realloc;
-	lzhtable_allocator.dealloc = dyn_dealloc;
-	lzhtable_allocator.ctx = compile_dynalloc;
+    lzhtable_allocator.alloc = arena_alloc;
+	lzhtable_allocator.realloc = arena_realloc;
+	lzhtable_allocator.dealloc = arena_dealloc;
+	lzhtable_allocator.ctx = compile_arena;
 
+    // runtime
     runtime_arena = lzarena_create();
-    runtime_dynalloc = lzdynalloc_node_raw(32768, LZARENA_ALLOC(32768, runtime_arena));
 
-	runtime_dynarr_allocator.alloc = dyn_alloc;
-	runtime_dynarr_allocator.realloc = dyn_realloc;
-	runtime_dynarr_allocator.dealloc = dyn_dealloc;
-	runtime_dynarr_allocator.ctx = runtime_dynalloc;
+	runtime_dynarr_allocator.alloc = arena_alloc;
+	runtime_dynarr_allocator.realloc = arena_realloc;
+	runtime_dynarr_allocator.dealloc = arena_dealloc;
+	runtime_dynarr_allocator.ctx = runtime_arena;
 
-    runtime_lzhtable_allocator.alloc = dyn_alloc;
-	runtime_lzhtable_allocator.realloc = dyn_realloc;
-	runtime_lzhtable_allocator.dealloc = dyn_dealloc;
-	runtime_lzhtable_allocator.ctx = runtime_dynalloc;
+    runtime_lzhtable_allocator.alloc = arena_alloc;
+	runtime_lzhtable_allocator.realloc = arena_realloc;
+	runtime_lzhtable_allocator.dealloc = arena_dealloc;
+	runtime_lzhtable_allocator.ctx = runtime_arena;
 
     return 0;
 }
@@ -109,8 +76,15 @@ void memory_deinit(){
 }
 
 void memory_report(){
-	printf("Compile arena: %ld/%ld\n", compile_arena->used, compile_arena->len);
-    printf("Runtime arena: %ld/%ld\n", runtime_arena->used, runtime_arena->len);
+    size_t compile_used = 0;
+    size_t compile_size = 0;
+
+    lzarena_report(&compile_used, &compile_size, compile_arena);
+	printf("Compile arena: %ld/%ld\n", compile_used, compile_size);
+
+    size_t runtime_used = 0;
+    size_t runtime_size = 0;
+    printf("Runtime arena: %ld/%ld\n", runtime_used, runtime_size);
 }
 
 void memory_free_compile(){
