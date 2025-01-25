@@ -49,6 +49,7 @@ typedef struct fn{
 }Fn;
 
 typedef Value (*RawNativeFn)(uint8_t argc, Value *values, void *target, VM *vm);
+typedef Value (*RawForeignFn)(Value *values);
 
 typedef struct native_fn{
     char unique;
@@ -56,8 +57,12 @@ typedef struct native_fn{
     size_t name_len;
     char name[NAME_LEN];
     void *target;
-    RawNativeFn native;
+    RawNativeFn raw_fn;
 }NativeFn;
+
+typedef struct foreign_fn{
+    RawForeignFn raw_fn;
+}ForeignFn;
 
 typedef struct record{
 	LZHTable *key_values;
@@ -90,5 +95,9 @@ typedef struct module_symbol{
 		Module *module;
 	}value;
 }ModuleSymbol;
+
+typedef struct native_module{
+    void *handler;  
+}NativeLib;
 
 #endif

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
+#include <dlfcn.h>
 
 #define CURRENT_FRAME(vm)(&vm->frame_stack[vm->frame_ptr - 1])
 #define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
@@ -105,6 +106,25 @@ void destroy_obj(Obj *obj, VM *vm){
             break;
         }
         case MODULE_OTYPE:{
+            break;
+        }
+        case NATIVE_LIB_OTYPE:{
+            NativeLib *library = obj->value.native_lib;
+            void *handler = library->handler;
+            void (*znative_deinit)(void) = dlsym(handler, "znative_deinit");
+            
+            if(znative_deinit)
+                znative_deinit();
+            else
+                fprintf(stderr, "Failed to deinit native library: not function present");
+
+            dlclose(handler);
+            free(library);
+
+            break;
+        }
+        case FOREIGN_FN_OTYPE:{
+            free(obj->value.foreign_fn);
             break;
         }
 		default:{
@@ -587,7 +607,7 @@ NativeFn *vm_utils_native_function(
     native_fn->name[name_len] = '\0';
     native_fn->name_len = name_len;
     native_fn->target = target;
-    native_fn->native = native;
+    native_fn->raw_fn = native;
 
     return native_fn;
 }

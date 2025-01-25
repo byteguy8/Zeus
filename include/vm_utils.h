@@ -44,6 +44,8 @@ Obj *vm_utils_record_obj(char empty, VM *vm);
 #define IS_FN(v)(IS_OBJ(v) && (v)->literal.obj->type == FN_OTYPE)
 #define IS_NATIVE_FN(v)(IS_OBJ(v) && (v)->literal.obj->type == NATIVE_FN_OTYPE)
 #define IS_MODULE(v)(IS_OBJ(v) && (v)->literal.obj->type == MODULE_OTYPE)
+#define IS_NATIVE_LIBRARY(v)(IS_OBJ(v) && (v)->literal.obj->type == NATIVE_LIB_OTYPE)
+#define IS_FOREIGN_FN(v)(IS_OBJ(v) && (v)->literal.obj->type == FOREIGN_FN_OTYPE)
 
 #define TO_BOOL(v)((v)->literal.bool)
 #define TO_INT(v)((v)->literal.i64)
@@ -55,6 +57,8 @@ Obj *vm_utils_record_obj(char empty, VM *vm);
 #define TO_FN(v)((v)->literal.obj->value.fn)
 #define TO_NATIVE_FN(v)((v)->literal.obj->value.native_fn)
 #define TO_MODULE(v)((v)->literal.obj->value.module)
+#define TO_NATIVE_LIBRARY(v)((v)->literal.obj->value.native_lib)
+#define TO_FOREIGN_FN(v)((v)->literal.obj->value.foreign_fn)
 
 #define EMPTY_VALUE ((Value){.type = EMPTY_VTYPE})
 #define BOOL_VALUE(value)((Value){.type = BOOL_VTYPE, .literal.bool = value})

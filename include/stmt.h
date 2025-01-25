@@ -20,6 +20,7 @@ typedef enum stmt_type{
     VAR_DECL_STMTTYPE,
     FUNCTION_STMTTYPE,
     IMPORT_STMTTYPE,
+    LOAD_STMTTYPE,
 }StmtType;
 
 typedef struct stmt{
@@ -97,5 +98,11 @@ typedef struct import_stmt{
     Token *path_token;
     Token *name_token;
 }ImportStmt;
+
+typedef struct load_stmt{
+    Token *load_token;
+    Token *path_token;
+    Token *name_token;
+}LoadStmt;
 
 #endif

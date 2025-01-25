@@ -54,7 +54,7 @@ void add_native(char *name, int arity, RawNativeFn raw_native, LZHTable *natives
     native->name[name_len] = '\0';
     native->name_len = name_len;
     native->target = NULL;
-    native->native = raw_native;
+    native->raw_fn = raw_native;
 
     lzhtable_put((uint8_t *)name, name_len, native, natives, NULL);
 }
@@ -132,6 +132,7 @@ int main(int argc, char const *argv[]){
     add_keyword("try", TRY_TOKTYPE, keywords);
     add_keyword("catch", CATCH_TOKTYPE, keywords);
     add_keyword("throw", THROW_TOKTYPE, keywords);
+    add_keyword("load", LOAD_TOKTYPE, keywords);
 
 	Lexer *lexer = lexer_create();
 	Parser *parser = parser_create();

@@ -13,6 +13,8 @@ typedef enum obj_type{
     FN_OTYPE,
     NATIVE_FN_OTYPE,
     MODULE_OTYPE,
+    FOREIGN_FN_OTYPE,
+    NATIVE_LIB_OTYPE,
 }ObjType;
 
 typedef struct obj{    
@@ -30,6 +32,8 @@ typedef struct obj{
         Fn *fn;
         NativeFn *native_fn;
         Module *module;
+        NativeLib *native_lib;
+        ForeignFn *foreign_fn;
 	}value;
 }Obj;
 

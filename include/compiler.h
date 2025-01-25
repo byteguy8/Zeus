@@ -18,7 +18,8 @@ typedef enum symbol_type{
     IMUT_SYMTYPE,
     FN_SYMTYPE,
     NATIVE_FN_SYMTYPE,
-    MODULE_SYMTYPE
+    MODULE_SYMTYPE,
+    NATIVE_MODULE_SYMTYPE,
 }SymbolType;
 
 typedef struct symbol{

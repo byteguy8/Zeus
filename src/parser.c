@@ -127,6 +127,7 @@ Stmt *parse_return_stmt(Parser *parser);
 Stmt *parse_var_decl_stmt(Parser *parser);
 Stmt *parse_function_stmt(Parser *parser);
 Stmt *parse_import_stmt(Parser *parser);
+Stmt *parse_load_stmt(Parser *parser);
 
 Expr *parse_expr(Parser *parser){
 	return parse_is_expr(parser);
@@ -617,6 +618,9 @@ Stmt *parse_stmt(Parser *parser){
     if(match(parser, 1, IMPORT_TOKTYPE))
         return parse_import_stmt(parser);
 
+    if(match(parser, 1, LOAD_TOKTYPE))
+        return parse_load_stmt(parser);
+
     if(match(parser, 1, THROW_TOKTYPE))
         return parse_throw_stmt(parser);
 
@@ -861,6 +865,29 @@ Stmt *parse_import_stmt(Parser *parser){
     import_stmt->name_token = name_token;
 
     return create_stmt(IMPORT_STMTTYPE, import_stmt);
+}
+
+Stmt *parse_load_stmt(Parser *parser){
+    Token *load_token = NULL;
+    Token *path_token = NULL;
+    Token *name_token = NULL;
+
+    load_token = previous(parser);
+    path_token = consume(parser, STR_TYPE_TOKTYPE, "Expect path after 'load' keyword");
+    
+    consume(parser, AS_TOKTYPE, "Expect 'as' after native library path");
+
+    name_token = consume(parser, IDENTIFIER_TOKTYPE, "Expect name for native library");
+    
+    consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of load statement");
+
+    LoadStmt *load_stmt = (LoadStmt *)A_COMPILE_ALLOC(sizeof(ImportStmt));
+    
+    load_stmt->load_token = load_token;
+    load_stmt->path_token = path_token;
+    load_stmt->name_token = name_token;
+
+    return create_stmt(LOAD_STMTTYPE, load_stmt);
 }
 
 Parser *parser_create(){

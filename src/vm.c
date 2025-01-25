@@ -12,6 +12,7 @@
 #include <stdarg.h>
 #include <assert.h>
 #include <setjmp.h>
+#include <dlfcn.h>
 
 //> Private Interface
 static Value *peek(VM *vm);
@@ -219,6 +220,16 @@ void print_obj(Obj *object){
         case MODULE_OTYPE:{
             Module *module = object->value.module;
             printf("<module '%s' at %p>\n", module->name, module);
+            break;
+        }
+        case NATIVE_LIB_OTYPE:{
+            NativeLib *module = object->value.native_lib;
+            printf("<native library %p at %p>\n", module->handler, module);
+            break;
+        }
+        case FOREIGN_FN_OTYPE:{
+            ForeignFn *foreign = object->value.foreign_fn;
+            printf("<foreign function at %p>\n", foreign);
             break;
         }
         default:{
@@ -919,7 +930,7 @@ void execute(uint8_t chunk, VM *vm){
             }else if(IS_NATIVE_FN(fn_value)){
 				NativeFn *native_fn = TO_NATIVE_FN(fn_value);
                 void *target = native_fn->target;
-                RawNativeFn native = native_fn->native;
+                RawNativeFn raw_fn = native_fn->raw_fn;
 
                 if(native_fn->arity != args_count)
                     vm_utils_error(
@@ -937,7 +948,19 @@ void execute(uint8_t chunk, VM *vm){
                 
                 pop(vm);
 
-                Value out_value = native(args_count, values, target, vm);
+                Value out_value = raw_fn(args_count, values, target, vm);
+                PUSH(out_value, vm);
+            }else if(IS_FOREIGN_FN(fn_value)){
+                ForeignFn *foreign_fn = TO_FOREIGN_FN(fn_value);
+                RawForeignFn raw_fn = foreign_fn->raw_fn;
+                Value values[args_count];
+                
+                for (int i = args_count; i > 0; i--)
+                    values[i - 1] = *pop(vm);
+                
+                pop(vm);
+
+                Value out_value = raw_fn(values);
                 PUSH(out_value, vm);
             }else{
                 vm_utils_error(vm, "Expect function after %d parameters count", args_count);
@@ -1100,6 +1123,30 @@ void execute(uint8_t chunk, VM *vm){
 				break;
 			}
 
+            if(IS_NATIVE_LIBRARY(value)){
+                NativeLib *library = TO_NATIVE_LIBRARY(value);
+                void *handler = library->handler;
+                
+                void *(*znative_symbol)(char *symbol_name) = dlsym(handler, "znative_symbol");
+                if(!znative_symbol) vm_utils_error(vm, "Something is wrong with loaded native library. Expect 'znative_symbol' to be present");
+
+                RawForeignFn raw_foreign_fn = znative_symbol(symbol);
+                if(!raw_foreign_fn) vm_utils_error(vm, "Failed to get '%s' from native library: do not exists", symbol);
+
+                Obj *foreign_fn_obj = vm_utils_obj(FOREIGN_FN_OTYPE, vm);
+                if(!foreign_fn_obj) vm_utils_error(vm, "Failed to get native library symbol: out of memory");
+
+                ForeignFn *foreign_fn = (ForeignFn *)malloc(sizeof(ForeignFn));
+                if(!foreign_fn) vm_utils_error(vm, "Failed to get native library symbol: out of memory");
+
+                foreign_fn->raw_fn = raw_foreign_fn;
+                foreign_fn_obj->value.foreign_fn = foreign_fn;
+                
+                PUSH(OBJ_VALUE(foreign_fn_obj), vm);
+
+                break;
+            }
+
             vm_utils_error(vm, "Illegal target to access");
 
             break;
@@ -1233,6 +1280,28 @@ void execute(uint8_t chunk, VM *vm){
                     vm_utils_error(vm, "");
             }
             
+            break;
+        }
+        case LOAD_OPCODE:{
+            char *path = read_str(vm, NULL);
+            void *handler = dlopen(path, RTLD_LAZY);
+
+            if(!handler) vm_utils_error(vm, "Failed to load native library: %s", dlerror());
+
+            NativeLib *module = (NativeLib *)malloc(sizeof(NativeLib));
+            if(!module) vm_utils_error(vm, "Failed to load native library: out of memory");;
+
+            Obj *obj = vm_utils_obj(NATIVE_LIB_OTYPE, vm);
+            if(!obj) vm_utils_error(vm, "Failed to load native library: out of memory");
+
+            module->handler = handler;
+            obj->value.native_lib = module;
+
+            void (*znative_init)(void) = dlsym(handler, "znative_init");
+            znative_init();
+
+            PUSH(OBJ_VALUE(obj), vm);
+
             break;
         }
         default:{

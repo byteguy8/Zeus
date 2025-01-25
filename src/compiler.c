@@ -434,7 +434,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             Symbol *symbol = get(identifier_token, compiler);
 
-            if(symbol->type == MUT_SYMTYPE || symbol->type == IMUT_SYMTYPE){
+            if(symbol->type == MUT_SYMTYPE || symbol->type == IMUT_SYMTYPE || symbol->type == NATIVE_MODULE_SYMTYPE){
                 if(symbol->depth == 1){
                     write_chunk(GGET_OPCODE, compiler);
 					write_location(identifier_token, compiler);
@@ -1346,6 +1346,21 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			dynarr_ptr_insert(try_block, tries);
 
             break;
+        }
+        case LOAD_STMTTYPE:{
+            LoadStmt *load_stmt = (LoadStmt *)stmt->sub_stmt;
+            Token *load_token = load_stmt->load_token;
+            Token *path_token = load_stmt->path_token;
+            Token *name_token = load_stmt->name_token;
+            
+            declare(NATIVE_MODULE_SYMTYPE, name_token, compiler);
+            
+            write_chunk(LOAD_OPCODE, compiler);
+            write_location(load_token, compiler);
+            write_i32(*(int32_t*)path_token->literal, compiler);
+
+            write_chunk(GSET_OPCODE, compiler);
+            write_str(name_token->lexeme, compiler);
         }
         default:{
             assert("Illegal stmt type");
