@@ -6,7 +6,7 @@
 #include <assert.h>
 
 static int16_t compose_i16(uint8_t *bytes){
-    return ((int32_t)bytes[1] << 8) | ((int32_t)bytes[0]);
+    return ((int16_t)bytes[1] << 8) | ((int16_t)bytes[0]);
 }
 
 static int32_t compose_i32(uint8_t *bytes){
@@ -375,7 +375,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             char *path = read_str(dumpper, NULL);
             size_t end = dumpper->ip;
             
-            printf("%8.8s %.7ld", "NATIVE", end - start);
+            printf("%8.8s %.7ld", "LOAD", end - start);
             printf(" | path: %s\n", path);
             
             break;

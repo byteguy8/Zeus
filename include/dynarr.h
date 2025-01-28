@@ -1,7 +1,7 @@
 // Humble implementation of a dynamic array
 
-#ifndef _DYNARR_H_
-#define _DYNARR_H_
+#ifndef DYNARR_H
+#define DYNARR_H
 
 #include <stdlib.h>
 #include <stdint.h>
@@ -43,15 +43,15 @@ typedef struct dynarr_ptr{
 struct dynarr *dynarr_create(size_t item_size, struct dynarr_allocator *allocator);
 void dynarr_destroy(struct dynarr *dynarr);
 
-#define DYNARR_LEN(dynarr)(dynarr->used)
-#define DYNARR_AVAILABLE(dynarr)(dynarr->count - dynarr->used)
+#define DYNARR_LEN(dynarr)((dynarr)->used)
+#define DYNARR_AVAILABLE(dynarr)((dynarr)->count - (dynarr)->used)
 void dynarr_reverse(struct dynarr *dyarr);
 void dynarr_sort(int (*comparator)(void *a, void *b), struct dynarr *dynarr);
 int dynarr_find(void *b, int (*comparator)(void *a, void *b), struct dynarr *dynarr);
 
-#define DYNARR_GET(index, dynarr)(dynarr->items + ((dynarr->padding + dynarr->size) * index))
+#define DYNARR_GET(index, dynarr)((dynarr)->items + (((dynarr)->padding + (dynarr)->size) * (index)))
 #define DYNARR_GET_AS(as, index, arr)(*(as *)(DYNARR_GET(index, arr)))
-#define DYNARR_SET(item, index, dynarr)(memmove(DYNARR_GET(index, dynarr), item, dynarr->size))
+#define DYNARR_SET(item, index, dynarr)(memmove(DYNARR_GET(index, dynarr), (item), (dynarr)->size))
 int dynarr_insert(void *item, struct dynarr *dynarr);
 int dynarr_insert_at(size_t index, void *item, struct dynarr *dynarr);
 int dynarr_append(struct dynarr *from, struct dynarr *to);
@@ -62,11 +62,9 @@ int dynarr_remove_all(struct dynarr *dynarr);
 struct dynarr_ptr *dynarr_ptr_create(struct dynarr_allocator *allocator);
 void dynarr_ptr_destroy(struct dynarr_ptr *dynarr);
 
-#define DYNARR_PTR_SIZE(count, dynarr) (sizeof(void *) * (count))
-#define DYNARR_PTR_POSITION(position, dynarr) (dynarr->items + position)
-#define DYNARR_PTR_GET(index, dynarr) *DYNARR_PTR_POSITION(index, dynarr)
-
-int dynarr_ptr_resize(size_t new_count, struct dynarr_ptr *dynarr);
+#define DYNARR_PTR_LEN(dynarr_ptr)((dynarr_ptr)->used)
+#define DYNARR_PTR_POSITION(position, dynarr) ((dynarr)->items + (position))
+#define DYNARR_PTR_GET(index, dynarr) (*DYNARR_PTR_POSITION(index, dynarr))
 
 void dynarr_ptr_set(size_t index, void *value, struct dynarr_ptr *dynarr);
 int dynarr_ptr_insert(void *ptr, struct dynarr_ptr *dynarr);

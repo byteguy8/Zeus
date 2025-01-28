@@ -17,7 +17,6 @@ static int dynarr_resize(size_t new_count, struct dynarr *dynarr);
 static void quick_sort(void *buff, size_t size, size_t len, int (*comparator)(void *a, void *b), struct dynarr_allocator *allocator);
 
 #define DYNARR_DETERMINATE_GROW(count) (count == 0 ? DYNARR_DEFAULT_GROW_SIZE : count * 2)
-#define DYNARR_LEN(dynarr)(dynarr->used)
 #define DYNARR_FREE(dynarr)(dynarr->count - DYNARR_LEN(dynarr))
 #define DYNARR_ITEM_SIZE(dynarr)(dynarr->padding + dynarr->size)
 #define DYNARR_CALC_SIZE(count, dynarr) (DYNARR_ITEM_SIZE(dynarr) * count)
@@ -32,6 +31,7 @@ static void quick_sort(void *buff, size_t size, size_t len, int (*comparator)(vo
     )
 
 #define DYNARR_PTR_ITEMS_SIZE(dynarr_ptr) (sizeof(void *) * dynarr_ptr->count)
+int dynarr_ptr_resize(size_t new_count, struct dynarr_ptr *dynarr);
 
 // private implementation
 void *lzalloc(size_t size, struct dynarr_allocator *allocator){
@@ -175,6 +175,24 @@ void dynarr_sort(int (*comparator)(void *a, void *b), struct dynarr *dynarr){
     quick_sort(dynarr->items, DYNARR_ITEM_SIZE(dynarr), dynarr->used, comparator, dynarr->allocator);
 }
 
+int dynarr_ptr_resize(size_t new_count, struct dynarr_ptr *dynarr){
+    size_t old_size = DYNARR_PTR_ITEMS_SIZE(dynarr);
+    size_t new_size = sizeof(void *) * new_count;
+    void **items = lzrealloc(dynarr->items, new_size, old_size, dynarr->allocator);
+
+    if (!items)
+        return 1;
+
+    for (size_t i = dynarr->count; i < new_count; i++){
+        items[i] = NULL;
+    }
+
+    dynarr->items = items;
+    dynarr->count = new_count;
+
+    return 0;
+}
+
 int dynarr_find(void *b, int (*comparator)(void *a, void *b), struct dynarr *dynarr){
     int left = 0;
     int right = DYNARR_LEN(dynarr) == 0 ? 0 : DYNARR_LEN(dynarr) - 1;
@@ -288,24 +306,6 @@ void dynarr_ptr_destroy(struct dynarr_ptr *dynarr){
     dynarr->items = NULL;
 
     lzdealloc(dynarr, sizeof(struct dynarr_ptr), dynarr->allocator);
-}
-
-int dynarr_ptr_resize(size_t new_count, struct dynarr_ptr *dynarr){
-    size_t old_size = DYNARR_PTR_ITEMS_SIZE(dynarr);
-    size_t new_size = sizeof(void *) * new_count;
-    void **items = lzrealloc(dynarr->items, new_size, old_size, dynarr->allocator);
-
-    if (!items)
-        return 1;
-
-    for (size_t i = dynarr->count; i < new_count; i++){
-        items[i] = NULL;
-    }
-
-    dynarr->items = items;
-    dynarr->count = new_count;
-
-    return 0;
 }
 
 void dynarr_ptr_set(size_t index, void *value, struct dynarr_ptr *dynarr){

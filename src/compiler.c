@@ -330,7 +330,7 @@ size_t write_i32(int32_t i32, Compiler *compiler){
 	return index;
 }
 
-void update_i16(size_t index, int32_t i16, Compiler *compiler){
+void update_i16(size_t index, int16_t i16, Compiler *compiler){
     uint8_t bytes[2];
 	DynArr *chunks = current_chunks(compiler);
 
@@ -1023,7 +1023,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             size_t len_af_body = chunks_len(compiler);
 			size_t body_len = len_af_body - len_bef_body;
 
-            update_i16(jmp_index, (int32_t)body_len + 1, compiler);
+            update_i16(jmp_index, (int16_t)body_len + 1, compiler);
 
 			compile_expr(condition, compiler);
             size_t len_af_while = chunks_len(compiler);
@@ -1360,7 +1360,13 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             write_i32(*(int32_t*)path_token->literal, compiler);
 
             write_chunk(GSET_OPCODE, compiler);
+            write_location(load_token, compiler);
             write_str(name_token->lexeme, compiler);
+            
+            write_chunk(POP_OPCODE, compiler);
+            write_location(load_token, compiler);
+
+            break;
         }
         default:{
             assert("Illegal stmt type");

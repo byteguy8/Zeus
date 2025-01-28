@@ -313,7 +313,7 @@ Value *peek(VM *vm){
 }
 
 Value *peek_at(int offset, VM *vm){
-    if(1 + offset > vm->stack_ptr) vm_utils_error(vm, "Illegal offset");
+    if(1 + offset > vm->stack_ptr) vm_utils_error(vm, "Illegal offset: %d, stack: %d", offset, vm->stack_ptr);
     size_t at = vm->stack_ptr - 1 - offset;
     return &vm->stack[at];
 }
@@ -1288,11 +1288,11 @@ void execute(uint8_t chunk, VM *vm){
 
             if(!handler) vm_utils_error(vm, "Failed to load native library: %s", dlerror());
 
-            NativeLib *module = (NativeLib *)malloc(sizeof(NativeLib));
-            if(!module) vm_utils_error(vm, "Failed to load native library: out of memory");;
-
             Obj *obj = vm_utils_obj(NATIVE_LIB_OTYPE, vm);
             if(!obj) vm_utils_error(vm, "Failed to load native library: out of memory");
+
+            NativeLib *module = (NativeLib *)malloc(sizeof(NativeLib));
+            if(!module) vm_utils_error(vm, "Failed to load native library: out of memory");;
 
             module->handler = handler;
             obj->value.native_lib = module;
