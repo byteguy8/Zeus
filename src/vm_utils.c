@@ -670,3 +670,18 @@ Obj *vm_utils_record_obj(char empty, VM *vm){
 
 	return record_obj;
 }
+
+Obj *vm_utils_native_lib_obj(void *handler, VM *vm){
+    NativeLib *native_lib = (NativeLib *)malloc(sizeof(NativeLib));
+    Obj *native_lib_obj = vm_utils_obj(NATIVE_LIB_OTYPE, vm);
+
+    if(!native_lib || !native_lib_obj){
+        free(native_lib);
+        return NULL;
+    }
+
+    native_lib->handler = handler;
+    native_lib_obj->value.native_lib = native_lib;
+
+    return native_lib_obj;
+}

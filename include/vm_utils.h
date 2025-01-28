@@ -32,6 +32,7 @@ NativeFn *vm_utils_native_function(
 Obj *vm_utils_list_obj(VM *vm);
 Obj *vm_utils_dict_obj(VM *vm);
 Obj *vm_utils_record_obj(char empty, VM *vm);
+Obj *vm_utils_native_lib_obj(void *handler, VM *vm);
 
 #define IS_EMPTY(v)((v)->type == EMPTY_VTYPE)
 #define IS_BOOL(v)((v)->type == BOOL_VTYPE)

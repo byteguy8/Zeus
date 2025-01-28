@@ -1288,19 +1288,13 @@ void execute(uint8_t chunk, VM *vm){
 
             if(!handler) vm_utils_error(vm, "Failed to load native library: %s", dlerror());
 
-            Obj *obj = vm_utils_obj(NATIVE_LIB_OTYPE, vm);
-            if(!obj) vm_utils_error(vm, "Failed to load native library: out of memory");
-
-            NativeLib *module = (NativeLib *)malloc(sizeof(NativeLib));
-            if(!module) vm_utils_error(vm, "Failed to load native library: out of memory");;
-
-            module->handler = handler;
-            obj->value.native_lib = module;
-
             void (*znative_init)(void) = dlsym(handler, "znative_init");
             znative_init();
 
-            PUSH(OBJ_VALUE(obj), vm);
+            Obj *native_lib_obj = vm_utils_native_lib_obj(handler, vm);
+            if(!native_lib_obj) vm_utils_error(vm, "Failed to load native library: out of memory");
+
+            PUSH(OBJ_VALUE(native_lib_obj), vm);
 
             break;
         }
