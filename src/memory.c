@@ -157,6 +157,7 @@ Fn *runtime_fn(char *name, Module *module){
     DynArr *chunks = runtime_dynarr(sizeof(uint8_t));
 	DynArr *locations = runtime_dynarr(sizeof(OPCodeLocation));
     DynArr *constants = runtime_dynarr(sizeof(int64_t));
+    DynArr *float_values = runtime_dynarr(sizeof(double));
     Fn *fn = (Fn *)A_RUNTIME_ALLOC(sizeof(Fn));
     
     fn->name = fn_name;
@@ -164,6 +165,7 @@ Fn *runtime_fn(char *name, Module *module){
     fn->chunks = chunks;
 	fn->locations = locations;
     fn->constants = constants;
+    fn->float_values = float_values;
     fn->module = module;
 
     return fn;

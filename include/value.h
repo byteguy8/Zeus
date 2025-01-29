@@ -9,6 +9,7 @@ typedef enum value_type{
     EMPTY_VTYPE,
     BOOL_VTYPE,
     INT_VTYPE,
+    FLOAT_VTYPE,
 	OBJ_VTYPE
 }ValueType;
 
@@ -17,6 +18,7 @@ typedef struct value{
     union{
         uint8_t bool;
         int64_t i64;
+        double fvalue;
 		Obj *obj;
     }literal;
 }Value;

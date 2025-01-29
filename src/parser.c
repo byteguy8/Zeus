@@ -521,6 +521,15 @@ Expr *parse_literal(Parser *parser){
 
         return create_expr(INT_EXPRTYPE, int_expr);
 	}
+	
+	if(match(parser, 1, FLOAT_TYPE_TOKTYPE)){
+		Token *float_token = previous(parser);
+
+        FloatExpr *float_expr = (FloatExpr *)A_COMPILE_ALLOC(sizeof(FloatExpr));
+		float_expr->token = float_token;
+
+        return create_expr(FLOAT_EXPRTYPE, float_expr);
+	}
 
 	if(match(parser, 1, STR_TYPE_TOKTYPE)){
 		Token *string_token = previous(parser);

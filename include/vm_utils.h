@@ -37,6 +37,7 @@ Obj *vm_utils_native_lib_obj(void *handler, VM *vm);
 #define IS_EMPTY(v)((v)->type == EMPTY_VTYPE)
 #define IS_BOOL(v)((v)->type == BOOL_VTYPE)
 #define IS_INT(v)((v)->type == INT_VTYPE)
+#define IS_FLOAT(v)((v)->type == FLOAT_VTYPE)
 #define IS_OBJ(v)((v)->type == OBJ_VTYPE)
 #define IS_STR(v)(IS_OBJ(v) && (v)->literal.obj->type == STR_OTYPE)
 #define IS_LIST(v)(IS_OBJ(v) && (v)->literal.obj->type == LIST_OTYPE)
@@ -50,6 +51,7 @@ Obj *vm_utils_native_lib_obj(void *handler, VM *vm);
 
 #define TO_BOOL(v)((v)->literal.bool)
 #define TO_INT(v)((v)->literal.i64)
+#define TO_FLOAT(v)((v)->literal.fvalue)
 #define TO_OBJ(v)((v)->literal.obj)
 #define TO_STR(v)((v)->literal.obj->value.str)
 #define TO_LIST(v)((v)->literal.obj->value.list)
@@ -64,6 +66,7 @@ Obj *vm_utils_native_lib_obj(void *handler, VM *vm);
 #define EMPTY_VALUE ((Value){.type = EMPTY_VTYPE})
 #define BOOL_VALUE(value)((Value){.type = BOOL_VTYPE, .literal.bool = value})
 #define INT_VALUE(value)((Value){.type = INT_VTYPE, .literal.i64 = value})
+#define FLOAT_VALUE(value)((Value){.type = FLOAT_VTYPE, .literal.fvalue = value})
 #define OBJ_VALUE(value)((Value){.type = OBJ_VTYPE, .literal.obj = value})
 
 #define VALIDATE_INDEX(value, index, len) \

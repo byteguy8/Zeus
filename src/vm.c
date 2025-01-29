@@ -38,6 +38,11 @@ static Value *peek(VM *vm);
     PUSH(int_value, vm)                 \
 }
 
+#define PUSH_FLOAT(value, vm) {             \
+    Value float_value = FLOAT_VALUE(value); \
+    PUSH(float_value, vm)                   \
+}
+
 #define PUSH_CORE_STR(buff, vm){                    \
     Obj *str_obj = vm_utils_core_str_obj(buff, vm); \
     Value obj_value = OBJ_VALUE(str_obj);           \
@@ -131,6 +136,7 @@ char *multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm){
 #define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
 #define CURRENT_CHUNKS(vm)(CURRENT_FN(vm)->chunks)
 #define CURRENT_CONSTANTS(vm)(CURRENT_FN(vm)->constants)
+#define CURRENT_FLOAT_VALUES(vm)(CURRENT_FN(vm)->float_values)
 
 Frame *frame_up(char *name, VM *vm){
     if(vm->frame_ptr >= FRAME_LENGTH)
@@ -250,9 +256,13 @@ void print_value(Value *value){
             break;
         }
         case INT_VTYPE:{
-            printf("%ld\n", value->literal.i64);   
+            printf("%ld\n", value->literal.i64);
             break;
         }
+        case FLOAT_VTYPE:{
+			printf("%.8f\n", value->literal.fvalue);   
+            break;
+		}
         case OBJ_VTYPE:{
             print_obj(value->literal.obj);
             break;
@@ -296,6 +306,12 @@ int64_t read_i64_const(VM *vm){
     DynArr *constants = CURRENT_CONSTANTS(vm);
     int16_t index = read_i16(vm);
     return DYNARR_GET_AS(int64_t, index, constants);
+}
+
+double read_float_const(VM *vm){
+	DynArr *float_values = CURRENT_FLOAT_VALUES(vm);
+	int16_t index = read_i16(vm);
+	return DYNARR_GET_AS(double, index, float_values);
 }
 
 char *read_str(VM *vm, uint32_t *out_hash){
@@ -357,6 +373,11 @@ void execute(uint8_t chunk, VM *vm){
             PUSH_INT(i64, vm);
             break;
         }
+        case FLOAT_OPCODE:{
+			double value = read_float_const(vm);
+			PUSH_FLOAT(value, vm);
+			break;
+		}
 		case STRING_OPCODE:{
             char *buff = read_str(vm, NULL);
             PUSH_CORE_STR(buff, vm)
@@ -742,11 +763,19 @@ void execute(uint8_t chunk, VM *vm){
         case NNOT_OPCODE:{
             Value *vb = pop(vm);
 
-            if(!IS_INT(vb))
-                vm_utils_error(vm, "Expect integer at right side");
-
-            int64_t right = TO_INT(vb);
-            PUSH_INT(-right, vm)
+			if(IS_INT(vb)){
+				int64_t right = TO_INT(vb);
+				PUSH_INT(-right, vm)
+				break;
+			}
+			
+			if(IS_FLOAT(vb)){
+				double right = TO_FLOAT(vb);
+				PUSH_FLOAT(-right, vm)
+				break;
+			}
+            
+            vm_utils_error(vm, "Expect integer or float at right side");
             
             break;
         }

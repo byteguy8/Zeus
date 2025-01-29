@@ -51,6 +51,50 @@ static int str_to_i64(char *str, int64_t *out_value){
     return 0;
 }
 
+static double str_to_double(char *str, double *out_value){
+    int len = (int)strlen(str);
+    int is_negative = 0;
+    int is_decimal = 0;
+    double special = 10.0;
+    double value = 0.0;
+    
+    for(int i = 0; i < len; i++){
+        char c = str[i];
+        
+        if(c == '-' && i == 0){
+            is_negative = 1;
+            continue;
+        }
+        
+        if(c == '.'){
+			if(i == 0) return 1;
+			is_decimal = 1;
+			continue;
+		}
+        
+        if(c < '0' || c > '9')
+            return 1;
+            
+        int digit = ((int)c) - 48;
+        
+        if(is_decimal){
+			double decimal = digit / special;
+			value += decimal;
+			special *= 10.0;
+		}else{
+			value *= 10.0;
+			value += digit;
+		}
+    }
+    
+    if(is_negative == 1)
+        value *= -1;
+        
+    *out_value = value;
+    
+    return 0;
+}
+
 static int is_at_end(Lexer *lexer){
     RawStr *source = lexer->source;
     return lexer->current >= ((int) source->size);
@@ -183,21 +227,45 @@ static void comment(Lexer *lexer){
 }
 
 static void number(Lexer *lexer){
+    TokenType type = INT_TYPE_TOKTYPE;
+    
     while (!is_at_end(lexer) && is_digit(peek(lexer)))
-        advance(lexer);
+		advance(lexer);
+        
+	if(match('.', lexer)){
+		type = FLOAT_TYPE_TOKTYPE;
+		
+		while (!is_at_end(lexer) && is_digit(peek(lexer)))
+			advance(lexer);
+	}
 
     char *lexeme = lexeme_current(lexer);
-    int64_t *value = A_COMPILE_ALLOC(sizeof(int64_t));
+    
+    if(type == INT_TYPE_TOKTYPE){
+		int64_t *value = A_COMPILE_ALLOC(sizeof(int64_t));
 
-    str_to_i64(lexeme, value);
-    add_token_raw(
-        lexer->line,
-        lexeme,
-        value,
-        sizeof(int64_t),
-        INT_TYPE_TOKTYPE,
-        lexer
-    );
+		str_to_i64(lexeme, value);
+		add_token_raw(
+			lexer->line,
+			lexeme,
+			value,
+			sizeof(int64_t),
+			type,
+			lexer
+		);
+	}else{
+		double *value = A_COMPILE_ALLOC(sizeof(double));
+		
+		str_to_double(lexeme, value);
+		add_token_raw(
+			lexer->line,
+			lexeme,
+			value,
+			sizeof(double),
+			type,
+			lexer
+		);
+	}
 }
 
 static void identifier(Lexer *lexer){

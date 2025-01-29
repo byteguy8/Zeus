@@ -45,6 +45,7 @@ typedef struct fn{
     DynArrPtr *params;
 	DynArr *locations;
     DynArr *constants;
+    DynArr *float_values;
     Module *module;
 }Fn;
 

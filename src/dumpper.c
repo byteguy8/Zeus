@@ -18,6 +18,7 @@ static int32_t compose_i32(uint8_t *bytes){
 #define CURRENT_STRINGS(d)(CURRENT_SUBMODULE(d)->strings)
 #define CURRENT_FN(d)(d->current_fn)
 #define CURRENT_CONSTANTS(d)(CURRENT_FN(d)->constants)
+#define CURRENT_FLOAT_VALUES(d)(CURRENT_FN(d)->float_values)
 #define CURRENT_CHUNKS(d)(CURRENT_FN(d)->chunks)
 
 static int is_at_end(Dumpper *dumpper){
@@ -52,6 +53,12 @@ static int64_t read_i64_const(Dumpper *dumpper){
     DynArr *constants = CURRENT_CONSTANTS(dumpper);
     size_t index = (size_t)read_i16(dumpper);
     return DYNARR_GET_AS(int64_t, index, constants);
+}
+
+static double read_float_const(Dumpper *dumpper){
+    DynArr *float_values = CURRENT_FLOAT_VALUES(dumpper);
+    size_t index = (size_t)read_i16(dumpper);
+    return DYNARR_GET_AS(double, index, float_values);
 }
 
 static char *read_str(Dumpper *dumpper, uint32_t *out_hash){
@@ -99,6 +106,15 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             
             break;
         }
+        case FLOAT_OPCODE:{
+			double value = read_float_const(dumpper);
+			size_t end = dumpper->ip;
+			
+			printf("%8.8s %.7ld", "FLOAT", end - start);
+            printf(" | value: %.8f\n", value);
+			
+			break;
+		}
         case STRING_OPCODE:{
             uint32_t hash = 0;
             char *value = read_str(dumpper, &hash);

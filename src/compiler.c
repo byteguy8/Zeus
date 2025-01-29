@@ -278,6 +278,12 @@ DynArr *current_constants(Compiler *compiler){
     return fn->constants;
 }
 
+DynArr *current_float_values(Compiler *compiler){
+    assert(compiler->fn_ptr > 0 && compiler->fn_ptr < FUNCTIONS_LENGTH);
+    Fn *fn = compiler->fn_stack[compiler->fn_ptr - 1];
+    return fn->float_values;
+}
+
 size_t chunks_len(Compiler *compiler){
 	return current_chunks(compiler)->used;
 }
@@ -361,6 +367,17 @@ size_t write_i64_const(int64_t i64, Compiler *compiler){
 	return write_i16(used, compiler);
 }
 
+size_t write_double_const(double value, Compiler *compiler){
+	DynArr *float_values = current_float_values(compiler);
+	int32_t length = (int32_t) float_values->used;
+	
+	assert(length < 32767 && "Too many constants");
+	
+	dynarr_insert(&value, float_values);
+	
+	return write_i16(length, compiler);
+}
+
 void write_str(char *rstr, Compiler *compiler){
     uint8_t *key = (uint8_t *)rstr;
     size_t key_size = strlen(rstr);
@@ -417,6 +434,18 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             break;
         }
+        case FLOAT_EXPRTYPE:{
+			FloatExpr *float_expr = (FloatExpr *)expr->sub_expr;
+			Token *float_token = float_expr->token;
+			double value = *(double *)float_token->literal;
+			
+			write_chunk(FLOAT_OPCODE, compiler);
+			write_location(float_token, compiler);
+			
+			write_double_const(value, compiler);
+			
+			break;
+		}
 		case STRING_EXPRTYPE:{
 			StringExpr *string_expr = (StringExpr *)expr->sub_expr;
 			uint32_t hash = string_expr->hash;

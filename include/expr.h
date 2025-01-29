@@ -8,6 +8,7 @@ typedef enum expr_type{
     EMPTY_EXPRTYPE,
 	BOOL_EXPRTYPE,
     INT_EXPRTYPE,
+    FLOAT_EXPRTYPE,
 	STRING_EXPRTYPE,
     GROUP_EXPRTYPE,
     IDENTIFIER_EXPRTYPE,
@@ -42,6 +43,10 @@ typedef struct bool_expr{
 typedef struct int_expr{
 	Token *token;
 }IntExpr;
+
+typedef struct float_expr{
+	Token *token;
+}FloatExpr;
 
 typedef struct string_expr{
 	uint32_t hash;

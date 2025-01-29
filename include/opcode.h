@@ -5,7 +5,7 @@ typedef enum opcode{
     EMPTY_OPCODE,
     TRUE_OPCODE, FALSE_OPCODE,
     CINT_OPCODE, INT_OPCODE,
-    STRING_OPCODE,
+    FLOAT_OPCODE, STRING_OPCODE,
     
     // arithmeric
     ADD_OPCODE, SUB_OPCODE,
