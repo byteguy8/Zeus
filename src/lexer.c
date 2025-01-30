@@ -273,7 +273,7 @@ static void number(Lexer *lexer){
 }
 
 static void identifier(Lexer *lexer){
-    while (!is_at_end(lexer) && is_alpha(peek(lexer)))
+    while (!is_at_end(lexer) && is_alpha_numeric(peek(lexer)))
         advance(lexer);
     
     size_t lexeme_len = lexeme_current_len(lexer);
