@@ -108,6 +108,10 @@ static int is_alpha(char c){
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 }
 
+static int is_alpha_numeric(char c){
+    return is_digit(c) || is_alpha(c);
+}
+
 static char peek(Lexer *lexer){
     if(is_at_end(lexer)) return '\0';
     RawStr *source = lexer->source;
@@ -419,7 +423,7 @@ static void scan_token(Lexer *lexer){
             break;
         default:{
             if(is_digit(c)) number(lexer);
-            else if(is_alpha(c)) identifier(lexer);
+            else if(is_alpha_numeric(c)) identifier(lexer);
 			else if(c == '"') string(lexer);
             else error(lexer, "Unknown token '%c'", c);
             break;

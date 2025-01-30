@@ -805,7 +805,7 @@ Stmt *parse_var_decl_stmt(Parser *parser){
     identifier_token = consume(
         parser, 
         IDENTIFIER_TOKTYPE, 
-        "Expect symbol name after 'var' keyword.");
+        "Expect symbol name after 'imut' or 'mut' keyword.");
     
     if(match(parser, 1, EQUALS_TOKTYPE)){
         is_initialized = 1;
