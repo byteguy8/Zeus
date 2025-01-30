@@ -403,16 +403,37 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            if(!IS_INT(va))
-                vm_utils_error(vm, "Expect int at left side of sum");
+            if(IS_INT(va) || IS_INT(vb)){
+                if(!IS_INT(va))
+                    vm_utils_error(vm, "Expect integer at left side of sum");
 
-            if(!IS_INT(vb))
-                vm_utils_error(vm, "Expect int at right side of sum");
+                if(!IS_INT(vb))
+                    vm_utils_error(vm, "Expect integer at right side of sum");
 
-            int64_t right = TO_INT(vb);
-            int64_t left = TO_INT(va);
+                int64_t left = TO_INT(va);
+                int64_t right = TO_INT(vb);
 
-            PUSH_INT(left + right, vm)
+                PUSH_INT(left + right, vm)
+
+                break;
+            }
+
+            if(IS_FLOAT(va) || IS_FLOAT(vb)){
+                if(!IS_FLOAT(va))
+                    vm_utils_error(vm, "Expect float at left side of sum");
+
+                if(!IS_FLOAT(vb))
+                    vm_utils_error(vm, "Expect float at right side of sum");
+
+                double left = TO_FLOAT(va);
+                double right = TO_FLOAT(vb);
+
+                PUSH_FLOAT(left + right, vm);
+
+                break;
+            }
+
+            vm_utils_error(vm, "Unsuported types using + operator");
             
             break;
         }
@@ -420,16 +441,37 @@ void execute(uint8_t chunk, VM *vm){
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
-            if(!IS_INT(va))
-                vm_utils_error(vm, "Expect integer at left side");
+            if(IS_INT(va) || IS_INT(vb)){
+                if(!IS_INT(va))
+                    vm_utils_error(vm, "Expect integer at left side subtraction");
 
-            if(!IS_INT(vb))
-                vm_utils_error(vm, "Expect integer at right side");
+                if(!IS_INT(vb))
+                    vm_utils_error(vm, "Expect integer at right side subtraction");
 
-            int64_t left = TO_INT(va);
-            int64_t right = TO_INT(vb);
+                int64_t left = TO_INT(va);
+                int64_t right = TO_INT(vb);
 
-            PUSH_INT(left - right, vm)
+                PUSH_INT(left - right, vm)
+
+                break;
+            }
+
+            if(IS_FLOAT(va) || IS_FLOAT(vb)){
+                if(!IS_FLOAT(va))
+                    vm_utils_error(vm, "Expect float at left side of subtraction");
+
+                if(!IS_FLOAT(vb))
+                    vm_utils_error(vm, "Expect float at right side of subtraction");
+
+                double left = TO_FLOAT(va);
+                double right = TO_FLOAT(vb);
+
+                PUSH_FLOAT(left - right, vm);
+
+                break;
+            }
+
+            vm_utils_error(vm, "Unsuported types using - operator");
 
             break;
         }
@@ -470,34 +512,75 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            if(!IS_INT(va))
-                vm_utils_error(vm, "Expect integer at left side of multiplication");
+            if(IS_INT(va) || IS_INT(vb)){
+                if(!IS_INT(va))
+                    vm_utils_error(vm, "Expect integer at left side of multiplication");
 
-            if(!IS_INT(vb))
-                vm_utils_error(vm, "Expect integer at right side of multiplication");
+                if(!IS_INT(vb))
+                    vm_utils_error(vm, "Expect integer at right side of multiplication");
 
-            int64_t left = TO_INT(va);
-            int64_t right = TO_INT(vb);
+                int64_t left = TO_INT(va);
+                int64_t right = TO_INT(vb);
+                
+                PUSH_INT(left * right, vm);
+
+                break;
+            }
             
-            PUSH_INT(left * right, vm);
-            
+            if(IS_FLOAT(va) || IS_FLOAT(vb)){
+                if(!IS_FLOAT(va))
+                    vm_utils_error(vm, "Expect float at left side of multiplication");
+
+                if(!IS_FLOAT(vb))
+                    vm_utils_error(vm, "Expect float at right side of multiplication");
+
+                double left = TO_FLOAT(va);
+                double right = TO_FLOAT(vb);
+
+                PUSH_FLOAT(left * right, vm);
+
+                break;
+            }
+
+            vm_utils_error(vm, "Unsuported types using * operator");
+
             break;
-
         }
         case DIV_OPCODE:{
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
-            if(!IS_INT(va))
-                vm_utils_error(vm, "Expect integer at left side");
-        
-            if(!IS_INT(vb))
-                vm_utils_error(vm, "Expect integer at right side");
+            if(IS_INT(va) || IS_INT(vb)){
+                if(!IS_INT(va))
+                    vm_utils_error(vm, "Expect integer at left side of division");
+            
+                if(!IS_INT(vb))
+                    vm_utils_error(vm, "Expect integer at right side of division");
 
-            int64_t left = TO_INT(va);
-            int64_t right = TO_INT(vb);
+                int64_t left = TO_INT(va);
+                int64_t right = TO_INT(vb);
 
-            PUSH_INT(left / right, vm)
+                PUSH_INT(left / right, vm)
+
+                break;
+            }
+
+            if(IS_FLOAT(va) || IS_FLOAT(vb)){
+                if(!IS_FLOAT(va))
+                    vm_utils_error(vm, "Expect float at left side of division");
+
+                if(!IS_FLOAT(vb))
+                    vm_utils_error(vm, "Expect float at right side of division");
+
+                double left = TO_FLOAT(va);
+                double right = TO_FLOAT(vb);
+
+                PUSH_FLOAT(left / right, vm)
+
+                break;
+            }
+
+            vm_utils_error(vm, "Unsuported types using / operator");
 
             break;
         }
@@ -506,10 +589,10 @@ void execute(uint8_t chunk, VM *vm){
             Value *va = pop(vm);
 
             if(!IS_INT(va))
-                vm_utils_error(vm, "Expect integer at left side");
+                vm_utils_error(vm, "Expect integer at left side of module");
         
             if(!IS_INT(vb))
-                vm_utils_error(vm, "Expect integer at right side");
+                vm_utils_error(vm, "Expect integer at right side of module");
 
             int64_t left = TO_INT(va);
             int64_t right = TO_INT(vb);
@@ -522,16 +605,37 @@ void execute(uint8_t chunk, VM *vm){
 			Value *vb = pop(vm);
             Value *va = pop(vm);
 
-            if(!IS_INT(va))
-                vm_utils_error(vm, "Expect integer at left side");
-        
-            if(!IS_INT(vb))
-                vm_utils_error(vm, "Expect integer at right side");
+            if(IS_INT(va) || IS_INT(vb)){
+                if(!IS_INT(va))
+                    vm_utils_error(vm, "Expect integer at left side of comparison");
+            
+                if(!IS_INT(vb))
+                    vm_utils_error(vm, "Expect integer at right side of comparison");
 
-            int64_t left = TO_INT(va);
-            int64_t right = TO_INT(vb);
+                int64_t left = TO_INT(va);
+                int64_t right = TO_INT(vb);
 
-            PUSH_BOOL(left < right, vm)
+                PUSH_BOOL(left < right, vm)
+
+                break;
+            }
+
+            if(IS_FLOAT(va) || IS_FLOAT(vb)){
+                if(!IS_FLOAT(va))
+                    vm_utils_error(vm, "Expect float at left side of comparison");
+
+                if(!IS_FLOAT(vb))
+                    vm_utils_error(vm, "Expect float at right side of comparison");
+
+                double left = TO_FLOAT(va);
+                double right = TO_FLOAT(vb);
+
+                PUSH_BOOL(left < right, vm)
+
+                break;
+            }
+
+            vm_utils_error(vm, "Unsuported types using < operator");
 
             break;
         }
@@ -539,16 +643,37 @@ void execute(uint8_t chunk, VM *vm){
    			Value *vb = pop(vm);
             Value *va = pop(vm);
 
-            if(!IS_INT(va))
-                vm_utils_error(vm, "Expect integer at left side");
-        
-            if(!IS_INT(vb))
-                vm_utils_error(vm, "Expect integer at right side");
+            if(IS_INT(va) || IS_INT(vb)){
+                if(!IS_INT(va))
+                    vm_utils_error(vm, "Expect integer at left side of comparison");
+            
+                if(!IS_INT(vb))
+                    vm_utils_error(vm, "Expect integer at right side of comparison");
 
-            int64_t left = TO_INT(va);
-            int64_t right = TO_INT(vb);
+                int64_t left = TO_INT(va);
+                int64_t right = TO_INT(vb);
 
-            PUSH_BOOL(left > right, vm)
+                PUSH_BOOL(left > right, vm)
+
+                break;
+            }
+
+            if(IS_FLOAT(va) || IS_FLOAT(vb)){
+                if(!IS_FLOAT(va))
+                    vm_utils_error(vm, "Expect float at left side of comparison");
+
+                if(!IS_FLOAT(vb))
+                    vm_utils_error(vm, "Expect float at right side of comparison");
+
+                double left = TO_FLOAT(va);
+                double right = TO_FLOAT(vb);
+
+                PUSH_BOOL(left > right, vm)
+
+                break;
+            }
+
+            vm_utils_error(vm, "Unsuported types using > operator");
 
             break;
         }
@@ -556,16 +681,37 @@ void execute(uint8_t chunk, VM *vm){
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
-            if(!IS_INT(va))
-                vm_utils_error(vm, "Expect integer at left side");
-        
-            if(!IS_INT(vb))
-                vm_utils_error(vm, "Expect integer at right side");
+            if(IS_INT(va) || IS_INT(vb)){
+                if(!IS_INT(va))
+                    vm_utils_error(vm, "Expect integer at left side of comparison");
+            
+                if(!IS_INT(vb))
+                    vm_utils_error(vm, "Expect integer at right side of comparison");
 
-            int64_t left = TO_INT(va);
-            int64_t right = TO_INT(vb);
+                int64_t left = TO_INT(va);
+                int64_t right = TO_INT(vb);
 
-            PUSH_BOOL(left <= right, vm)
+                PUSH_BOOL(left <= right, vm)
+
+                break;
+            }
+
+            if(IS_FLOAT(va) || IS_FLOAT(vb)){
+                if(!IS_FLOAT(va))
+                    vm_utils_error(vm, "Expect float at left side of comparison");
+
+                if(!IS_FLOAT(vb))
+                    vm_utils_error(vm, "Expect float at right side of comparison");
+
+                double left = TO_FLOAT(va);
+                double right = TO_FLOAT(vb);
+
+                PUSH_BOOL(left <= right, vm)
+
+                break;
+            }
+
+            vm_utils_error(vm, "Unsuported types using <= operator");
 
             break;
         }
@@ -573,16 +719,37 @@ void execute(uint8_t chunk, VM *vm){
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
-            if(!IS_INT(va))
-                vm_utils_error(vm, "Expect integer at left side");
-        
-            if(!IS_INT(vb))
-                vm_utils_error(vm, "Expect integer at right side");
+            if(IS_INT(va) || IS_INT(vb)){
+                if(!IS_INT(va))
+                    vm_utils_error(vm, "Expect integer at left side of comparison");
+            
+                if(!IS_INT(vb))
+                    vm_utils_error(vm, "Expect integer at right side of comparison");
 
-            int64_t left = TO_INT(va);
-            int64_t right = TO_INT(vb);
+                int64_t left = TO_INT(va);
+                int64_t right = TO_INT(vb);
 
-            PUSH_BOOL(left >= right, vm)
+                PUSH_BOOL(left >= right, vm)
+
+                break;
+            }
+
+            if(IS_FLOAT(va) || IS_FLOAT(vb)){
+                if(!IS_FLOAT(va))
+                    vm_utils_error(vm, "Expect float at left side of comparison");
+
+                if(!IS_FLOAT(vb))
+                    vm_utils_error(vm, "Expect float at right side of comparison");
+
+                double left = TO_FLOAT(va);
+                double right = TO_FLOAT(vb);
+
+                PUSH_BOOL(left >= right, vm)
+
+                break;
+            }
+
+            vm_utils_error(vm, "Unsuported types using >= operator");
 
             break;
         }
@@ -590,7 +757,13 @@ void execute(uint8_t chunk, VM *vm){
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
-            if(IS_BOOL(va) && IS_BOOL(vb)){
+            if(IS_BOOL(va) || IS_BOOL(vb)){
+                if(!IS_BOOL(va))
+                    vm_utils_error(vm, "Expect boolean at left side of equality");
+
+                if(!IS_BOOL(vb))
+                    vm_utils_error(vm, "Expect boolean at right side of equality");
+
                 uint8_t left = TO_BOOL(va);
                 uint8_t right = TO_BOOL(vb);
 
@@ -599,16 +772,37 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            if(IS_INT(va) && IS_INT(vb)){
+            if(IS_INT(va) || IS_INT(vb)){
+                if(!IS_INT(va))
+                    vm_utils_error(vm, "Expect integer at left side of equality");
+            
+                if(!IS_INT(vb))
+                    vm_utils_error(vm, "Expect integer at right side of equality");
+
                 int64_t left = TO_INT(va);
                 int64_t right = TO_INT(vb);
 
-                PUSH_BOOL(left == right, vm);
+                PUSH_BOOL(left == right, vm)
 
                 break;
             }
 
-            vm_utils_error(vm, "Illegal type in comparison expression");
+            if(IS_FLOAT(va) || IS_FLOAT(vb)){
+                if(!IS_FLOAT(va))
+                    vm_utils_error(vm, "Expect float at left side of equality");
+
+                if(!IS_FLOAT(vb))
+                    vm_utils_error(vm, "Expect float at right side of equality");
+
+                double left = TO_FLOAT(va);
+                double right = TO_FLOAT(vb);
+
+                PUSH_BOOL(left == right, vm)
+
+                break;
+            }
+
+            vm_utils_error(vm, "Unsuported types using == operator");
 
             break;
         }
@@ -616,7 +810,13 @@ void execute(uint8_t chunk, VM *vm){
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
-            if(IS_BOOL(va) && IS_BOOL(vb)){
+            if(IS_BOOL(va) || IS_BOOL(vb)){
+                if(!IS_BOOL(va))
+                    vm_utils_error(vm, "Expect boolean at left side of equality");
+
+                if(!IS_BOOL(vb))
+                    vm_utils_error(vm, "Expect boolean at right side of equality");
+
                 uint8_t left = TO_BOOL(va);
                 uint8_t right = TO_BOOL(vb);
 
@@ -625,16 +825,37 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            if(IS_INT(va) && IS_INT(vb)){
+            if(IS_INT(va) || IS_INT(vb)){
+                if(!IS_INT(va))
+                    vm_utils_error(vm, "Expect integer at left side of equality");
+            
+                if(!IS_INT(vb))
+                    vm_utils_error(vm, "Expect integer at right side of equality");
+
                 int64_t left = TO_INT(va);
                 int64_t right = TO_INT(vb);
 
-                PUSH_BOOL(left != right, vm);
+                PUSH_BOOL(left != right, vm)
 
                 break;
             }
 
-            vm_utils_error(vm, "Illegal type in comparison expression");
+            if(IS_FLOAT(va) || IS_FLOAT(vb)){
+                if(!IS_FLOAT(va))
+                    vm_utils_error(vm, "Expect float at left side of equality");
+
+                if(!IS_FLOAT(vb))
+                    vm_utils_error(vm, "Expect float at right side of equality");
+
+                double left = TO_FLOAT(va);
+                double right = TO_FLOAT(vb);
+
+                PUSH_BOOL(left != right, vm)
+
+                break;
+            }
+
+            vm_utils_error(vm, "Unsuported types using != operator");
 
             break;
         }

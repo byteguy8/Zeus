@@ -3,7 +3,7 @@ OUT_DIR = ./build
 
 BUILD := debug
 
-cflags.common := -I./include --std=gnu99
+cflags.common := -I./include --std=gnu99 -lm
 cflags.debug := -g2 -O0 -Wall -Wextra -Wno-unused-parameter -fsanitize=address
 cflags.release := -O2 -Wall -Wextra
 

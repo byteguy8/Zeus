@@ -47,4 +47,22 @@ Value native_fn_int_to_str(uint8_t argsc, Value *values, void *target, VM *vm){
     return str_value;
 }
 
+Value native_fn_int_to_float(uint8_t argsc, Value *values, void *target, VM *vm){
+    Value *raw_value = &values[0];
+
+    if(!IS_INT(raw_value))
+		vm_utils_error(vm, "Expect integer, but got something else");
+	
+    return FLOAT_VALUE((double)TO_INT(raw_value));
+}
+
+Value native_fn_float_to_int(uint8_t argsc, Value *values, void *target, VM *vm){
+    Value *raw_value = &values[0];
+    
+    if(!IS_FLOAT(raw_value))
+		vm_utils_error(vm, "Expect float, but got something else");
+	
+    return INT_VALUE((uint64_t)TO_FLOAT(raw_value));
+}
+
 #endif

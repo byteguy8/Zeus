@@ -3,6 +3,7 @@
 
 #include "vm_utils.h"
 #include "native.h"
+#include "native_math.h"
 #include "native_time.h"
 #include "native_io.h"
 
@@ -86,6 +87,18 @@ int main(int argc, char const *argv[]){
 	add_native("is_str_int", 1, native_fn_is_str_int, natives);
 	add_native("str_to_int", 1, native_fn_str_to_int, natives);
     add_native("int_to_str", 1, native_fn_int_to_str, natives);
+    add_native("int_to_float", 1, native_fn_int_to_float, natives);
+    add_native("float_to_int", 1, native_fn_float_to_int, natives);
+
+    add_native("sqrt", 1, native_fn_sqrt, natives);
+    add_native("pow", 2, native_fn_pow, natives);
+    add_native("sin", 1, native_fn_sin, natives);
+    add_native("sinh", 1, native_fn_sinh, natives);
+    add_native("cos", 1, native_fn_cos, natives);
+    add_native("cosh", 1, native_fn_cosh, natives);
+    add_native("tan", 1, native_fn_tan, natives);
+    add_native("tanh", 1, native_fn_tanh, natives);
+
     add_native("time", 0, native_fn_time, natives);
     add_native("millis", 0, native_fn_time_millis, natives);
     add_native("sleep", 1, native_fn_time_sleep, natives);
