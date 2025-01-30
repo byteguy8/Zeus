@@ -872,17 +872,20 @@ void compile_expr(Expr *expr, Compiler *compiler){
 				}case INT_TOKTYPE:{
 					write_chunk(2, compiler);
 					break;
-				}case STR_TOKTYPE:{
+				}case FLOAT_TOKTYPE:{
 					write_chunk(3, compiler);
 					break;
-				}case LIST_TOKTYPE:{
+				}case STR_TOKTYPE:{
 					write_chunk(4, compiler);
 					break;
-				}case DICT_TOKTYPE:{
+				}case LIST_TOKTYPE:{
 					write_chunk(5, compiler);
 					break;
+				}case DICT_TOKTYPE:{
+					write_chunk(6, compiler);
+					break;
 				}case RECORD_TOKTYPE:{
-                    write_chunk(6, compiler);
+                    write_chunk(7, compiler);
 					break;
                 } default:{
 					assert("Illegal type value");

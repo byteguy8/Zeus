@@ -140,6 +140,7 @@ int main(int argc, char const *argv[]){
     add_keyword("as", AS_TOKTYPE, keywords);
 	add_keyword("bool", BOOL_TOKTYPE, keywords);
 	add_keyword("int", INT_TOKTYPE, keywords);
+	add_keyword("float", FLOAT_TOKTYPE, keywords);
 	add_keyword("str", STR_TOKTYPE, keywords);
 	add_keyword("is", IS_TOKTYPE, keywords);
     add_keyword("try", TRY_TOKTYPE, keywords);

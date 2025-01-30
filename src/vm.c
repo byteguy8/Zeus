@@ -1414,16 +1414,16 @@ void execute(uint8_t chunk, VM *vm){
 
 				switch(obj->type){
 					case STR_OTYPE:{
-						PUSH(BOOL_VALUE(type == 3), vm);
-						break;
-					}case LIST_OTYPE:{
 						PUSH(BOOL_VALUE(type == 4), vm);
 						break;
-					}case DICT_OTYPE:{
+					}case LIST_OTYPE:{
 						PUSH(BOOL_VALUE(type == 5), vm);
 						break;
-					}case RECORD_OTYPE:{
+					}case DICT_OTYPE:{
 						PUSH(BOOL_VALUE(type == 6), vm);
+						break;
+					}case RECORD_OTYPE:{
+						PUSH(BOOL_VALUE(type == 7), vm);
 						break;
 					}default:{
 						vm_utils_error(vm, "Illegal object type");
@@ -1440,6 +1440,9 @@ void execute(uint8_t chunk, VM *vm){
 						break;
 					}case INT_VTYPE:{
 						PUSH(BOOL_VALUE(type == 2), vm);
+						break;
+					}case FLOAT_VTYPE:{
+						PUSH(BOOL_VALUE(type == 3), vm);
 						break;
 					}default:{
 						vm_utils_error(vm, "Illegal value type");

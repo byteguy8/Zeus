@@ -146,6 +146,7 @@ Expr *parse_is_expr(Parser *parser){
 			             EMPTY_TOKTYPE,
 					     BOOL_TOKTYPE,
 					     INT_TOKTYPE,
+					     FLOAT_TOKTYPE,
 					     STR_TOKTYPE,
 					     LIST_TOKTYPE,
 					     DICT_TOKTYPE,
