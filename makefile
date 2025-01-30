@@ -1,13 +1,12 @@
-SRC = ./src
-OUT_DIR = ./build
-
+SRC := ./src
+OUT_DIR := ./build
 BUILD := debug
 
-cflags.common := -I./include --std=gnu99 -lm
-cflags.debug := -g2 -O0 -Wall -Wextra -Wno-unused-parameter -fsanitize=address
-cflags.release := -O2 -Wall -Wextra
+cflags.common := -Wall -Wextra --std=gnu99 -I./include
+cflags.debug := -g2 -O0 -Wno-unused-parameter -fsanitize=address
+cflags.release := -O2
 
-CFLAGS := ${cflags.${BUILD}} ${cflags.common}
+CFLAGS := ${cflags.common} ${cflags.${BUILD}}
 
 COMPILER = gcc
 OBJS = lzarena.o \
@@ -19,7 +18,7 @@ compiler.o dumpper.o \
 vm_utils.o vm.o
 
 zeus: $(OBJS)
-	$(COMPILER) -o $(OUT_DIR)/zeus $(CFLAGS) $(OUT_DIR)/*.o $(SRC)/zeus.c
+	$(COMPILER) -o $(OUT_DIR)/zeus $(CFLAGS) $(OUT_DIR)/*.o $(SRC)/zeus.c -lm
 vm.o:
 	$(COMPILER) -c -o $(OUT_DIR)/vm.o $(CFLAGS) $(SRC)/vm.c
 vm_utils.o:
