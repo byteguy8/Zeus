@@ -225,7 +225,7 @@ void print_obj(Obj *object){
         }
         case MODULE_OTYPE:{
             Module *module = object->value.module;
-            printf("<module '%s' at %p>\n", module->name, module);
+            printf("<module '%s' from '%s' at %p>\n", module->name, module->pathname, module);
             break;
         }
         case NATIVE_LIB_OTYPE:{

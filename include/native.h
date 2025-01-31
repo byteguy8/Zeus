@@ -1,6 +1,20 @@
 #ifndef NATIVE_H
 #define NATIVE_H
 
+Value native_fn_assert(uint8_t argsc, Value *values, void *target, VM *vm){
+	Value *raw_value = &values[0];
+	
+    if(!IS_BOOL(raw_value))
+        vm_utils_error(vm, "Expect boolean, but got something else");
+
+    uint8_t value = TO_BOOL(raw_value);
+    
+    if(!value)
+        vm_utils_error(vm, "Assertion failed");
+
+	return EMPTY_VALUE;
+}
+
 Value native_fn_is_str_int(uint8_t argsc, Value *values, void *target, VM *vm){
 	Value *raw_value = &values[0];
 	Str *str = NULL;

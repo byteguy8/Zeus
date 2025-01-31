@@ -7,6 +7,7 @@
 #include "lzhtable.h"
 #include <setjmp.h>
 
+#define PATHS_LENGTH 256
 #define SCOPES_LENGTH 32
 #define SYMBOLS_LENGTH 255
 #define SYMBOL_NAME_LENGTH 32
@@ -57,6 +58,9 @@ typedef struct loop_mark{
 typedef struct compiler{
 	char is_err;
     jmp_buf err_jmp;
+
+    int paths_len;
+    char *paths[PATHS_LENGTH];
 
     int symbols;
     

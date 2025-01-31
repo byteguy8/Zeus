@@ -95,14 +95,14 @@ typedef struct function_stmt{
 
 typedef struct import_stmt{
     Token *import_token;
-    Token *path_token;
-    Token *name_token;
+    Token *name;
+    Token *alt_name;
 }ImportStmt;
 
 typedef struct load_stmt{
     Token *load_token;
-    Token *path_token;
-    Token *name_token;
+    Token *pathname;
+    Token *name;
 }LoadStmt;
 
 #endif

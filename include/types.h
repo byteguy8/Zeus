@@ -80,7 +80,7 @@ typedef struct submodule{
 typedef struct module{
     char shadow;
     char *name;
-    char *filepath;
+    char *pathname;
     SubModule *submodule;
 }Module;
 

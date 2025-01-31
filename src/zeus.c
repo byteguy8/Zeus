@@ -16,6 +16,7 @@
 #include "vm.h"
 #include <stdio.h>
 #include <unistd.h>
+#include <libgen.h>
 #include <sys/stat.h>
 
 typedef struct args{
@@ -71,12 +72,12 @@ int main(int argc, char const *argv[]){
 		exit(EXIT_FAILURE);
 	}
 
-	if(!UTILS_EXISTS_FILE(source_path)){
-		fprintf(stderr, "File at '%s' do not exists.\n", source_path);
+	if(!UTILS_FILE_CAN_READ(source_path)){
+		fprintf(stderr, "File at '%s' do not exists or cannot be read.\n", source_path);
 		exit(EXIT_FAILURE);
 	}
 
-	if(!utils_is_reg(source_path)){
+	if(!utils_file_is_regular(source_path)){
 		fprintf(stderr, "File at '%s' is not a regular file.\n", source_path);
 		exit(EXIT_FAILURE);
 	}
@@ -84,7 +85,8 @@ int main(int argc, char const *argv[]){
 	memory_init();
 
     LZHTable *natives = runtime_lzhtable();
-	add_native("is_str_int", 1, native_fn_is_str_int, natives);
+	add_native("assert", 1, native_fn_assert, natives);
+    add_native("is_str_int", 1, native_fn_is_str_int, natives);
 	add_native("str_to_int", 1, native_fn_str_to_int, natives);
     add_native("int_to_str", 1, native_fn_int_to_str, natives);
     add_native("int_to_float", 1, native_fn_int_to_float, natives);
@@ -104,7 +106,7 @@ int main(int argc, char const *argv[]){
     add_native("sleep", 1, native_fn_time_sleep, natives);
 	add_native("readln", 0, native_fn_io_readln, natives);
 
-	RawStr *source = utils_read_source(source_path);
+	RawStr *source = compile_read_source(source_path);
     char *module_path = compile_clone_str(source_path);
     LZHTable *keywords = compile_lzhtable();
     
@@ -153,6 +155,11 @@ int main(int argc, char const *argv[]){
     Compiler *compiler = compiler_create();
     Dumpper *dumpper = dumpper_create();    
     VM *vm = vm_create();
+
+    if(module_path[0] == '/')
+        compiler->paths[compiler->paths_len++] = dirname(module_path);
+    else
+        compiler->paths[compiler->paths_len++] = compile_cwd();
 
     if(args.lex){
         if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)) goto CLEAN_UP;

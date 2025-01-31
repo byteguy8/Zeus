@@ -1,9 +1,10 @@
 #ifndef MEMORY_H
 #define MEMORY_H
 
+#include "types.h"
+#include "lzarena.h"
 #include "dynarr.h"
 #include "lzhtable.h"
-#include "types.h"
 #include <stddef.h>
 
 #define COMPILE_ARENA 0

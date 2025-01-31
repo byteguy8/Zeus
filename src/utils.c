@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 int utils_is_integer(char *buff){
 	size_t buff_len = strlen(buff);
@@ -75,7 +76,7 @@ int utils_i64_to_str(int64_t value, char *out_value){
     return len;
 }
 
-int utils_is_reg(char *filename){
+int utils_file_is_regular(char *filename){
 	struct stat file = {0};
 
 	if(stat(filename, &file) == -1)
@@ -84,7 +85,7 @@ int utils_is_reg(char *filename){
 	return S_ISREG(file.st_mode);
 }
 
-RawStr *utils_read_source(char *path){
+RawStr *compile_read_source(char *path){
 	FILE *source_file = fopen(path, "r");
     if(source_file == NULL) return NULL;
 
@@ -104,4 +105,22 @@ RawStr *utils_read_source(char *path){
 	rstr->buff = buff;
 
 	return rstr;
+}
+
+char *compile_cwd(){
+    char *pathname = getcwd(NULL, 0);
+    size_t pathname_len = strlen(pathname);
+    char *new_pathname = A_COMPILE_ALLOC(pathname_len + 1);
+    
+    if(!new_pathname){
+        free(pathname);
+        return NULL;
+    }
+    
+    memcpy(new_pathname, pathname, pathname_len);
+    new_pathname[pathname_len] = '\0';
+
+    free(pathname);
+
+    return new_pathname;
 }

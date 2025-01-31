@@ -395,6 +395,55 @@ void write_str(char *rstr, Compiler *compiler){
     write_i32((int32_t)hash, compiler);
 }
 
+char *resolve_module_location(
+    Token *import_token,
+    char *module_name,
+    Module *previous_module,
+    Module *current_module,
+    Compiler *compiler,
+    size_t *out_module_name_len,
+    size_t *out_module_pathname_len
+){
+    size_t module_name_len = strlen(module_name);
+
+    for (int i = 0; i < compiler->paths_len; i++){
+        char* base_pathname = compiler->paths[i];
+        size_t base_pathname_len = strlen(base_pathname);
+                
+        size_t module_pathname_len = base_pathname_len + module_name_len + 4;
+        char module_pathname[module_pathname_len + 1];
+
+        memcpy(module_pathname, base_pathname, base_pathname_len);
+        memcpy(module_pathname + base_pathname_len, "/", 1);
+        memcpy(module_pathname + base_pathname_len + 1, module_name, module_name_len);
+        memcpy(module_pathname + base_pathname_len + 1 + module_name_len, ".ze", 3);
+        module_pathname[module_pathname_len] = '\0';
+
+        // detect self module import
+        if(strcmp(module_pathname, current_module->pathname) == 0)
+            error(compiler, import_token, "Trying to import the current module '%s'", module_name);
+
+        if(previous_module){
+            // detect circular dependency
+            if(strcmp(module_pathname, previous_module->pathname) == 0)
+                error(compiler, import_token, "Circular dependency between '%s' and '%s'", current_module->pathname, previous_module->pathname);
+        }
+
+        if(!UTILS_FILE_CAN_READ(module_pathname))
+            error(compiler, import_token, "File at '%s' do not exists or cannot be read\n", module_pathname);
+
+        if(!utils_file_is_regular(module_pathname))
+            error(compiler, import_token, "File at '%s' is not a regular file\n", module_pathname);
+
+        *out_module_name_len = module_name_len;
+        *out_module_pathname_len = module_pathname_len;
+
+        return compile_clone_str(module_pathname);
+    }
+
+    return NULL;
+}
+
 void compile_expr(Expr *expr, Compiler *compiler){
     switch (expr->type){
         case EMPTY_EXPRTYPE:{
@@ -1198,54 +1247,48 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             break;
         }
         case IMPORT_STMTTYPE:{
+            assert(compiler->paths_len > 0);
+
             ImportStmt *import_stmt = (ImportStmt *)stmt->sub_stmt;
             Token *import_token = import_stmt->import_token;
-            Token *path_token = import_stmt->path_token;
-            Token *name_token = import_stmt->name_token;
+            Token *name = import_stmt->name;
+            Token *alt_name = import_stmt->alt_name;
 
             LZHTable *modules = compiler->modules;
             Module *current_module = compiler->current_module;
             Module *previous_module = compiler->previous_module;
             LZHTable *current_symbols = MODULE_SYMBOLS(current_module);
-            LZHTable *current_strings = MODULE_STRINGS(current_module);
             
-            char *module_name = name_token->lexeme;
-            size_t module_name_size = strlen(module_name);
-            uint32_t module_path_hash = *(uint32_t *) path_token->literal;
-            char *module_path = (char *)lzhtable_hash_get(module_path_hash, current_strings);
+            char *module_name = name->lexeme;
+            size_t module_name_len;
 
-            char *clone_module_path = compile_clone_str(module_path);
-            size_t module_path_size = strlen(clone_module_path);
+            char *module_alt_name = alt_name ? alt_name->lexeme : NULL;
+            size_t module_alt_name_len = module_alt_name ? strlen(module_alt_name) : 0;
 
-            // detect self module import
-            if(strcmp(module_path, current_module->filepath) == 0)
-                error(compiler, import_token, "Trying to import the current module '%s'", module_path);
+            size_t module_pathname_len;
+            char *module_pathname = resolve_module_location(
+                import_token,
+                module_name,
+                previous_module,
+                current_module,
+                compiler,
+                &module_name_len,
+                &module_pathname_len
+            );
 
-            if(previous_module){
-                // detect circular dependency
-                if(strcmp(module_path, previous_module->filepath) == 0)
-                    error(compiler, import_token, "Circular dependency between '%s' and '%s'", current_module->filepath, previous_module->filepath);
-            }
+            LZHTableNode *module_node = NULL;
 
-            if(!UTILS_EXISTS_FILE(clone_module_path))
-                error(compiler, import_token, "File at '%s' do not exists.\n", clone_module_path);
-
-            if(!utils_is_reg(clone_module_path))
-                error(compiler, import_token, "File at '%s' is not a regular file.\n", clone_module_path);
-
-            LZHTableNode *node = NULL;
-
-            if(lzhtable_contains((uint8_t *)module_path, module_path_size, modules, &node)){
-                Module *imported_module = (Module *)node->value;
-                Module *cloned_module = runtime_clone_module(module_name, module_path, imported_module);
+            if(lzhtable_contains((uint8_t *)module_pathname, module_pathname_len, modules, &module_node)){
+                Module *imported_module = (Module *)module_node->value;
+                Module *cloned_module = runtime_clone_module(module_name, module_pathname, imported_module);
                 
-                add_module_symbol(module_name, module_name_size, cloned_module, current_symbols);
-                declare(MODULE_SYMTYPE, name_token, compiler);
+                add_module_symbol(module_name, module_name_len, cloned_module, current_symbols);
+                declare(MODULE_SYMTYPE, alt_name, compiler);
                 
                 break;
             }
 
-            RawStr *source = utils_read_source(clone_module_path);
+            RawStr *source = compile_read_source(module_pathname);
             
             LZHTable *keywords = compiler->keywords;
             LZHTable *natives = compiler->natives;
@@ -1253,14 +1296,17 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             DynArrPtr *tokens = compile_dynarr_ptr();
             DynArrPtr *stmts = compile_dynarr_ptr();
             
-            Module *module = runtime_module(module_name, clone_module_path);
+            Module *module = runtime_module(module_name, module_pathname);
             SubModule *submodule = module->submodule;
 
             Lexer *lexer = lexer_create();
 	        Parser *parser = parser_create();
             Compiler *import_compiler = compiler_create();
 
-            if(lexer_scan(source, tokens, submodule->strings, keywords, clone_module_path, lexer)){
+            import_compiler->paths_len = compiler->paths_len;
+            memcpy(import_compiler->paths, compiler->paths, sizeof(char *) * compiler->paths_len);
+
+            if(lexer_scan(source, tokens, submodule->strings, keywords, module_pathname, lexer)){
 				compiler->is_err = 1;
 				break;
 			}
@@ -1274,11 +1320,18 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 compiler->is_err = 1;
 				break;
             }
-
-            add_module_symbol(module_name, module_name_size, module, current_symbols);
-            lzhtable_put((uint8_t *)clone_module_path, module_path_size, module, modules, NULL);
-            declare(MODULE_SYMTYPE, name_token, compiler);
             
+            uint32_t module_pathname_hash = lzhtable_hash((uint8_t *)module_pathname, module_pathname_len);
+            lzhtable_hash_put(module_pathname_hash, module, modules);
+            
+            add_module_symbol(
+                module_alt_name ? module_alt_name : module_name,
+                module_alt_name ? module_alt_name_len : module_name_len,
+                module,
+                current_symbols
+            );
+            declare(MODULE_SYMTYPE, alt_name ? alt_name : name, compiler);
+
             break;
         }
         case THROW_STMTTYPE:{
@@ -1382,8 +1435,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
         case LOAD_STMTTYPE:{
             LoadStmt *load_stmt = (LoadStmt *)stmt->sub_stmt;
             Token *load_token = load_stmt->load_token;
-            Token *path_token = load_stmt->path_token;
-            Token *name_token = load_stmt->name_token;
+            Token *path_token = load_stmt->pathname;
+            Token *name_token = load_stmt->name;
             
             declare(NATIVE_MODULE_SYMTYPE, name_token, compiler);
             
@@ -1431,9 +1484,7 @@ int compiler_compile(
     Module *current_module,
     LZHTable *modules,
     Compiler *compiler
-){
-    memset(compiler, 0, sizeof(Compiler));
-    
+){  
     if(setjmp(compiler->err_jmp) == 1) return 1;
     else{
         compiler->symbols = 1;
@@ -1465,9 +1516,7 @@ int compiler_import(
     Module *current_module,
     LZHTable *modules,
     Compiler *compiler
-){
-    memset(compiler, 0, sizeof(Compiler));
-    
+){  
     if(setjmp(compiler->err_jmp) == 1) return 1;
     else{
         compiler->keywords = keywords;

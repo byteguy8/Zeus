@@ -173,7 +173,7 @@ Fn *runtime_fn(char *name, Module *module){
 
 Module *runtime_module(char *name, char *filepath){
     char *module_name = runtime_clone_str(name);
-    char *module_filepath = runtime_clone_str(filepath);
+    char *module_pathname = runtime_clone_str(filepath);
     LZHTable *strings = runtime_lzhtable();
 	LZHTable *symbols = runtime_lzhtable();
     LZHTable *tries = runtime_lzhtable();
@@ -189,7 +189,7 @@ Module *runtime_module(char *name, char *filepath){
 
     module->shadow = 0;
     module->name = module_name;
-    module->filepath = module_filepath;
+    module->pathname = module_pathname;
     module->submodule = submodule;
 
     return module;
@@ -197,12 +197,12 @@ Module *runtime_module(char *name, char *filepath){
 
 Module *runtime_clone_module(char *new_name, char *filepath, Module *module){
     char *module_name = runtime_clone_str(new_name);
-    char *module_filepath = runtime_clone_str(filepath);
+    char *module_pathname = runtime_clone_str(filepath);
     Module *new_module = (Module *)A_RUNTIME_ALLOC(sizeof(Module));
 
     new_module->shadow = 1;
     new_module->name = module_name;
-    new_module->filepath = module_filepath;
+    new_module->pathname = module_pathname;
     new_module->submodule = module->submodule;
 
     return new_module;
