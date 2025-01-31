@@ -10,7 +10,7 @@ Value native_fn_assert(uint8_t argsc, Value *values, void *target, VM *vm){
     uint8_t value = TO_BOOL(raw_value);
     
     if(!value)
-        vm_utils_error(vm, "Assertion failed");
+		vm_utils_error(vm, "Assertion failed");
 
 	return EMPTY_VALUE;
 }

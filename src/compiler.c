@@ -1283,7 +1283,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 Module *cloned_module = runtime_clone_module(module_name, module_pathname, imported_module);
                 
                 add_module_symbol(module_name, module_name_len, cloned_module, current_symbols);
-                declare(MODULE_SYMTYPE, alt_name, compiler);
+                declare(MODULE_SYMTYPE, alt_name ? alt_name : name, compiler);
                 
                 break;
             }
