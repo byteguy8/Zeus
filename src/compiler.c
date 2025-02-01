@@ -395,6 +395,27 @@ void write_str(char *rstr, Compiler *compiler){
     write_i32((int32_t)hash, compiler);
 }
 
+char *names_to_name(DynArr *names, Token **out_name){
+    if(DYNARR_LEN(names) == 1){
+        Token *name = (Token *)DYNARR_GET(0, names);
+        *out_name = name;
+        return name->lexeme;
+    }
+
+    Token *name = NULL;
+    BStr *bstr = compile_bstr();
+
+    for (size_t i = 0; i < DYNARR_LEN(names); i++){
+        name = (Token *)DYNARR_GET(i, names);
+        bstr_append(name->lexeme, bstr);
+        if(i + 1 < DYNARR_LEN(names)) bstr_append("/", bstr);
+    }
+
+    *out_name = name;
+
+    return (char *)bstr_raw_substr(0, bstr->len - 1, bstr);
+}
+
 char *resolve_module_location(
     Token *import_token,
     char *module_name,
@@ -1251,7 +1272,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             ImportStmt *import_stmt = (ImportStmt *)stmt->sub_stmt;
             Token *import_token = import_stmt->import_token;
-            Token *name = import_stmt->name;
+            DynArr *names = import_stmt->names;
             Token *alt_name = import_stmt->alt_name;
 
             LZHTable *modules = compiler->modules;
@@ -1259,20 +1280,28 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             Module *previous_module = compiler->previous_module;
             LZHTable *current_symbols = MODULE_SYMBOLS(current_module);
             
-            char *module_name = name->lexeme;
-            size_t module_name_len;
+            Token *name = NULL;
+            
+            char *module_name = NULL;
+            size_t module_name_len = 0;
 
+            char *module_absolute_name = names_to_name(names, &name);
+            size_t module_absolute_name_len;
+
+            module_name = name->lexeme;
+            module_name_len = strlen(module_name);
+            
             char *module_alt_name = alt_name ? alt_name->lexeme : NULL;
             size_t module_alt_name_len = module_alt_name ? strlen(module_alt_name) : 0;
 
             size_t module_pathname_len;
             char *module_pathname = resolve_module_location(
                 import_token,
-                module_name,
+                module_absolute_name,
                 previous_module,
                 current_module,
                 compiler,
-                &module_name_len,
+                &module_absolute_name_len,
                 &module_pathname_len
             );
 

@@ -2,6 +2,7 @@
 #define MEMORY_H
 
 #include "types.h"
+#include "bstr.h"
 #include "lzarena.h"
 #include "dynarr.h"
 #include "lzhtable.h"
@@ -20,6 +21,7 @@ void *memory_arena_alloc(size_t size, int type);
 #define A_COMPILE_ALLOC(size)(memory_arena_alloc(size, COMPILE_ARENA))
 #define A_RUNTIME_ALLOC(size)(memory_arena_alloc(size, RUNTIME_ARENA))
 
+BStr *compile_bstr();
 DynArr *compile_dynarr(size_t size);
 DynArrPtr *compile_dynarr_ptr();
 LZHTable *compile_lzhtable();

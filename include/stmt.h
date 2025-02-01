@@ -95,7 +95,7 @@ typedef struct function_stmt{
 
 typedef struct import_stmt{
     Token *import_token;
-    Token *name;
+    DynArr *names;
     Token *alt_name;
 }ImportStmt;
 

@@ -309,7 +309,7 @@ int compare_locations(void *a, void *b){
 }
 
 BStr *prepare_stacktrace(unsigned int spaces, VM *vm){
-	BStr *st = bstr_create_empty();
+	BStr *st = bstr_create_empty(NULL);
 
 	for(int i = vm->frame_ptr - 1; i >= 0; i--){
 		Frame *frame = FRAME_AT(i, vm);

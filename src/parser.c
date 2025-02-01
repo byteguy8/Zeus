@@ -858,11 +858,16 @@ Stmt *parse_function_stmt(Parser *parser){
 
 Stmt *parse_import_stmt(Parser *parser){
     Token *import_token = NULL;
-    Token *name = NULL;
+    DynArr *names = NULL;
     Token *alt_name = NULL;
 
     import_token = previous(parser);
-    name = consume(parser, IDENTIFIER_TOKTYPE, "Expect module name");
+    names = compile_dynarr(sizeof(Token));
+    
+    do{
+        Token *name = consume(parser, IDENTIFIER_TOKTYPE, "Expect module name");
+        dynarr_insert(name, names);
+    } while (match(parser, 1, DOT_TOKTYPE));
     
     if(match(parser, 1, AS_TOKTYPE))
         alt_name = consume(parser, IDENTIFIER_TOKTYPE, "Expect module alternative name after 'as' keyword");
@@ -872,7 +877,7 @@ Stmt *parse_import_stmt(Parser *parser){
     ImportStmt *import_stmt = (ImportStmt *)A_COMPILE_ALLOC(sizeof(ImportStmt));
     
     import_stmt->import_token = import_token;
-    import_stmt->name = name;
+    import_stmt->names = names;
     import_stmt->alt_name = alt_name;
 
     return create_stmt(IMPORT_STMTTYPE, import_stmt);

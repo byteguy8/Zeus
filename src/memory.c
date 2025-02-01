@@ -5,6 +5,7 @@
 #include <assert.h>
 
 static LZArena *compile_arena = NULL;
+static BStrAllocator compile_bstr_allocator = {0};
 static DynArrAllocator compile_dynarr_allocator = {0};
 static LZHTableAllocator lzhtable_allocator = {0};
 
@@ -43,6 +44,11 @@ void arena_dealloc(void *ptr, size_t size, void *ctx){
 int memory_init(){
     // compile time
 	compile_arena = lzarena_create();
+
+    compile_bstr_allocator.alloc = arena_alloc;
+    compile_bstr_allocator.realloc = arena_realloc;
+    compile_bstr_allocator.dealloc = arena_dealloc;
+    compile_bstr_allocator.ctx = compile_arena;
 
 	compile_dynarr_allocator.alloc = arena_alloc;
 	compile_dynarr_allocator.realloc = arena_realloc;
@@ -105,6 +111,10 @@ void *memory_arena_alloc(size_t size, int type){
 	}
 
 	return ptr;
+}
+
+BStr *compile_bstr(){
+    return bstr_create_empty(&compile_bstr_allocator);
 }
 
 DynArr *compile_dynarr(size_t size){
