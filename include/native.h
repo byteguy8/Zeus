@@ -15,6 +15,29 @@ Value native_fn_assert(uint8_t argsc, Value *values, void *target, VM *vm){
 	return EMPTY_VALUE;
 }
 
+Value native_fn_assertm(uint8_t argsc, Value *values, void *target, VM *vm){
+	Value *raw_value = &values[0];
+    Value *msg_value = &values[1];
+	
+    if(!IS_BOOL(raw_value)){
+        vm_utils_error(vm, "Expect boolean at argument 0, but got something else");
+    }
+
+    uint8_t value = TO_BOOL(raw_value);
+
+    if(!IS_STR(msg_value)){
+        vm_utils_error(vm, "Expect string at argument 1, but got something else");
+    }
+
+    Str *msg = TO_STR(msg_value);
+    
+    if(!value){
+        vm_utils_error(vm, "Assertion failed: %s", msg->buff);
+    }
+
+	return EMPTY_VALUE;
+}
+
 Value native_fn_is_str_int(uint8_t argsc, Value *values, void *target, VM *vm){
 	Value *raw_value = &values[0];
 	Str *str = NULL;
@@ -25,6 +48,18 @@ Value native_fn_is_str_int(uint8_t argsc, Value *values, void *target, VM *vm){
 	str = TO_STR(raw_value);
 
 	return BOOL_VALUE((uint8_t)utils_is_integer(str->buff));
+}
+
+Value native_fn_is_str_float(uint8_t argsc, Value *values, void *target, VM *vm){
+	Value *raw_value = &values[0];
+	Str *str = NULL;
+	
+	if(!IS_STR(raw_value))
+		vm_utils_error(vm, "Expect a string, but got something else");
+
+	str = TO_STR(raw_value);
+
+	return BOOL_VALUE((uint8_t)utils_is_float(str->buff));
 }
 
 Value native_fn_str_to_int(uint8_t argsc, Value *values, void *target, VM *vm){
@@ -57,6 +92,49 @@ Value native_fn_int_to_str(uint8_t argsc, Value *values, void *target, VM *vm){
 
     if(!vm_utils_range_str_obj(0, len - 1, buff, &str_value, vm))
         vm_utils_error(vm, "Out of memory");
+
+    return str_value;
+}
+
+Value native_fn_str_to_float(uint8_t argsc, Value *values, void *target, VM *vm){
+    Value *raw_value = &values[0];
+    Str *str = NULL;
+    double value;
+
+    if(!IS_STR(raw_value)){
+        vm_utils_error(vm, "Expect string, but got something else");
+    }
+
+    str = TO_STR(raw_value);
+
+    if(utils_str_to_double(str->buff, &value)){
+        vm_utils_error(vm, "String do not contains a valid integer");
+    }
+
+	return FLOAT_VALUE(value);
+}
+
+Value native_fn_float_to_str(uint8_t argsc, Value *values, void *target, VM *vm){
+    Value *raw_value = &values[0];
+    double value = 0;
+    size_t buff_len = 1024;
+    char buff[buff_len];
+
+    if(!IS_FLOAT(raw_value)){
+        vm_utils_error(vm, "Expect float, but got something else");
+    }
+	
+	Value str_value = {0};
+	value = TO_FLOAT(raw_value);
+    int len = utils_double_to_str(buff_len, value, buff);
+
+    if(len == -1){
+        vm_utils_error(vm, "Unexpected error");
+    }
+
+    if(!vm_utils_range_str_obj(0, len - 1, buff, &str_value, vm)){
+        vm_utils_error(vm, "Out of memory");
+    }
 
     return str_value;
 }

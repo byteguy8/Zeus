@@ -135,7 +135,6 @@ Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function){
     return scope_in(FUNCTION_SCOPE, compiler);
 }
 
-
 void scope_out(Compiler *compiler){
     compiler->depth--;
 }
@@ -1294,6 +1293,9 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             char *module_alt_name = alt_name ? alt_name->lexeme : NULL;
             size_t module_alt_name_len = module_alt_name ? strlen(module_alt_name) : 0;
 
+            char *module_real_name = module_alt_name ? module_alt_name : module_name;
+            size_t module_real_name_len = module_alt_name ? module_alt_name_len : module_name_len;
+
             size_t module_pathname_len;
             char *module_pathname = resolve_module_location(
                 import_token,
@@ -1311,7 +1313,12 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 Module *imported_module = (Module *)module_node->value;
                 Module *cloned_module = runtime_clone_module(module_name, module_pathname, imported_module);
                 
-                add_module_symbol(module_name, module_name_len, cloned_module, current_symbols);
+                add_module_symbol(
+                    module_real_name,
+                    module_real_name_len,
+                    cloned_module,
+                    current_symbols
+                );
                 declare(MODULE_SYMTYPE, alt_name ? alt_name : name, compiler);
                 
                 break;
@@ -1332,8 +1339,13 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 	        Parser *parser = parser_create();
             Compiler *import_compiler = compiler_create();
 
-            import_compiler->paths_len = compiler->paths_len;
-            memcpy(import_compiler->paths, compiler->paths, sizeof(char *) * compiler->paths_len);
+            import_compiler->paths[import_compiler->paths_len++] = utils_parent_pathname(compile_clone_str(module_pathname));
+
+            if(compiler->paths_len > 1){
+                for (int i = 0; i < compiler->paths_len; i++){
+                    import_compiler->paths[import_compiler->paths_len++] = compiler->paths[i];
+                }
+            }
 
             if(lexer_scan(source, tokens, submodule->strings, keywords, module_pathname, lexer)){
 				compiler->is_err = 1;
@@ -1354,8 +1366,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             lzhtable_hash_put(module_pathname_hash, module, modules);
             
             add_module_symbol(
-                module_alt_name ? module_alt_name : module_name,
-                module_alt_name ? module_alt_name_len : module_name_len,
+                module_real_name,
+                module_real_name_len,
                 module,
                 current_symbols
             );

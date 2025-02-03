@@ -1,10 +1,12 @@
 #include "lexer.h"
 #include "memory.h"
+#include "utils.h"
 #include "token.h"
 #include <stdint.h>
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <math.h>
 
 static void error(Lexer *lexer, char *msg, ...){
 	if(lexer->status == 0) lexer->status = 1;
@@ -19,80 +21,6 @@ static void error(Lexer *lexer, char *msg, ...){
     fprintf(stderr, "\n");
 
 	va_end(args);
-}
-
-static int str_to_i64(char *str, int64_t *out_value){
-    int len = (int)strlen(str);
-    int is_negative = 0;
-    int64_t value = 0;
-    
-    for(int i = 0; i < len; i++){
-        char c = str[i];
-        
-        if(c == '-' && i == 0){
-            is_negative = 1;
-            continue;
-        }
-        
-        if(c < '0' || c > '9')
-            return 1;
-            
-        int64_t digit = ((int64_t)c) - 48;
-        
-        value *= 10;
-        value += digit;
-    }
-    
-    if(is_negative == 1)
-        value *= -1;
-        
-    *out_value = value;
-    
-    return 0;
-}
-
-static double str_to_double(char *str, double *out_value){
-    int len = (int)strlen(str);
-    int is_negative = 0;
-    int is_decimal = 0;
-    double special = 10.0;
-    double value = 0.0;
-    
-    for(int i = 0; i < len; i++){
-        char c = str[i];
-        
-        if(c == '-' && i == 0){
-            is_negative = 1;
-            continue;
-        }
-        
-        if(c == '.'){
-			if(i == 0) return 1;
-			is_decimal = 1;
-			continue;
-		}
-        
-        if(c < '0' || c > '9')
-            return 1;
-            
-        int digit = ((int)c) - 48;
-        
-        if(is_decimal){
-			double decimal = digit / special;
-			value += decimal;
-			special *= 10.0;
-		}else{
-			value *= 10.0;
-			value += digit;
-		}
-    }
-    
-    if(is_negative == 1)
-        value *= -1;
-        
-    *out_value = value;
-    
-    return 0;
 }
 
 static int is_at_end(Lexer *lexer){
@@ -247,8 +175,8 @@ static void number(Lexer *lexer){
     
     if(type == INT_TYPE_TOKTYPE){
 		int64_t *value = A_COMPILE_ALLOC(sizeof(int64_t));
-
-		str_to_i64(lexeme, value);
+        
+        utils_str_to_i64(lexeme, value);
 		add_token_raw(
 			lexer->line,
 			lexeme,
@@ -260,7 +188,7 @@ static void number(Lexer *lexer){
 	}else{
 		double *value = A_COMPILE_ALLOC(sizeof(double));
 		
-		str_to_double(lexeme, value);
+        utils_str_to_double(lexeme, value);
 		add_token_raw(
 			lexer->line,
 			lexeme,

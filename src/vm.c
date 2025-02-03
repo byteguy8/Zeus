@@ -82,7 +82,6 @@ static Value *peek(VM *vm);
     SubModule *submodule = m->submodule;                                                  \
     if(!submodule->resolve){                                                              \
         resolve_module(m, vm);                                                            \
-        submodule->resolve = 1;                                                           \
     }                                                                                     \
    	size_t key_size = strlen(n);                                                          \
    	LZHTable *symbols = submodule->symbols;                                                  \
@@ -1562,6 +1561,8 @@ void resolve_module(Module *module, VM *vm){
 
     vm->module = module;
     frame_up("import", vm);
+
+    module->submodule->resolve = 1;
 
     while (!IS_AT_END(vm)){
         uint8_t chunk = ADVANCE(vm);

@@ -16,7 +16,6 @@
 #include "vm.h"
 #include <stdio.h>
 #include <unistd.h>
-#include <libgen.h>
 #include <sys/stat.h>
 
 typedef struct args{
@@ -86,11 +85,14 @@ int main(int argc, char const *argv[]){
 
     LZHTable *natives = runtime_lzhtable();
 	add_native("assert", 1, native_fn_assert, natives);
+    add_native("assertm", 2, native_fn_assertm, natives);
     add_native("is_str_int", 1, native_fn_is_str_int, natives);
+    add_native("is_str_float", 1, native_fn_is_str_float, natives);
 	add_native("str_to_int", 1, native_fn_str_to_int, natives);
     add_native("int_to_str", 1, native_fn_int_to_str, natives);
     add_native("int_to_float", 1, native_fn_int_to_float, natives);
     add_native("float_to_int", 1, native_fn_float_to_int, natives);
+    add_native("float_to_str", 1, native_fn_float_to_str, natives);
 
     add_native("sqrt", 1, native_fn_sqrt, natives);
     add_native("pow", 2, native_fn_pow, natives);
@@ -157,7 +159,7 @@ int main(int argc, char const *argv[]){
     VM *vm = vm_create();
 
     if(module_path[0] == '/')
-        compiler->paths[compiler->paths_len++] = dirname(module_path);
+        compiler->paths[compiler->paths_len++] = utils_parent_pathname(compile_clone_str(module_path));
     else
         compiler->paths[compiler->paths_len++] = compile_cwd();
 

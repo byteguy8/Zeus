@@ -3,7 +3,9 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 #include <unistd.h>
+#include <libgen.h>
 
 int utils_is_integer(char *buff){
 	size_t buff_len = strlen(buff);
@@ -11,10 +13,42 @@ int utils_is_integer(char *buff){
 
 	for(size_t i = 0; i < buff_len; i++){
 		char c = buff[i];
+        
+        if(c == '-'){
+            if(i > 0) return 0;
+            continue;
+        }
+
 		if(c < '0' || c > '9') return 0;
 	}
 
 	return 1;
+}
+
+int utils_is_float(char *buff){
+    size_t buff_len = strlen(buff);
+	if(buff_len == 0) return 0;
+    int decimal_dot = 0;
+
+	for(size_t i = 0; i < buff_len; i++){
+		char c = buff[i];
+        
+        if(c == '-'){
+            if(i > 0) return 0;
+            continue;
+        }
+
+        if(c == '.'){
+            if(decimal_dot) return 0;
+            if(i == 0 || i + 1 >= buff_len) return 0;
+            if(!decimal_dot) decimal_dot = 1;
+            continue;
+        }
+
+		if(c < '0' || c > '9') return 0;
+	}
+
+	return decimal_dot;
 }
 
 int utils_str_to_i64(char *str, int64_t *out_value){
@@ -76,6 +110,58 @@ int utils_i64_to_str(int64_t value, char *out_value){
     return len;
 }
 
+int utils_str_to_double(char *raw_str, double *out_value){
+    int len = (int)strlen(raw_str);
+    int is_negative = 0;
+    int is_decimal = 0;
+    double special = 10.0;
+    double value = 0.0;
+    
+    for(int i = 0; i < len; i++){
+        char c = raw_str[i];
+        
+        if(c == '-' && i == 0){
+            is_negative = 1;
+            continue;
+        }
+        
+        if(c == '.'){
+			if(i == 0) return 1;
+			is_decimal = 1;
+			continue;
+		}
+        
+        if(c < '0' || c > '9')
+            return 1;
+            
+        int digit = ((int)c) - 48;
+        
+        if(is_decimal){
+			double decimal = digit / special;
+			value += decimal;
+			special *= 10.0;
+		}else{
+			value *= 10.0;
+			value += digit;
+		}
+    }
+    
+    if(is_negative == 1)
+        value *= -1;
+        
+    *out_value = value;
+    
+    return 0;
+}
+
+int utils_double_to_str(int buff_len, double value, char *out_value){
+    assert(buff_len > 0);
+    char buff[buff_len];
+    int written = snprintf(buff, buff_len, "%.8f", value);
+    memcpy(out_value, buff, written);
+    return written == -1 ? -1 : written == buff_len ? -1 : written;
+}
+
 int utils_file_is_regular(char *filename){
 	struct stat file = {0};
 
@@ -83,6 +169,10 @@ int utils_file_is_regular(char *filename){
 		return -1;
 
 	return S_ISREG(file.st_mode);
+}
+
+char *utils_parent_pathname(char *pathname){
+    return dirname(pathname);
 }
 
 RawStr *compile_read_source(char *path){
