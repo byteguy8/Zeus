@@ -96,12 +96,17 @@ int main(int argc, char const *argv[]){
 
     add_native("sqrt", 1, native_fn_sqrt, natives);
     add_native("pow", 2, native_fn_pow, natives);
-    add_native("sin", 1, native_fn_sin, natives);
-    add_native("sinh", 1, native_fn_sinh, natives);
     add_native("cos", 1, native_fn_cos, natives);
+    add_native("acos", 1, native_fn_acos, natives);
     add_native("cosh", 1, native_fn_cosh, natives);
+    add_native("sin", 1, native_fn_sin, natives);
+    add_native("asin", 1, native_fn_asin, natives);
+    add_native("sinh", 1, native_fn_sinh, natives);
     add_native("tan", 1, native_fn_tan, natives);
+    add_native("atan", 1, native_fn_atan, natives);
     add_native("tanh", 1, native_fn_tanh, natives);
+    add_native("rad2deg", 1, native_fn_rad2deg, natives);
+    add_native("deg2rad", 1, native_fn_deg2rad, natives);
 
     add_native("time", 0, native_fn_time, natives);
     add_native("millis", 0, native_fn_time_millis, natives);

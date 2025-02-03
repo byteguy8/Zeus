@@ -449,17 +449,24 @@ char *resolve_module_location(
                 error(compiler, import_token, "Circular dependency between '%s' and '%s'", current_module->pathname, previous_module->pathname);
         }
 
-        if(!UTILS_FILE_CAN_READ(module_pathname))
-            error(compiler, import_token, "File at '%s' do not exists or cannot be read\n", module_pathname);
+        if(!UTILS_FILE_EXISTS(module_pathname)){
+			continue;
+		}
+		
+		if(!UTILS_FILE_CAN_READ(module_pathname)){
+			error(compiler, import_token, "File at '%s' do not exists or cannot be read", module_pathname);
+		}
 
         if(!utils_file_is_regular(module_pathname))
-            error(compiler, import_token, "File at '%s' is not a regular file\n", module_pathname);
+            error(compiler, import_token, "File at '%s' is not a regular file", module_pathname);
 
         *out_module_name_len = module_name_len;
         *out_module_pathname_len = module_pathname_len;
 
         return compile_clone_str(module_pathname);
     }
+    
+    error(compiler, import_token, "module %s not found", module_name);
 
     return NULL;
 }
@@ -1341,10 +1348,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             import_compiler->paths[import_compiler->paths_len++] = utils_parent_pathname(compile_clone_str(module_pathname));
 
-            if(compiler->paths_len > 1){
-                for (int i = 0; i < compiler->paths_len; i++){
-                    import_compiler->paths[import_compiler->paths_len++] = compiler->paths[i];
-                }
+            for (int i = 0; i < compiler->paths_len; i++){
+				import_compiler->paths[import_compiler->paths_len++] = compiler->paths[i];
             }
 
             if(lexer_scan(source, tokens, submodule->strings, keywords, module_pathname, lexer)){
