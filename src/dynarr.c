@@ -210,6 +210,17 @@ int dynarr_find(void *b, int (*comparator)(void *a, void *b), struct dynarr *dyn
     return -1;
 }
 
+void *dynarr_get_ptr(size_t index, struct dynarr *dynarr){
+    assert(dynarr->size == sizeof(uintptr_t));
+    return (void *)(DYNARR_GET_AS(uintptr_t, index, dynarr));
+}
+
+void dynarr_set_ptr(void *ptr, size_t index, struct dynarr *dynarr){
+    assert(dynarr->size == sizeof(uintptr_t));
+    uintptr_t iptr = (uintptr_t)ptr;
+    memmove(DYNARR_GET(index, dynarr), (void *)(&iptr), dynarr->size);
+}
+
 int dynarr_insert(void *item, struct dynarr *dynarr){
     if (dynarr->used >= dynarr->count){
         size_t new_count = DYNARR_DETERMINATE_GROW(dynarr->count);
@@ -237,6 +248,18 @@ int dynarr_insert_at(size_t index, void *item, struct dynarr *dynarr){
     dynarr->used++;
 
     return 0;
+}
+
+int dynarr_insert_ptr(void *ptr, struct dynarr *dynarr){
+    assert(dynarr->size == sizeof(uintptr_t));
+    uintptr_t iptr = (uintptr_t)ptr;
+    return dynarr_insert(&iptr, dynarr);
+}
+
+int dynarr_insert_ptr_at(size_t index, void *ptr, struct dynarr *dynarr){
+    assert(dynarr->size == sizeof(uintptr_t));
+    uintptr_t iptr = (uintptr_t)ptr;
+    return dynarr_insert_at(index, &iptr, dynarr);
 }
 
 int dynarr_append(struct dynarr *from, struct dynarr *to){

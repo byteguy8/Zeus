@@ -125,6 +125,15 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             
             break;
         }
+        case TEMPLATE_OPCODE:{
+            int16_t len = read_i16(dumpper);
+            size_t end = dumpper->ip;
+
+            printf("%8.8s %.7ld", "TEMPLATE", end - start);
+            printf(" | length: %d\n", len);
+
+            break;
+        }
         case ADD_OPCODE:{
             size_t end = dumpper->ip;
             printf("%8.8s %.7ld\n", "ADD", end - start);

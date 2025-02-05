@@ -10,6 +10,7 @@ typedef enum expr_type{
     INT_EXPRTYPE,
     FLOAT_EXPRTYPE,
 	STRING_EXPRTYPE,
+    TEMPLATE_EXPRTYPE,
     GROUP_EXPRTYPE,
     IDENTIFIER_EXPRTYPE,
     CALL_EXPRTYPE,
@@ -52,6 +53,11 @@ typedef struct string_expr{
 	uint32_t hash;
 	Token *string_token;
 }StringExpr;
+
+typedef struct template_expr{
+    Token *template_token;
+    DynArrPtr *exprs; //expressions statements
+}TemplateExpr;
 
 typedef struct group_expr{
     Token *left_paren_token;

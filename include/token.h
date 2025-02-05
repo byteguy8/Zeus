@@ -41,7 +41,7 @@ typedef enum token_type{
     
     //types
     INT_TYPE_TOKTYPE, FLOAT_TYPE_TOKTYPE,
-    STR_TYPE_TOKTYPE,
+    STR_TYPE_TOKTYPE, TEMPLATE_TYPE_TOKTYPE,
 
     IDENTIFIER_TOKTYPE,
     EOF_TOKTYPE
@@ -54,6 +54,21 @@ typedef struct token{
 	size_t literal_size;
 	TokenType type;
     char *pathname;
+    void *extra;
 }Token;
+
+typedef enum template_item_type{
+    STR_TITEMTYPE,
+    TOKENS_TITEMTYPE,
+}TemplateItemType;
+
+typedef struct template_item{
+    TemplateItemType type;
+    union{
+        Token *str;
+        void *tokens; //can be NULL
+    }value;
+    
+}TemplateItem;
 
 #endif

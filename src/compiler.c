@@ -533,6 +533,23 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
 			break;
 		}
+        case TEMPLATE_EXPRTYPE:{
+            TemplateExpr *template_expr = (TemplateExpr *)expr->sub_expr;
+            Token *template_token = template_expr->template_token;
+            DynArrPtr *stmts = template_expr->exprs;
+            
+            for (int16_t i = DYNARR_PTR_LEN(stmts) - 1; i >= 0; i--){
+                Expr *expr = (Expr *)DYNARR_PTR_GET(i, stmts);
+                compile_expr(expr, compiler);
+            }
+            
+            write_chunk(TEMPLATE_OPCODE, compiler);
+            write_location(template_token, compiler);
+
+            write_i16((int16_t)DYNARR_PTR_LEN(stmts), compiler);
+
+            break;
+        }
         case IDENTIFIER_EXPRTYPE:{
             IdentifierExpr *identifier_expr = (IdentifierExpr *)expr->sub_expr;
             Token *identifier_token = identifier_expr->identifier_token;

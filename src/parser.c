@@ -8,8 +8,6 @@
 #include <setjmp.h>
 #include <assert.h>
 
-static jmp_buf err_jmp;
-
 static void error(Parser *parser, Token *token, char *msg, ...){
     va_list args;
 	va_start(args, msg);
@@ -20,7 +18,7 @@ static void error(Parser *parser, Token *token, char *msg, ...){
 
 	va_end(args);
 
-    longjmp(err_jmp, 1);
+    longjmp(parser->err_jmp, 1);
 }
 
 Expr *create_expr(ExprType type, void *sub_expr){
@@ -96,15 +94,15 @@ Token *consume(Parser *parser, TokenType type, char *err_msg, ...){
 
 	va_end(args);
 
-    longjmp(err_jmp, 1);
+    longjmp(parser->err_jmp, 1);
 }
 
 Expr *parse_expr(Parser *paser);
-Expr *parse_is_expr(Parser *parser);
 Expr *parse_assign(Parser *parser);
+Expr *parse_is_expr(Parser *parser);
+Expr *parse_record(Parser *parser);
 Expr *parse_dict(Parser *parser);
 Expr *parse_list(Parser *parser);
-Expr *parse_record(Parser *parser);
 Expr *parse_or(Parser *parser);
 Expr *parse_and(Parser *parser);
 Expr *parse_comparison(Parser *parser);
@@ -130,46 +128,11 @@ Stmt *parse_import_stmt(Parser *parser);
 Stmt *parse_load_stmt(Parser *parser);
 
 Expr *parse_expr(Parser *parser){
-	return parse_is_expr(parser);
-}
-
-Expr *parse_is_expr(Parser *parser){
-	Expr *left = parse_assign(parser);
-
-	if(match(parser, 1, IS_TOKTYPE)){
-		Token *is_token = NULL;
-		Token *type_token = NULL;
-
-		is_token = previous(parser);
-
-		if(match(parser, 7, 
-			             EMPTY_TOKTYPE,
-					     BOOL_TOKTYPE,
-					     INT_TOKTYPE,
-					     FLOAT_TOKTYPE,
-					     STR_TOKTYPE,
-					     LIST_TOKTYPE,
-					     DICT_TOKTYPE,
-                         RECORD_TOKTYPE)){
-			type_token = previous(parser);
-		}
-
-		if(!type_token)
-			error(parser, is_token, "Expect type after 'is' keyword.");
-
-		IsExpr *is_expr = (IsExpr *)A_COMPILE_ALLOC(sizeof(IsExpr));
-		is_expr->left_expr = left;
-		is_expr->is_token = is_token;
-		is_expr->type_token = type_token;
-
-		return create_expr(IS_EXPRTYPE, is_expr);
-	}
-
-	return left;
+	return parse_assign(parser);
 }
 
 Expr *parse_assign(Parser *parser){
-    Expr *expr = parse_record(parser);
+    Expr *expr = parse_is_expr(parser);
 	
 	if(match(parser, 4, 
 			 COMPOUND_ADD_TOKTYPE, 
@@ -208,6 +171,41 @@ Expr *parse_assign(Parser *parser){
     }
 
     return expr;
+}
+
+Expr *parse_is_expr(Parser *parser){
+	Expr *left = parse_record(parser);
+
+	if(match(parser, 1, IS_TOKTYPE)){
+		Token *is_token = NULL;
+		Token *type_token = NULL;
+
+		is_token = previous(parser);
+
+		if(match(parser, 7, 
+			             EMPTY_TOKTYPE,
+					     BOOL_TOKTYPE,
+					     INT_TOKTYPE,
+					     FLOAT_TOKTYPE,
+					     STR_TOKTYPE,
+					     LIST_TOKTYPE,
+					     DICT_TOKTYPE,
+                         RECORD_TOKTYPE)){
+			type_token = previous(parser);
+		}
+
+		if(!type_token)
+			error(parser, is_token, "Expect type after 'is' keyword.");
+
+		IsExpr *is_expr = (IsExpr *)A_COMPILE_ALLOC(sizeof(IsExpr));
+		is_expr->left_expr = left;
+		is_expr->is_token = is_token;
+		is_expr->type_token = type_token;
+
+		return create_expr(IS_EXPRTYPE, is_expr);
+	}
+
+	return left;
 }
 
 DynArrPtr *record_key_values(Token *record_token, Parser *parser){
@@ -542,6 +540,23 @@ Expr *parse_literal(Parser *parser){
 
 		return create_expr(STRING_EXPRTYPE, string_expr);
 	}
+
+    if(match(parser, 1, TEMPLATE_TYPE_TOKTYPE)){
+        Token *template_token = previous(parser);
+        DynArrPtr *tokens = (DynArrPtr *)template_token->extra;
+        DynArrPtr *exprs = compile_dynarr_ptr();
+        Parser *template_parser = parser_create();
+
+        if(parser_parse_template(tokens, exprs, template_parser)){
+            error(parser, template_token, "failed to parse template");
+        }
+
+        TemplateExpr *template_expr = (TemplateExpr *)A_COMPILE_ALLOC(sizeof(TemplateExpr));
+        template_expr->template_token = template_token;
+        template_expr->exprs = exprs;
+
+        return create_expr(TEMPLATE_EXPRTYPE, template_expr);
+    }
 
     if(match(parser, 1, LEFT_PAREN_TOKTYPE)){
         Token *left_paren_token = previous(parser);
@@ -913,7 +928,7 @@ Parser *parser_create(){
 }
 
 int parser_parse(DynArrPtr *tokens, DynArrPtr *stmts, Parser *parser){
-	if(setjmp(err_jmp) == 1) return 1;
+	if(setjmp(parser->err_jmp) == 1) return 1;
     else {
         parser->current = 0;
         parser->tokens = tokens;
@@ -922,6 +937,22 @@ int parser_parse(DynArrPtr *tokens, DynArrPtr *stmts, Parser *parser){
         while(!is_at_end(parser)){
             Stmt *stmt = parse_stmt(parser);
             dynarr_ptr_insert(stmt, stmts);
+        }
+
+        return 0;
+    }
+}
+
+int parser_parse_template(DynArrPtr *tokens, DynArrPtr *exprs, Parser *parser){
+    if(setjmp(parser->err_jmp) == 1) return 1;
+    else {
+        parser->current = 0;
+        parser->tokens = tokens;
+        parser->stmt = exprs;
+        
+        while(!is_at_end(parser)){
+            Expr *expr = parse_is_expr(parser);
+            dynarr_ptr_insert(expr, exprs);
         }
 
         return 0;

@@ -8,6 +8,8 @@
 #include <stdio.h>
 #include <math.h>
 
+static Token *scan_token(char c, Lexer *lexer);
+
 static void error(Lexer *lexer, char *msg, ...){
 	if(lexer->status == 0) lexer->status = 1;
 
@@ -113,15 +115,15 @@ static char *lexeme_current_copy(char *lexeme_copy, Lexer *lexer){
     return lexeme_copy;
 }
 
-static void add_token_raw(
-    int line, 
+static Token *create_token_raw(
+	int line, 
     char *lexeme, 
     void *literal, 
     size_t literal_size, 
-    TokenType type, 
+    TokenType type,
     Lexer *lexer
 ){
-    Token *token = (Token *)A_COMPILE_ALLOC(sizeof(Token));
+	Token *token = (Token *)A_COMPILE_ALLOC(sizeof(Token));
 
     token->line = line;
     token->lexeme = lexeme;
@@ -129,25 +131,33 @@ static void add_token_raw(
     token->literal_size = literal_size;
     token->type = type;
     token->pathname = lexer->pathname;
-
-    dynarr_ptr_insert(token, lexer->tokens);
+    token->extra = NULL;
+    
+    return token;
 }
 
-static void add_token_literal(void *literal, size_t literal_size, TokenType type, Lexer *lexer){
-    char *lexeme = lexeme_current(lexer);
-    add_token_raw(
-        lexer->line,
+static Token *create_token_literal(
+	void *literal,
+	size_t literal_size,
+	TokenType type,
+	Lexer *lexer
+){
+	char *lexeme = lexeme_current(lexer);
+	return create_token_raw(
+		lexer->line,
         lexeme,
         literal,
         literal_size,
         type,
         lexer
-    );
+	);
 }
 
-static void add_token(TokenType type, Lexer *lexer){
-    add_token_literal(NULL, 0, type, lexer);
+static Token *create_token(TokenType type, Lexer *lexer){
+	return create_token_literal(NULL, 0, type, lexer);
 }
+
+#define ADD_TOKEN_RAW(token)(dynarr_ptr_insert((token), lexer->tokens))
 
 static void comment(Lexer *lexer){
 	while(!is_at_end(lexer)){
@@ -158,26 +168,28 @@ static void comment(Lexer *lexer){
 	}
 }
 
-static void number(Lexer *lexer){
+static Token *number(Lexer *lexer){
     TokenType type = INT_TYPE_TOKTYPE;
     
-    while (!is_at_end(lexer) && is_digit(peek(lexer)))
-		advance(lexer);
+    while (!is_at_end(lexer) && is_digit(peek(lexer))){
+        advance(lexer);
+    }
         
 	if(match('.', lexer)){
 		type = FLOAT_TYPE_TOKTYPE;
 		
-		while (!is_at_end(lexer) && is_digit(peek(lexer)))
-			advance(lexer);
+		while (!is_at_end(lexer) && is_digit(peek(lexer))){
+            advance(lexer);
+        }
 	}
 
     char *lexeme = lexeme_current(lexer);
     
     if(type == INT_TYPE_TOKTYPE){
 		int64_t *value = A_COMPILE_ALLOC(sizeof(int64_t));
-        
         utils_str_to_i64(lexeme, value);
-		add_token_raw(
+
+		return create_token_raw(
 			lexer->line,
 			lexeme,
 			value,
@@ -187,9 +199,9 @@ static void number(Lexer *lexer){
 		);
 	}else{
 		double *value = A_COMPILE_ALLOC(sizeof(double));
-		
         utils_str_to_double(lexeme, value);
-		add_token_raw(
+
+        return create_token_raw(
 			lexer->line,
 			lexeme,
 			value,
@@ -200,9 +212,10 @@ static void number(Lexer *lexer){
 	}
 }
 
-static void identifier(Lexer *lexer){
-    while (!is_at_end(lexer) && is_alpha_numeric(peek(lexer)))
+static Token *identifier(Lexer *lexer){
+    while (!is_at_end(lexer) && is_alpha_numeric(peek(lexer))){
         advance(lexer);
+    }
     
     size_t lexeme_len = lexeme_current_len(lexer);
     char lexeme[lexeme_len + 1];
@@ -211,22 +224,118 @@ static void identifier(Lexer *lexer){
     TokenType *type = (TokenType *)lzhtable_get(
         (uint8_t *)lexeme, 
         lexeme_len, 
-        lexer->keywords);
+        lexer->keywords
+    );
 
-    if(type == NULL) add_token(IDENTIFIER_TOKTYPE, lexer);
-    else add_token(*type, lexer);
+    if(type == NULL){
+        return create_token(IDENTIFIER_TOKTYPE, lexer);
+    }else{
+        return create_token(*type, lexer);
+    }
 }
 
-static void string(Lexer *lexer){
+static uint32_t *str_to_table(size_t len, char *str, Lexer *lexer){
+    uint32_t *hash = A_COMPILE_ALLOC(sizeof(uint32_t));
+	*hash = lzhtable_hash((uint8_t *)str, len);
+
+	if(!lzhtable_hash_contains(*hash, lexer->strings, NULL)){
+		char *literal = A_RUNTIME_ALLOC(len + 1);
+		memcpy(literal, str, len);
+		literal[len] = '\0';
+
+		lzhtable_hash_put(*hash, literal, lexer->strings);
+	}
+
+    return hash;
+}
+
+static Token *string(Lexer *lexer){
 	int lines = 0;
+	int from = lexer->current;
     char empty = peek(lexer) == '"';
+    TokenType type = STR_TYPE_TOKTYPE;
+    DynArrPtr *tokens = NULL;
 	
-	while(peek(lexer) != '"')
-		if(advance(lexer) == '\n') lines++;
+	while(peek(lexer) != '"'){
+		char c = advance(lexer);
+		
+		if(c == '\n'){
+			lines++;
+		}else if(c == '$'){
+			if(match('{', lexer)){
+                if(type != TEMPLATE_TYPE_TOKTYPE){
+                    type = TEMPLATE_TYPE_TOKTYPE;
+                }
+
+                if(!tokens){
+                    tokens = compile_dynarr_ptr();
+                }
+
+                if(lexer->current - 2 - from > 0){
+                    char *str = lexeme_range(from, lexer->current - 2, lexer);
+                    size_t len = strlen(str);
+                    uint32_t *hash = str_to_table(len, str,lexer);
+                    Token *str_token = create_token_literal(
+                        hash,
+                        sizeof(uint32_t),
+                        STR_TYPE_TOKTYPE,
+                        lexer
+                    );
+
+                    dynarr_ptr_insert(str_token, tokens);
+                }
+				
+                size_t prev_start = lexer->start;
+                lexer->start = lexer->current;
+
+				while(!is_at_end(lexer) && peek(lexer) != '}'){
+					c = advance(lexer);
+					Token *token = scan_token(c, lexer);
+					
+                    if(token){
+                        dynarr_ptr_insert(token, tokens);
+					}
+
+                    lexer->start = lexer->current;
+				}
+				
+                lexer->start = prev_start;
+
+				if(peek(lexer) != '}'){
+					error(lexer, "unterminated placeholder");
+					return NULL;
+				}
+
+                advance(lexer);
+				
+				from = lexer->current;
+			}
+		}
+	}
+
+    if(type == TEMPLATE_TYPE_TOKTYPE){
+        if(lexer->current - from > 0){
+            char *str = lexeme_range(from, lexer->current, lexer);
+            size_t len = strlen(str);
+            uint32_t *hash = str_to_table(len, str,lexer);
+            Token *str_token = create_token_literal(
+                hash,
+                sizeof(uint32_t),
+                STR_TYPE_TOKTYPE,
+                lexer
+            );
+
+            dynarr_ptr_insert(str_token, tokens);
+        }
+        
+        Token *eof = create_token(EOF_TOKTYPE, lexer);
+        
+        dynarr_ptr_insert(eof, tokens);
+    }
 
 	if(peek(lexer) != '"'){
 		error(lexer, "Unterminated string");
-		return;
+		return NULL;
 	}
 
 	size_t len = empty ? 0 : lexeme_range_copy(
@@ -249,114 +358,128 @@ static void string(Lexer *lexer){
 
     advance(lexer);
 
-	uint32_t *hash = A_COMPILE_ALLOC(sizeof(uint32_t));
-	*hash = lzhtable_hash((uint8_t *)str, len);
+	uint32_t *hash = str_to_table(len, str,lexer);
+    Token *str_token = create_token_literal(
+		hash,
+		sizeof(uint32_t),
+		type,
+		lexer
+	);
 
-	if(!lzhtable_hash_contains(*hash, lexer->strings, NULL)){
-		char *literal = A_RUNTIME_ALLOC(len + 1);
-		memcpy(literal, str, len);
-		literal[len] = '\0';
-
-		lzhtable_hash_put(*hash, literal, lexer->strings);
-	}
-
-	add_token_literal(hash, sizeof(uint32_t), STR_TYPE_TOKTYPE, lexer);
+	str_token->extra = tokens;
 	lexer->line += lines;
+	
+	return str_token;
 }
 
-static void scan_token(Lexer *lexer){
-    char c = advance(lexer);
-
+static Token *scan_token(char c, Lexer *lexer){
     switch (c)
     {
         case '+':{
-			if(match('=', lexer)) add_token(COMPOUND_ADD_TOKTYPE, lexer);
-			else add_token(PLUS_TOKTYPE, lexer);
-            break;
+			if(match('=', lexer)){
+				return create_token(COMPOUND_ADD_TOKTYPE, lexer);
+			}else{
+				return create_token(PLUS_TOKTYPE, lexer);
+			}
         }
         case '-':{
-			if(match('=', lexer)) add_token(COMPOUND_SUB_TOKTYPE, lexer);
-			else add_token(MINUS_TOKTYPE, lexer);
-            break;
+			if(match('=', lexer)){
+				return create_token(COMPOUND_SUB_TOKTYPE, lexer);
+			}else{
+				return create_token(MINUS_TOKTYPE, lexer);
+			}
         }
         case '*':{
-			if(match('=', lexer)) add_token(COMPOUND_MUL_TOKTYPE, lexer);
-            else add_token(ASTERISK_TOKTYPE, lexer);
-            break;
+			if(match('=', lexer)){
+				return create_token(COMPOUND_MUL_TOKTYPE, lexer);
+			}else{
+				return create_token(ASTERISK_TOKTYPE, lexer);
+			}
         }
         case '/':{
-			if(match('/', lexer)) comment(lexer);
-			else if(match('=', lexer)) add_token(COMPOUND_DIV_TOKTYPE, lexer);
-            else add_token(SLASH_TOKTYPE, lexer);
-            break;
+			if(match('/', lexer)){
+				comment(lexer);
+				return NULL;
+			}else if(match('=', lexer)){
+				return create_token(COMPOUND_DIV_TOKTYPE, lexer);
+			}else{
+				return create_token(SLASH_TOKTYPE, lexer);
+			}
         }
 		case ',':{
-			add_token(COMMA_TOKTYPE, lexer);
-			break;
+			return create_token(COMMA_TOKTYPE, lexer);
 		}
 		case '.':{
-			add_token(DOT_TOKTYPE, lexer);
-			break;
+			return create_token(DOT_TOKTYPE, lexer);
 		}
         case '<':{
-            if(match('=', lexer)) add_token(LESS_EQUALS_TOKTYPE, lexer);
-            else add_token(LESS_TOKTYPE, lexer);
-            break;
+            if(match('=', lexer)){
+				return create_token(LESS_EQUALS_TOKTYPE, lexer);
+			}else{
+				return create_token(LESS_TOKTYPE, lexer);
+			}
         }
         case '>':{
-            if(match('=', lexer)) add_token(GREATER_EQUALS_TOKTYPE, lexer);
-            else add_token(GREATER_TOKTYPE, lexer);
-            break;
+            if(match('=', lexer)){
+				return create_token(GREATER_EQUALS_TOKTYPE, lexer);
+			}else{
+				return create_token(GREATER_TOKTYPE, lexer);
+			}
         }
         case '=':{
-            if(match('=', lexer)) add_token(EQUALS_EQUALS_TOKTYPE, lexer);
-            else add_token(EQUALS_TOKTYPE, lexer);
-            break;
+            if(match('=', lexer)){
+				return create_token(EQUALS_EQUALS_TOKTYPE, lexer);
+			}else{
+				return create_token(EQUALS_TOKTYPE, lexer);
+			}
         }
         case '!':{
-            if(match('=', lexer)) add_token(NOT_EQUALS_TOKTYPE, lexer);
-            else add_token(EXCLAMATION_TOKTYPE, lexer);
-            break;
+            if(match('=', lexer)){
+				return create_token(NOT_EQUALS_TOKTYPE, lexer);
+			}else{
+				return create_token(EXCLAMATION_TOKTYPE, lexer);
+			}
         }
 		case ':':{
-			add_token(COLON_TOKTYPE, lexer);
-			break;
+			return create_token(COLON_TOKTYPE, lexer);
 		}
         case ';':{
-            add_token(SEMICOLON_TOKTYPE, lexer);
-            break;
+            return create_token(SEMICOLON_TOKTYPE, lexer);
         }
         case '(':{
-            add_token(LEFT_PAREN_TOKTYPE, lexer);
-            break;
+            return create_token(LEFT_PAREN_TOKTYPE, lexer);
         }
         case ')':{
-            add_token(RIGHT_PAREN_TOKTYPE, lexer);
-            break;
+            return create_token(RIGHT_PAREN_TOKTYPE, lexer);
         }
         case '{':{
-            add_token(LEFT_BRACKET_TOKTYPE, lexer);
-            break;
+            return create_token(LEFT_BRACKET_TOKTYPE, lexer);
         }
         case '}':{
-            add_token(RIGHT_BRACKET_TOKTYPE, lexer);
-            break;
+            return create_token(RIGHT_BRACKET_TOKTYPE, lexer);
         }
         case '\n':{
             lexer->line++;
-            break;
+            return NULL;
         }
         case ' ':
         case '\t':
-            break;
+            return NULL;
         default:{
-            if(is_digit(c)) number(lexer);
-            else if(is_alpha_numeric(c)) identifier(lexer);
-			else if(c == '"') string(lexer);
-            else error(lexer, "Unknown token '%c'", c);
-            break;
+            if(is_digit(c)){
+				return number(lexer);
+			}else if(is_alpha_numeric(c)){
+				return identifier(lexer);
+			}else if(c == '"'){
+				return string(lexer);
+			}else{
+				error(lexer, "Unknown token '%c'", c);
+				return NULL;
+			}
         }
     }
+    
+    return NULL;
 }
 
 Lexer *lexer_create(){
@@ -383,11 +506,17 @@ int lexer_scan(
     lexer->pathname = pathname;
 
     while (!is_at_end(lexer)){
-        scan_token(lexer);
+		char c = advance(lexer);
+        Token *token = scan_token(c, lexer);
+        
+        if(token){
+			ADD_TOKEN_RAW(token);
+		}
+        
         lexer->start = lexer->current;
     }
     
-    add_token(EOF_TOKTYPE, lexer);
+    ADD_TOKEN_RAW(create_token(EOF_TOKTYPE, lexer));
 
     return lexer->status;
 }

@@ -39,12 +39,6 @@ static void get_args(int argc, char const *argv[], Args *args){
 	}
 }
 
-void add_keyword(char *name, TokenType type, LZHTable *keywords){
-    TokenType *ctype = (TokenType *)A_COMPILE_ALLOC(sizeof(TokenType));
-    *ctype = type;
-    lzhtable_put((uint8_t *)name, strlen(name), ctype, keywords, NULL);
-}
-
 void add_native(char *name, int arity, RawNativeFn raw_native, LZHTable *natives){
     size_t name_len = strlen(name);
     NativeFn *native = (NativeFn *)A_RUNTIME_ALLOC(sizeof(NativeFn));
@@ -58,6 +52,50 @@ void add_native(char *name, int arity, RawNativeFn raw_native, LZHTable *natives
     native->raw_fn = raw_native;
 
     lzhtable_put((uint8_t *)name, name_len, native, natives, NULL);
+}
+
+void add_keyword(char *name, TokenType type, LZHTable *keywords){
+    TokenType *ctype = (TokenType *)A_COMPILE_ALLOC(sizeof(TokenType));
+    *ctype = type;
+    lzhtable_put((uint8_t *)name, strlen(name), ctype, keywords, NULL);
+}
+
+LZHTable *create_keywords_table(){
+	LZHTable *keywords = compile_lzhtable();
+	
+	add_keyword("mod", MOD_TOKTYPE, keywords);
+	add_keyword("empty", EMPTY_TOKTYPE, keywords);
+    add_keyword("false", FALSE_TOKTYPE, keywords);
+    add_keyword("true", TRUE_TOKTYPE, keywords);
+    add_keyword("print", PRINT_TOKTYPE, keywords);
+    add_keyword("mut", MUT_TOKTYPE, keywords);
+    add_keyword("imut", IMUT_TOKTYPE, keywords);
+    add_keyword("or", OR_TOKTYPE, keywords);
+    add_keyword("and", AND_TOKTYPE, keywords);
+	add_keyword("if", IF_TOKTYPE, keywords);
+	add_keyword("else", ELSE_TOKTYPE, keywords);
+	add_keyword("while", WHILE_TOKTYPE, keywords);
+	add_keyword("stop", STOP_TOKTYPE, keywords);
+    add_keyword("continue", CONTINUE_TOKTYPE, keywords);
+	add_keyword("list", LIST_TOKTYPE, keywords);
+    add_keyword("to", TO_TOKTYPE, keywords);
+    add_keyword("dict", DICT_TOKTYPE, keywords);
+	add_keyword("record", RECORD_TOKTYPE, keywords);
+    add_keyword("proc", PROC_TOKTYPE, keywords);
+    add_keyword("ret", RET_TOKTYPE, keywords);
+    add_keyword("import", IMPORT_TOKTYPE, keywords);
+    add_keyword("as", AS_TOKTYPE, keywords);
+	add_keyword("bool", BOOL_TOKTYPE, keywords);
+	add_keyword("int", INT_TOKTYPE, keywords);
+	add_keyword("float", FLOAT_TOKTYPE, keywords);
+	add_keyword("str", STR_TOKTYPE, keywords);
+	add_keyword("is", IS_TOKTYPE, keywords);
+    add_keyword("try", TRY_TOKTYPE, keywords);
+    add_keyword("catch", CATCH_TOKTYPE, keywords);
+    add_keyword("throw", THROW_TOKTYPE, keywords);
+    add_keyword("load", LOAD_TOKTYPE, keywords);
+    
+    return keywords;
 }
 
 int main(int argc, char const *argv[]){
@@ -115,7 +153,6 @@ int main(int argc, char const *argv[]){
 
 	RawStr *source = compile_read_source(source_path);
     char *module_path = compile_clone_str(source_path);
-    LZHTable *keywords = compile_lzhtable();
     
     Module *module = runtime_module("main", module_path);
     LZHTable *modules = compile_lzhtable();
@@ -125,37 +162,7 @@ int main(int argc, char const *argv[]){
 	DynArrPtr *tokens = compile_dynarr_ptr();
 	DynArrPtr *stmts = compile_dynarr_ptr();
 
-	add_keyword("mod", MOD_TOKTYPE, keywords);
-	add_keyword("empty", EMPTY_TOKTYPE, keywords);
-    add_keyword("false", FALSE_TOKTYPE, keywords);
-    add_keyword("true", TRUE_TOKTYPE, keywords);
-    add_keyword("print", PRINT_TOKTYPE, keywords);
-    add_keyword("mut", MUT_TOKTYPE, keywords);
-    add_keyword("imut", IMUT_TOKTYPE, keywords);
-    add_keyword("or", OR_TOKTYPE, keywords);
-    add_keyword("and", AND_TOKTYPE, keywords);
-	add_keyword("if", IF_TOKTYPE, keywords);
-	add_keyword("else", ELSE_TOKTYPE, keywords);
-	add_keyword("while", WHILE_TOKTYPE, keywords);
-	add_keyword("stop", STOP_TOKTYPE, keywords);
-    add_keyword("continue", CONTINUE_TOKTYPE, keywords);
-	add_keyword("list", LIST_TOKTYPE, keywords);
-    add_keyword("to", TO_TOKTYPE, keywords);
-    add_keyword("dict", DICT_TOKTYPE, keywords);
-	add_keyword("record", RECORD_TOKTYPE, keywords);
-    add_keyword("proc", PROC_TOKTYPE, keywords);
-    add_keyword("ret", RET_TOKTYPE, keywords);
-    add_keyword("import", IMPORT_TOKTYPE, keywords);
-    add_keyword("as", AS_TOKTYPE, keywords);
-	add_keyword("bool", BOOL_TOKTYPE, keywords);
-	add_keyword("int", INT_TOKTYPE, keywords);
-	add_keyword("float", FLOAT_TOKTYPE, keywords);
-	add_keyword("str", STR_TOKTYPE, keywords);
-	add_keyword("is", IS_TOKTYPE, keywords);
-    add_keyword("try", TRY_TOKTYPE, keywords);
-    add_keyword("catch", CATCH_TOKTYPE, keywords);
-    add_keyword("throw", THROW_TOKTYPE, keywords);
-    add_keyword("load", LOAD_TOKTYPE, keywords);
+	LZHTable *keywords = create_keywords_table();
 
 	Lexer *lexer = lexer_create();
 	Parser *parser = parser_create();
@@ -163,37 +170,72 @@ int main(int argc, char const *argv[]){
     Dumpper *dumpper = dumpper_create();    
     VM *vm = vm_create();
 
-    if(module_path[0] == '/')
-        compiler->paths[compiler->paths_len++] = utils_parent_pathname(compile_clone_str(module_path));
-    else
-        compiler->paths[compiler->paths_len++] = compile_cwd();
+    if(module_path[0] == '/'){
+		compiler->paths[compiler->paths_len++] = utils_parent_pathname(compile_clone_str(module_path));
+	}else{
+		compiler->paths[compiler->paths_len++] = compile_cwd();
+	}
 
     if(args.lex){
-        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)) goto CLEAN_UP;
-		printf("No errors in lexer phase\n");
+        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)){
+			goto CLEAN_UP;
+		}
+		
+		printf("no errors in lexer phase\n");
     }else if(args.parse){
-        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)) goto CLEAN_UP;
-        if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
-		printf("No errors in parse phase\n");
+        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)){
+			goto CLEAN_UP;
+		}
+        if(parser_parse(tokens, stmts, parser)){
+			goto CLEAN_UP;
+		}
+		
+		printf("no errors in parse phase\n");
     }else if(args.compile){
-        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)) goto CLEAN_UP;
-        if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
-        if(compiler_compile(keywords, natives, stmts, module, modules, compiler)) goto CLEAN_UP;
-		printf("No errors in compile phase\n");
+        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)){
+			goto CLEAN_UP;
+		}
+        if(parser_parse(tokens, stmts, parser)){
+			goto CLEAN_UP;
+		}
+        if(compiler_compile(keywords, natives, stmts, module, modules, compiler)){
+			goto CLEAN_UP;
+		}
+		
+		printf("no errors in compile phase\n");
     }else if(args.dump){
-        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)) goto CLEAN_UP;
-        if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
-        if(compiler_compile(keywords, natives, stmts, module, modules, compiler)) goto CLEAN_UP;
+        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)){
+			goto CLEAN_UP;
+		}
+        if(parser_parse(tokens, stmts, parser)){
+			goto CLEAN_UP;
+		}
+        if(compiler_compile(keywords, natives, stmts, module, modules, compiler)){
+			goto CLEAN_UP;
+		}
+        
         dumpper_dump(modules, module, dumpper);
     }else{
-        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)) goto CLEAN_UP;
-        if(parser_parse(tokens, stmts, parser)) goto CLEAN_UP;
-        if(compiler_compile(keywords, natives, stmts, module, modules, compiler)) goto CLEAN_UP;
+        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)){
+			goto CLEAN_UP;
+		}
+        if(parser_parse(tokens, stmts, parser)){
+			goto CLEAN_UP;
+		}
+        if(compiler_compile(keywords, natives, stmts, module, modules, compiler)){
+			goto CLEAN_UP;
+		}
+        
         memory_free_compile();
-        if(vm_execute(natives, module, vm)) goto CLEAN_UP;
+        
+        if(vm_execute(natives, module, vm)){
+			goto CLEAN_UP;
+		}
     }
 
-	if(args.memuse) memory_report();
+	if(args.memuse){
+		memory_report();
+	}
 
 CLEAN_UP:
     memory_deinit();

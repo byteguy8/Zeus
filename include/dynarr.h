@@ -52,8 +52,12 @@ int dynarr_find(void *b, int (*comparator)(void *a, void *b), struct dynarr *dyn
 #define DYNARR_GET(index, dynarr)((dynarr)->items + (((dynarr)->padding + (dynarr)->size) * (index)))
 #define DYNARR_GET_AS(as, index, arr)(*(as *)(DYNARR_GET(index, arr)))
 #define DYNARR_SET(item, index, dynarr)(memmove(DYNARR_GET(index, dynarr), (item), (dynarr)->size))
+void *dynarr_get_ptr(size_t index, struct dynarr *dynarr);
+void dynarr_set_ptr(void *ptr, size_t index, struct dynarr *dynarr);
 int dynarr_insert(void *item, struct dynarr *dynarr);
 int dynarr_insert_at(size_t index, void *item, struct dynarr *dynarr);
+int dynarr_insert_ptr(void *ptr, struct dynarr *dynarr);
+int dynarr_insert_ptr_at(size_t index, void *ptr, struct dynarr *dynarr);
 int dynarr_append(struct dynarr *from, struct dynarr *to);
 void dynarr_remove_index(size_t index, struct dynarr *dynarr);
 int dynarr_remove_all(struct dynarr *dynarr);
