@@ -8,10 +8,54 @@
 #include <stdio.h>
 #include <math.h>
 
+// PRIVATE INTERFACE
+static void error(Lexer *lexer, char *msg, ...);
+static int is_at_end(Lexer *lexer);
+static int is_digit(char c);
+static int is_alpha(char c);
+static int is_alpha_numeric(char c);
+static char peek(Lexer *lexer);
+static int match(char c, Lexer *lexer);
+static char advance(Lexer *lexer);
+static char *lexeme_range(int start, int end, Lexer *lexer);
+static int lexeme_range_copy(
+    int start,
+    int end,
+    char *lexeme,
+    size_t lexeme_len,
+    Lexer *lexer
+);
+static size_t lexeme_current_len(Lexer *lexer);
+static char *lexeme_current(Lexer *lexer);
+static char *lexeme_current_copy(char *lexeme_copy, Lexer *lexer);
+static Token *create_token_raw(
+	int line, 
+    char *lexeme, 
+    void *literal, 
+    size_t literal_size, 
+    TokenType type,
+    Lexer *lexer
+);
+static Token *create_token_literal(
+	void *literal,
+	size_t literal_size,
+	TokenType type,
+	Lexer *lexer
+);
+static Token *create_token(TokenType type, Lexer *lexer);
+#define ADD_TOKEN_RAW(token)(dynarr_ptr_insert((token), lexer->tokens))
+static void comment(Lexer *lexer);
+static Token *number(Lexer *lexer);
+static Token *identifier(Lexer *lexer);
+static uint32_t *str_to_table(size_t len, char *str, Lexer *lexer);
+static Token *string(Lexer *lexer);
 static Token *scan_token(char c, Lexer *lexer);
 
-static void error(Lexer *lexer, char *msg, ...){
-	if(lexer->status == 0) lexer->status = 1;
+// PRIVATE IMPLEMENTATION
+void error(Lexer *lexer, char *msg, ...){
+	if(lexer->status == 0){
+		lexer->status = 1;
+	}
 
     va_list args;
 	va_start(args, msg);
@@ -25,48 +69,58 @@ static void error(Lexer *lexer, char *msg, ...){
 	va_end(args);
 }
 
-static int is_at_end(Lexer *lexer){
+int is_at_end(Lexer *lexer){
     RawStr *source = lexer->source;
     return lexer->current >= ((int) source->size);
 }
 
-static int is_digit(char c){
+int is_digit(char c){
     return c >= '0' && c <= '9';
 }
 
-static int is_alpha(char c){
+int is_alpha(char c){
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 }
 
-static int is_alpha_numeric(char c){
+int is_alpha_numeric(char c){
     return is_digit(c) || is_alpha(c);
 }
 
-static char peek(Lexer *lexer){
-    if(is_at_end(lexer)) return '\0';
+char peek(Lexer *lexer){
+    if(is_at_end(lexer)){
+		return '\0';
+	}
+	
     RawStr *source = lexer->source;
     return source->buff[lexer->current];
 }
 
-static int match(char c, Lexer *lexer){
-    if(is_at_end(lexer)) return '\0';
+int match(char c, Lexer *lexer){
+    if(is_at_end(lexer)){
+		return '\0';
+	}
     
     RawStr *source = lexer->source;
     char cc = source->buff[lexer->current];
 
-    if(c != cc) return 0;
+    if(c != cc){
+		return 0;
+	}
     
     lexer->current++;
     return 1;
 }
 
-static char advance(Lexer *lexer){
-    if(is_at_end(lexer)) return '\0';
+char advance(Lexer *lexer){
+    if(is_at_end(lexer)){
+		return '\0';
+	}
+	
     RawStr *source = lexer->source;
     return source->buff[lexer->current++];
 }
 
-static char *lexeme_range(int start, int end, Lexer *lexer){
+char *lexeme_range(int start, int end, Lexer *lexer){
     assert(end >= start);
 
     RawStr *source = lexer->source;
@@ -79,7 +133,7 @@ static char *lexeme_range(int start, int end, Lexer *lexer){
     return lexeme;
 }
 
-static int lexeme_range_copy(
+int lexeme_range_copy(
     int start,
     int end,
     char *lexeme,
@@ -88,8 +142,12 @@ static int lexeme_range_copy(
 ){
     int len = end - start + 1;
 
-	if(!lexeme) return len;
-    if(lexeme_len == 0) return 0;
+	if(!lexeme){
+		return len;
+	}
+    if(lexeme_len == 0){
+		return 0;
+	}
 
     RawStr *source = lexer->source;
 	memcpy(lexeme, source->buff + start, lexeme_len);
@@ -97,15 +155,15 @@ static int lexeme_range_copy(
 	return 0;
 }
 
-static size_t lexeme_current_len(Lexer *lexer){
+size_t lexeme_current_len(Lexer *lexer){
     return lexer->current - lexer->start;
 }
 
-static char *lexeme_current(Lexer *lexer){
+char *lexeme_current(Lexer *lexer){
     return lexeme_range(lexer->start, lexer->current, lexer);
 }
 
-static char *lexeme_current_copy(char *lexeme_copy, Lexer *lexer){
+char *lexeme_current_copy(char *lexeme_copy, Lexer *lexer){
     size_t len = lexeme_current_len(lexer);
     RawStr *source = lexer->source;
 
@@ -115,7 +173,7 @@ static char *lexeme_current_copy(char *lexeme_copy, Lexer *lexer){
     return lexeme_copy;
 }
 
-static Token *create_token_raw(
+Token *create_token_raw(
 	int line, 
     char *lexeme, 
     void *literal, 
@@ -136,7 +194,7 @@ static Token *create_token_raw(
     return token;
 }
 
-static Token *create_token_literal(
+Token *create_token_literal(
 	void *literal,
 	size_t literal_size,
 	TokenType type,
@@ -153,13 +211,11 @@ static Token *create_token_literal(
 	);
 }
 
-static Token *create_token(TokenType type, Lexer *lexer){
+Token *create_token(TokenType type, Lexer *lexer){
 	return create_token_literal(NULL, 0, type, lexer);
 }
 
-#define ADD_TOKEN_RAW(token)(dynarr_ptr_insert((token), lexer->tokens))
-
-static void comment(Lexer *lexer){
+void comment(Lexer *lexer){
 	while(!is_at_end(lexer)){
 		if(advance(lexer) == '\n'){
 			lexer->line++;
@@ -168,7 +224,7 @@ static void comment(Lexer *lexer){
 	}
 }
 
-static Token *number(Lexer *lexer){
+Token *number(Lexer *lexer){
     TokenType type = INT_TYPE_TOKTYPE;
     
     while (!is_at_end(lexer) && is_digit(peek(lexer))){
@@ -212,7 +268,7 @@ static Token *number(Lexer *lexer){
 	}
 }
 
-static Token *identifier(Lexer *lexer){
+Token *identifier(Lexer *lexer){
     while (!is_at_end(lexer) && is_alpha_numeric(peek(lexer))){
         advance(lexer);
     }
@@ -234,7 +290,7 @@ static Token *identifier(Lexer *lexer){
     }
 }
 
-static uint32_t *str_to_table(size_t len, char *str, Lexer *lexer){
+uint32_t *str_to_table(size_t len, char *str, Lexer *lexer){
     uint32_t *hash = A_COMPILE_ALLOC(sizeof(uint32_t));
 	*hash = lzhtable_hash((uint8_t *)str, len);
 
@@ -249,7 +305,7 @@ static uint32_t *str_to_table(size_t len, char *str, Lexer *lexer){
     return hash;
 }
 
-static Token *string(Lexer *lexer){
+Token *string(Lexer *lexer){
 	int lines = 0;
 	int from = lexer->current;
     char empty = peek(lexer) == '"';
@@ -372,7 +428,7 @@ static Token *string(Lexer *lexer){
 	return str_token;
 }
 
-static Token *scan_token(char c, Lexer *lexer){
+Token *scan_token(char c, Lexer *lexer){
     switch (c)
     {
         case '+':{
