@@ -25,7 +25,7 @@ void *arena_alloc(size_t size, void *ctx){
 	return ptr;
 }
 
-void *arena_realloc(void *ptr, size_t new_size, size_t old_size, void *ctx){
+void *arena_realloc(void *ptr, size_t old_size, size_t new_size, void *ctx){
     void *new_ptr = LZARENA_REALLOC(ptr, old_size, new_size, ctx);
 
 	if(!new_ptr){
@@ -126,7 +126,7 @@ DynArrPtr *compile_dynarr_ptr(){
 }
 
 LZHTable *compile_lzhtable(){
-    return lzhtable_create(17, &lzhtable_allocator);
+    return lzhtable_create(16, &lzhtable_allocator);
 }
 
 char *compile_clone_str(char *str){
@@ -148,7 +148,7 @@ DynArrPtr *runtime_dynarr_ptr(){
 }
 
 LZHTable *runtime_lzhtable(){
-    return lzhtable_create(17, &runtime_lzhtable_allocator);
+    return lzhtable_create(16, &runtime_lzhtable_allocator);
 }
 
 char *runtime_clone_str(char *str){
