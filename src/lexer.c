@@ -538,6 +538,7 @@ Token *scan_token(char c, Lexer *lexer){
     return NULL;
 }
 
+// PUBLIC IMPLEMENTATION
 Lexer *lexer_create(){
     Lexer *lexer = (Lexer *)A_COMPILE_ALLOC(sizeof(Lexer));
     memset(lexer, 0, sizeof(Lexer));

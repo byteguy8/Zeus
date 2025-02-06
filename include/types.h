@@ -11,20 +11,14 @@
 #define MODULE_STRINGS(m)(m->submodule->strings)
 #define MODULE_GLOBALS(m)(m->submodule->globals)
 
-typedef struct value Value;
 typedef struct vm VM;
+typedef struct value Value;
 typedef struct module Module;
 
 typedef struct rawstr{
 	size_t size;
 	char *buff;
 }RawStr;
-
-typedef struct str{
-	char core;
-	size_t len;
-	char *buff;
-}Str;
 
 typedef struct try_block{
     size_t try;
@@ -38,6 +32,13 @@ typedef struct opcode_location{
 	int line;
     char *filepath;
 }OPCodeLocation;
+
+// TYPES RELATED TO TYPE SYSTEM
+typedef struct str{
+	char core;
+	size_t len;
+	char *buff;
+}Str;
 
 typedef struct fn{
     char *name;
