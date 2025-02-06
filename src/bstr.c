@@ -15,7 +15,7 @@ static void *lzalloc(size_t size, BStrAllocator *allocator){
 }
 
 static void *lzrealloc(void *ptr, size_t old_size, size_t new_size, BStrAllocator *allocator){
-    return allocator ? allocator->realloc(ptr, new_size, old_size, allocator->ctx) : realloc(ptr, new_size);
+    return allocator ? allocator->realloc(ptr, old_size, new_size, allocator->ctx) : realloc(ptr, new_size);
 }
 
 static void lzdealloc(void *ptr, size_t size, BStrAllocator *allocator){
