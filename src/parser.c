@@ -708,12 +708,24 @@ Stmt *parse_if_stmt(Parser *parser){
 	if_condition = parse_expr(parser);
 	consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' at end of if condition.");
 
-	consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of if body.");
-	if_stmts = parse_block_stmt(parser);
+	if(match(parser, 1, COLON_TOKTYPE)){
+		if_stmts = compile_dynarr_ptr();
+		Stmt *stmt = parse_stmt(parser);
+		dynarr_ptr_insert(stmt, if_stmts);
+	}else{
+		consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of if body.");
+		if_stmts = parse_block_stmt(parser);
+	}
 
 	if(match(parser, 1, ELSE_TOKTYPE)){
-		consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of else body.");
-		else_stmts = parse_block_stmt(parser);
+		if(match(parser, 1, COLON_TOKTYPE)){
+			else_stmts = compile_dynarr_ptr();
+			Stmt *stmt = parse_stmt(parser);
+			dynarr_ptr_insert(stmt, else_stmts);
+		}else{
+			consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of else body.");
+			else_stmts = parse_block_stmt(parser);
+		}
 	}
 
 	IfStmt *if_stmt = (IfStmt *)A_COMPILE_ALLOC(sizeof(IfStmt));
@@ -860,8 +872,15 @@ Stmt *parse_function_stmt(Parser *parser){
     }
 
     consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' at end of function parameters.");
-    consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of function body.");
-    stmts = parse_block_stmt(parser);
+    
+    if(match(parser, 1, COLON_TOKTYPE)){
+		stmts = compile_dynarr_ptr();
+		Stmt *stmt = parse_return_stmt(parser);
+		dynarr_ptr_insert(stmt, stmts);
+	}else{
+		consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of function body.");
+		stmts = parse_block_stmt(parser);
+	}
 
     FunctionStmt *function_stmt = (FunctionStmt *)A_COMPILE_ALLOC(sizeof(FunctionStmt));
     function_stmt->name_token = name_token;
