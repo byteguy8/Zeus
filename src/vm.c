@@ -71,6 +71,13 @@ static Value *peek(VM *vm);
     PUSH(fn_value, vm)                            \
 }
 
+#define PUSH_NATIVE_MODULE(m, vm){                    \
+	Obj *obj = vm_utils_obj(NATIVE_MODULE_OTYPE, vm); \
+	if(!obj) vm_utils_error(vm, "out of memory");     \
+	obj->value.native_module = (m);                   \
+	PUSH(OBJ_VALUE(obj), vm);                         \
+}
+
 #define PUSH_MODULE(m, vm) {                      \
     Obj *obj = vm_utils_obj(MODULE_OTYPE, vm);    \
 	if(!obj) vm_utils_error(vm, "Out of memory"); \
@@ -78,21 +85,34 @@ static Value *peek(VM *vm);
 	PUSH(OBJ_VALUE(obj), vm);                     \
 }
 
-#define PUSH_MODULE_SYMBOL(n, m, vm) {                                                    \
-    SubModule *submodule = m->submodule;                                                  \
-    if(!submodule->resolve){                                                              \
-        resolve_module(m, vm);                                                            \
-    }                                                                                     \
-   	size_t key_size = strlen(n);                                                          \
-   	LZHTable *symbols = submodule->symbols;                                                  \
-	LZHTableNode *node = NULL;                                                            \
-	if(!lzhtable_contains((uint8_t *)n, key_size, symbols, &node))                        \
-		vm_utils_error(vm, "Module '%s' do not contains a symbol '%s'", module->name, n); \
-	ModuleSymbol *symbol = (ModuleSymbol *)node->value;                                   \
-	if(symbol->type == FUNCTION_MSYMTYPE)                                                 \
-		push_fn(symbol->value.fn, vm);                                                    \
-	if(symbol->type == MODULE_MSYMTYPE)                                                   \
-		PUSH_MODULE(symbol->value.module, vm);                                            \
+#define PUSH_NATIVE_MODULE_SYMBOL(n, m, vm){												\
+	size_t key_size = strlen((n));															\
+	LZHTable *symbols = (m)->symbols;               										\
+	LZHTableNode *symbol_node = NULL;                                                       \
+	if(!lzhtable_contains((uint8_t *)(n), key_size, symbols, &symbol_node))                 \
+		vm_utils_error(vm, "Module '%s' do not contains a symbol '%s'", (m)->name, (n));    \
+	NativeModuleSymbol *symbol = (NativeModuleSymbol *)symbol_node->value;					\
+	if(symbol->type == NATIVE_FUNCTION_NMSYMTYPE)											\
+		PUSH_NATIVE_FN(symbol->value.fn, vm);												\
+}
+
+#define PUSH_MODULE_SYMBOL(n, m, vm) {                                                      \
+    SubModule *submodule = (m)->submodule;                                                  \
+    if(!submodule->resolve){                                                                \
+        resolve_module((m), vm);                                                            \
+    }                                                                                       \
+   	size_t key_size = strlen((n));                                                          \
+   	LZHTable *symbols = submodule->symbols;                                                 \
+	LZHTableNode *node = NULL;                                                              \
+	if(!lzhtable_contains((uint8_t *)(n), key_size, symbols, &node))                        \
+		vm_utils_error(vm, "Module '%s' do not contains a symbol '%s'", module->name, (n)); \
+	ModuleSymbol *symbol = (ModuleSymbol *)node->value;                                     \
+	if(symbol->type == NATIVE_MODULE_MSYMTYPE)											    \
+		PUSH_NATIVE_MODULE(symbol->value.native_module, vm);							    \
+	if(symbol->type == FUNCTION_MSYMTYPE)                                                   \
+		push_fn(symbol->value.fn, vm);                                                      \
+	if(symbol->type == MODULE_MSYMTYPE)                                                     \
+		PUSH_MODULE(symbol->value.module, vm);                                              \
 }
 
 static Value *pop(VM *vm);
@@ -231,6 +251,13 @@ int obj_to_str(Obj *object, BStr *bstr, VM *vm){
             snprintf(buff, buff_len, "<native function '%s' - %d at %p>", native_fn->name, native_fn->arity, native_fn);
 			return bstr_append(buff, bstr);
         }
+        case NATIVE_MODULE_OTYPE:{
+			size_t buff_len = 1024;
+            char buff[buff_len];
+            NativeModule *module = object->value.native_module;
+            snprintf(buff, buff_len, "<native module '%s' at %p>", module->name, module);
+			return bstr_append(buff, bstr);
+		}
         case MODULE_OTYPE:{
             size_t buff_len = 1024;
             char buff[buff_len];
@@ -327,6 +354,11 @@ void print_obj(Obj *object){
         case NATIVE_FN_OTYPE:{
             NativeFn *native_fn = object->value.native_fn;
             printf("<native function '%s' - %d at %p>\n", native_fn->name, native_fn->arity, native_fn);
+            break;
+        }
+        case NATIVE_MODULE_OTYPE:{
+            NativeModule *module = object->value.native_module;
+            printf("<native module '%s' at %p>\n", module->name, module);
             break;
         }
         case MODULE_OTYPE:{
@@ -1499,6 +1531,12 @@ void execute(uint8_t chunk, VM *vm){
 
 				PUSH(*value, vm);
 
+				break;
+			}
+
+			if(IS_NATIVE_MODULE(value)){
+				NativeModule *module = TO_NATIVE_MODULE(value);
+				PUSH_NATIVE_MODULE_SYMBOL(symbol, module, vm);
 				break;
 			}
 

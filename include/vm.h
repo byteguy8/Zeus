@@ -28,11 +28,11 @@ typedef struct vm{
 
     LZHTable *natives;
     Module *module;
-//> garbage collector
+//> GARBAGE COLLECTOR
     Obj *head;
     Obj *tail;
     size_t objs_size;
-//< garbage collector
+//< GARBAGE COLLECTOR
 }VM;
 
 VM *vm_create();

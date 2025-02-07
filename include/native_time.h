@@ -9,6 +9,8 @@
 #include <time.h>
 #include <unistd.h>
 
+NativeModule *time_module = NULL;
+
 Value native_fn_time(uint8_t argsc, Value *values, void *target, VM *vm){
     time_t t;
     t = time(NULL);
@@ -39,6 +41,14 @@ Value native_fn_time_sleep(uint8_t argsc, Value *values, void *target, VM *vm){
     usleep(value * 1000);
     
     return EMPTY_VALUE;
+}
+
+void time_module_init(){
+    time_module = runtime_native_module("time");
+
+    add_native_function("time", 0, native_fn_time, time_module);
+    add_native_function("millis", 0, native_fn_time_millis, time_module);
+    add_native_function("sleep", 1, native_fn_time_sleep, time_module);
 }
 
 #endif

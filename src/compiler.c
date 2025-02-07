@@ -6,6 +6,8 @@
 #include "stmt.h"
 #include "lexer.h"
 #include "parser.h"
+#include "native_math.h"
+#include "native_time.h"
 #include <stdint.h>
 #include <assert.h>
 #include <stdarg.h>
@@ -413,6 +415,26 @@ char *names_to_name(DynArr *names, Token **out_name){
     *out_name = name;
 
     return (char *)bstr_raw_substr(0, bstr->len - 1, bstr);
+}
+
+NativeModule *resolve_native_module(char *module_name){
+	if(strcmp("math", module_name) == 0){
+		if(!math_module){
+			math_module_init();
+		}
+		
+		return math_module;
+	}
+
+    if(strcmp("time", module_name) == 0){
+        if(!time_module){
+            time_module_init();
+        }
+
+        return time_module;
+    }
+	
+	return NULL;
 }
 
 char *resolve_module_location(
@@ -993,6 +1015,13 @@ void compile_expr(Expr *expr, Compiler *compiler){
     }
 }
 
+void add_native_module_symbol(char *key, size_t key_size, NativeModule *module, LZHTable *symbols){
+	ModuleSymbol *symbol = (ModuleSymbol *)A_RUNTIME_ALLOC(sizeof(ModuleSymbol));
+	symbol->type = NATIVE_MODULE_MSYMTYPE;
+	symbol->value.native_module = module;
+    lzhtable_put((uint8_t *)key, key_size, symbol, symbols, NULL);
+}
+
 void add_module_symbol(char *key, size_t key_size, Module *module, LZHTable *symbols){
 	ModuleSymbol *symbol = (ModuleSymbol *)A_RUNTIME_ALLOC(sizeof(ModuleSymbol));
 	symbol->type = MODULE_MSYMTYPE;
@@ -1319,6 +1348,21 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             char *module_real_name = module_alt_name ? module_alt_name : module_name;
             size_t module_real_name_len = module_alt_name ? module_alt_name_len : module_name_len;
+
+			NativeModule *native_module = resolve_native_module(module_name);
+			
+			if(native_module){
+				add_native_module_symbol(
+					module_real_name,
+                    module_real_name_len,
+                    native_module,
+                    current_symbols
+				);
+				
+				declare(MODULE_SYMTYPE, alt_name ? alt_name : name, compiler);
+				
+				break;
+			}
 
             size_t module_pathname_len;
             char *module_pathname = resolve_module_location(

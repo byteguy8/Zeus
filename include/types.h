@@ -70,6 +70,25 @@ typedef struct record{
 	LZHTable *key_values;
 }Record;
 
+//> NATIVE MODULE RELATED
+typedef struct native_module{
+	char *name;
+	LZHTable *symbols;
+}NativeModule;
+
+typedef enum native_module_symbol_type{
+	NATIVE_FUNCTION_NMSYMTYPE
+}NativeModuleSymbolType;
+
+typedef struct native_module_symbol{
+	NativeModuleSymbolType type;
+	union{
+		NativeFn *fn;
+	}value;
+}NativeModuleSymbol;
+//< NATIVE MODULE RELATED
+
+//> MODULE RELATED
 typedef struct submodule{
     char resolve;
     LZHTable *tries;
@@ -86,20 +105,25 @@ typedef struct module{
 }Module;
 
 typedef enum module_symbol_type{
+	NATIVE_MODULE_MSYMTYPE,
 	FUNCTION_MSYMTYPE,
-	MODULE_MSYMTYPE,
+	MODULE_MSYMTYPE
 }ModuleSymbolType;
 
 typedef struct module_symbol{
 	ModuleSymbolType type;
 	union{
+		NativeModule *native_module;
 		Fn *fn;
 		Module *module;
 	}value;
 }ModuleSymbol;
+//< MODULE RELATED
 
-typedef struct native_module{
+//> NATIVE LIBRARY RELATED
+typedef struct native_lib{
     void *handler;  
 }NativeLib;
+//< NATIVE LIBRARY RELATED
 
 #endif

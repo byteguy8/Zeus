@@ -31,6 +31,12 @@ DynArr *runtime_dynarr(size_t size);
 DynArrPtr *runtime_dynarr_ptr();
 LZHTable *runtime_lzhtable();
 char *runtime_clone_str(char *str);
+
+//> NATIVE MODULE RELATED
+NativeModule *runtime_native_module(char *name);
+void add_native_function(char *name, int arity, RawNativeFn raw_native, NativeModule *module);
+//< NATIVE MODULE RELATED
+
 Fn *runtime_fn(char *name, Module *module);
 Module *runtime_module(char *name, char *filepath);
 Module *runtime_clone_module(char *new_name, char *filepath, Module *module);

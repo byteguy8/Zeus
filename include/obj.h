@@ -12,6 +12,7 @@ typedef enum obj_type{
 	RECORD_OTYPE,
     FN_OTYPE,
     NATIVE_FN_OTYPE,
+    NATIVE_MODULE_OTYPE,
     MODULE_OTYPE,
     FOREIGN_FN_OTYPE,
     NATIVE_LIB_OTYPE,
@@ -31,6 +32,7 @@ typedef struct obj{
         LZHTable *dict;
         Fn *fn;
         NativeFn *native_fn;
+        NativeModule *native_module;
         Module *module;
         NativeLib *native_lib;
         ForeignFn *foreign_fn;

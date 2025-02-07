@@ -161,6 +161,36 @@ char *runtime_clone_str(char *str){
     return cstr;
 }
 
+NativeModule *runtime_native_module(char *name){
+	char *module_name = runtime_clone_str(name);
+	LZHTable *symbols = runtime_lzhtable();
+	NativeModule *module = A_RUNTIME_ALLOC(sizeof(NativeModule));
+	
+	module->name = module_name;
+	module->symbols = symbols;
+	
+	return module;
+}
+
+void add_native_function(char *name, int arity, RawNativeFn raw_native, NativeModule *module){
+	size_t name_len = strlen(name);
+	NativeFn *native = (NativeFn *)A_RUNTIME_ALLOC(sizeof(NativeFn));
+	NativeModuleSymbol *symbol = (NativeModuleSymbol *)A_RUNTIME_ALLOC(sizeof(NativeModuleSymbol));
+
+    native->unique = 1;
+    native->arity = arity;
+    memcpy(native->name, name, name_len);
+    native->name[name_len] = '\0';
+    native->name_len = name_len;
+    native->target = NULL;
+    native->raw_fn = raw_native;
+
+	symbol->type = NATIVE_FUNCTION_NMSYMTYPE;
+	symbol->value.fn = native;
+
+    lzhtable_put((uint8_t *)name, name_len, symbol, module->symbols, NULL);
+}
+
 Fn *runtime_fn(char *name, Module *module){
     char *fn_name = runtime_clone_str(name);
     DynArrPtr *params = runtime_dynarr_ptr();
