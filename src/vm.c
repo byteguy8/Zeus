@@ -104,15 +104,22 @@ static Value *peek(VM *vm);
    	size_t key_size = strlen((n));                                                          \
    	LZHTable *symbols = submodule->symbols;                                                 \
 	LZHTableNode *node = NULL;                                                              \
-	if(!lzhtable_contains((uint8_t *)(n), key_size, symbols, &node))                        \
-		vm_utils_error(vm, "Module '%s' do not contains a symbol '%s'", module->name, (n)); \
+	if(!lzhtable_contains((uint8_t *)(n), key_size, symbols, &node)){                       \
+        vm_utils_error(vm, "Module '%s' do not contains a symbol '%s'", module->name, (n)); \
+    }                                                                                       \
 	ModuleSymbol *symbol = (ModuleSymbol *)node->value;                                     \
-	if(symbol->type == NATIVE_MODULE_MSYMTYPE)											    \
-		PUSH_NATIVE_MODULE(symbol->value.native_module, vm);							    \
-	if(symbol->type == FUNCTION_MSYMTYPE)                                                   \
-		push_fn(symbol->value.fn, vm);                                                      \
-	if(symbol->type == MODULE_MSYMTYPE)                                                     \
-		PUSH_MODULE(symbol->value.module, vm);                                              \
+    if(symbol->access == PRIVATE_MSYMATYPE){                                                \
+        vm_utils_error(vm, "Symbol '%s' not public", (n));                                  \
+    }                                                                                       \
+	if(symbol->type == NATIVE_MODULE_MSYMTYPE){                                             \
+        PUSH_NATIVE_MODULE(symbol->value.native_module, vm);							    \
+    }                                                                                       \
+	if(symbol->type == FUNCTION_MSYMTYPE){                                                  \
+        push_fn(symbol->value.fn, vm);                                                      \
+    }                                                                                       \
+	if(symbol->type == MODULE_MSYMTYPE){                                                    \
+        PUSH_MODULE(symbol->value.module, vm);                                              \
+    }                                                                                       \
 }
 
 static Value *pop(VM *vm);

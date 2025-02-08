@@ -91,6 +91,7 @@ LZHTable *create_keywords_table(){
     add_keyword("catch", CATCH_TOKTYPE, keywords);
     add_keyword("throw", THROW_TOKTYPE, keywords);
     add_keyword("load", LOAD_TOKTYPE, keywords);
+    add_keyword("export", EXPORT_TOKTYPE, keywords);
     
     return keywords;
 }

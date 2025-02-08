@@ -26,12 +26,6 @@ typedef struct rawstr{
 	char *buff;
 }RawStr;
 
-typedef struct slice{
-    size_t from;
-    size_t len;
-    char *source;
-}Slice;
-
 typedef struct try_block{
     size_t try;
     size_t catch;
@@ -122,8 +116,14 @@ typedef enum module_symbol_type{
 	MODULE_MSYMTYPE
 }ModuleSymbolType;
 
+typedef enum module_symbol_access_type{
+    PRIVATE_MSYMATYPE,
+    PUBLIC_MSYMATYPE
+}ModuleSymbolAccessType;
+
 typedef struct module_symbol{
 	ModuleSymbolType type;
+    ModuleSymbolAccessType access;
 	union{
 		NativeModule *native_module;
 		Fn *fn;

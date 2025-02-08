@@ -129,6 +129,7 @@ Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function){
 	ModuleSymbol *symbol = (ModuleSymbol *)A_RUNTIME_ALLOC(sizeof(ModuleSymbol));
 
 	symbol->type = FUNCTION_MSYMTYPE;
+    symbol->access = PRIVATE_MSYMATYPE;
 	symbol->value.fn = fn;
     
     lzhtable_put((uint8_t *)name, strlen(name), symbol, symbols, NULL);
@@ -1027,6 +1028,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 void add_native_module_symbol(char *key, size_t key_size, NativeModule *module, LZHTable *symbols){
 	ModuleSymbol *symbol = (ModuleSymbol *)A_RUNTIME_ALLOC(sizeof(ModuleSymbol));
 	symbol->type = NATIVE_MODULE_MSYMTYPE;
+    symbol->access = PUBLIC_MSYMATYPE;
 	symbol->value.native_module = module;
     lzhtable_put((uint8_t *)key, key_size, symbol, symbols, NULL);
 }
@@ -1034,6 +1036,7 @@ void add_native_module_symbol(char *key, size_t key_size, NativeModule *module, 
 void add_module_symbol(char *key, size_t key_size, Module *module, LZHTable *symbols){
 	ModuleSymbol *symbol = (ModuleSymbol *)A_RUNTIME_ALLOC(sizeof(ModuleSymbol));
 	symbol->type = MODULE_MSYMTYPE;
+    symbol->access = PUBLIC_MSYMATYPE;
 	symbol->value.module = module;
     lzhtable_put((uint8_t *)key, key_size, symbol, symbols, NULL);
 }
@@ -1422,7 +1425,14 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 				import_compiler->paths[import_compiler->paths_len++] = compiler->paths[i];
             }
 
-            if(lexer_scan(source, tokens, submodule->strings, keywords, module_pathname, lexer)){
+            if(lexer_scan(
+                source,
+                tokens,
+                submodule->strings,
+                keywords,
+                module_pathname,
+                lexer
+            )){
 				compiler->is_err = 1;
 				break;
 			}
@@ -1432,7 +1442,15 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 				break;
 			}
 
-            if(compiler_import(keywords, natives, stmts, current_module, module, modules, import_compiler)){
+            if(compiler_import(
+                keywords,
+                natives,
+                stmts,
+                current_module,
+                module,
+                modules,
+                import_compiler
+            )){
                 compiler->is_err = 1;
 				break;
             }
@@ -1567,6 +1585,30 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             write_chunk(POP_OPCODE, compiler);
             write_location(load_token, compiler);
 
+            break;
+        }
+        case EXPORT_STMTTYPE:{
+            ExportStmt *export_stmt = (ExportStmt *)stmt->sub_stmt;
+            Token *export_token = export_stmt->export_token;
+            DynArrPtr *symbols = export_stmt->symbols;
+
+            for (size_t i = 0; i < DYNARR_PTR_LEN(symbols); i++){
+                Token *identifier = (Token *)DYNARR_PTR_GET(i, symbols);
+                Module *module = compiler->current_module;
+                LZHTable *symbols = MODULE_SYMBOLS(module);
+                
+                char *key = identifier->lexeme;
+                size_t key_size = strlen(key);
+                LZHTableNode *symbol_node = NULL;
+                
+                if(!lzhtable_contains((uint8_t *)key, key_size, symbols, &symbol_node)){
+                    error(compiler, identifier, "Symbol '%s' do not exists", key);
+                }
+
+                ModuleSymbol *symbol = (ModuleSymbol *)symbol_node->value;
+                symbol->access = PUBLIC_MSYMATYPE;
+            }
+            
             break;
         }
         default:{

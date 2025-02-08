@@ -126,6 +126,7 @@ Stmt *parse_var_decl_stmt(Parser *parser);
 Stmt *parse_function_stmt(Parser *parser);
 Stmt *parse_import_stmt(Parser *parser);
 Stmt *parse_load_stmt(Parser *parser);
+Stmt *parse_export_stmt(Parser *parser);
 
 Expr *parse_expr(Parser *parser){
 	return parse_assign(parser);
@@ -646,6 +647,9 @@ Stmt *parse_stmt(Parser *parser){
     if(match(parser, 1, LOAD_TOKTYPE))
         return parse_load_stmt(parser);
 
+    if(match(parser, 1, EXPORT_TOKTYPE))
+        return parse_export_stmt(parser);
+
     if(match(parser, 1, THROW_TOKTYPE))
         return parse_throw_stmt(parser);
 
@@ -938,6 +942,30 @@ Stmt *parse_load_stmt(Parser *parser){
     load_stmt->name = name_token;
 
     return create_stmt(LOAD_STMTTYPE, load_stmt);
+}
+
+Stmt *parse_export_stmt(Parser *parser){
+    Token *export_token = NULL;
+    DynArrPtr *symbols = NULL;
+
+    export_token = previous(parser);
+    symbols = compile_dynarr_ptr();
+
+    consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of export symbols");
+    
+    do{
+        Token *identifier = consume(parser, IDENTIFIER_TOKTYPE, "Expect symbol name");
+        dynarr_ptr_insert(identifier, symbols);
+    } while (match(parser, 1, COMMA_TOKTYPE));
+
+    consume(parser, RIGHT_BRACKET_TOKTYPE, "Expect '}' at end of export symbols");
+    
+    ExportStmt *export_stmt = (ExportStmt *)A_COMPILE_ALLOC(sizeof(ExportStmt));
+
+    export_stmt->export_token = export_token;
+    export_stmt->symbols = symbols;
+
+    return create_stmt(EXPORT_STMTTYPE, export_stmt);
 }
 
 Parser *parser_create(){
