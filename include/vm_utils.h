@@ -3,12 +3,15 @@
 
 #include "value.h"
 #include "vm.h"
+#include "bstr.h"
 
 void vm_utils_error(VM *vm, char *msg, ...);
 void *assert_ptr(void *ptr, VM *vm);
 
 uint32_t vm_utils_hash_obj(Obj *obj);
 uint32_t vm_utils_hash_value(Value *value);
+int vm_utils_obj_to_str(Obj *obj, BStr *bstr);
+int vm_utils_value_to_str(Value *value, BStr *bstr);
 
 void vm_utils_clean_up(VM *vm);
 

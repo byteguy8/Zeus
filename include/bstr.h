@@ -6,7 +6,7 @@
 typedef struct bstr_allocator{
     void *ctx;
     void *(*alloc)(size_t size, void *ctx);
-    void *(*realloc)(void *ptr, size_t old_size, size_t new_size, void *ctx);
+    void *(*realloc)(void *ptr, size_t new_size, size_t old_size, void *ctx);
     void (*dealloc)(void *ptr, size_t size, void *ctx);
 }BStrAllocator;
 
@@ -33,6 +33,7 @@ unsigned char *bstr_raw_substr(size_t start, size_t end, BStr *str);
 
 int bstr_append(char *raw_str, BStr *str);
 int bstr_append_args(BStr *str, char *format, ...);
+int bstr_append_range(char *raw_str, size_t start, size_t end, BStr *bstr);
 int bstr_insert(size_t at, char *raw_str, BStr *str);
 int bstr_insert_args(size_t at, BStr *str, char *format, ...);
 void bstr_remove(size_t start, size_t end, BStr *str);

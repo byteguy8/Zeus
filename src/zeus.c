@@ -3,7 +3,6 @@
 
 #include "vm_utils.h"
 #include "native.h"
-#include "native_io.h"
 
 #include "lzhtable.h"
 #include "token.h"
@@ -129,8 +128,6 @@ int main(int argc, char const *argv[]){
     add_native("int_to_float", 1, native_fn_int_to_float, natives);
     add_native("float_to_int", 1, native_fn_float_to_int, natives);
     add_native("float_to_str", 1, native_fn_float_to_str, natives);
-
-	add_native("readln", 0, native_fn_io_readln, natives);
 
 	RawStr *source = compile_read_source(source_path);
     char *module_path = compile_clone_str(source_path);

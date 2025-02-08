@@ -26,11 +26,13 @@ DynArr *compile_dynarr(size_t size);
 DynArrPtr *compile_dynarr_ptr();
 LZHTable *compile_lzhtable();
 char *compile_clone_str(char *str);
+char *compile_clone_str_range(size_t start, size_t len, char *str);
 
 DynArr *runtime_dynarr(size_t size);
 DynArrPtr *runtime_dynarr_ptr();
 LZHTable *runtime_lzhtable();
 char *runtime_clone_str(char *str);
+char *runtime_clone_str_range(size_t start, size_t len, char *str);
 
 //> NATIVE MODULE RELATED
 NativeModule *runtime_native_module(char *name);

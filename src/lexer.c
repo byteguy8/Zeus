@@ -2,6 +2,7 @@
 #include "memory.h"
 #include "utils.h"
 #include "token.h"
+#include "types.h"
 #include <stdint.h>
 #include <assert.h>
 #include <stdarg.h>
@@ -120,6 +121,7 @@ char advance(Lexer *lexer){
     return source->buff[lexer->current++];
 }
 
+// the output str is valid only during compilation allocated
 char *lexeme_range(int start, int end, Lexer *lexer){
     assert(end >= start);
 
@@ -290,46 +292,83 @@ Token *identifier(Lexer *lexer){
     }
 }
 
+// str must be runtime allocated
 uint32_t *str_to_table(size_t len, char *str, Lexer *lexer){
     uint32_t *hash = A_COMPILE_ALLOC(sizeof(uint32_t));
 	*hash = lzhtable_hash((uint8_t *)str, len);
 
 	if(!lzhtable_hash_contains(*hash, lexer->strings, NULL)){
-		char *literal = A_RUNTIME_ALLOC(len + 1);
-		memcpy(literal, str, len);
-		literal[len] = '\0';
-
-		lzhtable_hash_put(*hash, literal, lexer->strings);
+		lzhtable_hash_put(*hash, str, lexer->strings);
 	}
 
     return hash;
 }
 
 Token *string(Lexer *lexer){
+    int from = 0;
 	int lines = 0;
-	int from = lexer->current;
-    char empty = peek(lexer) == '"';
-    TokenType type = STR_TYPE_TOKTYPE;
     DynArrPtr *tokens = NULL;
+    TokenType type = STR_TYPE_TOKTYPE;
+    BStr *bstr = bstr_create_empty(NULL);
+
+    if(!bstr){
+        error(lexer, "out of memory");
+        return NULL;
+    }
 	
-	while(peek(lexer) != '"'){
+	while(!is_at_end(lexer) && peek(lexer) != '"'){
 		char c = advance(lexer);
 		
 		if(c == '\n'){
 			lines++;
-		}else if(c == '$'){
+		}else if(c == '\\'){
+            size_t escape_start = lexer->current - 1;
+            size_t escape_end = lexer->current;
+            
+            char escape;
+
+            if(peek(lexer) == 'a'){escape = '\a';}
+            else if(peek(lexer) == 'b'){escape = '\b';}
+            else if(peek(lexer) == 'f'){escape = '\f';}
+            else if(peek(lexer) == 'n'){escape = '\n';}
+            else if(peek(lexer) == 'r'){escape = '\r';}
+            else if(peek(lexer) == 't'){escape = '\t';}
+            else if(peek(lexer) == 'v'){escape = '\v';}
+            else if(peek(lexer) == '\\'){escape = '\\';}
+            else if(peek(lexer) == '\"'){escape = '\"';}
+            else{
+                int len = escape_end - escape_start + 1;
+                char sequence[len + 1];
+
+                lexeme_range_copy(escape_start, escape_end, sequence, len, lexer);
+                sequence[len] = 0;
+
+                error(lexer, "unknown scape sequence %s", sequence);
+                
+                advance(lexer);
+
+                continue;
+            }
+
+            if(bstr_append_range(&escape, 0, 0, bstr)){
+                bstr_destroy(bstr);
+                error(lexer, "Out of memory");
+                return NULL;
+            }
+
+            advance(lexer);
+        }else if(c == '$'){
+            size_t interpolation_start = lexer->current - 1;
+
 			if(match('{', lexer)){
-                if(type != TEMPLATE_TYPE_TOKTYPE){
-                    type = TEMPLATE_TYPE_TOKTYPE;
-                }
+                if(type != TEMPLATE_TYPE_TOKTYPE) type = TEMPLATE_TYPE_TOKTYPE;
+                if(!tokens) tokens = compile_dynarr_ptr();
 
-                if(!tokens){
-                    tokens = compile_dynarr_ptr();
-                }
-
-                if(lexer->current - 2 - from > 0){
-                    char *str = lexeme_range(from, lexer->current - 2, lexer);
-                    size_t len = strlen(str);
+                if(bstr->used > 0){
+                    size_t start = from;
+                    size_t len = bstr->used - start + 1;
+                    char *str = runtime_clone_str_range(start, len, (char *)bstr->buff);
+        
                     uint32_t *hash = str_to_table(len, str,lexer);
                     Token *str_token = create_token_literal(
                         hash,
@@ -346,6 +385,7 @@ Token *string(Lexer *lexer){
 
 				while(!is_at_end(lexer) && peek(lexer) != '}'){
 					c = advance(lexer);
+
 					Token *token = scan_token(c, lexer);
 					
                     if(token){
@@ -362,17 +402,33 @@ Token *string(Lexer *lexer){
 					return NULL;
 				}
 
+                size_t interpolation_end = lexer->current;
+                
+                if(bstr_append_range(lexer->source->buff, interpolation_start, interpolation_end, bstr)){
+                    bstr_destroy(bstr);
+                    error(lexer, "Out of memory");
+                    return NULL;
+                }
+
                 advance(lexer);
 				
-				from = lexer->current;
+				from = bstr->used;
 			}
-		}
+		}else{
+            if(bstr_append_range(&c, 0, 0, bstr)){
+                bstr_destroy(bstr);
+                error(lexer, "Out of memory");
+                return NULL;
+            }
+        }
 	}
 
     if(type == TEMPLATE_TYPE_TOKTYPE){
-        if(lexer->current - from > 0){
-            char *str = lexeme_range(from, lexer->current, lexer);
-            size_t len = strlen(str);
+        if(bstr->len - from + 1 > 0){
+            size_t start = from;
+            size_t len = bstr->used - start + 1;
+            char *str = runtime_clone_str_range(start, len, (char *)bstr->buff);
+            
             uint32_t *hash = str_to_table(len, str,lexer);
             Token *str_token = create_token_literal(
                 hash,
@@ -394,27 +450,12 @@ Token *string(Lexer *lexer){
 		return NULL;
 	}
 
-	size_t len = empty ? 0 : lexeme_range_copy(
-        lexer->start + 1,
-        lexer->current - 1,
-        NULL,
-        0,
-        lexer
-    );
-	char str[len + 1];
-
-	lexeme_range_copy(
-        lexer->start + 1,
-        lexer->current - 1,
-        str,
-        empty ? 0 : len,
-        lexer
-    );
-    str[len] = 0;
-
     advance(lexer);
 
-	uint32_t *hash = str_to_table(len, str,lexer);
+    size_t str_len = bstr->used;
+    char *str = runtime_clone_str_range(0, bstr->used, (char *)bstr->buff);
+
+	uint32_t *hash = str_to_table(str_len, str, lexer);
     Token *str_token = create_token_literal(
 		hash,
 		sizeof(uint32_t),
@@ -425,6 +466,8 @@ Token *string(Lexer *lexer){
 	str_token->extra = tokens;
 	lexer->line += lines;
 	
+    bstr_destroy(bstr);
+
 	return str_token;
 }
 

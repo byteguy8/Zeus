@@ -6,6 +6,8 @@
 #include "vm_utils.h"
 #include <stdio.h>
 
+NativeModule *io_module = NULL;
+
 Value native_fn_io_readln(uint8_t argsc, Value *values, void *target, VM *vm){
 	size_t buff_len = 1024;
 	char buff[buff_len];
@@ -34,6 +36,45 @@ Value native_fn_io_readln(uint8_t argsc, Value *values, void *target, VM *vm){
     }
 
 	return value;
+}
+
+Value native_fn_io_prt(uint8_t argsc, Value *values, void *target, VM *vm){
+    Value *arg0 = &values[0];
+    BStr *bstr = bstr_create_empty(NULL);
+    
+    if(!bstr || vm_utils_value_to_str(arg0, bstr)){
+        bstr_destroy(bstr);
+        vm_utils_error(vm, "out of memory");
+    }
+
+    printf("%s", bstr->buff);
+
+    bstr_destroy(bstr);
+    
+    return EMPTY_VALUE;
+}
+
+Value native_fn_io_prterr(uint8_t argsc, Value *values, void *target, VM *vm){
+    Value *arg0 = &values[0];
+    BStr *bstr = bstr_create_empty(NULL);
+    
+    if(!bstr || vm_utils_value_to_str(arg0, bstr)){
+        bstr_destroy(bstr);
+        vm_utils_error(vm, "out of memory");
+    }
+
+    fprintf(stderr, "%s", bstr->buff);
+
+    bstr_destroy(bstr);
+    
+    return EMPTY_VALUE;
+}
+
+void io_module_init(){
+    io_module = runtime_native_module("io");
+    add_native_function("readln", 0, native_fn_io_readln, io_module);
+    add_native_function("prt", 1, native_fn_io_prt, io_module);
+    add_native_function("prterr", 1, native_fn_io_prterr, io_module);
 }
 
 #endif

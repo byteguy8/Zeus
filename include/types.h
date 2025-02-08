@@ -15,10 +15,22 @@ typedef struct vm VM;
 typedef struct value Value;
 typedef struct module Module;
 
+typedef struct scape_info{
+    int from;
+    int len;
+    char scape;
+}ScapeInfo;
+
 typedef struct rawstr{
 	size_t size;
 	char *buff;
 }RawStr;
+
+typedef struct slice{
+    size_t from;
+    size_t len;
+    char *source;
+}Slice;
 
 typedef struct try_block{
     size_t try;

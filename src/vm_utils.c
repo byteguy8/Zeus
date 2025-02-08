@@ -389,6 +389,120 @@ uint32_t vm_utils_hash_value(Value *value){
     }   
 }
 
+int vm_utils_obj_to_str(Obj *object, BStr *bstr){
+    switch (object->type){
+        case STR_OTYPE:{
+            Str *str = object->value.str;
+            return bstr_append(str->buff, bstr);
+        }
+   		case LIST_OTYPE:{
+            size_t buff_len = 1024;
+            char buff[buff_len];
+			DynArr *list = object->value.list;
+            snprintf(buff, buff_len, "<list %ld at %p>", list->used, list);
+            return bstr_append(buff, bstr);
+		}
+        case DICT_OTYPE:{
+            size_t buff_len = 1024;
+            char buff[buff_len];
+            LZHTable *table = object->value.dict;
+            snprintf(buff, buff_len, "<dict %ld at %p>", table->n, table);
+			return bstr_append(buff, bstr);
+        }
+		case RECORD_OTYPE:{
+            size_t buff_len = 1024;
+            char buff[buff_len];
+			Record *record = object->value.record;
+            snprintf(buff, buff_len, "<record %ld at %p>", record->key_values ? record->key_values->n : 0, record);
+			return bstr_append(buff, bstr);
+		}
+        case FN_OTYPE:{
+            size_t buff_len = 1024;
+            char buff[buff_len];
+            Fn *fn = (Fn *)object->value.fn;
+            snprintf(buff, buff_len, "<function '%s' - %d at %p>", fn->name, (uint8_t)(fn->params ? fn->params->used : 0), fn);
+			return bstr_append(buff, bstr);
+        }
+        case NATIVE_FN_OTYPE:{
+            size_t buff_len = 1024;
+            char buff[buff_len];
+            NativeFn *native_fn = object->value.native_fn;
+            snprintf(buff, buff_len, "<native function '%s' - %d at %p>", native_fn->name, native_fn->arity, native_fn);
+			return bstr_append(buff, bstr);
+        }
+        case NATIVE_MODULE_OTYPE:{
+			size_t buff_len = 1024;
+            char buff[buff_len];
+            NativeModule *module = object->value.native_module;
+            snprintf(buff, buff_len, "<native module '%s' at %p>", module->name, module);
+			return bstr_append(buff, bstr);
+		}
+        case MODULE_OTYPE:{
+            size_t buff_len = 1024;
+            char buff[buff_len];
+            Module *module = object->value.module;
+            snprintf(buff, buff_len, "<module '%s' from '%s' at %p>", module->name, module->pathname, module);
+			return bstr_append(buff, bstr);
+        }
+        case NATIVE_LIB_OTYPE:{
+            size_t buff_len = 1024;
+            char buff[buff_len];
+            NativeLib *module = object->value.native_lib;
+            snprintf(buff, buff_len, "<native library %p at %p>", module->handler, module);
+			return bstr_append(buff, bstr);
+        }
+        case FOREIGN_FN_OTYPE:{
+            size_t buff_len = 1024;
+            char buff[buff_len];
+            ForeignFn *foreign = object->value.foreign_fn;
+            snprintf(buff, buff_len, "<foreign function at %p>", foreign);
+			return bstr_append(buff, bstr);
+        }
+        default:{
+            assert("Illegal object type");
+        }
+    }
+
+    return 1;
+}
+
+int vm_utils_value_to_str(Value *value, BStr *bstr){
+    switch (value->type){
+        case EMPTY_VTYPE:{
+            return bstr_append("empty", bstr);
+        }
+        case BOOL_VTYPE:{
+            uint8_t bool = value->literal.bool;
+
+            if(bool){
+                return bstr_append("true", bstr);
+            }else{
+                return bstr_append("false", bstr);
+            }
+        }
+        case INT_VTYPE:{
+            size_t buff_len = 1024;
+            char buff[buff_len];
+            snprintf(buff, buff_len, "%ld", value->literal.i64);
+            return bstr_append(buff, bstr);
+        }
+        case FLOAT_VTYPE:{
+            size_t buff_len = 1024;
+            char buff[buff_len];
+            snprintf(buff, buff_len, "%.8f", value->literal.fvalue);
+            return bstr_append(buff, bstr);
+		}
+        case OBJ_VTYPE:{
+            return vm_utils_obj_to_str(value->literal.obj, bstr);
+        }
+        default:{
+            assert("Illegal value type");
+        }
+    }
+
+    return 1;
+}
+
 void vm_utils_clean_up(VM *vm){
 	Obj *obj = vm->head;
 

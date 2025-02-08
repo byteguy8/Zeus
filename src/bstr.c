@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <assert.h>
 
 #define BSTR_SIZE (sizeof(BStr))
 #define BSTR_OUTOFSPACE(str_len, str) ((str)->used + (str_len) >= (str)->len)
@@ -15,7 +16,7 @@ static void *lzalloc(size_t size, BStrAllocator *allocator){
 }
 
 static void *lzrealloc(void *ptr, size_t old_size, size_t new_size, BStrAllocator *allocator){
-    return allocator ? allocator->realloc(ptr, old_size, new_size, allocator->ctx) : realloc(ptr, new_size);
+    return allocator ? allocator->realloc(ptr, new_size, old_size, allocator->ctx) : realloc(ptr, new_size);
 }
 
 static void lzdealloc(void *ptr, size_t size, BStrAllocator *allocator){
@@ -148,6 +149,26 @@ int bstr_append_args(BStr *str, char *format, ...){
     str->used += str_len;
 
     va_end(args);
+
+    return 0;
+}
+
+int bstr_append_range(char *raw_str, size_t start, size_t end, BStr *str){
+    assert(start <= end);
+    size_t str_len = end - start + 1;
+
+    if(BSTR_OUTOFSPACE(str_len, str)){
+        size_t new_len = BSTR_NEWLEN(str_len, str);
+        
+        if(grow(new_len, str)){
+            return 1;
+        }
+    }
+
+    memcpy(str->buff + str->used, raw_str + start, str_len);
+    
+    str->used += str_len;
+    str->buff[str->used] = 0;
 
     return 0;
 }

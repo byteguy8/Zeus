@@ -139,6 +139,13 @@ char *compile_clone_str(char *str){
     return cstr;
 }
 
+char *compile_clone_str_range(size_t start, size_t len, char *str){
+    char *cstr = A_COMPILE_ALLOC(len + 1);
+    memcpy(cstr, str + start, len);
+    cstr[len] = '\0';
+    return cstr;
+}
+
 DynArr *runtime_dynarr(size_t size){
     return dynarr_create(size, &runtime_dynarr_allocator);
 }
@@ -158,6 +165,13 @@ char *runtime_clone_str(char *str){
     memcpy(cstr, str, len);
     cstr[len] = '\0';
 
+    return cstr;
+}
+
+char *runtime_clone_str_range(size_t start, size_t len, char *str){
+    char *cstr = A_RUNTIME_ALLOC(len + 1);
+    memcpy(cstr, str + start, len);
+    cstr[len] = '\0';
     return cstr;
 }
 

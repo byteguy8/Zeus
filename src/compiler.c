@@ -8,6 +8,7 @@
 #include "parser.h"
 #include "native_math.h"
 #include "native_time.h"
+#include "native_io.h"
 #include <stdint.h>
 #include <assert.h>
 #include <stdarg.h>
@@ -432,6 +433,14 @@ NativeModule *resolve_native_module(char *module_name){
         }
 
         return time_module;
+    }
+
+    if(strcmp("io", module_name) == 0){
+        if(!io_module){
+            io_module_init();
+        }
+
+        return io_module;
     }
 	
 	return NULL;
