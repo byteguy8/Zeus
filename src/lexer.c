@@ -327,7 +327,8 @@ Token *string(Lexer *lexer){
             
             char escape;
 
-            if(peek(lexer) == 'a'){escape = '\a';}
+            if(peek(lexer) == '0'){escape = '\0';}
+            else if(peek(lexer) == 'a'){escape = '\a';}
             else if(peek(lexer) == 'b'){escape = '\b';}
             else if(peek(lexer) == 'f'){escape = '\f';}
             else if(peek(lexer) == 'n'){escape = '\n';}
