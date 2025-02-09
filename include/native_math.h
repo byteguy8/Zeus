@@ -138,19 +138,19 @@ Value native_fn_deg2rad(uint8_t argsc, Value *values, void *target, VM *vm){
 void math_module_init(){
 	  math_module = runtime_native_module("math");
 	
-	  add_native_function("sqrt", 1, native_fn_sqrt, math_module);
-    add_native_function("pow", 2, native_fn_pow, math_module);
-    add_native_function("cos", 1, native_fn_cos, math_module);
-    add_native_function("acos", 1, native_fn_acos, math_module);
-    add_native_function("cosh", 1, native_fn_cosh, math_module);
-    add_native_function("sin", 1, native_fn_sin, math_module);
-    add_native_function("asin", 1, native_fn_asin, math_module);
-    add_native_function("sinh", 1, native_fn_sinh, math_module);
-    add_native_function("tan", 1, native_fn_tan, math_module);
-    add_native_function("atan", 1, native_fn_atan, math_module);
-    add_native_function("tanh", 1, native_fn_tanh, math_module);
-    add_native_function("rad2deg", 1, native_fn_rad2deg, math_module);
-    add_native_function("deg2rad", 1, native_fn_deg2rad, math_module);
+	  runtime_add_native_fn("sqrt", 1, native_fn_sqrt, math_module);
+    runtime_add_native_fn("pow", 2, native_fn_pow, math_module);
+    runtime_add_native_fn("cos", 1, native_fn_cos, math_module);
+    runtime_add_native_fn("acos", 1, native_fn_acos, math_module);
+    runtime_add_native_fn("cosh", 1, native_fn_cosh, math_module);
+    runtime_add_native_fn("sin", 1, native_fn_sin, math_module);
+    runtime_add_native_fn("asin", 1, native_fn_asin, math_module);
+    runtime_add_native_fn("sinh", 1, native_fn_sinh, math_module);
+    runtime_add_native_fn("tan", 1, native_fn_tan, math_module);
+    runtime_add_native_fn("atan", 1, native_fn_atan, math_module);
+    runtime_add_native_fn("tanh", 1, native_fn_tanh, math_module);
+    runtime_add_native_fn("rad2deg", 1, native_fn_rad2deg, math_module);
+    runtime_add_native_fn("deg2rad", 1, native_fn_deg2rad, math_module);
 }
 
 #endif

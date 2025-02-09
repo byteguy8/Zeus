@@ -1370,49 +1370,13 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_LIST(value)){
 				DynArr *list = TO_LIST(value);
-				
-                if(strcmp(symbol, "size") == 0){
-                    PUSH_INT((int64_t)list->used, vm)
-                }else if(strcmp(symbol, "capacity") == 0){
-                    PUSH_INT((int64_t)(list->count), vm)
-                }else if(strcmp(symbol, "available") == 0){
-                    PUSH_INT((int64_t)DYNARR_AVAILABLE(list), vm)
-                }else if(strcmp(symbol, "first") == 0){
-                    if(DYNARR_LEN(list) == 0) PUSH_EMPTY(vm)
-                    else PUSH(DYNARR_GET_AS(Value, 0, list), vm);
-                }else if(strcmp(symbol, "last") == 0){
-                    if(DYNARR_LEN(list) == 0) PUSH_EMPTY(vm)
-                    else PUSH(DYNARR_GET_AS(Value, DYNARR_LEN(list) - 1, list), vm);
-                }else if(strcmp(symbol, "get") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "get", list, native_fn_list_get, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else if(strcmp(symbol, "insert") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "insert", list, native_fn_list_insert, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else if(strcmp(symbol, "insert_at") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(2, "insert_at", list, native_fn_list_insert_at, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else if(strcmp(symbol, "set") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(2, "set", list, native_fn_list_set, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else if(strcmp(symbol, "remove") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "remove", list, native_fn_list_remove, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else if(strcmp(symbol, "append") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "append", list, native_fn_list_append, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else if(strcmp(symbol, "append_new") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "append_new", list, native_fn_list_append_new, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else if(strcmp(symbol, "clear") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "clear", list, native_fn_list_clear, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else if(strcmp(symbol, "reverse") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "reverse", list, native_fn_list_reverse, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else{
-                    vm_utils_error(vm, "List do not have symbol named as '%s'", symbol);
+                Obj *native_fn_obj = native_list_get(symbol, list, vm);
+                
+                if(!native_fn_obj){
+                    vm_utils_error(vm, "Out of memory");
                 }
+
+                PUSH(OBJ_VALUE(native_fn_obj), vm)
 
                 break;
             }

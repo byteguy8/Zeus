@@ -782,6 +782,37 @@ Obj *vm_utils_record_obj(char empty, VM *vm){
 	return record_obj;
 }
 
+Obj *vm_utils_native_fn_obj(
+    int arity,
+    char *name,
+    void *target,
+    RawNativeFn raw_native,
+    VM *vm
+){
+    size_t name_len = strlen(name);
+    assert(name_len < NAME_LEN - 1);
+
+    NativeFn *native_fn = (NativeFn *)malloc(sizeof(NativeFn));
+    Obj *native_fn_obj = vm_utils_obj(NATIVE_FN_OTYPE, vm);
+
+    if(!native_fn || !native_fn_obj){
+        free(native_fn);
+        return NULL;
+    }
+
+    native_fn->unique = 0;
+    native_fn->arity = arity;
+    memcpy(native_fn->name, name, name_len);
+    native_fn->name[name_len] = '\0';
+    native_fn->name_len = name_len;
+    native_fn->target = target;
+    native_fn->raw_fn = raw_native;
+
+    native_fn_obj->value.native_fn = native_fn;
+
+    return native_fn_obj;
+}
+
 Obj *vm_utils_native_lib_obj(void *handler, VM *vm){
     NativeLib *native_lib = (NativeLib *)malloc(sizeof(NativeLib));
     Obj *native_lib_obj = vm_utils_obj(NATIVE_LIB_OTYPE, vm);

@@ -28,6 +28,13 @@ Obj *vm_utils_array_obj(int16_t len, VM *vm);
 Obj *vm_utils_list_obj(VM *vm);
 Obj *vm_utils_dict_obj(VM *vm);
 Obj *vm_utils_record_obj(char empty, VM *vm);
+Obj *vm_utils_native_fn_obj(
+    int arity,
+    char *name,
+    void *target,
+    RawNativeFn raw_native,
+    VM *vm
+);
 Obj *vm_utils_native_lib_obj(void *handler, VM *vm);
 
 NativeFn *vm_utils_native_function(

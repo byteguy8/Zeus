@@ -14,12 +14,19 @@
 typedef struct vm VM;
 typedef struct value Value;
 typedef struct module Module;
+typedef Value (*RawNativeFn)(uint8_t argc, Value *values, void *target, VM *vm);
+typedef Value (*RawForeignFn)(Value *values);
 
 typedef struct scape_info{
     int from;
     int len;
     char scape;
 }ScapeInfo;
+
+typedef struct native_fn_info{
+    uint8_t arity;
+    RawNativeFn raw_native;
+}NativeFnInfo;
 
 typedef struct rawstr{
 	size_t size;
@@ -60,9 +67,6 @@ typedef struct fn{
     DynArr *float_values;
     Module *module;
 }Fn;
-
-typedef Value (*RawNativeFn)(uint8_t argc, Value *values, void *target, VM *vm);
-typedef Value (*RawForeignFn)(Value *values);
 
 typedef struct native_fn{
     char unique;

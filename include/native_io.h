@@ -72,9 +72,9 @@ Value native_fn_io_prterr(uint8_t argsc, Value *values, void *target, VM *vm){
 
 void io_module_init(){
     io_module = runtime_native_module("io");
-    add_native_function("readln", 0, native_fn_io_readln, io_module);
-    add_native_function("prt", 1, native_fn_io_prt, io_module);
-    add_native_function("prterr", 1, native_fn_io_prterr, io_module);
+    runtime_add_native_fn("readln", 0, native_fn_io_readln, io_module);
+    runtime_add_native_fn("prt", 1, native_fn_io_prt, io_module);
+    runtime_add_native_fn("prterr", 1, native_fn_io_prterr, io_module);
 }
 
 #endif

@@ -36,7 +36,8 @@ char *runtime_clone_str_range(size_t start, size_t len, char *str);
 
 //> NATIVE MODULE RELATED
 NativeModule *runtime_native_module(char *name);
-void add_native_function(char *name, int arity, RawNativeFn raw_native, NativeModule *module);
+void runtime_add_native_fn_info(char *name, uint8_t arity, RawNativeFn raw_native, LZHTable *natives);
+void runtime_add_native_fn(char *name, uint8_t arity, RawNativeFn raw_native, NativeModule *module);
 //< NATIVE MODULE RELATED
 
 Fn *runtime_fn(char *name, Module *module);

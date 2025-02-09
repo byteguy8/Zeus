@@ -46,9 +46,9 @@ Value native_fn_time_sleep(uint8_t argsc, Value *values, void *target, VM *vm){
 void time_module_init(){
     time_module = runtime_native_module("time");
 
-    add_native_function("time", 0, native_fn_time, time_module);
-    add_native_function("millis", 0, native_fn_time_millis, time_module);
-    add_native_function("sleep", 1, native_fn_time_sleep, time_module);
+    runtime_add_native_fn("time", 0, native_fn_time, time_module);
+    runtime_add_native_fn("millis", 0, native_fn_time_millis, time_module);
+    runtime_add_native_fn("sleep", 1, native_fn_time_sleep, time_module);
 }
 
 #endif

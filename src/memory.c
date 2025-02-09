@@ -186,7 +186,17 @@ NativeModule *runtime_native_module(char *name){
 	return module;
 }
 
-void add_native_function(char *name, int arity, RawNativeFn raw_native, NativeModule *module){
+void runtime_add_native_fn_info(char *name, uint8_t arity, RawNativeFn raw_native, LZHTable *natives){
+    size_t name_len = strlen(name);
+    NativeFnInfo *info = (NativeFnInfo *)A_RUNTIME_ALLOC(sizeof(NativeFnInfo));
+
+    info->arity = arity;
+    info->raw_native = raw_native;
+
+    lzhtable_put((uint8_t *)name, name_len, info, natives, NULL);
+}
+
+void runtime_add_native_fn(char *name, uint8_t arity, RawNativeFn raw_native, NativeModule *module){
 	size_t name_len = strlen(name);
 	NativeFn *native = (NativeFn *)A_RUNTIME_ALLOC(sizeof(NativeFn));
 	NativeModuleSymbol *symbol = (NativeModuleSymbol *)A_RUNTIME_ALLOC(sizeof(NativeModuleSymbol));
