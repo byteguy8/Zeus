@@ -32,6 +32,7 @@ NativeFn *vm_utils_native_function(
     RawNativeFn native,
     VM *vm
 );
+Obj *vm_utils_array_obj(int16_t len, VM *vm);
 Obj *vm_utils_list_obj(VM *vm);
 Obj *vm_utils_dict_obj(VM *vm);
 Obj *vm_utils_record_obj(char empty, VM *vm);
@@ -43,6 +44,7 @@ Obj *vm_utils_native_lib_obj(void *handler, VM *vm);
 #define IS_FLOAT(v)((v)->type == FLOAT_VTYPE)
 #define IS_OBJ(v)((v)->type == OBJ_VTYPE)
 #define IS_STR(v)(IS_OBJ(v) && (v)->literal.obj->type == STR_OTYPE)
+#define IS_ARRAY(v)(IS_OBJ(v) && (v)->literal.obj->type == ARRAY_OTYPE)
 #define IS_LIST(v)(IS_OBJ(v) && (v)->literal.obj->type == LIST_OTYPE)
 #define IS_DICT(v)(IS_OBJ(v) && (v)->literal.obj->type == DICT_OTYPE)
 #define IS_RECORD(v)(IS_OBJ(v) && (v)->literal.obj->type == RECORD_OTYPE)
@@ -58,6 +60,7 @@ Obj *vm_utils_native_lib_obj(void *handler, VM *vm);
 #define TO_FLOAT(v)((v)->literal.fvalue)
 #define TO_OBJ(v)((v)->literal.obj)
 #define TO_STR(v)((v)->literal.obj->value.str)
+#define TO_ARRAY(v)((v)->literal.obj->value.array)
 #define TO_LIST(v)((v)->literal.obj->value.list)
 #define TO_DICT(v)((v)->literal.obj->value.dict)
 #define TO_RECORD(v)((v)->literal.obj->value.record)

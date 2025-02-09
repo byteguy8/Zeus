@@ -74,6 +74,7 @@ LZHTable *create_keywords_table(){
 	add_keyword("while", WHILE_TOKTYPE, keywords);
 	add_keyword("stop", STOP_TOKTYPE, keywords);
     add_keyword("continue", CONTINUE_TOKTYPE, keywords);
+    add_keyword("array", ARRAY_TOKTYPE, keywords);
 	add_keyword("list", LIST_TOKTYPE, keywords);
     add_keyword("to", TO_TOKTYPE, keywords);
     add_keyword("dict", DICT_TOKTYPE, keywords);

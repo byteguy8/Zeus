@@ -77,18 +77,15 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             size_t end = dumpper->ip;
             printf("%8.8s %.7ld\n", "EMPTY", end - start);
             break;
-        }
-        case FALSE_OPCODE:{
+        }case FALSE_OPCODE:{
             size_t end = dumpper->ip;
             printf("%8.8s %.7ld\n", "FALSE", end - start);
             break;
-        }
-        case TRUE_OPCODE:{
+        }case TRUE_OPCODE:{
             size_t end = dumpper->ip;
             printf("%8.8s %.7ld\n", "TRUE", end - start);
             break;
-        }
-        case CINT_OPCODE:{
+        }case CINT_OPCODE:{
             int64_t value = (int64_t)advance(dumpper);
             size_t end = dumpper->ip;
 
@@ -96,8 +93,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | value: %ld\n", value);
 
             break;
-        }
-        case INT_OPCODE:{
+        }case INT_OPCODE:{
             int64_t value = read_i64_const(dumpper);
             size_t end = dumpper->ip;
 
@@ -105,8 +101,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | value: %ld\n", value);
             
             break;
-        }
-        case FLOAT_OPCODE:{
+        }case FLOAT_OPCODE:{
 			double value = read_float_const(dumpper);
 			size_t end = dumpper->ip;
 			
@@ -114,8 +109,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | value: %.8f\n", value);
 			
 			break;
-		}
-        case STRING_OPCODE:{
+		}case STRING_OPCODE:{
             uint32_t hash = 0;
             char *value = read_str(dumpper, &hash);
             size_t end = dumpper->ip;
@@ -124,8 +118,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | hash: %u value: '%s'\n", hash, value);
             
             break;
-        }
-        case TEMPLATE_OPCODE:{
+        }case TEMPLATE_OPCODE:{
             int16_t len = read_i16(dumpper);
             size_t end = dumpper->ip;
 
@@ -133,63 +126,51 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | length: %d\n", len);
 
             break;
-        }
-        case ADD_OPCODE:{
+        }case ADD_OPCODE:{
             size_t end = dumpper->ip;
             printf("%8.8s %.7ld\n", "ADD", end - start);
             break;
-        }
-        case SUB_OPCODE:{
+        }case SUB_OPCODE:{
             size_t end = dumpper->ip;
             printf("%8.8s %.7ld\n", "SUB", end - start);
             break;
-        }
-        case MUL_OPCODE:{
+        }case MUL_OPCODE:{
             size_t end = dumpper->ip;
 			printf("%8.8s %.7ld\n", "MUL", end - start);
             break;
-        }
-        case DIV_OPCODE:{
+        }case DIV_OPCODE:{
             size_t end = dumpper->ip;
 			printf("%8.8s %.7ld\n", "DIV", end - start);
             break;
-        }
-        case MOD_OPCODE:{
+        }case MOD_OPCODE:{
             size_t end = dumpper->ip;
             printf("%8.8s %.7ld\n", "MOD", end - start);
             break;
-		}
-        case LT_OPCODE:{
+		}case LT_OPCODE:{
             size_t end = dumpper->ip;
 			printf("%8.8s %.7ld\n", "LT", end - start);
             break;
-        }
-        case GT_OPCODE:{
+        }case GT_OPCODE:{
             size_t end = dumpper->ip;
 			printf("%8.8s %.7ld\n", "GT", end - start);
            	break;
-        }
-        case LE_OPCODE:{
+        }case LE_OPCODE:{
             size_t end = dumpper->ip;
 			printf("%8.8s %.7ld\n", "LE", end - start);
           	break;
-        }
-        case GE_OPCODE:{
+        }case GE_OPCODE:{
             size_t end = dumpper->ip;
 			printf("%8.8s %.7ld\n", "GE", end - start);
            	break;
-        }
-        case EQ_OPCODE:{
+        }case EQ_OPCODE:{
             size_t end = dumpper->ip;
 			printf("%8.8s %.7ld\n", "EQ", end - start);
            	break;
-        }
-        case NE_OPCODE:{
+        }case NE_OPCODE:{
             size_t end = dumpper->ip;
 			printf("%8.8s %.7ld\n", "NE", end - start);
           	break;
-        }
-        case LSET_OPCODE:{
+        }case LSET_OPCODE:{
 			uint8_t slot = advance(dumpper);
             size_t end = dumpper->ip;
 
@@ -197,8 +178,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | slot: %d\n", slot);
            	
             break;
-        }
-        case LGET_OPCODE:{
+        }case LGET_OPCODE:{
 			uint8_t slot = advance(dumpper);
             size_t end = dumpper->ip;
 
@@ -206,8 +186,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | slot: %d\n", slot);
            	
             break;
-        }
-        case GSET_OPCODE:{
+        }case GSET_OPCODE:{
             uint32_t hash = 0;
             char *value = read_str(dumpper, &hash);
             size_t end = dumpper->ip;
@@ -216,8 +195,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | hash: %u value: '%s'\n", hash, value);
             
             break;
-        }
-        case GGET_OPCODE:{
+        }case GGET_OPCODE:{
             uint32_t hash = 0;
             char *value = read_str(dumpper, &hash);
             size_t end = dumpper->ip;
@@ -226,8 +204,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | hash: %u value: '%s'\n", hash, value);
             
             break;
-        }
-        case NGET_OPCODE:{
+        }case NGET_OPCODE:{
             uint32_t hash = 0;
             char *value = read_str(dumpper, &hash);
             size_t end = dumpper->ip;
@@ -236,8 +213,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | hash: %u value: '%s'\n", hash, value);
             
             break;
-        }
-        case SGET_OPCODE:{
+        }case SGET_OPCODE:{
             uint32_t hash = 0;
             char *value = read_str(dumpper, &hash);
             size_t end = dumpper->ip;
@@ -246,8 +222,11 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | hash: %u value: '%s'\n", hash, value);
             
             break;
-        }
-		case PUT_OPCODE:{
+        }case ASET_OPCODE:{
+            size_t end = dumpper->ip;
+            printf("%8.8s %.7ld", "ASET", end - start);
+            break;
+        }case PUT_OPCODE:{
 			char *target = read_str(dumpper, NULL);
             size_t end = dumpper->ip;
 
@@ -255,38 +234,31 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | target: '%s'\n", target);
 			
             break;
-		}
-        case OR_OPCODE:{
+		}case OR_OPCODE:{
             size_t end = dumpper->ip;
 			printf("%8.8s %.7ld\n", "OR", end - start);
            	break;
-        }
-        case AND_OPCODE:{
+        }case AND_OPCODE:{
             size_t end = dumpper->ip;
 			printf("%8.8s %.7ld\n", "AND", end - start);
             break;
-        }
-        case NNOT_OPCODE:{
+        }case NNOT_OPCODE:{
             size_t end = dumpper->ip;
 			printf("%8.8s %.7ld\n", "NNOT", end - start);
             break;
-        }
-        case NOT_OPCODE:{
+        }case NOT_OPCODE:{
             size_t end = dumpper->ip;
 			printf("%8.8s %.7ld\n", "NOT", end - start);
           	break;
-        }
-        case PRT_OPCODE:{
+        }case PRT_OPCODE:{
             size_t end = dumpper->ip;
 			printf("%8.8s %.7ld\n", "PRT", end - start);
             break;
-        }
-        case POP_OPCODE:{
+        }case POP_OPCODE:{
             size_t end = dumpper->ip;
             printf("%8.8s %.7ld\n", "POP", end - start);
             break;
-        }
-        case JMP_OPCODE:{
+        }case JMP_OPCODE:{
 			int16_t value = read_i16(dumpper);
 			size_t to = dumpper->ip;
             size_t end = dumpper->ip;
@@ -299,8 +271,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | value: %d to: %ld\n", value, to);
 
             break;
-        }
-		case JIF_OPCODE:{
+        }case JIF_OPCODE:{
 			int16_t value = read_i16(dumpper);
 			size_t to = dumpper->ip;
             size_t end = dumpper->ip;
@@ -313,8 +284,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | value: %d to: %ld\n", value, to);
 
 			break;
-		}
-		case JIT_OPCODE:{
+		}case JIT_OPCODE:{
             int16_t value = read_i16(dumpper);
 			size_t to = dumpper->ip;
             size_t end = dumpper->ip;
@@ -327,8 +297,15 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | value: %d to: %ld\n", value, to);
 
 			break;
-		}
-		case LIST_OPCODE:{
+		}case ARRAY_OPCODE:{
+			int16_t len = read_i16(dumpper);
+            size_t end = dumpper->ip;
+
+			printf("%8.8s %.7ld", "ARRAY", end - start);
+            printf(" | length: %d\n", len);
+			
+            break;
+		}case LIST_OPCODE:{
 			int16_t len = read_i16(dumpper);
             size_t end = dumpper->ip;
 
@@ -336,8 +313,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | length: %d\n", len);
 			
             break;
-		}
-        case DICT_OPCODE:{
+		}case DICT_OPCODE:{
             int16_t len = read_i16(dumpper);
             size_t end = dumpper->ip;
 
@@ -345,8 +321,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | length: %d\n", len);
 			
             break;
-        }
-		case RECORD_OPCODE:{
+        }case RECORD_OPCODE:{
 			uint8_t len = advance(dumpper);
             
             for (uint8_t i = 0; i < len; i++)
@@ -358,8 +333,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | length: %d\n", len);
 		
             break;
-		}
-        case CALL_OPCODE:{
+		}case CALL_OPCODE:{
             uint8_t args_count = advance(dumpper);
             size_t end = dumpper->ip;
 
@@ -367,8 +341,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | arguments: %d\n", args_count);
             
             break;
-        }
-        case ACCESS_OPCODE:{
+        }case ACCESS_OPCODE:{
             char *symbol = read_str(dumpper, NULL);
             size_t end = dumpper->ip;
 
@@ -376,13 +349,15 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | value: %s\n", symbol);
             
             break;
-        }
-        case RET_OPCODE:{
+        }case INDEX_OPCODE:{
+            size_t end = dumpper->ip;
+            printf("%8.8s %.7ld", "INDEX", end - start);
+            break;
+        }case RET_OPCODE:{
             size_t end = dumpper->ip;
             printf("%8.8s %.7ld\n", "RET", end - start);
             break;
-        }
-		case IS_OPCODE:{
+        }case IS_OPCODE:{
 			uint8_t type = advance(dumpper);
             size_t end = dumpper->ip;
 
@@ -390,13 +365,11 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | type: %d\n", type);
 			
             break;
-		}
-        case THROW_OPCODE:{
+		}case THROW_OPCODE:{
             size_t end = dumpper->ip;
             printf("%8.8s %.7ld\n", "THROW", end - start);
             break;
-        }
-        case LOAD_OPCODE:{
+        }case LOAD_OPCODE:{
             char *path = read_str(dumpper, NULL);
             size_t end = dumpper->ip;
             
@@ -404,8 +377,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | path: %s\n", path);
             
             break;
-        }
-        default:{
+        }default:{
             assert("Illegal opcode\n");
         }
     }

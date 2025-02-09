@@ -14,6 +14,68 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+//>PRIVATE INTERFACE
+static void error(Compiler *compiler, Token *token, char *msg, ...);
+void descompose_i16(int16_t value, uint8_t *bytes);
+void descompose_i32(int32_t value, uint8_t *bytes);
+#define WHILE_IN(compiler) (++compiler->while_counter)
+#define WHILE_OUT(compiler) (--compiler->while_counter)
+static void mark_stop(size_t len, size_t index, Compiler *compiler);
+static void unmark_stop(size_t which, Compiler *compiler);
+static void mark_continue(size_t len, size_t index, Compiler *compiler);
+static void unmark_continue(size_t which, Compiler *compiler);
+Scope *scope_in(ScopeType type, Compiler *compiler);
+Scope *scope_in_soft(ScopeType type, Compiler *compiler);
+Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function);
+void scope_out(Compiler *compiler);
+void scope_out_fn(Compiler *compiler);
+Scope *inside_while(Compiler *compiler);
+Scope *inside_function(Compiler *compiler);
+Scope *current_scope(Compiler *compiler);
+Scope *previous_scope(Scope *scope, Compiler *compiler);
+Symbol *exists_scope(char *name, Scope *scope, Compiler *compiler);
+Symbol *exists_local(char *name, Compiler *compiler);
+Symbol *get(Token *identifier_token, Compiler *compiler);
+Symbol *declare_native(char *identifier, Compiler *compiler);
+Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler);
+DynArr *current_chunks(Compiler *compiler);
+DynArr *current_locations(Compiler *compiler);
+DynArr *current_constants(Compiler *compiler);
+DynArr *current_float_values(Compiler *compiler);
+size_t chunks_len(Compiler *compiler);
+size_t write_chunk(uint8_t chunk, Compiler *compiler);
+void write_location(Token *token, Compiler *compiler);
+void update_chunk(size_t index, uint8_t chunk, Compiler *compiler);
+size_t write_i16(int16_t i16, Compiler *compiler);
+size_t write_i32(int32_t i32, Compiler *compiler);
+void update_i16(size_t index, int16_t i16, Compiler *compiler);
+void update_i32(size_t index, int32_t i32, Compiler *compiler);
+size_t write_i64_const(int64_t i64, Compiler *compiler);
+size_t write_double_const(double value, Compiler *compiler);
+void write_str(char *rstr, Compiler *compiler);
+char *names_to_name(DynArr *names, Token **out_name);
+NativeModule *resolve_native_module(char *module_name);
+char *resolve_module_location(
+    Token *import_token,
+    char *module_name,
+    Module *previous_module,
+    Module *current_module,
+    Compiler *compiler,
+    size_t *out_module_name_len,
+    size_t *out_module_pathname_len
+);
+void compile_expr(Expr *expr, Compiler *compiler);
+void add_native_module_symbol(
+    char *key,
+    size_t key_size,
+    NativeModule *module,
+    LZHTable *symbols
+);
+void add_module_symbol(char *key, size_t key_size, Module *module, LZHTable *symbols);
+void compile_stmt(Stmt *stmt, Compiler *compiler);
+void define_natives(Compiler *compiler);
+//<PRIVATE INTERFACE
+//>PRIVATE IMPLEMENTATION
 static void error(Compiler *compiler, Token *token, char *msg, ...){
     va_list args;
     va_start(args, msg);
@@ -45,9 +107,6 @@ void descompose_i32(int32_t value, uint8_t *bytes){
         bytes[i] = r;
     }
 }
-
-#define WHILE_IN(compiler) (++compiler->while_counter)
-#define WHILE_OUT(compiler) (--compiler->while_counter)
 
 static void mark_stop(size_t len, size_t index, Compiler *compiler){
 	assert(compiler->stop_ptr < LOOP_MARK_LENGTH);
@@ -510,8 +569,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             write_chunk(EMPTY_OPCODE, compiler);
 			write_location(empty_expr->empty_token, compiler);
             break;
-        }
-        case BOOL_EXPRTYPE:{
+        }case BOOL_EXPRTYPE:{
             BoolExpr *bool_expr = (BoolExpr *)expr->sub_expr;
             uint8_t value = bool_expr->value;
 
@@ -519,8 +577,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			write_location(bool_expr->bool_token, compiler);
 
             break;
-        }
-        case INT_EXPRTYPE:{
+        }case INT_EXPRTYPE:{
             IntExpr *int_expr = (IntExpr *)expr->sub_expr;
             Token *token = int_expr->token;
             int64_t value = *(int64_t *)token->literal;
@@ -541,8 +598,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             write_i64_const(value, compiler);
 
             break;
-        }
-        case FLOAT_EXPRTYPE:{
+        }case FLOAT_EXPRTYPE:{
 			FloatExpr *float_expr = (FloatExpr *)expr->sub_expr;
 			Token *float_token = float_expr->token;
 			double value = *(double *)float_token->literal;
@@ -553,8 +609,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			write_double_const(value, compiler);
 			
 			break;
-		}
-		case STRING_EXPRTYPE:{
+		}case STRING_EXPRTYPE:{
 			StringExpr *string_expr = (StringExpr *)expr->sub_expr;
 			uint32_t hash = string_expr->hash;
 
@@ -564,8 +619,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			write_i32((int32_t) hash, compiler);
 
 			break;
-		}
-        case TEMPLATE_EXPRTYPE:{
+		}case TEMPLATE_EXPRTYPE:{
             TemplateExpr *template_expr = (TemplateExpr *)expr->sub_expr;
             Token *template_token = template_expr->template_token;
             DynArrPtr *stmts = template_expr->exprs;
@@ -581,8 +635,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             write_i16((int16_t)DYNARR_PTR_LEN(stmts), compiler);
 
             break;
-        }
-        case IDENTIFIER_EXPRTYPE:{
+        }case IDENTIFIER_EXPRTYPE:{
             IdentifierExpr *identifier_expr = (IdentifierExpr *)expr->sub_expr;
             Token *identifier_token = identifier_expr->identifier_token;
 
@@ -617,16 +670,14 @@ void compile_expr(Expr *expr, Compiler *compiler){
             }
 
             break;
-        }
-        case GROUP_EXPRTYPE:{
+        }case GROUP_EXPRTYPE:{
             GroupExpr *group_expr = (GroupExpr *)expr->sub_expr;
             Expr *expr = group_expr->expr;
 
             compile_expr(expr, compiler);
             
             break;
-        }
-        case CALL_EXPRTYPE:{
+        }case CALL_EXPRTYPE:{
             CallExpr *call_expr = (CallExpr *)expr->sub_expr;
             Expr *left = call_expr->left;
             DynArrPtr *args = call_expr->args;
@@ -647,8 +698,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             write_chunk(args_count, compiler);
 
             break;
-        }
-        case ACCESS_EXPRTYPE:{
+        }case ACCESS_EXPRTYPE:{
             AccessExpr *access_expr = (AccessExpr *)expr->sub_expr;
             Expr *left = access_expr->left;
             Token *symbol_token = access_expr->symbol_token;
@@ -661,8 +711,20 @@ void compile_expr(Expr *expr, Compiler *compiler){
             write_str(symbol_token->lexeme, compiler);
 
             break;
-        }
-        case UNARY_EXPRTYPE:{
+        }case INDEX_EXPRTYPE:{
+            IndexExpr *index_expr = (IndexExpr *)expr->sub_expr;
+            Expr *target = index_expr->target;
+            Token *left_square_token = index_expr->left_square_token;
+            Expr *index = index_expr->index_expr;
+
+            compile_expr(index, compiler);
+            compile_expr(target, compiler);
+
+            write_chunk(INDEX_OPCODE, compiler);
+            write_location(left_square_token, compiler);
+
+            break;
+        }case UNARY_EXPRTYPE:{
             UnaryExpr *unary_expr = (UnaryExpr *)expr->sub_expr;
             Token *operator = unary_expr->operator;
             Expr *right = unary_expr->right;
@@ -686,8 +748,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			write_location(operator, compiler);
 
             break;
-        }
-        case BINARY_EXPRTYPE:{
+        }case BINARY_EXPRTYPE:{
             BinaryExpr *binary_expr = (BinaryExpr *)expr->sub_expr;
             Expr *left = binary_expr->left;
             Token *operator = binary_expr->operator;
@@ -725,8 +786,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			write_location(operator, compiler);
 
             break;
-        }
-        case COMPARISON_EXPRTYPE:{
+        }case COMPARISON_EXPRTYPE:{
             ComparisonExpr *comparison_expr = (ComparisonExpr *)expr->sub_expr;
             Expr *left = comparison_expr->left;
             Token *operator = comparison_expr->operator;
@@ -768,8 +828,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			write_location(operator, compiler);
 
             break;
-        }
-        case LOGICAL_EXPRTYPE:{
+        }case LOGICAL_EXPRTYPE:{
             LogicalExpr *logical_expr = (LogicalExpr *)expr->sub_expr;
             Expr *left = logical_expr->left;
             Token *operator = logical_expr->operator;
@@ -795,8 +854,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			write_location(operator, compiler);
 
             break;
-        }
-        case ASSIGN_EXPRTYPE:{
+        }case ASSIGN_EXPRTYPE:{
             AssignExpr *assign_expr = (AssignExpr *)expr->sub_expr;
 			Expr *left = assign_expr->left;
 			Token *equals_token = assign_expr->equals_token;
@@ -843,11 +901,25 @@ void compile_expr(Expr *expr, Compiler *compiler){
 				break;
 			}
 
+            if(left->type == INDEX_EXPRTYPE){
+                IndexExpr *index_expr = (IndexExpr *)left->sub_expr;
+                Expr *target = index_expr->target;
+                Expr *index = index_expr->index_expr;
+
+                compile_expr(value_expr, compiler);
+                compile_expr(index, compiler);
+                compile_expr(target, compiler);
+
+                write_chunk(ASET_OPCODE, compiler);
+                write_location(equals_token, compiler);
+
+                break;
+            }
+
 			error(compiler, equals_token, "Illegal assign target");
 
             break;
-        }
-		case COMPOUND_EXPRTYPE:{
+        }case COMPOUND_EXPRTYPE:{
 			CompoundExpr *compound_expr = (CompoundExpr *)expr->sub_expr;
 			Token *identifier_token = compound_expr->identifier_token;
 			Token *operator = compound_expr->operator;
@@ -905,8 +977,35 @@ void compile_expr(Expr *expr, Compiler *compiler){
             }
 	
 			break;
-		}
-		case LIST_EXPRTYPE:{
+		}case ARRAY_EXPRTYPE:{
+            ArrayExpr *array_expr = (ArrayExpr *)expr->sub_expr;
+            Token *array_token = array_expr->array_token;
+            Expr *len_expr = array_expr->len_expr;
+            DynArrPtr *values = array_expr->values;
+
+            if(len_expr){
+                compile_expr(len_expr, compiler);
+            }else{
+                if(values){
+                    for (int16_t i = (int16_t)DYNARR_PTR_LEN(values) - 1; i >= 0; i--){
+                        Expr *expr = (Expr *)DYNARR_PTR_GET(i, values);
+                        compile_expr(expr, compiler);
+                    }
+                }
+            }
+
+            write_chunk(ARRAY_OPCODE, compiler);
+            write_location(array_token, compiler);
+
+            if(len_expr){
+                write_i16(-1, compiler);
+            }else{
+                int16_t len = values ? DYNARR_PTR_LEN(values) : 0;
+                write_i16(len, compiler);
+            }
+
+            break;
+        }case LIST_EXPRTYPE:{
 			ListExpr *list_expr = (ListExpr *)expr->sub_expr;
 			Token *list_token = list_expr->list_token;
 			DynArrPtr *exprs = list_expr->exprs;
@@ -918,7 +1017,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 				}
 			}
 
-            size_t len = exprs ? (int32_t)exprs->used : 0;
+            int16_t len = exprs ? (int16_t)exprs->used : 0;
 			
             write_chunk(LIST_OPCODE, compiler);
 			write_location(list_token, compiler);
@@ -926,8 +1025,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             write_i16(len, compiler);
 
 			break;
-		}
-        case DICT_EXPRTYPE:{
+		}case DICT_EXPRTYPE:{
             DictExpr *dict_expr = (DictExpr *)expr->sub_expr;
             DynArrPtr *key_values = dict_expr->key_values;
 
@@ -942,7 +1040,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
                 }
             }
 
-            int32_t len = (int32_t)(key_values ? key_values->used : 0);
+            int16_t len = (int16_t)(key_values ? key_values->used : 0);
             
             write_chunk(DICT_OPCODE, compiler);
 			write_location(dict_expr->dict_token, compiler);
@@ -950,8 +1048,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             write_i16(len, compiler);
 
             break;
-        }
-		case RECORD_EXPRTYPE:{
+        }case RECORD_EXPRTYPE:{
 			RecordExpr *record_expr = (RecordExpr *)expr->sub_expr;
 			DynArrPtr *key_values = record_expr->key_values;
 
@@ -975,8 +1072,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			}
 
 			break;
-		}
-		case IS_EXPRTYPE:{
+		}case IS_EXPRTYPE:{
 			IsExpr *is_expr = (IsExpr *)expr->sub_expr;
 			Expr *left_expr = is_expr->left_expr;
 			Token *is_token = is_expr->is_token;
@@ -1003,14 +1099,17 @@ void compile_expr(Expr *expr, Compiler *compiler){
 				}case STR_TOKTYPE:{
 					write_chunk(4, compiler);
 					break;
-				}case LIST_TOKTYPE:{
+				}case ARRAY_TOKTYPE:{
 					write_chunk(5, compiler);
 					break;
-				}case DICT_TOKTYPE:{
+				}case LIST_TOKTYPE:{
 					write_chunk(6, compiler);
 					break;
+				}case DICT_TOKTYPE:{
+					write_chunk(7, compiler);
+					break;
 				}case RECORD_TOKTYPE:{
-                    write_chunk(7, compiler);
+                    write_chunk(8, compiler);
 					break;
                 } default:{
 					assert("Illegal type value");
@@ -1018,8 +1117,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			}
 
 			break;
-		}
-        default:{
+		}default:{
             assert("Illegal expression type");
         }
     }
@@ -1051,8 +1149,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             write_chunk(POP_OPCODE, compiler);
 
             break;
-        }
-        case PRINT_STMTTYPE:{
+        }case PRINT_STMTTYPE:{
             PrintStmt *print_stmt = (PrintStmt *)stmt->sub_stmt;
             Expr *expr = print_stmt->expr;
 
@@ -1062,8 +1159,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             write_location(print_stmt->print_token, compiler);
 
             break;
-        }
-        case VAR_DECL_STMTTYPE:{
+        }case VAR_DECL_STMTTYPE:{
             VarDeclStmt *var_decl_stmt = (VarDeclStmt *)stmt->sub_stmt;
             char is_const = var_decl_stmt->is_const;
             char is_initialized = var_decl_stmt->is_initialized;
@@ -1094,8 +1190,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			write_location(identifier_token, compiler);
 
             break;
-        }
-        case BLOCK_STMTTYPE:{
+        }case BLOCK_STMTTYPE:{
             BlockStmt *block_stmt = (BlockStmt *)stmt->sub_stmt;
             DynArrPtr *stmts = block_stmt->stmts;
 
@@ -1110,8 +1205,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             scope_out(compiler);
             
             break;
-        }
-		case IF_STMTTYPE:{
+        }case IF_STMTTYPE:{
 			IfStmt *if_stmt = (IfStmt *)stmt->sub_stmt;
 			Expr *if_condition = if_stmt->if_condition;
 			DynArrPtr *if_stmts = if_stmt->if_stmts;
@@ -1163,8 +1257,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             }
             
 			break;
-		}
-		case WHILE_STMTTYPE:{
+		}case WHILE_STMTTYPE:{
 			WhileStmt *while_stmt = (WhileStmt *)stmt->sub_stmt;
 			Expr *condition = while_stmt->condition;
 			DynArrPtr *stmts = while_stmt->stmts;
@@ -1229,8 +1322,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			}
 		
 			break;
-		}
-		case STOP_STMTTYPE:{
+		}case STOP_STMTTYPE:{
 			StopStmt *stop_stmt = (StopStmt *)stmt->sub_stmt;
 			Token *stop_token = stop_stmt->stop_token;
 
@@ -1245,8 +1337,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			mark_stop(len, index, compiler);
 
 			break;
-		}
-        case CONTINUE_STMTTYPE:{
+		}case CONTINUE_STMTTYPE:{
             ContinueStmt *continue_stmt = (ContinueStmt *)stmt->sub_stmt;
             Token *continue_token = continue_stmt->continue_token;
 
@@ -1261,8 +1352,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             mark_continue(len, index, compiler);
 
             break;
-        }
-        case RETURN_STMTTYPE:{
+        }case RETURN_STMTTYPE:{
             ReturnStmt *return_stmt = (ReturnStmt *)stmt->sub_stmt;
 			Token *return_token = return_stmt->return_token;
             Expr *value = return_stmt->value;
@@ -1282,8 +1372,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             write_location(return_token, compiler);
 
             break;
-        }
-        case FUNCTION_STMTTYPE:{
+        }case FUNCTION_STMTTYPE:{
             FunctionStmt *function_stmt = (FunctionStmt *)stmt->sub_stmt;
             Token *name_token = function_stmt->name_token;
             DynArrPtr *params = function_stmt->params;
@@ -1330,8 +1419,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             scope_out_fn(compiler);
 
             break;
-        }
-        case IMPORT_STMTTYPE:{
+        }case IMPORT_STMTTYPE:{
             assert(compiler->paths_len > 0);
 
             ImportStmt *import_stmt = (ImportStmt *)stmt->sub_stmt;
@@ -1467,8 +1555,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             declare(MODULE_SYMTYPE, alt_name ? alt_name : name, compiler);
 
             break;
-        }
-        case THROW_STMTTYPE:{
+        }case THROW_STMTTYPE:{
             ThrowStmt *throw_stmt = (ThrowStmt *)stmt->sub_stmt;
             Token *throw_token = throw_stmt->throw_token;
 			Expr *value = throw_stmt->value;
@@ -1490,8 +1577,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             write_location(throw_token, compiler);
 
             break;
-        }
-        case TRY_STMTTYPE:{
+        }case TRY_STMTTYPE:{
             TryStmt *try_stmt = (TryStmt *)stmt->sub_stmt;
             DynArrPtr *try_stmts = try_stmt->try_stmts;
 			Token *err_identifier = try_stmt->err_identifier;
@@ -1565,8 +1651,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			dynarr_ptr_insert(try_block, tries);
 
             break;
-        }
-        case LOAD_STMTTYPE:{
+        }case LOAD_STMTTYPE:{
             LoadStmt *load_stmt = (LoadStmt *)stmt->sub_stmt;
             Token *load_token = load_stmt->load_token;
             Token *path_token = load_stmt->pathname;
@@ -1586,8 +1671,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             write_location(load_token, compiler);
 
             break;
-        }
-        case EXPORT_STMTTYPE:{
+        }case EXPORT_STMTTYPE:{
             ExportStmt *export_stmt = (ExportStmt *)stmt->sub_stmt;
             Token *export_token = export_stmt->export_token;
             DynArrPtr *symbols = export_stmt->symbols;
@@ -1610,8 +1694,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             }
             
             break;
-        }
-        default:{
+        }default:{
             assert("Illegal stmt type");
         }
     }
@@ -1628,6 +1711,7 @@ void define_natives(Compiler *compiler){
         node = next;
     }
 }
+//<PRIVATE IMPLEMENTATION
 
 Compiler *compiler_create(){
     Compiler *compiler = (Compiler *)A_COMPILE_ALLOC(sizeof(Compiler));

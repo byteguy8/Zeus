@@ -473,30 +473,26 @@ Token *string(Lexer *lexer){
 }
 
 Token *scan_token(char c, Lexer *lexer){
-    switch (c)
-    {
+    switch (c){
         case '+':{
 			if(match('=', lexer)){
 				return create_token(COMPOUND_ADD_TOKTYPE, lexer);
 			}else{
 				return create_token(PLUS_TOKTYPE, lexer);
 			}
-        }
-        case '-':{
+        }case '-':{
 			if(match('=', lexer)){
 				return create_token(COMPOUND_SUB_TOKTYPE, lexer);
 			}else{
 				return create_token(MINUS_TOKTYPE, lexer);
 			}
-        }
-        case '*':{
+        }case '*':{
 			if(match('=', lexer)){
 				return create_token(COMPOUND_MUL_TOKTYPE, lexer);
 			}else{
 				return create_token(ASTERISK_TOKTYPE, lexer);
 			}
-        }
-        case '/':{
+        }case '/':{
 			if(match('/', lexer)){
 				comment(lexer);
 				return NULL;
@@ -505,67 +501,57 @@ Token *scan_token(char c, Lexer *lexer){
 			}else{
 				return create_token(SLASH_TOKTYPE, lexer);
 			}
-        }
-		case ',':{
+        }case ',':{
 			return create_token(COMMA_TOKTYPE, lexer);
-		}
-		case '.':{
+		}case '.':{
 			return create_token(DOT_TOKTYPE, lexer);
-		}
-        case '<':{
+		}case '<':{
             if(match('=', lexer)){
 				return create_token(LESS_EQUALS_TOKTYPE, lexer);
 			}else{
 				return create_token(LESS_TOKTYPE, lexer);
 			}
-        }
-        case '>':{
+        }case '>':{
             if(match('=', lexer)){
 				return create_token(GREATER_EQUALS_TOKTYPE, lexer);
 			}else{
 				return create_token(GREATER_TOKTYPE, lexer);
 			}
-        }
-        case '=':{
+        }case '=':{
             if(match('=', lexer)){
 				return create_token(EQUALS_EQUALS_TOKTYPE, lexer);
 			}else{
 				return create_token(EQUALS_TOKTYPE, lexer);
 			}
-        }
-        case '!':{
+        }case '!':{
             if(match('=', lexer)){
 				return create_token(NOT_EQUALS_TOKTYPE, lexer);
 			}else{
 				return create_token(EXCLAMATION_TOKTYPE, lexer);
 			}
-        }
-		case ':':{
+        }case ':':{
 			return create_token(COLON_TOKTYPE, lexer);
-		}
-        case ';':{
+		}case ';':{
             return create_token(SEMICOLON_TOKTYPE, lexer);
-        }
-        case '(':{
+        }case '[':{
+            return create_token(LEFT_SQUARE_TOKTYPE, lexer);
+        }case ']':{
+            return create_token(RIGHT_SQUARE_TOKTYPE, lexer);
+        }case '(':{
             return create_token(LEFT_PAREN_TOKTYPE, lexer);
-        }
-        case ')':{
+        }case ')':{
             return create_token(RIGHT_PAREN_TOKTYPE, lexer);
-        }
-        case '{':{
+        }case '{':{
             return create_token(LEFT_BRACKET_TOKTYPE, lexer);
-        }
-        case '}':{
+        }case '}':{
             return create_token(RIGHT_BRACKET_TOKTYPE, lexer);
-        }
-        case '\n':{
+        }case '\n':{
             lexer->line++;
             return NULL;
-        }
-        case ' ':
-        case '\t':
+        }case ' ':
+         case '\t':{
             return NULL;
-        default:{
+        }default:{
             if(is_digit(c)){
 				return number(lexer);
 			}else if(is_alpha_numeric(c)){

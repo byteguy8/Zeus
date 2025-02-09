@@ -2,18 +2,24 @@
 #define OPCODE_H
 
 typedef enum opcode{
-    EMPTY_OPCODE,
-    TRUE_OPCODE, FALSE_OPCODE,
-    CINT_OPCODE, INT_OPCODE,
-    FLOAT_OPCODE, STRING_OPCODE,
-    TEMPLATE_OPCODE,
+    // PRIMITIVES
+    EMPTY_OPCODE,    // push NULL value equivalent
+    TRUE_OPCODE,     // push TRUE value
+    FALSE_OPCODE,    // push FALSE value
+    CINT_OPCODE,     // push integer of 1 byte
+    INT_OPCODE,      // push integer of 8 bytes
+    FLOAT_OPCODE,    // push float
+    STRING_OPCODE,   // push string
+    TEMPLATE_OPCODE, // construct template and push it
     
-    // arithmeric
-    ADD_OPCODE, SUB_OPCODE,
-    MUL_OPCODE, DIV_OPCODE,
-	MOD_OPCODE,
+    // ARITHMETIC
+    ADD_OPCODE, // add two integers or floats and push the result
+    SUB_OPCODE, // subtract two integers or floats and push the result
+    MUL_OPCODE, // muliply two integers or floats and push the result
+    DIV_OPCODE, // divide two integers or floats and push the result
+	MOD_OPCODE, // calculate module from two integers and push the result
 
-    // comparison
+    // COMPARISON
     LT_OPCODE, // less
     GT_OPCODE, // greater
     LE_OPCODE, // less equals
@@ -21,14 +27,18 @@ typedef enum opcode{
     EQ_OPCODE, // equals
     NE_OPCODE, // not equals
 
-    // logical
+    // LOGICAL
     OR_OPCODE, AND_OPCODE,
     NOT_OPCODE, NNOT_OPCODE,
 
-    LSET_OPCODE, LGET_OPCODE,
-    GSET_OPCODE, GGET_OPCODE,
-    NGET_OPCODE, SGET_OPCODE,
-	PUT_OPCODE,
+    LSET_OPCODE,
+    LGET_OPCODE,
+    GSET_OPCODE,
+    GGET_OPCODE,
+    NGET_OPCODE,
+    SGET_OPCODE,
+	ASET_OPCODE,
+    PUT_OPCODE,
 
     PRT_OPCODE,
     POP_OPCODE,
@@ -37,12 +47,14 @@ typedef enum opcode{
 	JIF_OPCODE,
 	JIT_OPCODE,
 
+    ARRAY_OPCODE,
 	LIST_OPCODE,
     DICT_OPCODE,
 	RECORD_OPCODE,
     CALL_OPCODE,
-    RET_OPCODE,
     ACCESS_OPCODE,
+    INDEX_OPCODE,
+    RET_OPCODE,
 	IS_OPCODE,
     THROW_OPCODE,
     LOAD_OPCODE,

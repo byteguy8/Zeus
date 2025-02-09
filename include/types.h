@@ -46,6 +46,11 @@ typedef struct str{
 	char *buff;
 }Str;
 
+typedef struct array{
+    size_t len;
+    Value *values;
+}Array;
+
 typedef struct fn{
     char *name;
     DynArr *chunks;

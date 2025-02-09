@@ -14,7 +14,14 @@
 #include <setjmp.h>
 #include <dlfcn.h>
 
-//> Private Interface
+//> PRIVATE INTERFACE
+#define CURRENT_FRAME(vm)(&(vm)->frame_stack[(vm)->frame_ptr - 1])
+#define CURRENT_LOCALS(vm)(CURRENT_FRAME(vm)->locals)
+#define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
+#define CURRENT_CHUNKS(vm)(CURRENT_FN(vm)->chunks)
+#define CURRENT_CONSTANTS(vm)(CURRENT_FN(vm)->constants)
+#define CURRENT_FLOAT_VALUES(vm)(CURRENT_FN(vm)->float_values)
+
 static Value *peek(VM *vm);
 
 #define PUSH(value, vm) {                      \
@@ -108,7 +115,7 @@ static Value *peek(VM *vm);
         vm_utils_error(vm, "Module '%s' do not contains a symbol '%s'", module->name, (n)); \
     }                                                                                       \
 	ModuleSymbol *symbol = (ModuleSymbol *)node->value;                                     \
-    if(symbol->access == PRIVATE_MSYMATYPE){                                                \
+    if((m) != CURRENT_FRAME(vm)->fn->module && symbol->access == PRIVATE_MSYMATYPE){        \
         vm_utils_error(vm, "Symbol '%s' not public", (n));                                  \
     }                                                                                       \
 	if(symbol->type == NATIVE_MODULE_MSYMTYPE){                                             \
@@ -156,13 +163,6 @@ char *multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm){
 
 	return b;
 }
-
-#define CURRENT_FRAME(vm)(&vm->frame_stack[vm->frame_ptr - 1])
-#define CURRENT_LOCALS(vm)(CURRENT_FRAME(vm)->locals)
-#define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
-#define CURRENT_CHUNKS(vm)(CURRENT_FN(vm)->chunks)
-#define CURRENT_CONSTANTS(vm)(CURRENT_FN(vm)->constants)
-#define CURRENT_FLOAT_VALUES(vm)(CURRENT_FN(vm)->float_values)
 
 Frame *frame_up(char *name, VM *vm){
     if(vm->frame_ptr >= FRAME_LENGTH)
@@ -224,6 +224,11 @@ void print_obj(Obj *object){
             printf("%s\n", str->buff);
             break;
         }
+        case ARRAY_OTYPE:{
+			Array *array = object->value.array;
+			printf("<array %ld at %p>\n", array->len, array);
+			break;
+		}
    		case LIST_OTYPE:{
 			DynArr *list = object->value.list;
 			printf("<list %ld at %p>\n", list->used, list);
@@ -385,36 +390,29 @@ void execute(uint8_t chunk, VM *vm){
         case EMPTY_OPCODE:{
             PUSH_EMPTY(vm)
             break;
-        }
-        case FALSE_OPCODE:{
+        }case FALSE_OPCODE:{
             PUSH_BOOL(0, vm);
             break;
-        }
-        case TRUE_OPCODE:{
+        }case TRUE_OPCODE:{
             PUSH_BOOL(1, vm);
             break;
-        }
-        case CINT_OPCODE:{
+        }case CINT_OPCODE:{
             int64_t i64 = (int64_t)ADVANCE(vm);
             PUSH_INT(i64, vm);
             break;
-        }
-        case INT_OPCODE:{
+        }case INT_OPCODE:{
             int64_t i64 = read_i64_const(vm);
             PUSH_INT(i64, vm);
             break;
-        }
-        case FLOAT_OPCODE:{
+        }case FLOAT_OPCODE:{
 			double value = read_float_const(vm);
 			PUSH_FLOAT(value, vm);
 			break;
-		}
-		case STRING_OPCODE:{
+		}case STRING_OPCODE:{
             char *buff = read_str(vm, NULL);
             PUSH_CORE_STR(buff, vm)
             break;
-		}
-        case TEMPLATE_OPCODE:{
+		}case TEMPLATE_OPCODE:{
             int16_t len = read_i16(vm);
             BStr *bstr = bstr_create_empty(NULL);
             
@@ -442,8 +440,7 @@ void execute(uint8_t chunk, VM *vm){
             PUSH(OBJ_VALUE(str_obj), vm);
             
             break;
-        }
-        case ADD_OPCODE:{
+        }case ADD_OPCODE:{
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
@@ -496,8 +493,7 @@ void execute(uint8_t chunk, VM *vm){
             vm_utils_error(vm, "Unsuported types using + operator");
             
             break;
-        }
-        case SUB_OPCODE:{
+        }case SUB_OPCODE:{
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
@@ -534,8 +530,7 @@ void execute(uint8_t chunk, VM *vm){
             vm_utils_error(vm, "Unsuported types using - operator");
 
             break;
-        }
-        case MUL_OPCODE:{
+        }case MUL_OPCODE:{
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
@@ -605,8 +600,7 @@ void execute(uint8_t chunk, VM *vm){
             vm_utils_error(vm, "Unsuported types using * operator");
 
             break;
-        }
-        case DIV_OPCODE:{
+        }case DIV_OPCODE:{
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
@@ -643,8 +637,7 @@ void execute(uint8_t chunk, VM *vm){
             vm_utils_error(vm, "Unsuported types using / operator");
 
             break;
-        }
-		case MOD_OPCODE:{
+        }case MOD_OPCODE:{
 			Value *vb = pop(vm);
             Value *va = pop(vm);
 
@@ -660,8 +653,7 @@ void execute(uint8_t chunk, VM *vm){
             PUSH_INT(left % right, vm)
 
             break;
-		}
-        case LT_OPCODE:{
+		}case LT_OPCODE:{
 			Value *vb = pop(vm);
             Value *va = pop(vm);
 
@@ -698,8 +690,7 @@ void execute(uint8_t chunk, VM *vm){
             vm_utils_error(vm, "Unsuported types using < operator");
 
             break;
-        }
-        case GT_OPCODE:{
+        }case GT_OPCODE:{
    			Value *vb = pop(vm);
             Value *va = pop(vm);
 
@@ -736,8 +727,7 @@ void execute(uint8_t chunk, VM *vm){
             vm_utils_error(vm, "Unsuported types using > operator");
 
             break;
-        }
-        case LE_OPCODE:{
+        }case LE_OPCODE:{
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
@@ -774,8 +764,7 @@ void execute(uint8_t chunk, VM *vm){
             vm_utils_error(vm, "Unsuported types using <= operator");
 
             break;
-        }
-        case GE_OPCODE:{
+        }case GE_OPCODE:{
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
@@ -812,8 +801,7 @@ void execute(uint8_t chunk, VM *vm){
             vm_utils_error(vm, "Unsuported types using >= operator");
 
             break;
-        }
-        case EQ_OPCODE:{
+        }case EQ_OPCODE:{
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
@@ -865,8 +853,7 @@ void execute(uint8_t chunk, VM *vm){
             vm_utils_error(vm, "Unsuported types using == operator");
 
             break;
-        }
-        case NE_OPCODE:{
+        }case NE_OPCODE:{
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
@@ -918,20 +905,17 @@ void execute(uint8_t chunk, VM *vm){
             vm_utils_error(vm, "Unsuported types using != operator");
 
             break;
-        }
-        case LSET_OPCODE:{
+        }case LSET_OPCODE:{
             Value *value = peek(vm);
             uint8_t index = ADVANCE(vm);
             CURRENT_FRAME(vm)->locals[index] = *value;
             break;
-        }
-        case LGET_OPCODE:{
+        }case LGET_OPCODE:{
             uint8_t index = ADVANCE(vm);
             Value value = CURRENT_FRAME(vm)->locals[index];
             PUSH(value, vm);
             break;
-        }
-        case GSET_OPCODE:{
+        }case GSET_OPCODE:{
             Value *value = peek(vm);
             uint32_t hash = (uint32_t)read_i32(vm);
             Module *module = CURRENT_FRAME(vm)->fn->module;
@@ -947,8 +931,7 @@ void execute(uint8_t chunk, VM *vm){
             }
 
             break;
-        }
-        case GGET_OPCODE:{
+        }case GGET_OPCODE:{
             uint32_t hash = 0;
             char *symbol = read_str(vm, &hash);
             Module *module = CURRENT_FRAME(vm)->fn->module;
@@ -962,8 +945,7 @@ void execute(uint8_t chunk, VM *vm){
             PUSH(*(Value *)node->value, vm);
 
             break;
-        }
-        case NGET_OPCODE:{
+        }case NGET_OPCODE:{
             char *key = read_str(vm, NULL);
             size_t key_size = strlen(key);
             LZHTableNode *node = NULL;
@@ -977,14 +959,39 @@ void execute(uint8_t chunk, VM *vm){
             vm_utils_error(vm, "Unknown native '%s'", (char *)key);
 
             break;
-        }
-		case SGET_OPCODE:{
+        }case SGET_OPCODE:{
 			char *key = read_str(vm, NULL);
             Module *module = CURRENT_FRAME(vm)->fn->module;
             PUSH_MODULE_SYMBOL(key, module, vm);
 			break;
-		}
-		case PUT_OPCODE:{
+		}case ASET_OPCODE:{
+			Value *target_value =  pop(vm);
+            Value *index_value =  pop(vm);
+            Value *value =  peek(vm);
+
+            if(!IS_ARRAY(target_value)){
+                vm_utils_error(vm, "Expect array, but got something else");
+            }
+
+            Array *array = TO_ARRAY(target_value);
+                
+            if(!IS_INT(index_value)){
+                vm_utils_error(vm, "Expect integer as index");
+            }
+
+            int64_t index = TO_INT(index_value);
+            
+            if(index < 0 || index > INT16_MAX){
+                vm_utils_error(vm, "Illegal index range. Must be > 0 and < %s", INT16_MAX);
+            }
+            if((size_t)index >= array->len){
+                vm_utils_error(vm, "Index out of bounds. Array length: %d, index: %d", array->len, INT16_MAX);
+            }
+
+            array->values[index] = *value;
+
+			break;
+		}case PUT_OPCODE:{
 			Value *target = pop(vm);
 			Value *value = peek(vm);
 			char *symbol = read_str(vm, NULL);
@@ -1006,8 +1013,7 @@ void execute(uint8_t chunk, VM *vm){
             *(Value *)node->value = *value;
 
 			break;
-		}
-        case OR_OPCODE:{
+		}case OR_OPCODE:{
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
@@ -1023,8 +1029,7 @@ void execute(uint8_t chunk, VM *vm){
             PUSH_BOOL(left || right, vm)
             
             break;
-        }
-        case AND_OPCODE:{
+        }case AND_OPCODE:{
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
@@ -1040,8 +1045,7 @@ void execute(uint8_t chunk, VM *vm){
             PUSH_BOOL(left && right, vm)
             
             break;
-        }
-        case NNOT_OPCODE:{
+        }case NNOT_OPCODE:{
             Value *vb = pop(vm);
 
 			if(IS_INT(vb)){
@@ -1059,8 +1063,7 @@ void execute(uint8_t chunk, VM *vm){
             vm_utils_error(vm, "Expect integer or float at right side");
             
             break;
-        }
-        case NOT_OPCODE:{
+        }case NOT_OPCODE:{
             Value *vb = pop(vm);
 
             if(!IS_BOOL(vb))
@@ -1070,17 +1073,14 @@ void execute(uint8_t chunk, VM *vm){
             PUSH_BOOL(!right, vm)
 
             break;
-        }
-        case PRT_OPCODE:{
+        }case PRT_OPCODE:{
             Value *value = pop(vm);
             print_value(value);
             break;
-        }
-        case POP_OPCODE:{
+        }case POP_OPCODE:{
             pop(vm);
             break;
-        }
-        case JMP_OPCODE:{
+        }case JMP_OPCODE:{
             int16_t jmp_value = read_i16(vm);
             if(jmp_value == 0) break;
             
@@ -1088,8 +1088,7 @@ void execute(uint8_t chunk, VM *vm){
             else CURRENT_FRAME(vm)->ip += jmp_value - 3;
 
             break;
-        }
-		case JIF_OPCODE:{
+        }case JIF_OPCODE:{
             Value *value = pop(vm);
             
             if(!IS_BOOL(value))
@@ -1106,8 +1105,7 @@ void execute(uint8_t chunk, VM *vm){
             }
 
 			break;
-		}
-		case JIT_OPCODE:{
+		}case JIT_OPCODE:{
             Value *value = pop(vm);
 
             if(!IS_BOOL(value))
@@ -1124,9 +1122,41 @@ void execute(uint8_t chunk, VM *vm){
             }
 
 			break;
-		}
-		case LIST_OPCODE:{
-			int32_t len = read_i16(vm);
+		}case ARRAY_OPCODE:{
+            int16_t len = read_i16(vm);
+            int from_stack = 1;
+
+            if(len == -1){
+                Value *len_value = pop(vm);
+                
+                if(!IS_INT(len_value)){
+                    vm_utils_error(vm, "Expect integer as length for array");
+                }
+
+                len = (int16_t)TO_INT(len_value);
+                from_stack = 0;
+            }
+
+            Obj *array_obj = vm_utils_array_obj(len, vm);
+
+            if(!array_obj){
+                vm_utils_error(vm, "Out of memory");
+            }
+
+            if(from_stack){
+                Array *array = array_obj->value.array;
+
+                for (int16_t i = 0; i < len; i++){
+                    Value *value = pop(vm);
+                    array->values[i] = *value;
+                }
+            }
+            
+            PUSH(OBJ_VALUE(array_obj), vm)
+
+            break;
+        }case LIST_OPCODE:{
+			int16_t len = read_i16(vm);
             
             Obj *list_obj = vm_utils_list_obj(vm);
             if(!list_obj) vm_utils_error(vm, "Out of memory");
@@ -1143,8 +1173,7 @@ void execute(uint8_t chunk, VM *vm){
             PUSH(OBJ_VALUE(list_obj), vm);
 
 			break;
-		}
-        case DICT_OPCODE:{
+		}case DICT_OPCODE:{
             int32_t len = read_i16(vm);
             
             Obj *dict_obj = vm_utils_dict_obj(vm);
@@ -1174,8 +1203,7 @@ void execute(uint8_t chunk, VM *vm){
             PUSH(OBJ_VALUE(dict_obj), vm);
 
             break;
-        }
-		case RECORD_OPCODE:{
+        }case RECORD_OPCODE:{
 			uint8_t len = ADVANCE(vm);
             
 			Obj *record_obj = vm_utils_record_obj(len == 0, vm);
@@ -1215,8 +1243,7 @@ void execute(uint8_t chunk, VM *vm){
             PUSH(OBJ_VALUE(record_obj), vm);
 
 			break;
-		}
-        case CALL_OPCODE:{
+		}case CALL_OPCODE:{
             uint8_t args_count = ADVANCE(vm);
 			Value *fn_value = peek_at(args_count, vm);
 			
@@ -1277,8 +1304,7 @@ void execute(uint8_t chunk, VM *vm){
             }
 
             break;
-        }
-        case ACCESS_OPCODE:{
+        }case ACCESS_OPCODE:{
             char *symbol = read_str(vm, NULL);
             Value *value = pop(vm);
 
@@ -1327,6 +1353,16 @@ void execute(uint8_t chunk, VM *vm){
                     PUSH_NATIVE_FN(native_fn, vm);
                 }else{
                     vm_utils_error(vm, "string do not have symbol named as '%s'", symbol);
+                }
+
+                break;
+            }
+
+            if(IS_ARRAY(value)){
+                Array *array = TO_ARRAY(value);
+
+                if(strcmp(symbol, "len") == 0){
+                    PUSH_INT((int64_t)array->len, vm);
                 }
 
                 break;
@@ -1466,12 +1502,40 @@ void execute(uint8_t chunk, VM *vm){
             vm_utils_error(vm, "Illegal target to access");
 
             break;
-        }
-        case RET_OPCODE:{
+        }case INDEX_OPCODE:{
+            Value *target_value = pop(vm);
+            Value *index_value = pop(vm);
+
+            if(IS_ARRAY(target_value)){
+                Array *array = TO_ARRAY(target_value);
+                
+                if(!IS_INT(index_value)){
+                    vm_utils_error(vm, "Expect integer as index");
+                }
+
+                int64_t index = TO_INT(index_value);
+                
+                if(index < 0 || index > INT16_MAX){
+                    vm_utils_error(vm, "Illegal index range. Must be > 0 and < %s", INT16_MAX);
+                }
+                if((size_t)index >= array->len){
+                    vm_utils_error(vm, "Index out of bounds. Array length: %d, index: %d", array->len, INT16_MAX);
+                }
+
+                Value value = array->values[(int16_t)index];
+
+                PUSH(value, vm);
+
+                break;
+            }
+
+            vm_utils_error(vm, "Illegal target");
+
+            break;
+        }case RET_OPCODE:{
             frame_down(vm);
             break;
-        }
-		case IS_OPCODE:{
+        }case IS_OPCODE:{
 			Value *value = pop(vm);
 			uint8_t type = ADVANCE(vm);
 
@@ -1482,14 +1546,17 @@ void execute(uint8_t chunk, VM *vm){
 					case STR_OTYPE:{
 						PUSH(BOOL_VALUE(type == 4), vm);
 						break;
-					}case LIST_OTYPE:{
+					}case ARRAY_OTYPE:{
 						PUSH(BOOL_VALUE(type == 5), vm);
 						break;
-					}case DICT_OTYPE:{
+					}case LIST_OTYPE:{
 						PUSH(BOOL_VALUE(type == 6), vm);
 						break;
-					}case RECORD_OTYPE:{
+					}case DICT_OTYPE:{
 						PUSH(BOOL_VALUE(type == 7), vm);
+						break;
+					}case RECORD_OTYPE:{
+						PUSH(BOOL_VALUE(type == 8), vm);
 						break;
 					}default:{
 						vm_utils_error(vm, "Illegal object type");
@@ -1518,8 +1585,7 @@ void execute(uint8_t chunk, VM *vm){
 			}
 
 			break;
-		}
-        case THROW_OPCODE:{
+		}case THROW_OPCODE:{
 			if(vm->frame_ptr == 0)
 				vm_utils_error(vm, "Can not throw in a empty frame stack");
             
@@ -1600,8 +1666,7 @@ void execute(uint8_t chunk, VM *vm){
             }
             
             break;
-        }
-        case LOAD_OPCODE:{
+        }case LOAD_OPCODE:{
             char *path = read_str(vm, NULL);
             void *handler = dlopen(path, RTLD_LAZY);
 
@@ -1616,8 +1681,7 @@ void execute(uint8_t chunk, VM *vm){
             PUSH(OBJ_VALUE(native_lib_obj), vm);
 
             break;
-        }
-        default:{
+        }default:{
             assert("Illegal opcode");
         }
     }

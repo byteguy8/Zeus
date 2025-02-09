@@ -8,7 +8,51 @@
 #include <setjmp.h>
 #include <assert.h>
 
-static void error(Parser *parser, Token *token, char *msg, ...){
+//> PRIVATE INTERFACE
+static void error(Parser *parser, Token *token, char *msg, ...);
+static Expr *create_expr(ExprType type, void *sub_expr);
+static Stmt *create_stmt(StmtType type, void *sub_stmt);
+static Token *peek(Parser *parser);
+static Token *previous(Parser *parser);
+static int is_at_end(Parser *parser);
+static int match(Parser *parser, int count, ...);
+static int check(Parser *parser, TokenType type);
+Token *consume(Parser *parser, TokenType type, char *err_msg, ...);
+DynArrPtr *record_key_values(Token *record_token, Parser *parser);
+// EXPRESSIONS
+Expr *parse_expr(Parser *paser);
+Expr *parse_assign(Parser *parser);
+Expr *parse_is_expr(Parser *parser);
+Expr *parse_or(Parser *parser);
+Expr *parse_and(Parser *parser);
+Expr *parse_comparison(Parser *parser);
+Expr *parse_term(Parser *parser);
+Expr *parse_factor(Parser *parser);
+Expr *parse_unary(Parser *parser);
+Expr *parse_call(Parser *parser);
+Expr *parse_record(Parser *parser);
+Expr *parse_dict(Parser *parser);
+Expr *parse_list(Parser *parser);
+Expr *parse_array(Parser *parser);
+Expr *parse_literal(Parser *parser);
+// STATEMENTS
+Stmt *parse_stmt(Parser *parser);
+Stmt *parse_expr_stmt(Parser *parser);
+Stmt *parse_print_stmt(Parser *parser);
+DynArrPtr *parse_block_stmt(Parser *parser);
+Stmt *parse_if_stmt(Parser *parser);
+Stmt *parse_while_stmt(Parser *parser);
+Stmt *parse_throw_stmt(Parser *parser);
+Stmt *parse_try_stmt(Parser *parser);
+Stmt *parse_return_stmt(Parser *parser);
+Stmt *parse_var_decl_stmt(Parser *parser);
+Stmt *parse_function_stmt(Parser *parser);
+Stmt *parse_import_stmt(Parser *parser);
+Stmt *parse_load_stmt(Parser *parser);
+Stmt *parse_export_stmt(Parser *parser);
+//< PRIVATE INTERFACE
+
+void error(Parser *parser, Token *token, char *msg, ...){
     va_list args;
 	va_start(args, msg);
 
@@ -37,22 +81,22 @@ Stmt *create_stmt(StmtType type, void *sub_stmt){
     return stmt;
 }
 
-static Token *peek(Parser *parser){
+Token *peek(Parser *parser){
 	DynArrPtr *tokens = parser->tokens;
 	return (Token *)DYNARR_PTR_GET(parser->current, tokens);
 }
 
-static Token *previous(Parser *parser){
+Token *previous(Parser *parser){
 	DynArrPtr *tokens = parser->tokens;
 	return (Token *)DYNARR_PTR_GET(parser->current - 1, tokens);
 }
 
-static int is_at_end(Parser *parser){
+int is_at_end(Parser *parser){
     Token *token = peek(parser);
 	return token->type == EOF_TOKTYPE;
 }
 
-static int match(Parser *parser, int count, ...){
+int match(Parser *parser, int count, ...){
 	Token *token = peek(parser);
 
 	va_list args;
@@ -72,7 +116,7 @@ static int match(Parser *parser, int count, ...){
 	return 0;
 }
 
-static int check(Parser *parser, TokenType type){
+int check(Parser *parser, TokenType type){
     Token *token = peek(parser);
     return token->type == type;
 }
@@ -97,36 +141,27 @@ Token *consume(Parser *parser, TokenType type, char *err_msg, ...){
     longjmp(parser->err_jmp, 1);
 }
 
-Expr *parse_expr(Parser *paser);
-Expr *parse_assign(Parser *parser);
-Expr *parse_is_expr(Parser *parser);
-Expr *parse_record(Parser *parser);
-Expr *parse_dict(Parser *parser);
-Expr *parse_list(Parser *parser);
-Expr *parse_or(Parser *parser);
-Expr *parse_and(Parser *parser);
-Expr *parse_comparison(Parser *parser);
-Expr *parse_term(Parser *parser);
-Expr *parse_factor(Parser *parser);
-Expr *parse_unary(Parser *parser);
-Expr *parse_call(Parser *parser);
-Expr *parse_literal(Parser *parser);
+DynArrPtr *record_key_values(Token *record_token, Parser *parser){
+	DynArrPtr *key_values = runtime_dynarr_ptr();
 
-Stmt *parse_stmt(Parser *parser);
-Stmt *parse_expr_stmt(Parser *parser);
-Stmt *parse_print_stmt(Parser *parser);
-DynArrPtr *parse_block_stmt(Parser *parser);
-Stmt *parse_if_stmt(Parser *parser);
-Stmt *parse_while_stmt(Parser *parser);
-Stmt *parse_throw_stmt(Parser *parser);
-Stmt *parse_try_stmt(Parser *parser);
-Stmt *parse_return_stmt(Parser *parser);
+	do{
+		if(key_values->used >= 255){
+            error(parser, record_token, "Record expressions only accept up to %d values", 255);
+        }
 
-Stmt *parse_var_decl_stmt(Parser *parser);
-Stmt *parse_function_stmt(Parser *parser);
-Stmt *parse_import_stmt(Parser *parser);
-Stmt *parse_load_stmt(Parser *parser);
-Stmt *parse_export_stmt(Parser *parser);
+		Token *key = consume(parser, IDENTIFIER_TOKTYPE, "Expect record key.");
+		consume(parser, COLON_TOKTYPE, "Expect ':' after record key.");
+		Expr *value = parse_expr(parser);
+
+		RecordExprValue *key_value = (RecordExprValue *)A_COMPILE_ALLOC(sizeof(RecordExprValue));
+		key_value->key = key;
+		key_value->value = value;
+
+		dynarr_ptr_insert(key_value, key_values);
+	}while(match(parser, 1, COMMA_TOKTYPE));
+
+	return key_values;
+}
 
 Expr *parse_expr(Parser *parser){
 	return parse_assign(parser);
@@ -136,10 +171,11 @@ Expr *parse_assign(Parser *parser){
     Expr *expr = parse_is_expr(parser);
 	
 	if(match(parser, 4, 
-			 COMPOUND_ADD_TOKTYPE, 
-			 COMPOUND_SUB_TOKTYPE, 
-			 COMPOUND_MUL_TOKTYPE, 
-			 COMPOUND_DIV_TOKTYPE)){
+		COMPOUND_ADD_TOKTYPE, 
+		COMPOUND_SUB_TOKTYPE, 
+		COMPOUND_MUL_TOKTYPE, 
+		COMPOUND_DIV_TOKTYPE
+    )){
 		if(expr->type != IDENTIFIER_EXPRTYPE)
             error(
                 parser, 
@@ -175,7 +211,7 @@ Expr *parse_assign(Parser *parser){
 }
 
 Expr *parse_is_expr(Parser *parser){
-	Expr *left = parse_record(parser);
+	Expr *left = parse_or(parser);
 
 	if(match(parser, 1, IS_TOKTYPE)){
 		Token *is_token = NULL;
@@ -184,14 +220,16 @@ Expr *parse_is_expr(Parser *parser){
 		is_token = previous(parser);
 
 		if(match(parser, 7, 
-			             EMPTY_TOKTYPE,
-					     BOOL_TOKTYPE,
-					     INT_TOKTYPE,
-					     FLOAT_TOKTYPE,
-					     STR_TOKTYPE,
-					     LIST_TOKTYPE,
-					     DICT_TOKTYPE,
-                         RECORD_TOKTYPE)){
+			EMPTY_TOKTYPE,
+			BOOL_TOKTYPE,
+			INT_TOKTYPE,
+			FLOAT_TOKTYPE,
+			STR_TOKTYPE,
+            ARRAY_TOKTYPE,
+			LIST_TOKTYPE,
+			DICT_TOKTYPE,
+            RECORD_TOKTYPE
+        )){
 			type_token = previous(parser);
 		}
 
@@ -207,114 +245,6 @@ Expr *parse_is_expr(Parser *parser){
 	}
 
 	return left;
-}
-
-DynArrPtr *record_key_values(Token *record_token, Parser *parser){
-	DynArrPtr *key_values = runtime_dynarr_ptr();
-
-	do{
-		if(key_values->used >= 255)
-			error(parser, record_token, "Records can have more than 255 key values.");
-
-		Token *key = consume(parser, IDENTIFIER_TOKTYPE, "Expect record key.");
-		consume(parser, COLON_TOKTYPE, "Expect ':' after record key.");
-		Expr *value = parse_expr(parser);
-
-		RecordExprValue *key_value = (RecordExprValue *)A_COMPILE_ALLOC(sizeof(RecordExprValue));
-		key_value->key = key;
-		key_value->value = value;
-
-		dynarr_ptr_insert(key_value, key_values);
-	}while(match(parser, 1, COMMA_TOKTYPE));
-
-	return key_values;
-}
-
-
-Expr *parse_record(Parser *parser){
-	if(match(parser, 1, RECORD_TOKTYPE)){
-		Token *record_token = NULL;
-		DynArrPtr *key_values = NULL;
-
-		record_token = previous(parser);
-		consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' after 'record' keyword at start of record body.");
-
-		if(!check(parser, RIGHT_BRACKET_TOKTYPE))
-			key_values = record_key_values(record_token, parser);
-
-		consume(parser, RIGHT_BRACKET_TOKTYPE, "Expect '}' at end of record body.");
-		
-		RecordExpr *record_expr = (RecordExpr *)A_COMPILE_ALLOC(sizeof(RecordExpr));
-		record_expr->record_token = record_token;
-		record_expr->key_values = key_values;
-
-		return create_expr(RECORD_EXPRTYPE, record_expr);
-	}
-
-	return parse_dict(parser);
-}
-
-Expr *parse_dict(Parser *parser){
-    if(match(parser, 1, DICT_TOKTYPE)){
-        Token *dict_token = NULL;
-        DynArrPtr *key_values = NULL;
-
-        dict_token = previous(parser);
-        consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'dict' keyword.");
-		
-		if(!check(parser, RIGHT_PAREN_TOKTYPE)){
-			key_values = compile_dynarr_ptr();
-			do{
-				Expr *key = parse_expr(parser);
-                consume(parser, TO_TOKTYPE, "Expect 'to' after keyword.");
-                Expr *value = parse_expr(parser);
-                
-                DictKeyValue *key_value = (DictKeyValue *)A_COMPILE_ALLOC(sizeof(DictKeyValue));
-                key_value->key = key;
-                key_value->value = value;
-				
-                dynarr_ptr_insert(key_value, key_values);
-			}while(match(parser, 1, COMMA_TOKTYPE));
-		}
-
-		consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' at end of list expression.");
-
-		DictExpr *dict_expr = (DictExpr *)A_COMPILE_ALLOC(sizeof(DictExpr));
-		dict_expr->dict_token = dict_token;
-        dict_expr->key_values = key_values;
-
-		return create_expr(DICT_EXPRTYPE, dict_expr);
-    }
-
-    return parse_list(parser);
-}
-
-Expr *parse_list(Parser *parser){
-	if(match(parser, 1, LIST_TOKTYPE)){
-		Token *list_token = NULL;
-		DynArrPtr *exprs = NULL;
-	
-		list_token = previous(parser);
-		consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'list' keyword.");
-		
-		if(!check(parser, RIGHT_PAREN_TOKTYPE)){
-			exprs = compile_dynarr_ptr();
-			do{
-				Expr *expr = parse_expr(parser);
-				dynarr_ptr_insert(expr, exprs);
-			}while(match(parser, 1, COMMA_TOKTYPE));
-		}
-
-		consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' at end of list expression.");
-
-		ListExpr *list_expr = (ListExpr *)A_COMPILE_ALLOC(sizeof(ListExpr));
-		list_expr->list_token = list_token;
-		list_expr->exprs = exprs;
-
-		return create_expr(LIST_EXPRTYPE, list_expr);
-	}
-
-	return parse_or(parser);
 }
 
 Expr *parse_or(Parser *parser){
@@ -362,7 +292,8 @@ Expr *parse_comparison(Parser *parser){
         LESS_EQUALS_TOKTYPE,
         GREATER_EQUALS_TOKTYPE,
         EQUALS_EQUALS_TOKTYPE,
-        NOT_EQUALS_TOKTYPE)){
+        NOT_EQUALS_TOKTYPE
+    )){
 		Token *operator = previous(parser);
 		Expr *right = parse_term(parser);
 
@@ -429,12 +360,17 @@ Expr *parse_unary(Parser *parser){
 }
 
 Expr *parse_call(Parser *parser){
-    Expr *left = parse_literal(parser);
+    Expr *left = parse_record(parser);
 
     if(check(parser, DOT_TOKTYPE) ||
-       check(parser, LEFT_PAREN_TOKTYPE)){
-
-        while (match(parser, 2, DOT_TOKTYPE, LEFT_PAREN_TOKTYPE)){
+       check(parser, LEFT_PAREN_TOKTYPE) ||
+       check(parser, LEFT_SQUARE_TOKTYPE)
+    ){
+        while (match(parser,3,
+            DOT_TOKTYPE,
+            LEFT_PAREN_TOKTYPE,
+            LEFT_SQUARE_TOKTYPE
+        )){
             Token *token = previous(parser);
 
             switch (token->type){
@@ -442,15 +378,14 @@ Expr *parse_call(Parser *parser){
                     Token *symbol_token = consume(parser, IDENTIFIER_TOKTYPE, "Expect identifier.");
                     
                     AccessExpr *access_expr = (AccessExpr *)A_COMPILE_ALLOC(sizeof(AccessExpr));
-                    access_expr->left = left;
+                    access_expr->left = left;                  
                     access_expr->dot_token = token;
                     access_expr->symbol_token = symbol_token;
                     
                     left = create_expr(ACCESS_EXPRTYPE, access_expr);
 
                     break;
-                }
-                case LEFT_PAREN_TOKTYPE:{
+                }case LEFT_PAREN_TOKTYPE:{
                     DynArrPtr *args = NULL;
         
                     if(!check(parser, RIGHT_PAREN_TOKTYPE)){
@@ -472,8 +407,21 @@ Expr *parse_call(Parser *parser){
                     left = create_expr(CALL_EXPRTYPE, call_expr);
                     
                     break;
-                }
-                default:{
+                }case LEFT_SQUARE_TOKTYPE:{
+                    Expr *index = parse_expr(parser);
+                    
+                    consume(parser, RIGHT_SQUARE_TOKTYPE, "Expect ']' after index expression");
+
+                    IndexExpr *index_expr = (IndexExpr *)A_COMPILE_ALLOC(sizeof(IndexExpr));
+
+                    index_expr->target = left;
+                    index_expr->left_square_token = token;
+                    index_expr->index_expr = index;
+
+                    left = create_expr(INDEX_EXPRTYPE, index_expr);
+
+                    break;
+                }default:{
                     assert("Illegal token type");
                 }
             }
@@ -481,6 +429,144 @@ Expr *parse_call(Parser *parser){
     }
 
     return left;
+}
+
+Expr *parse_record(Parser *parser){
+    if(match(parser, 1, RECORD_TOKTYPE)){
+        Token *record_token = NULL;
+        DynArrPtr *key_values = NULL;
+
+        record_token = previous(parser);
+        consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' after 'record' keyword at start of record body.");
+
+        if(!check(parser, RIGHT_BRACKET_TOKTYPE)){
+            key_values = record_key_values(record_token, parser);
+        }
+
+        consume(parser, RIGHT_BRACKET_TOKTYPE, "Expect '}' at end of record body.");
+        
+        RecordExpr *record_expr = (RecordExpr *)A_COMPILE_ALLOC(sizeof(RecordExpr));
+        record_expr->record_token = record_token;
+        record_expr->key_values = key_values;
+
+        return create_expr(RECORD_EXPRTYPE, record_expr);
+    }
+
+    return parse_dict(parser);
+}
+
+Expr *parse_dict(Parser *parser){
+    if(match(parser, 1, DICT_TOKTYPE)){
+        Token *dict_token = NULL;
+        DynArrPtr *key_values = NULL;
+
+        dict_token = previous(parser);
+        consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'dict' keyword.");
+        
+        if(!check(parser, RIGHT_PAREN_TOKTYPE)){
+            key_values = compile_dynarr_ptr();
+            do{
+                if(DYNARR_PTR_LEN(key_values) >= INT16_MAX){
+                    error(parser, dict_token, "Dict expressions only accept up to %d values", INT16_MAX);
+                }
+
+                Expr *key = parse_expr(parser);
+                consume(parser, TO_TOKTYPE, "Expect 'to' after keyword.");
+                Expr *value = parse_expr(parser);
+                
+                DictKeyValue *key_value = (DictKeyValue *)A_COMPILE_ALLOC(sizeof(DictKeyValue));
+                key_value->key = key;
+                key_value->value = value;
+                
+                dynarr_ptr_insert(key_value, key_values);
+            }while(match(parser, 1, COMMA_TOKTYPE));
+        }
+
+        consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' at end of list expression.");
+
+        DictExpr *dict_expr = (DictExpr *)A_COMPILE_ALLOC(sizeof(DictExpr));
+        dict_expr->dict_token = dict_token;
+        dict_expr->key_values = key_values;
+
+        return create_expr(DICT_EXPRTYPE, dict_expr);
+    }
+
+    return parse_list(parser);
+}
+
+Expr *parse_list(Parser *parser){
+	if(match(parser, 1, LIST_TOKTYPE)){
+        Token *list_token = NULL;
+        DynArrPtr *exprs = NULL;
+
+        list_token = previous(parser);
+        consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'list' keyword.");
+        
+        if(!check(parser, RIGHT_PAREN_TOKTYPE)){
+            exprs = compile_dynarr_ptr();
+
+            do{
+                if(DYNARR_PTR_LEN(exprs) >= INT16_MAX){
+                    error(parser, list_token, "List expressions only accept up to %d values", INT16_MAX);
+                }
+
+                Expr *expr = parse_expr(parser);
+                dynarr_ptr_insert(expr, exprs);
+            }while(match(parser, 1, COMMA_TOKTYPE));
+        }
+
+        consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' at end of list expression.");
+
+        ListExpr *list_expr = (ListExpr *)A_COMPILE_ALLOC(sizeof(ListExpr));
+        list_expr->list_token = list_token;
+        list_expr->exprs = exprs;
+
+        return create_expr(LIST_EXPRTYPE, list_expr);
+    }
+
+    return parse_array(parser);
+}
+
+Expr *parse_array(Parser *parser){
+    if(match(parser, 1, ARRAY_TOKTYPE)){
+        Token *array_token = NULL;
+        Expr *len_expr = NULL;
+        DynArrPtr *values = NULL;
+
+        array_token = previous(parser);
+        
+        if(match(parser, 1, LEFT_SQUARE_TOKTYPE)){
+            len_expr = parse_expr(parser);
+            consume(parser, RIGHT_SQUARE_TOKTYPE, "Expect ']' after array length expression");
+        }else{
+            consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'array' keyword");
+        
+            if(!check(parser, RIGHT_PAREN_TOKTYPE)){
+                values = compile_dynarr_ptr();
+
+                do{
+                    if(DYNARR_PTR_LEN(values) >= INT16_MAX){
+                        error(parser, array_token, "Array expressions only accept up to %d values", INT16_MAX);
+                    }
+
+                    Expr *expr = parse_expr(parser);
+                    dynarr_ptr_insert(expr, values);
+                } while (match(parser, 1, COMMA_TOKTYPE));
+            }
+
+            consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' at end of array elements");
+        }
+
+        ArrayExpr *array_expr = (ArrayExpr *)A_COMPILE_ALLOC(sizeof(ArrayExpr));
+
+        array_expr->array_token = array_token;
+        array_expr->len_expr = len_expr;
+        array_expr->values = values;
+
+        return create_expr(ARRAY_EXPRTYPE, array_expr);
+    }
+
+    return parse_literal(parser);
 }
 
 Expr *parse_literal(Parser *parser){

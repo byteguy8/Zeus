@@ -7,6 +7,7 @@
 
 typedef enum obj_type{
 	STR_OTYPE,
+    ARRAY_OTYPE,
 	LIST_OTYPE,
     DICT_OTYPE,
 	RECORD_OTYPE,
@@ -27,15 +28,16 @@ typedef struct obj{
 
     union{
 		Str *str;
+        Array *array;
 		DynArr *list;
 		Record *record;
         LZHTable *dict;
-        Fn *fn;
         NativeFn *native_fn;
+        Fn *fn;
         NativeModule *native_module;
         Module *module;
-        NativeLib *native_lib;
         ForeignFn *foreign_fn;
+        NativeLib *native_lib;
 	}value;
 }Obj;
 

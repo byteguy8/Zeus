@@ -84,6 +84,12 @@ void destroy_obj(Obj *obj, VM *vm){
             free(str);
 			break;
 		}
+        case ARRAY_OTYPE:{
+            Array *array = obj->value.array;
+            free(array->values);
+            free(array);
+            break;
+        }
 		case LIST_OTYPE:{
 			DynArr *list = obj->value.list;
 			dynarr_destroy(list);
@@ -147,7 +153,21 @@ void mark_value(Value *value){
 	switch(obj->type){
 		case STR_OTYPE:{
 			break;
-		}case LIST_OTYPE:{
+		}case ARRAY_OTYPE:{
+            Array *array = obj->value.array;
+            Value *values = array->values;
+            Value *value = NULL;
+
+            for (size_t i = 0; i < array->len; i++){
+                value = &values[i];
+                if(value->type != OBJ_VTYPE){
+                    continue;
+                }
+                mark_value(value);
+            }
+            
+            break;
+        }case LIST_OTYPE:{
 			DynArr *list = obj->value.list;
 			Value *value = NULL;
 			
@@ -395,6 +415,13 @@ int vm_utils_obj_to_str(Obj *object, BStr *bstr){
             Str *str = object->value.str;
             return bstr_append(str->buff, bstr);
         }
+        case ARRAY_OTYPE:{
+            size_t buff_len = 1024;
+            char buff[buff_len];
+			Array *array = object->value.array;
+            snprintf(buff, buff_len, "<array %ld at %p>", array->len, array);
+            return bstr_append(buff, bstr);
+		}
    		case LIST_OTYPE:{
             size_t buff_len = 1024;
             char buff[buff_len];
@@ -726,13 +753,30 @@ NativeFn *vm_utils_native_function(
     return native_fn;
 }
 
+Obj *vm_utils_array_obj(int16_t len, VM *vm){
+    Value *values = (Value *)calloc(len, sizeof(Value));
+    Array *array = (Array *)malloc(sizeof(Array));
+    Obj *array_obj = vm_utils_obj(ARRAY_OTYPE, vm);
+    
+    if(!values || !array || !array_obj){
+        free(values);
+        free(array);
+        return NULL;
+    }
+
+    array->len = (size_t)len;
+    array->values = values;
+
+    array_obj->value.array = array;
+
+    return array_obj;
+}
+
 Obj *vm_utils_list_obj(VM *vm){
     DynArr *list = dynarr_create(sizeof(Value), NULL);
-    if(!list) return NULL;
-
     Obj *list_obj = vm_utils_obj(LIST_OTYPE, vm);
-    
-    if(!list_obj){
+
+    if(!list || !list_obj){
         dynarr_destroy(list);
         return NULL;
     }

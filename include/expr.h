@@ -15,12 +15,14 @@ typedef enum expr_type{
     IDENTIFIER_EXPRTYPE,
     CALL_EXPRTYPE,
 	ACCESS_EXPRTYPE,
+    INDEX_EXPRTYPE,
     UNARY_EXPRTYPE,
 	BINARY_EXPRTYPE,
     COMPARISON_EXPRTYPE,
     LOGICAL_EXPRTYPE,
     ASSIGN_EXPRTYPE,
 	COMPOUND_EXPRTYPE,
+    ARRAY_EXPRTYPE,
 	LIST_EXPRTYPE,
     DICT_EXPRTYPE,
 	RECORD_EXPRTYPE,
@@ -80,6 +82,12 @@ typedef struct access_expr{
 	Token *symbol_token;
 }AccessExpr;
 
+typedef struct index_expr{
+    Expr *target;
+    Token *left_square_token;
+    Expr *index_expr;
+}IndexExpr;
+
 typedef struct unary_expr{
     Token *operator;
     Expr *right;
@@ -114,6 +122,12 @@ typedef struct compound_expr{
 	Token *operator;
 	Expr *right;
 }CompoundExpr;
+
+typedef struct array_expr{
+    Token *array_token;
+    Expr *len_expr;
+    DynArrPtr *values;
+}ArrayExpr;
 
 typedef struct list_expr{
 	Token *list_token;
