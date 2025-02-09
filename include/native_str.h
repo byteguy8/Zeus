@@ -3,7 +3,10 @@
 
 #include "types.h"
 #include "value.h"
+#include "memory.h"
 #include "vm_utils.h"
+
+static LZHTable *str_symbols = NULL;
 
 Value native_fn_str_char_at(uint8_t argc, Value *values, void *target, VM *vm){
     Str *str = (Str *)target;
@@ -293,6 +296,45 @@ Value native_fn_str_cmp_ic(uint8_t argsc, Value *values, void *target, VM *vm){
 	}
 
 	return INT_VALUE(0);
+}
+
+Obj *native_str_get(char *symbol, void *target, VM *vm){
+    if(!str_symbols){
+        str_symbols = runtime_lzhtable();
+        runtime_add_native_fn_info("char_at", 1, native_fn_str_char_at, str_symbols);
+        runtime_add_native_fn_info("sub_str", 2, native_fn_str_sub_str, str_symbols);
+        runtime_add_native_fn_info("char_code", 1, native_fn_str_char_code, str_symbols);
+        runtime_add_native_fn_info("split", 1, native_fn_str_split, str_symbols);
+        runtime_add_native_fn_info("lstrip", 0, native_fn_str_lstrip, str_symbols);
+        runtime_add_native_fn_info("rstrip", 0, native_fn_str_rstrip, str_symbols);
+        runtime_add_native_fn_info("strip", 0, native_fn_str_strip, str_symbols);
+        runtime_add_native_fn_info("lower", 0, native_fn_str_lower, str_symbols);
+        runtime_add_native_fn_info("upper", 0, native_fn_str_upper, str_symbols);
+        runtime_add_native_fn_info("title", 0, native_fn_str_title, str_symbols);
+        runtime_add_native_fn_info("cmp", 1, native_fn_str_cmp, str_symbols);
+        runtime_add_native_fn_info("cmp_ic", 1, native_fn_str_cmp_ic, str_symbols);
+    }
+
+    size_t key_size = strlen(symbol);
+    NativeFnInfo *native_fn_info = (NativeFnInfo *)lzhtable_get((uint8_t *)symbol, key_size, str_symbols);
+    
+    if(native_fn_info){
+        Obj *native_obj_fn = vm_utils_native_fn_obj(
+            native_fn_info->arity,
+            symbol,
+            target,
+            native_fn_info->raw_native,
+            vm
+        );
+
+        if(!native_obj_fn){
+            vm_utils_error(vm, "Out of memory");
+        }
+
+        return native_obj_fn;
+    }
+
+    return NULL;
 }
 
 #endif

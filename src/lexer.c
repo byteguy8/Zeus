@@ -309,12 +309,7 @@ Token *string(Lexer *lexer){
 	int lines = 0;
     DynArrPtr *tokens = NULL;
     TokenType type = STR_TYPE_TOKTYPE;
-    BStr *bstr = bstr_create_empty(NULL);
-
-    if(!bstr){
-        error(lexer, "out of memory");
-        return NULL;
-    }
+    BStr *bstr = compile_bstr();
 	
 	while(!is_at_end(lexer) && peek(lexer) != '"'){
 		char c = advance(lexer);
@@ -351,11 +346,7 @@ Token *string(Lexer *lexer){
                 continue;
             }
 
-            if(bstr_append_range(&escape, 0, 0, bstr)){
-                bstr_destroy(bstr);
-                error(lexer, "Out of memory");
-                return NULL;
-            }
+            bstr_append_range(&escape, 0, 0, bstr);
 
             advance(lexer);
         }else if(c == '$'){
@@ -405,22 +396,14 @@ Token *string(Lexer *lexer){
 
                 size_t interpolation_end = lexer->current;
                 
-                if(bstr_append_range(lexer->source->buff, interpolation_start, interpolation_end, bstr)){
-                    bstr_destroy(bstr);
-                    error(lexer, "Out of memory");
-                    return NULL;
-                }
+                bstr_append_range(lexer->source->buff, interpolation_start, interpolation_end, bstr);
 
                 advance(lexer);
 				
 				from = bstr->used;
 			}
 		}else{
-            if(bstr_append_range(&c, 0, 0, bstr)){
-                bstr_destroy(bstr);
-                error(lexer, "Out of memory");
-                return NULL;
-            }
+            bstr_append_range(&c, 0, 0, bstr);
         }
 	}
 
@@ -466,8 +449,6 @@ Token *string(Lexer *lexer){
 
 	str_token->extra = tokens;
 	lexer->line += lines;
-	
-    bstr_destroy(bstr);
 
 	return str_token;
 }

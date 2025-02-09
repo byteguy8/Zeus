@@ -1,10 +1,10 @@
 #ifndef NATIVE_LIST
 #define NATIVE_LIST
 
-#include "vm_utils.h"
 #include "types.h"
 #include "value.h"
 #include "memory.h"
+#include "vm_utils.h"
 
 static LZHTable *list_symbols = NULL;
 
@@ -196,13 +196,19 @@ Obj *native_list_get(char *symbol, void *target, VM *vm){
     NativeFnInfo *native_fn_info = (NativeFnInfo *)lzhtable_get((uint8_t *)symbol, key_size, list_symbols);
     
     if(native_fn_info){
-        return vm_utils_native_fn_obj(
+        Obj *native_fn_obj = vm_utils_native_fn_obj(
             native_fn_info->arity,
             symbol,
             target,
             native_fn_info->raw_native,
             vm
         );
+
+        if(!native_fn_obj){
+            vm_utils_error(vm, "Out of memory");
+        }
+
+        return native_fn_obj;
     }
 
     return NULL;

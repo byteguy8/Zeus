@@ -6,7 +6,7 @@
 typedef struct bstr_allocator{
     void *ctx;
     void *(*alloc)(size_t size, void *ctx);
-    void *(*realloc)(void *ptr, size_t new_size, size_t old_size, void *ctx);
+    void *(*realloc)(void *ptr, size_t old_size, size_t new_size, void *ctx);
     void (*dealloc)(void *ptr, size_t size, void *ctx);
 }BStrAllocator;
 

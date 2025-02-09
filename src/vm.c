@@ -2,6 +2,7 @@
 #include "vm_utils.h"
 
 #include "native_str.h"
+#include "native_array.h"
 #include "native_list.h"
 #include "native_dict.h"
 
@@ -139,8 +140,9 @@ char *join_buff(char *buffa, size_t sza, char *buffb, size_t szb, VM *vm){
     size_t szc = sza + szb;
     char *buff = malloc(szc + 1);
 
-	if(!buff)
-		vm_utils_error(vm, "Failed to create buffer: out of memory");
+	if(!buff){
+        vm_utils_error(vm, "Failed to create buffer: out of memory");
+    }
 
     memcpy(buff, buffa, sza);
     memcpy(buff + sza, buffb, szb);
@@ -153,11 +155,13 @@ char *multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm){
 	size_t sz = szbuff * by;
 	char *b = malloc(sz + 1);
 
-	if(!b)
-		vm_utils_error(vm, "Failed to create buffer: out of memory");
+	if(!b){
+        vm_utils_error(vm, "Failed to create buffer: out of memory");
+    }
 
-	for(size_t i = 0; i < by; i++)
-		memcpy(b + (i * szbuff), buff, szbuff);
+	for(size_t i = 0; i < by; i++){
+        memcpy(b + (i * szbuff), buff, szbuff);
+    }
 
 	b[sz] = '\0';
 
@@ -1310,60 +1314,26 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_STR(value)){
 				Str *str = TO_STR(value);
-				
-                if(strcmp(symbol, "len") == 0){
-                    PUSH_INT((int64_t)str->len, vm)
-                }else if(strcmp(symbol, "is_core") == 0){
-                    PUSH_BOOL((uint8_t)str->core, vm)
-                }else if(strcmp(symbol, "char_at") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "char_at", str, native_fn_str_char_at, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else if(strcmp(symbol, "sub_str") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(2, "sub_str", str, native_fn_str_sub_str, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else if(strcmp(symbol, "char_code") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "char_code", str, native_fn_str_char_code, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else if(strcmp(symbol, "split") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "split", str, native_fn_str_split, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else if(strcmp(symbol, "lstrip") == 0){
-					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "lstrip", str, native_fn_str_lstrip, vm), vm);
-					PUSH_NATIVE_FN(native_fn, vm);
-				}else if(strcmp(symbol, "rstrip") == 0){
-					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "rstrip", str, native_fn_str_rstrip, vm), vm);
-					PUSH_NATIVE_FN(native_fn, vm);
-				}else if(strcmp(symbol, "strip") == 0){
-					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "strip", str, native_fn_str_strip, vm), vm);
-					PUSH_NATIVE_FN(native_fn, vm);
-				}else if(strcmp(symbol, "lower") == 0){
-					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "lower", str, native_fn_str_lower, vm), vm);
-					PUSH_NATIVE_FN(native_fn, vm);
-				}else if(strcmp(symbol, "upper") == 0){
-					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "upper", str, native_fn_str_upper, vm), vm);
-					PUSH_NATIVE_FN(native_fn, vm);
-				}else if(strcmp(symbol, "title") == 0){
-					NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "title", str, native_fn_str_title, vm), vm);
-					PUSH_NATIVE_FN(native_fn, vm);
-				}else if(strcmp(symbol, "compare") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "compare", str, native_fn_str_cmp, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else if(strcmp(symbol, "compare_ignore") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "compare_ignore", str, native_fn_str_cmp_ic, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else{
-                    vm_utils_error(vm, "String do not have symbol named as '%s'", symbol);
+                Obj *native_fn_obj = native_str_get(symbol, str, vm);
+
+                if(!native_fn_obj){
+                    vm_utils_error(vm, "String does not have symbol '%s'", symbol);
                 }
+
+                PUSH(OBJ_VALUE(native_fn_obj), vm)
 
                 break;
             }
 
             if(IS_ARRAY(value)){
                 Array *array = TO_ARRAY(value);
+                Obj *native_fn_obj = native_array_get(symbol, array, vm);
 
-                if(strcmp(symbol, "len") == 0){
-                    PUSH_INT((int64_t)array->len, vm);
+                if(!native_fn_obj){
+                    vm_utils_error(vm, "Array does not have symbol '%s'", symbol);
                 }
+
+                PUSH(OBJ_VALUE(native_fn_obj), vm)
 
                 break;
             }
@@ -1373,7 +1343,7 @@ void execute(uint8_t chunk, VM *vm){
                 Obj *native_fn_obj = native_list_get(symbol, list, vm);
                 
                 if(!native_fn_obj){
-                    vm_utils_error(vm, "Out of memory");
+                    vm_utils_error(vm, "List does not have symbol '%s'", symbol);
                 }
 
                 PUSH(OBJ_VALUE(native_fn_obj), vm)
@@ -1383,46 +1353,30 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_DICT(value)){
 				LZHTable *dict = TO_DICT(value);
-				
-                if(strcmp(symbol, "contains") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "contains", dict, native_fn_dict_contains, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else if(strcmp(symbol, "get") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "get", dict, native_fn_dict_get, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else if(strcmp(symbol, "put") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(2, "put", dict, native_fn_dict_put, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else if(strcmp(symbol, "remove") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "remove", dict, native_fn_dict_remove, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else if(strcmp(symbol, "keys") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "keys", dict, native_fn_dict_keys, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else if(strcmp(symbol, "values") == 0){
-                    NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "values", dict, native_fn_dict_values, vm), vm);
-                    PUSH_NATIVE_FN(native_fn, vm);
-                }else{
-                    vm_utils_error(vm, "Dictionary do not have symbol named as '%s'", symbol);
+				Obj *native_fn_obj = native_dict_get(symbol, dict, vm);
+
+                if(!native_fn_obj){
+                    vm_utils_error(vm, "List does not have symbol '%s'", symbol);
                 }
+
+                PUSH(OBJ_VALUE(native_fn_obj), vm)
 
                 break;
             }
 
 			if(IS_RECORD(value)){
 				Record *record = TO_RECORD(value);
-				
 				uint8_t *key = (uint8_t *)symbol;
 				size_t key_size = strlen(symbol);
-				uint32_t hash = lzhtable_hash(key, key_size);
-				LZHTableNode *node = NULL;
+                LZHTable *key_values = record->key_values;
+                Value *value = (Value *)lzhtable_get(key, key_size, key_values);
 
-				if(!lzhtable_hash_contains(hash, record->key_values, &node))
-					vm_utils_error(vm, "Record do not constains key '%s'", symbol);
+                if(value){
+                    PUSH(*value, vm);
+                    break;
+                }
 
-				Value *value = (Value *)node->value;
-
-				PUSH(*value, vm);
+				vm_utils_error(vm, "Record do not constains key '%s'", symbol);
 
 				break;
 			}
@@ -1483,7 +1437,7 @@ void execute(uint8_t chunk, VM *vm){
                     vm_utils_error(vm, "Illegal index range. Must be > 0 and < %s", INT16_MAX);
                 }
                 if((size_t)index >= array->len){
-                    vm_utils_error(vm, "Index out of bounds. Array length: %d, index: %d", array->len, INT16_MAX);
+                    vm_utils_error(vm, "Index out of bounds. Array length: %d, index: %d", array->len, index);
                 }
 
                 Value value = array->values[(int16_t)index];
