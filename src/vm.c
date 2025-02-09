@@ -154,7 +154,7 @@ char *multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm){
 	char *b = malloc(sz + 1);
 
 	if(!b)
-		vm_utils_error(vm, "failed to create buffer: out of memory");
+		vm_utils_error(vm, "Failed to create buffer: out of memory");
 
 	for(size_t i = 0; i < by; i++)
 		memcpy(b + (i * szbuff), buff, szbuff);
@@ -417,7 +417,7 @@ void execute(uint8_t chunk, VM *vm){
             BStr *bstr = bstr_create_empty(NULL);
             
             if(!bstr){
-                vm_utils_error(vm, "failed to create template: out of memory");
+                vm_utils_error(vm, "Failed to create template: out of memory");
             }
             
             for (int16_t i = 0; i < len; i++){
@@ -425,7 +425,7 @@ void execute(uint8_t chunk, VM *vm){
                 
                 if(vm_utils_value_to_str(value, bstr)){
                     bstr_destroy(bstr);
-                    vm_utils_error(vm, "failed to create template: out of memory");
+                    vm_utils_error(vm, "Failed to create template: out of memory");
                 }
             }
 
@@ -434,7 +434,7 @@ void execute(uint8_t chunk, VM *vm){
             bstr_destroy(bstr);
 
             if(!str_obj){
-                vm_utils_error(vm, "failed to create template: out of memory");
+                vm_utils_error(vm, "Failed to create template: out of memory");
             }
 
             PUSH(OBJ_VALUE(str_obj), vm);
@@ -1352,7 +1352,7 @@ void execute(uint8_t chunk, VM *vm){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(1, "compare_ignore", str, native_fn_str_cmp_ic, vm), vm);
                     PUSH_NATIVE_FN(native_fn, vm);
                 }else{
-                    vm_utils_error(vm, "string do not have symbol named as '%s'", symbol);
+                    vm_utils_error(vm, "String do not have symbol named as '%s'", symbol);
                 }
 
                 break;
@@ -1411,7 +1411,7 @@ void execute(uint8_t chunk, VM *vm){
                     NativeFn *native_fn = assert_ptr(vm_utils_native_function(0, "reverse", list, native_fn_list_reverse, vm), vm);
                     PUSH_NATIVE_FN(native_fn, vm);
                 }else{
-                    vm_utils_error(vm, "list do not have symbol named as '%s'", symbol);
+                    vm_utils_error(vm, "List do not have symbol named as '%s'", symbol);
                 }
 
                 break;

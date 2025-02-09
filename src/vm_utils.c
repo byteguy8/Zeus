@@ -11,7 +11,7 @@
 #define FIND_LOCATION(index, arr)(dynarr_find(&((OPCodeLocation){.offset = index, .line = -1}), compare_locations, arr))
 #define FRAME_AT(at, vm)(&vm->frame_stack[at])
 
-//> Private Interface
+//> PRIVATE INTERFACE
 void clean_up_module(Module *module);
 void destroy_dict_values(void *key, void *value);
 void destroy_globals_values(void *ptr);
@@ -23,16 +23,16 @@ void gc(VM *vm);
 
 int compare_locations(void *a, void *b);
 BStr *prepare_stacktrace(unsigned int spaces, VM *vm);
-//< Private Interface
-//> Private Implementation
+//< PRIVATE INTERFACE
+//> PRIVATE IMPLEMENTATION
 void clean_up_module(Module *module){
-    if(module->shadow) return;
+    if(module->shadow){return;}
 
     SubModule *submodule = module->submodule;
 	LZHTable *globals = submodule->globals;
 	// Due to the same module can be imported in others modules
 	// we need to make sure we already handled its globals in order
-	// to no make a double free on them.
+	// to not make a double free on them.
 	if(globals){
 		LZHTableNode *global_node = submodule->globals->head;
 
@@ -51,8 +51,9 @@ void clean_up_module(Module *module){
         LZHTableNode *next = symbol_node->next_table_node;
 		ModuleSymbol *symbol = (ModuleSymbol *)symbol_node->value;
 
-        if(symbol->type == MODULE_MSYMTYPE)
-			clean_up_module(symbol->value.module);
+        if(symbol->type == MODULE_MSYMTYPE){
+            clean_up_module(symbol->value.module);
+        }
 
         symbol_node = next;
     }
@@ -74,66 +75,58 @@ void destroy_obj(Obj *obj, VM *vm){
     if(prev) prev->next = next;
 	if(next) next->prev = prev;
 
-	if(vm->head == obj) vm->head = next;
-	if(vm->tail == obj) vm->tail = prev;
+	if(vm->head == obj){vm->head = next;}
+	if(vm->tail == obj){vm->tail = prev;}
 
 	switch(obj->type){
 		case STR_OTYPE:{
 			Str *str = obj->value.str;
-			if(!str->core) free(str->buff);
+			if(!str->core){free(str->buff);}
             free(str);
 			break;
-		}
-        case ARRAY_OTYPE:{
+		}case ARRAY_OTYPE:{
             Array *array = obj->value.array;
             free(array->values);
             free(array);
             break;
-        }
-		case LIST_OTYPE:{
+        }case LIST_OTYPE:{
 			DynArr *list = obj->value.list;
 			dynarr_destroy(list);
 			break;
-		}
-        case DICT_OTYPE:{
+		}case DICT_OTYPE:{
             LZHTable *table = obj->value.dict;
             lzhtable_destroy(destroy_dict_values, table);
             break;
-        }
-		case RECORD_OTYPE:{
+        }case RECORD_OTYPE:{
 			Record *record = obj->value.record;
 			lzhtable_destroy(destroy_dict_values, record->key_values);
 			free(record);
 			break;
-		}
-        case NATIVE_FN_OTYPE:{
+		}case NATIVE_FN_OTYPE:{
             NativeFn *native_fn = obj->value.native_fn;
-            if(!native_fn->unique) free(native_fn);
+            if(!native_fn->unique){free(native_fn);}
             break;
-        }
-        case MODULE_OTYPE:{
+        }case MODULE_OTYPE:{
             break;
-        }
-        case NATIVE_LIB_OTYPE:{
+        }case NATIVE_LIB_OTYPE:{
             NativeLib *library = obj->value.native_lib;
             void *handler = library->handler;
             void (*znative_deinit)(void) = dlsym(handler, "znative_deinit");
             
-            if(znative_deinit)
+            if(znative_deinit){
                 znative_deinit();
-            else
+            }else{
                 fprintf(stderr, "Failed to deinit native library: not function present");
+            }
 
             dlclose(handler);
             free(library);
 
             break;
-        }
-        case FOREIGN_FN_OTYPE:{
+        }case FOREIGN_FN_OTYPE:{
             free(obj->value.foreign_fn);
             break;
-        }
-		default:{
+        }default:{
 			assert("Illegal object type");
 		}
 	}
@@ -143,11 +136,11 @@ void destroy_obj(Obj *obj, VM *vm){
 }
 
 void mark_value(Value *value){
-	if(value-> type != OBJ_VTYPE) return;
+	if(value-> type != OBJ_VTYPE){return;}
 	
 	Obj *obj = value->literal.obj;
 	
-    if(obj->marked) return;
+    if(obj->marked){return;}
     obj->marked = 1;
 	
 	switch(obj->type){
@@ -160,9 +153,7 @@ void mark_value(Value *value){
 
             for (size_t i = 0; i < array->len; i++){
                 value = &values[i];
-                if(value->type != OBJ_VTYPE){
-                    continue;
-                }
+                if(value->type != OBJ_VTYPE){continue;}
                 mark_value(value);
             }
             
@@ -173,7 +164,7 @@ void mark_value(Value *value){
 			
 			for(size_t i = 0; i < DYNARR_LEN(list); i++){
 				value = (Value *)DYNARR_GET(i, list);
-				if(value->type != OBJ_VTYPE) continue;
+				if(value->type != OBJ_VTYPE){continue;}
 				mark_value(value);
 			}
 			
@@ -202,7 +193,7 @@ void mark_value(Value *value){
 			Record *record = obj->value.record;
 			LZHTable *key_values = record->key_values;
 			
-			if(!key_values) break;
+			if(!key_values){break;}
 			
 			LZHTableNode *node = key_values->head;
 			LZHTableNode *next = NULL;
@@ -301,12 +292,13 @@ void sweep_objs(VM *vm){
             continue;
         }
         
-        if(obj == vm->head) 
+        if(obj == vm->head){
             vm->head = next;
-        if(obj == vm->tail)
+        }if(obj == vm->tail){
             vm->tail = prev;
-        if(prev)
+        }if(prev){
             prev->next = next;
+        }
             
         destroy_obj(obj, vm);
 
@@ -323,9 +315,9 @@ int compare_locations(void *a, void *b){
 	OPCodeLocation *al = (OPCodeLocation *)a;
 	OPCodeLocation *bl = (OPCodeLocation *)b;
 
-	if(al->offset < bl->offset) return -1;
-	else if(al->offset > bl->offset) return 1;
-	else return 0;
+	if(al->offset < bl->offset){return -1;}
+	else if(al->offset > bl->offset){return 1;}
+	else{return 0;}
 }
 
 BStr *prepare_stacktrace(unsigned int spaces, VM *vm){
@@ -338,7 +330,7 @@ BStr *prepare_stacktrace(unsigned int spaces, VM *vm){
 		int index = FIND_LOCATION(frame->last_offset, locations);
 		OPCodeLocation *location = index == -1 ? NULL : (OPCodeLocation *)DYNARR_GET(index, locations);
 
-		if(location)
+		if(location){
 			bstr_append_args(
 				st,
 				"%*sin file: '%s' at %s:%d\n",
@@ -348,8 +340,9 @@ BStr *prepare_stacktrace(unsigned int spaces, VM *vm){
 				frame->fn->name,
 				location->line
 			);
-		else
+		}else{
 			bstr_append_args(st, "inside function '%s'\n", fn->name);
+        }
 
 	}
 
@@ -365,7 +358,7 @@ void vm_utils_error(VM *vm, char *msg, ...){
     fprintf(stderr, "Runtime error: ");
 	vfprintf(stderr, msg, args);
     fprintf(stderr, "\n");
-	if(st) fprintf(stderr, "%s", (char *)st->buff);
+	if(st){fprintf(stderr, "%s", (char *)st->buff);}
 
 	va_end(args);
 	bstr_destroy(st);
@@ -375,7 +368,7 @@ void vm_utils_error(VM *vm, char *msg, ...){
 }
 
 void *assert_ptr(void *ptr, VM *vm){
-    if(ptr) return ptr;
+    if(ptr){return ptr;}
     vm_utils_error(vm, "Out of memory");
     return NULL;
 }
@@ -386,8 +379,7 @@ uint32_t vm_utils_hash_obj(Obj *obj){
             Str *str = obj->value.str;
             uint32_t hash = lzhtable_hash((uint8_t *)str->buff, str->len);
             return hash;
-        }
-        default:{
+        }default:{
             uint32_t hash = lzhtable_hash((uint8_t *)&obj->value, sizeof(obj->value));
             return hash;
         }
@@ -401,8 +393,7 @@ uint32_t vm_utils_hash_value(Value *value){
         case INT_VTYPE:{
             uint32_t hash = lzhtable_hash((uint8_t *)&value->literal.i64, sizeof(int64_t));
             return hash;
-        }
-        default:{
+        }default:{
             Obj *obj = value->literal.obj;
             return vm_utils_hash_obj(obj);
         }
@@ -414,78 +405,67 @@ int vm_utils_obj_to_str(Obj *object, BStr *bstr){
         case STR_OTYPE:{
             Str *str = object->value.str;
             return bstr_append(str->buff, bstr);
-        }
-        case ARRAY_OTYPE:{
+        }case ARRAY_OTYPE:{
             size_t buff_len = 1024;
             char buff[buff_len];
 			Array *array = object->value.array;
             snprintf(buff, buff_len, "<array %ld at %p>", array->len, array);
             return bstr_append(buff, bstr);
-		}
-   		case LIST_OTYPE:{
+		}case LIST_OTYPE:{
             size_t buff_len = 1024;
             char buff[buff_len];
 			DynArr *list = object->value.list;
             snprintf(buff, buff_len, "<list %ld at %p>", list->used, list);
             return bstr_append(buff, bstr);
-		}
-        case DICT_OTYPE:{
+		}case DICT_OTYPE:{
             size_t buff_len = 1024;
             char buff[buff_len];
             LZHTable *table = object->value.dict;
             snprintf(buff, buff_len, "<dict %ld at %p>", table->n, table);
 			return bstr_append(buff, bstr);
-        }
-		case RECORD_OTYPE:{
+        }case RECORD_OTYPE:{
             size_t buff_len = 1024;
             char buff[buff_len];
 			Record *record = object->value.record;
             snprintf(buff, buff_len, "<record %ld at %p>", record->key_values ? record->key_values->n : 0, record);
 			return bstr_append(buff, bstr);
-		}
-        case FN_OTYPE:{
+		}case FN_OTYPE:{
             size_t buff_len = 1024;
             char buff[buff_len];
             Fn *fn = (Fn *)object->value.fn;
             snprintf(buff, buff_len, "<function '%s' - %d at %p>", fn->name, (uint8_t)(fn->params ? fn->params->used : 0), fn);
 			return bstr_append(buff, bstr);
-        }
-        case NATIVE_FN_OTYPE:{
+        }case NATIVE_FN_OTYPE:{
             size_t buff_len = 1024;
             char buff[buff_len];
             NativeFn *native_fn = object->value.native_fn;
             snprintf(buff, buff_len, "<native function '%s' - %d at %p>", native_fn->name, native_fn->arity, native_fn);
 			return bstr_append(buff, bstr);
-        }
-        case NATIVE_MODULE_OTYPE:{
+        }case NATIVE_MODULE_OTYPE:{
 			size_t buff_len = 1024;
             char buff[buff_len];
             NativeModule *module = object->value.native_module;
             snprintf(buff, buff_len, "<native module '%s' at %p>", module->name, module);
 			return bstr_append(buff, bstr);
-		}
-        case MODULE_OTYPE:{
+		}case MODULE_OTYPE:{
             size_t buff_len = 1024;
             char buff[buff_len];
             Module *module = object->value.module;
             snprintf(buff, buff_len, "<module '%s' from '%s' at %p>", module->name, module->pathname, module);
 			return bstr_append(buff, bstr);
-        }
-        case NATIVE_LIB_OTYPE:{
+        }case NATIVE_LIB_OTYPE:{
             size_t buff_len = 1024;
             char buff[buff_len];
             NativeLib *module = object->value.native_lib;
             snprintf(buff, buff_len, "<native library %p at %p>", module->handler, module);
 			return bstr_append(buff, bstr);
-        }
-        case FOREIGN_FN_OTYPE:{
+        }case FOREIGN_FN_OTYPE:{
             size_t buff_len = 1024;
             char buff[buff_len];
             ForeignFn *foreign = object->value.foreign_fn;
             snprintf(buff, buff_len, "<foreign function at %p>", foreign);
 			return bstr_append(buff, bstr);
-        }
-        default:{
+        }default:{
             assert("Illegal object type");
         }
     }
@@ -497,8 +477,7 @@ int vm_utils_value_to_str(Value *value, BStr *bstr){
     switch (value->type){
         case EMPTY_VTYPE:{
             return bstr_append("empty", bstr);
-        }
-        case BOOL_VTYPE:{
+        }case BOOL_VTYPE:{
             uint8_t bool = value->literal.bool;
 
             if(bool){
@@ -506,23 +485,19 @@ int vm_utils_value_to_str(Value *value, BStr *bstr){
             }else{
                 return bstr_append("false", bstr);
             }
-        }
-        case INT_VTYPE:{
+        }case INT_VTYPE:{
             size_t buff_len = 1024;
             char buff[buff_len];
             snprintf(buff, buff_len, "%ld", value->literal.i64);
             return bstr_append(buff, bstr);
-        }
-        case FLOAT_VTYPE:{
+        }case FLOAT_VTYPE:{
             size_t buff_len = 1024;
             char buff[buff_len];
             snprintf(buff, buff_len, "%.8f", value->literal.fvalue);
             return bstr_append(buff, bstr);
-		}
-        case OBJ_VTYPE:{
+		}case OBJ_VTYPE:{
             return vm_utils_obj_to_str(value->literal.obj, bstr);
-        }
-        default:{
+        }default:{
             assert("Illegal value type");
         }
     }
@@ -546,7 +521,7 @@ char *vm_utils_clone_buff(char *buff, VM *vm){
 	size_t buff_len = strlen(buff);
 	char *cloned_buff = (char *)malloc(buff_len + 1);
 	
-	if(!cloned_buff) return NULL;
+	if(!cloned_buff){return NULL;}
 
 	memcpy(cloned_buff, buff, buff_len);
 	cloned_buff[buff_len] = '\0';
@@ -556,16 +531,16 @@ char *vm_utils_clone_buff(char *buff, VM *vm){
 
 Value *vm_utils_clone_value(Value *value, VM *vm){
     Value *clone = (Value *)malloc(sizeof(Value));
-    if(!clone) return NULL;
+    if(!clone){return NULL;}
     *clone = *value;
     return clone;
 }
 
 Obj *vm_utils_obj(ObjType type, VM *vm){
-    if(vm->objs_size >= 67108864) gc(vm);
+    if(vm->objs_size >= 67108864){gc(vm);}
 
     Obj *obj = malloc(sizeof(Obj));
-    if(!obj) return NULL;
+    if(!obj){return NULL;}
 
     memset(obj, 0, sizeof(Obj));
     obj->type = type;
@@ -662,8 +637,9 @@ Obj *vm_utils_clone_str_obj(char *buff, Value *out_value, VM *vm){
 
     str_obj->value.str = str;
 
-    if(out_value)
+    if(out_value){
         *out_value = OBJ_VALUE(str_obj);
+    }
 
     return str_obj;
 }
@@ -689,8 +665,9 @@ Obj *vm_utils_range_str_obj(size_t from, size_t to, char *buff, Value *out_value
 
 	str_obj->value.str = str;
 
-    if(out_value)
+    if(out_value){
         *out_value = OBJ_VALUE(str_obj);
+    }
 
     return str_obj;
 }
@@ -699,7 +676,7 @@ Str *vm_utils_uncore_nalloc_str(char *buff, VM *vm){
     size_t buff_len = strlen(buff);
     Str *str = (Str *)malloc(sizeof(Str));
 
-    if(!str) return NULL;
+    if(!str){return NULL;}
 
     str->core = 0;
     str->len = buff_len;
@@ -727,30 +704,6 @@ Str *vm_utils_uncore_alloc_str(char *buff, VM *vm){
     str->buff = new_buff;
 
     return str;
-}
-
-NativeFn *vm_utils_native_function(
-    int arity,
-    char *name,
-    void *target,
-    RawNativeFn native,
-    VM *vm
-){
-    size_t name_len = strlen(name);
-    assert(name_len < NAME_LEN - 1);
-
-    NativeFn *native_fn = (NativeFn *)malloc(sizeof(NativeFn));
-    if(!native_fn) return NULL;
-
-    native_fn->unique = 0;
-    native_fn->arity = arity;
-    memcpy(native_fn->name, name, name_len);
-    native_fn->name[name_len] = '\0';
-    native_fn->name_len = name_len;
-    native_fn->target = target;
-    native_fn->raw_fn = native;
-
-    return native_fn;
 }
 
 Obj *vm_utils_array_obj(int16_t len, VM *vm){
@@ -788,7 +741,7 @@ Obj *vm_utils_list_obj(VM *vm){
 
 Obj *vm_utils_dict_obj(VM *vm){
     LZHTable *dict = lzhtable_create(17, NULL);
-    if(!dict) return NULL;
+    if(!dict){return NULL;}
 
     Obj *dict_obj = vm_utils_obj(DICT_OTYPE, vm);
     
@@ -842,4 +795,28 @@ Obj *vm_utils_native_lib_obj(void *handler, VM *vm){
     native_lib_obj->value.native_lib = native_lib;
 
     return native_lib_obj;
+}
+
+NativeFn *vm_utils_native_function(
+    int arity,
+    char *name,
+    void *target,
+    RawNativeFn native,
+    VM *vm
+){
+    size_t name_len = strlen(name);
+    assert(name_len < NAME_LEN - 1);
+
+    NativeFn *native_fn = (NativeFn *)malloc(sizeof(NativeFn));
+    if(!native_fn){return NULL;}
+
+    native_fn->unique = 0;
+    native_fn->arity = arity;
+    memcpy(native_fn->name, name, name_len);
+    native_fn->name[name_len] = '\0';
+    native_fn->name_len = name_len;
+    native_fn->target = target;
+    native_fn->raw_fn = native;
+
+    return native_fn;
 }

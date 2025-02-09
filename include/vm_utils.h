@@ -24,6 +24,11 @@ Obj *vm_utils_uncore_str_obj(char *buff, VM *vm);
 Obj *vm_utils_empty_str_obj(Value *out_value, VM *vm);
 Obj *vm_utils_clone_str_obj(char *buff, Value *out_value, VM *vm);
 Obj *vm_utils_range_str_obj(size_t from, size_t to, char *buff, Value *out_value, VM *vm);
+Obj *vm_utils_array_obj(int16_t len, VM *vm);
+Obj *vm_utils_list_obj(VM *vm);
+Obj *vm_utils_dict_obj(VM *vm);
+Obj *vm_utils_record_obj(char empty, VM *vm);
+Obj *vm_utils_native_lib_obj(void *handler, VM *vm);
 
 NativeFn *vm_utils_native_function(
     int arity,
@@ -32,11 +37,6 @@ NativeFn *vm_utils_native_function(
     RawNativeFn native,
     VM *vm
 );
-Obj *vm_utils_array_obj(int16_t len, VM *vm);
-Obj *vm_utils_list_obj(VM *vm);
-Obj *vm_utils_dict_obj(VM *vm);
-Obj *vm_utils_record_obj(char empty, VM *vm);
-Obj *vm_utils_native_lib_obj(void *handler, VM *vm);
 
 #define IS_EMPTY(v)((v)->type == EMPTY_VTYPE)
 #define IS_BOOL(v)((v)->type == BOOL_VTYPE)
@@ -77,18 +77,24 @@ Obj *vm_utils_native_lib_obj(void *handler, VM *vm);
 #define FLOAT_VALUE(value)((Value){.type = FLOAT_VTYPE, .literal.fvalue = value})
 #define OBJ_VALUE(value)((Value){.type = OBJ_VTYPE, .literal.obj = value})
 
-#define VALIDATE_INDEX(value, index, len) \
-    if(!IS_INT((value))) \
-         vm_utils_error(vm, "Unexpected index value. Expect int, but got something else"); \
-    index = TO_INT((value)); \
-    if(index < 0 || index >= (int64_t)len) \
-        vm_utils_error(vm, "Index out of bounds. Must be 0 >= index(%ld) < len(%ld)", index, len);
+#define VALIDATE_INDEX(value, index, len){                                                         \
+    if(!IS_INT((value))){                                                                          \
+         vm_utils_error(vm, "Unexpected index value. Expect int, but got something else");         \
+    }                                                                                              \
+    index = TO_INT((value));                                                                       \
+    if((index) < 0 || (index) >= (int64_t)(len)){                                                        \
+        vm_utils_error(vm, "Index out of bounds. Must be 0 >= index(%ld) < len(%ld)", (index), (len)); \
+    }                                                                                              \
+}
     
-#define VALIDATE_INDEX_NAME(value, index, len, name) \
-    if(!IS_INT((value))) \
-        vm_utils_error(vm, "Unexpected value for '%s'. Expect int, but got something else", name);\
-    index = TO_INT((value)); \
-    if(index < 0 || index >= (int64_t)len) \
-        vm_utils_error(vm, "'%s' out of bounds. Must be 0 >= index(%ld) < len(%ld)", name, index, len);
+#define VALIDATE_INDEX_NAME(value, index, len, name){                                                   \
+    if(!IS_INT((value))){                                                                               \
+        vm_utils_error(vm, "Unexpected value for '%s'. Expect int, but got something else", (name));      \
+    }                                                                                                   \
+    index = TO_INT((value));                                                                            \
+    if((index) < 0 || (index) >= (int64_t)(len)){                                                             \
+        vm_utils_error(vm, "'%s' out of bounds. Must be 0 >= index(%ld) < len(%ld)", (name), (index), (len)); \
+    }                                                                                                   \
+}
 
 #endif

@@ -44,7 +44,7 @@ Value native_fn_io_prt(uint8_t argsc, Value *values, void *target, VM *vm){
     
     if(!bstr || vm_utils_value_to_str(arg0, bstr)){
         bstr_destroy(bstr);
-        vm_utils_error(vm, "out of memory");
+        vm_utils_error(vm, "Out of memory");
     }
 
     printf("%s", bstr->buff);
@@ -60,7 +60,7 @@ Value native_fn_io_prterr(uint8_t argsc, Value *values, void *target, VM *vm){
     
     if(!bstr || vm_utils_value_to_str(arg0, bstr)){
         bstr_destroy(bstr);
-        vm_utils_error(vm, "out of memory");
+        vm_utils_error(vm, "Out of memory");
     }
 
     fprintf(stderr, "%s", bstr->buff);
