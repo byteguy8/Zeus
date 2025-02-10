@@ -79,10 +79,10 @@ NativeFn *vm_utils_native_function(
 #define TO_FOREIGN_FN(v)((v)->literal.obj->value.foreign_fn)
 
 #define EMPTY_VALUE ((Value){.type = EMPTY_VTYPE})
-#define BOOL_VALUE(value)((Value){.type = BOOL_VTYPE, .literal.bool = value})
-#define INT_VALUE(value)((Value){.type = INT_VTYPE, .literal.i64 = value})
-#define FLOAT_VALUE(value)((Value){.type = FLOAT_VTYPE, .literal.fvalue = value})
-#define OBJ_VALUE(value)((Value){.type = OBJ_VTYPE, .literal.obj = value})
+#define BOOL_VALUE(value)((Value){.type = BOOL_VTYPE, .literal.bool = (value)})
+#define INT_VALUE(value)((Value){.type = INT_VTYPE, .literal.i64 = (value)})
+#define FLOAT_VALUE(value)((Value){.type = FLOAT_VTYPE, .literal.fvalue = (value)})
+#define OBJ_VALUE(value)((Value){.type = OBJ_VTYPE, .literal.obj = (value)})
 
 #define VALIDATE_INDEX(value, index, len){                                                         \
     if(!IS_INT((value))){                                                                          \

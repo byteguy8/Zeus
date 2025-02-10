@@ -151,7 +151,7 @@ void mark_value(Value *value){
             Value *values = array->values;
             Value *value = NULL;
 
-            for (size_t i = 0; i < array->len; i++){
+            for (int16_t i = 0; i < array->len; i++){
                 value = &values[i];
                 if(value->type != OBJ_VTYPE){continue;}
                 mark_value(value);
@@ -409,7 +409,7 @@ int vm_utils_obj_to_str(Obj *object, BStr *bstr){
             size_t buff_len = 1024;
             char buff[buff_len];
 			Array *array = object->value.array;
-            snprintf(buff, buff_len, "<array %ld at %p>", array->len, array);
+            snprintf(buff, buff_len, "<array %d at %p>", array->len, array);
             return bstr_append(buff, bstr);
 		}case LIST_OTYPE:{
             size_t buff_len = 1024;

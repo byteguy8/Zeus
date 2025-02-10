@@ -86,7 +86,7 @@ Value native_fn_dict_keys(uint8_t argsc, Value *values, void *target, VM *vm){
     LZHTableNode *node = dict->head;
     Array *array = array_obj->value.array;
 
-    for (size_t i = 0; i < array->len; i++){
+    for (int16_t i = 0; i < array->len; i++){
         LZHTableNode *next = node->next_table_node;
         array->values[i] = *(Value *)node->key;
         node = next;
@@ -106,7 +106,7 @@ Value native_fn_dict_values(uint8_t argsc, Value *values, void *target, VM *vm){
     LZHTableNode *current = dict->head;
     Array *array = array_obj->value.array;
 
-    for (size_t i = 0; i < array->len; i++){
+    for (int16_t i = 0; i < array->len; i++){
         LZHTableNode *next = current->next_table_node;
         array->values[i] = *(Value *)current->value;
         current = next;

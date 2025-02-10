@@ -6,6 +6,8 @@
 #include "native_list.h"
 #include "native_dict.h"
 
+#include "native_lib.h"
+
 #include "memory.h"
 #include "opcode.h"
 #include "types.h"
@@ -230,7 +232,7 @@ void print_obj(Obj *object){
         }
         case ARRAY_OTYPE:{
 			Array *array = object->value.array;
-			printf("<array %ld at %p>\n", array->len, array);
+			printf("<array %d at %p>\n", array->len, array);
 			break;
 		}
    		case LIST_OTYPE:{
@@ -988,7 +990,7 @@ void execute(uint8_t chunk, VM *vm){
             if(index < 0 || index > INT16_MAX){
                 vm_utils_error(vm, "Illegal index range. Must be > 0 and < %s", INT16_MAX);
             }
-            if((size_t)index >= array->len){
+            if((int16_t)index >= array->len){
                 vm_utils_error(vm, "Index out of bounds. Array length: %d, index: %d", array->len, INT16_MAX);
             }
 
@@ -1296,12 +1298,14 @@ void execute(uint8_t chunk, VM *vm){
                 RawForeignFn raw_fn = foreign_fn->raw_fn;
                 Value values[args_count];
                 
-                for (int i = args_count; i > 0; i--)
+                for (int i = args_count; i > 0; i--){
                     values[i - 1] = *pop(vm);
+                }
                 
                 pop(vm);
 
-                Value out_value = raw_fn(values);
+                Value out_value = *raw_fn(values);
+
                 PUSH(out_value, vm);
             }else{
                 vm_utils_error(vm, "Expect function after %d parameters count", args_count);
@@ -1436,7 +1440,7 @@ void execute(uint8_t chunk, VM *vm){
                 if(index < 0 || index > INT16_MAX){
                     vm_utils_error(vm, "Illegal index range. Must be > 0 and < %s", INT16_MAX);
                 }
-                if((size_t)index >= array->len){
+                if((int16_t)index >= array->len){
                     vm_utils_error(vm, "Index out of bounds. Array length: %d, index: %d", array->len, index);
                 }
 
@@ -1588,13 +1592,14 @@ void execute(uint8_t chunk, VM *vm){
             char *path = read_str(vm, NULL);
             void *handler = dlopen(path, RTLD_LAZY);
 
-            if(!handler) vm_utils_error(vm, "Failed to load native library: %s", dlerror());
+            if(!handler){
+                vm_utils_error(vm, "Failed to load native library: %s", dlerror());
+            }
 
-            void (*znative_init)(void) = dlsym(handler, "znative_init");
-            znative_init();
+            native_lib_init(handler, vm);
 
             Obj *native_lib_obj = vm_utils_native_lib_obj(handler, vm);
-            if(!native_lib_obj) vm_utils_error(vm, "Failed to load native library: out of memory");
+            if(!native_lib_obj){vm_utils_error(vm, "Out of memory");}
 
             PUSH(OBJ_VALUE(native_lib_obj), vm);
 

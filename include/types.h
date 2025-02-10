@@ -15,7 +15,7 @@ typedef struct vm VM;
 typedef struct value Value;
 typedef struct module Module;
 typedef Value (*RawNativeFn)(uint8_t argc, Value *values, void *target, VM *vm);
-typedef Value (*RawForeignFn)(Value *values);
+typedef Value *(*RawForeignFn)(Value *values);
 
 typedef struct scape_info{
     int from;
@@ -54,7 +54,7 @@ typedef struct str{
 }Str;
 
 typedef struct array{
-    size_t len;
+    int16_t len;
     Value *values;
 }Array;
 
