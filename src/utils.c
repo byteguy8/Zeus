@@ -4,8 +4,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+//> LINUX
 #include <unistd.h>
 #include <libgen.h>
+#include <sys/utsname.h>
+//< LINUX
 
 int utils_is_integer(char *buff){
 	size_t buff_len = strlen(buff);
@@ -162,19 +165,6 @@ int utils_double_to_str(int buff_len, double value, char *out_value){
     return written == -1 ? -1 : written == buff_len ? -1 : written;
 }
 
-int utils_file_is_regular(char *filename){
-	struct stat file = {0};
-
-	if(stat(filename, &file) == -1)
-		return -1;
-
-	return S_ISREG(file.st_mode);
-}
-
-char *utils_parent_pathname(char *pathname){
-    return dirname(pathname);
-}
-
 RawStr *compile_read_source(char *path){
 	FILE *source_file = fopen(path, "r");
     if(source_file == NULL) return NULL;
@@ -197,6 +187,19 @@ RawStr *compile_read_source(char *path){
 	return rstr;
 }
 
+int utils_file_is_regular(char *filename){
+	struct stat file = {0};
+
+	if(stat(filename, &file) == -1)
+		return -1;
+
+	return S_ISREG(file.st_mode);
+}
+
+char *utils_parent_pathname(char *pathname){
+    return dirname(pathname);
+}
+
 char *compile_cwd(){
     char *pathname = getcwd(NULL, 0);
     size_t pathname_len = strlen(pathname);
@@ -213,4 +216,22 @@ char *compile_cwd(){
     free(pathname);
 
     return new_pathname;
+}
+
+char *utils_sysname(){
+    struct utsname sysinfo = {0};
+    
+    if(uname(&sysinfo) == 0){
+        size_t name_len = strlen(sysinfo.sysname);
+        char *name = malloc(name_len + 1);
+        
+        if(!name){return NULL;}
+        
+        memcpy(name, sysinfo.sysname, name_len);
+        name[name_len] = 0;
+
+        return name;
+    }
+
+    return NULL;
 }

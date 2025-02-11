@@ -47,8 +47,6 @@ Value native_fn_io_prt(uint8_t argsc, Value *values, void *target, VM *vm){
         vm_utils_error(vm, "Out of memory");
     }
 
-    printf("%s", bstr->buff);
-
     bstr_destroy(bstr);
     
     return EMPTY_VALUE;

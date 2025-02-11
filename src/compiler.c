@@ -9,6 +9,7 @@
 #include "native_math.h"
 #include "native_time.h"
 #include "native_io.h"
+#include "native_os.h"
 #include <stdint.h>
 #include <assert.h>
 #include <stdarg.h>
@@ -501,6 +502,14 @@ NativeModule *resolve_native_module(char *module_name){
         }
 
         return io_module;
+    }
+
+    if(strcmp("os", module_name) == 0){
+        if(!os_module){
+            os_module_init();
+        }
+
+        return os_module;
     }
 	
 	return NULL;
