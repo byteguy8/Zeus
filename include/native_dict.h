@@ -12,6 +12,11 @@ static void clear_dict(void *key, void *value){
     free(value);
 }
 
+Value native_fn_dict_size(uint8_t argsc, Value *values, void *target, VM *vm){
+    LZHTable *dict = (LZHTable *)target;
+    return INT_VALUE(LZHTABLE_COUNT(dict));
+}
+
 Value native_fn_dict_contains(uint8_t argsc, Value *values, void *target, VM *vm){
     LZHTable *dict = (LZHTable *)target;
     Value *value = &values[0];
@@ -133,6 +138,7 @@ Value native_fn_dict_values(uint8_t argsc, Value *values, void *target, VM *vm){
 Obj *native_dict_get(char *symbol, void *target, VM *vm){
     if(!dict_symbols){
         dict_symbols = runtime_lzhtable();
+        runtime_add_native_fn_info("size", 0, native_fn_dict_size, dict_symbols);
         runtime_add_native_fn_info("contains", 1, native_fn_dict_contains, dict_symbols);
         runtime_add_native_fn_info("get", 1, native_fn_dict_get, dict_symbols);
         runtime_add_native_fn_info("put", 2, native_fn_dict_put, dict_symbols);

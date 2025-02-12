@@ -28,8 +28,9 @@
 static Value *peek(VM *vm);
 
 #define PUSH(value, vm) {                      \
-    if(vm->stack_ptr >= STACK_LENGTH)          \
+    if(vm->stack_ptr >= STACK_LENGTH){         \
         vm_utils_error(vm, "Stack over flow"); \
+    }                                          \
     vm->stack[vm->stack_ptr++] = value;        \
 }
 
@@ -65,45 +66,47 @@ static Value *peek(VM *vm);
     PUSH(obj_value, vm);                              \
 }
 
-#define PUSH_NON_NATIVE_FN(fn, vm) {              \
-    Obj *obj = vm_utils_obj(FN_OTYPE, vm);        \
-    if(!obj) vm_utils_error(vm, "Out of memory"); \
-    obj->value.f##n = fn;                         \
-    Value fn_value = OBJ_VALUE(obj);              \
-    PUSH(fn_value, vm)                            \
+#define PUSH_NON_NATIVE_FN(fn, vm) {               \
+    Obj *obj = vm_utils_obj(FN_OTYPE, vm);         \
+    if(!obj){vm_utils_error(vm, "Out of memory");} \
+    obj->value.f##n = fn;                          \
+    Value fn_value = OBJ_VALUE(obj);               \
+    PUSH(fn_value, vm)                             \
 }
 
-#define PUSH_NATIVE_FN(fn, vm) {                  \
-    Obj *obj = vm_utils_obj(NATIVE_FN_OTYPE, vm); \
-    if(!obj) vm_utils_error(vm, "Out of memory"); \
-    obj->value.native_fn = fn;                    \
-    Value fn_value = OBJ_VALUE(obj);              \
-    PUSH(fn_value, vm)                            \
+#define PUSH_NATIVE_FN(fn, vm) {                   \
+    Obj *obj = vm_utils_obj(NATIVE_FN_OTYPE, vm);  \
+    if(!obj){vm_utils_error(vm, "Out of memory");} \
+    obj->value.native_fn = fn;                     \
+    Value fn_value = OBJ_VALUE(obj);               \
+    PUSH(fn_value, vm)                             \
 }
 
 #define PUSH_NATIVE_MODULE(m, vm){                    \
 	Obj *obj = vm_utils_obj(NATIVE_MODULE_OTYPE, vm); \
-	if(!obj) vm_utils_error(vm, "out of memory");     \
+	if(!obj){vm_utils_error(vm, "out of memory");}    \
 	obj->value.native_module = (m);                   \
 	PUSH(OBJ_VALUE(obj), vm);                         \
 }
 
-#define PUSH_MODULE(m, vm) {                      \
-    Obj *obj = vm_utils_obj(MODULE_OTYPE, vm);    \
-	if(!obj) vm_utils_error(vm, "Out of memory"); \
-	obj->value.module = m;                        \
-	PUSH(OBJ_VALUE(obj), vm);                     \
+#define PUSH_MODULE(m, vm) {                       \
+    Obj *obj = vm_utils_obj(MODULE_OTYPE, vm);     \
+	if(!obj){vm_utils_error(vm, "Out of memory");} \
+	obj->value.module = m;                         \
+	PUSH(OBJ_VALUE(obj), vm);                      \
 }
 
 #define PUSH_NATIVE_MODULE_SYMBOL(n, m, vm){												\
 	size_t key_size = strlen((n));															\
 	LZHTable *symbols = (m)->symbols;               										\
 	LZHTableNode *symbol_node = NULL;                                                       \
-	if(!lzhtable_contains((uint8_t *)(n), key_size, symbols, &symbol_node))                 \
+	if(!lzhtable_contains((uint8_t *)(n), key_size, symbols, &symbol_node)){                \
 		vm_utils_error(vm, "Module '%s' do not contains a symbol '%s'", (m)->name, (n));    \
+    }                                                                                       \
 	NativeModuleSymbol *symbol = (NativeModuleSymbol *)symbol_node->value;					\
-	if(symbol->type == NATIVE_FUNCTION_NMSYMTYPE)											\
+	if(symbol->type == NATIVE_FUNCTION_NMSYMTYPE){											\
 		PUSH_NATIVE_FN(symbol->value.fn, vm);												\
+    }                                                                                       \
 }
 
 #define PUSH_MODULE_SYMBOL(n, m, vm) {                                                      \
@@ -117,18 +120,18 @@ static Value *peek(VM *vm);
 	if(!lzhtable_contains((uint8_t *)(n), key_size, symbols, &node)){                       \
         vm_utils_error(vm, "Module '%s' do not contains a symbol '%s'", module->name, (n)); \
     }                                                                                       \
-	ModuleSymbol *symbol = (ModuleSymbol *)node->value;                                     \
-    if((m) != CURRENT_FRAME(vm)->fn->module && symbol->access == PRIVATE_MSYMATYPE){        \
+	ModuleSymbol *module_symbol = (ModuleSymbol *)node->value;                                     \
+    if((m) != CURRENT_FRAME(vm)->fn->module && module_symbol->access == PRIVATE_MSYMATYPE){        \
         vm_utils_error(vm, "Symbol '%s' not public", (n));                                  \
     }                                                                                       \
-	if(symbol->type == NATIVE_MODULE_MSYMTYPE){                                             \
-        PUSH_NATIVE_MODULE(symbol->value.native_module, vm);							    \
+	if(module_symbol->type == NATIVE_MODULE_MSYMTYPE){                                             \
+        PUSH_NATIVE_MODULE(module_symbol->value.native_module, vm);							    \
     }                                                                                       \
-	if(symbol->type == FUNCTION_MSYMTYPE){                                                  \
-        push_fn(symbol->value.fn, vm);                                                      \
+	if(module_symbol->type == FUNCTION_MSYMTYPE){                                                  \
+        push_fn(module_symbol->value.fn, vm);                                                      \
     }                                                                                       \
-	if(symbol->type == MODULE_MSYMTYPE){                                                    \
-        PUSH_MODULE(symbol->value.module, vm);                                              \
+	if(module_symbol->type == MODULE_MSYMTYPE){                                                    \
+        PUSH_MODULE(module_symbol->value.module, vm);                                              \
     }                                                                                       \
 }
 
