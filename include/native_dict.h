@@ -7,6 +7,11 @@
 
 static LZHTable *dict_symbols = NULL;
 
+static void clear_dict(void *key, void *value){
+    free(key);
+    free(value);
+}
+
 Value native_fn_dict_contains(uint8_t argsc, Value *values, void *target, VM *vm){
     LZHTable *dict = (LZHTable *)target;
     Value *value = &values[0];
@@ -75,6 +80,16 @@ Value native_fn_dict_remove(uint8_t argsc, Value *values, void *target, VM *vm){
     return EMPTY_VALUE;
 }
 
+Value native_fn_dict_clear(uint8_t argsc, Value *values, void *target, VM *vm){
+    LZHTable *dict = (LZHTable *)target;
+    
+    if(lzhtable_clear_shrink(clear_dict, dict)){
+        vm_utils_error(vm, "Fatal error when cleaning dictionary");
+    }
+
+    return EMPTY_VALUE;
+}
+
 Value native_fn_dict_keys(uint8_t argsc, Value *values, void *target, VM *vm){
     LZHTable *dict = (LZHTable *)target;
     Obj *array_obj = vm_utils_array_obj(dict->n, vm);
@@ -122,6 +137,7 @@ Obj *native_dict_get(char *symbol, void *target, VM *vm){
         runtime_add_native_fn_info("get", 1, native_fn_dict_get, dict_symbols);
         runtime_add_native_fn_info("put", 2, native_fn_dict_put, dict_symbols);
         runtime_add_native_fn_info("remove", 1, native_fn_dict_remove, dict_symbols);
+        runtime_add_native_fn_info("clear", 0, native_fn_dict_clear, dict_symbols);
         runtime_add_native_fn_info("keys", 0, native_fn_dict_keys, dict_symbols);
         runtime_add_native_fn_info("values", 0, native_fn_dict_values, dict_symbols);
     }

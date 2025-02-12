@@ -33,6 +33,7 @@ typedef struct lzhtable_bucket{
 typedef struct lzhtable{
     size_t m; // count of buckets available
     size_t n; // count of distinct elements in the table
+    size_t default_len;
     struct lzhtable_node *head;
     struct lzhtable_node *tail;
     struct lzhtable_bucket *buckets;
@@ -77,6 +78,7 @@ int lzhtable_put(
 
 int lzhtable_hash_remove(uint32_t hash, LZHTable *table, void **out_value);
 int lzhtable_remove(uint8_t *key, size_t key_size, LZHTable *table, void **out_value);
-void lzhtable_clear(void (*clear_fn)(void *value), LZHTable *table);
+void lzhtable_clear(void (*clear_fn)(void *key, void *value), LZHTable *table);
+int lzhtable_clear_shrink(void (*clear_fn)(void *key, void *value), LZHTable *table);
 
 #endif

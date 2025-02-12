@@ -40,7 +40,7 @@ static int bucket_key_insert(
     LZHTableNode **out_node
 );
 static void relocate(LZHTable *table);
-static int resize(LZHTable *table);
+static int grow(LZHTable *table);
 static void print_bucket(LZHTableBucket *bucket);
 
 // PRIVATE IMPLEMENTATION
@@ -53,13 +53,10 @@ void *lzrealloc(void *ptr, size_t old_size, size_t new_size, LZHTableAllocator *
 }
 
 void lzdealloc(void *ptr, size_t size, LZHTableAllocator *allocator){
-    if (!ptr){
-        return;
-    }
+    if (!ptr){return;}
 
     if (allocator){
-        allocator->dealloc(ptr, size, allocator->ctx);
-        return;
+        return allocator->dealloc(ptr, size, allocator->ctx);
     }
 
     free(ptr);
@@ -101,19 +98,19 @@ void destroy_node(LZHTableNode *node, LZHTable *table){
 }
 
 int compare(uint32_t hash, LZHTableBucket *bucket, LZHTableNode **out_node){
-    LZHTableNode *node = bucket->head;
+    LZHTableNode *current = bucket->head;
 
-    while (node){
-        LZHTableNode *next = node->next_bucket_node;
+    while (current){
+        LZHTableNode *next = current->next_bucket_node;
 
-        if (node->hash == hash){
+        if (current->hash == hash){
             if (out_node){
-                *out_node = node;
+                *out_node = current;
             }
             return 1;
         }
 
-        node = next;
+        current = next;
     }
 
     return 0;
@@ -195,7 +192,7 @@ void relocate(LZHTable *table){
     }
 }
 
-int resize(LZHTable *table){
+int grow(LZHTable *table){
     size_t len = table->m;
     size_t new_len = len * 2;
     size_t old_size = BUCKET_SIZE * len;
@@ -208,14 +205,35 @@ int resize(LZHTable *table){
         table->allocator
     );
 
-    if(!new_buckets){
-        return 1;
-    }
+    if(!new_buckets){return 1;}
 
     table->m = new_len;
     table->buckets = new_buckets;
 
     relocate(table);
+
+    return 0;
+}
+
+int shrink_to(size_t to, int update, LZHTable *table){
+    size_t len = table->m;
+    size_t new_len = to;
+    size_t old_size = BUCKET_SIZE * len;
+    size_t new_size = BUCKET_SIZE * new_len;
+
+    void *new_buckets = lzrealloc(
+        table->buckets,
+        old_size,
+        new_size,
+        table->allocator
+    );
+
+    if(!new_buckets){return 1;}
+
+    table->m = new_len;
+    table->buckets = new_buckets;
+
+    if(update){relocate(table);}
 
     return 0;
 }
@@ -240,7 +258,6 @@ void print_bucket(LZHTableBucket *bucket){
 // PUBLIC IMPLEMENTATION
 LZHTable *lzhtable_create(size_t length, LZHTableAllocator *allocator){
     size_t buckets_length = BUCKET_SIZE * length;
-
     LZHTableBucket *buckets = (LZHTableBucket *)lzalloc(buckets_length, allocator);
     LZHTable *table = (LZHTable *)lzalloc(TABLE_SIZE, allocator);
 
@@ -255,10 +272,11 @@ LZHTable *lzhtable_create(size_t length, LZHTableAllocator *allocator){
 
     table->m = length;
     table->n = 0;
-    table->allocator = allocator;
-    table->buckets = buckets;
+    table->default_len = length;
     table->head = NULL;
     table->tail = NULL;
+    table->buckets = buckets;
+    table->allocator = allocator;
 
     return table;
 }
@@ -267,19 +285,17 @@ void lzhtable_destroy(void (*destroy_value)(void *key, void *value), LZHTable *t
     if (!table) return;
 
     LZHTableAllocator *allocator = table->allocator;
-    LZHTableNode *node = table->head;
+    LZHTableNode *current = table->head;
 
-    while (node){
-        void *key = node->key;
-        void *value = node->value;
-        LZHTableNode *next = node->next_table_node;
+    while (current){
+        void *key = current->key;
+        void *value = current->value;
+        LZHTableNode *next = current->next_table_node;
 
-        if(destroy_value)
-            destroy_value(key, value);
-        
-        destroy_node(node, table);
+        if(destroy_value){destroy_value(key, value);}
+        destroy_node(current, table);
 
-        node = next;
+        current = next;
     }
 
     lzdealloc(table->buckets, BUCKET_SIZE * table->m, allocator);
@@ -334,8 +350,8 @@ void *lzhtable_get(uint8_t *key, size_t key_size, LZHTable *table){
 }
 
 int lzhtable_hash_put_key(void *key, uint32_t hash, void *value, LZHTable *table){
-    if(LZHTABLE_COUNT(table) > 0 && LZHTABLE_LOAD_FACTOR(table) >= 0.7 && resize(table)){
-        return 1;
+    if(LZHTABLE_COUNT(table) > 0 && LZHTABLE_LOAD_FACTOR(table) >= 0.7){
+        if(grow(table)){return 1;}
     }
 
     size_t index = hash % table->m;
@@ -370,43 +386,51 @@ int lzhtable_hash_put(uint32_t hash, void *value, LZHTable *table){
 }
 
 int lzhtable_put(uint8_t *key, size_t key_size, void *value, LZHTable *table, uint32_t **hash_out){
-    uint32_t k = fnv_1a_hash(key, key_size);
-    if(hash_out) **hash_out = k;
-    return lzhtable_hash_put(k, value, table);
+    uint32_t hash = fnv_1a_hash(key, key_size);
+    if(hash_out){**hash_out = hash;}
+    return lzhtable_hash_put(hash, value, table);
 }
 
-int lzhtable_hash_remove(uint32_t hash, LZHTable *table, void **value){
+int lzhtable_hash_remove(uint32_t hash, LZHTable *table, void **out_value){
     size_t index = hash % table->m;
     LZHTableBucket *bucket = &table->buckets[index];
 
-    if (bucket->size == 0)
-        return 1;
+    if (bucket->size == 0){return 1;}
 
     LZHTableNode *node = NULL;
 
     if (compare(hash, bucket, &node)){
-        if (value)
-            *value = node->value;
+        if (out_value){
+            *out_value = node->value;
+        }
 
-        if(node == table->head)
+        if(node == table->head){
             table->head = node->next_table_node;
-        if(node == table->tail)
+        }
+        if(node == table->tail){
             table->tail = node->prev_table_node;
+        }
         
-        if(node == bucket->head)
+        if(node == bucket->head){
             bucket->head = node->next_bucket_node;
-        if(node == bucket->tail)
+        }
+        if(node == bucket->tail){
             bucket->tail = node->prev_bucket_node;
+        }
 
-        if (node->prev_table_node)
+        if (node->prev_table_node){
             node->prev_table_node->next_table_node = node->next_table_node;
-        if (node->next_table_node)
+        }
+        if (node->next_table_node){
             node->next_table_node->prev_table_node = node->prev_table_node;
+        }
 
-        if (node->prev_bucket_node)
+        if (node->prev_bucket_node){
             node->prev_bucket_node->next_bucket_node = node->next_bucket_node;
-        if (node->next_bucket_node)
+        }
+        if (node->next_bucket_node){
             node->next_bucket_node->prev_bucket_node = node->prev_bucket_node;
+        }
 
         destroy_node(node, table);
 
@@ -419,27 +443,31 @@ int lzhtable_hash_remove(uint32_t hash, LZHTable *table, void **value){
 }
 
 int lzhtable_remove(uint8_t *key, size_t key_size, LZHTable *table, void **value){
-    uint32_t k = fnv_1a_hash(key, key_size);
-    return lzhtable_hash_remove(k, table, value);
+    uint32_t hash = fnv_1a_hash(key, key_size);
+    return lzhtable_hash_remove(hash, table, value);
 }
 
-void lzhtable_clear(void (*clear_fn)(void *value), LZHTable *table){
+void lzhtable_clear(void (*clear_fn)(void *key, void *value), LZHTable *table){
+    memset(table->buckets, 0, BUCKET_SIZE * table->m);
+
+    LZHTableNode *current = table->head;
+
+    while (current){
+        LZHTableNode *next = current->next_table_node;
+
+        if (clear_fn){clear_fn(current->key, current->value);}
+        destroy_node(current, table);
+
+        current = next;
+    }
+
     table->n = 0;
     table->head = NULL;
     table->tail = NULL;
+}
 
-    memset(table->buckets, 0, BUCKET_SIZE * table->m);
-
-    LZHTableNode *node = table->head;
-
-    while (node){
-        LZHTableNode *prev = node->prev_table_node;
-
-        if (clear_fn)
-            clear_fn(node->value);
-
-        destroy_node(node, table);
-
-        node = prev;
-    }
+int lzhtable_clear_shrink(void (*clear_fn)(void *key, void *value), LZHTable *table){
+    if(shrink_to(table->default_len, 0, table)){return 1;}
+    lzhtable_clear(clear_fn, table);
+    return 0;
 }
