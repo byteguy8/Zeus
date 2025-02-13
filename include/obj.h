@@ -21,22 +21,21 @@ typedef enum obj_type{
 
 typedef struct obj{    
     char marked;
+    ObjType type;
     struct obj *prev;
     struct obj *next;
-	
-    ObjType type;
 
     union{
 		Str *str;
         Array *array;
 		DynArr *list;
-		Record *record;
         LZHTable *dict;
+		Record *record;
         NativeFn *native_fn;
         Fn *fn;
+        ForeignFn *foreign_fn;
         NativeModule *native_module;
         Module *module;
-        ForeignFn *foreign_fn;
         NativeLib *native_lib;
 	}value;
 }Obj;

@@ -6,7 +6,6 @@
 #include "bstr.h"
 
 void vm_utils_error(VM *vm, char *msg, ...);
-void *assert_ptr(void *ptr, VM *vm);
 
 uint32_t vm_utils_hash_obj(Obj *obj);
 uint32_t vm_utils_hash_value(Value *value);

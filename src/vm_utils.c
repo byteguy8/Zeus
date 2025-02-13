@@ -12,6 +12,7 @@
 #define FRAME_AT(at, vm)(&vm->frame_stack[at])
 
 //> PRIVATE INTERFACE
+// GARBAGE COLLECTOR
 void clean_up_module(Module *module);
 void destroy_dict_values(void *key, void *value);
 void destroy_globals_values(void *ptr);
@@ -20,7 +21,7 @@ void mark_value(Value *value);
 void mark_objs(VM *vm);
 void sweep_objs(VM *vm);
 void gc(VM *vm);
-
+// ERROR REPORT
 int compare_locations(void *a, void *b);
 BStr *prepare_stacktrace(unsigned int spaces, VM *vm);
 //< PRIVATE INTERFACE
@@ -171,21 +172,21 @@ void mark_value(Value *value){
 			break;
 		}case DICT_OTYPE:{
             LZHTable *dict = obj->value.dict;
-            LZHTableNode *node = dict->head;
+            LZHTableNode *current = dict->head;
 			LZHTableNode *next = NULL;
 			Value *value = NULL;
 			
-			while (node){
-				next = node->next_table_node;
-				value = (Value *)node->value;
+			while (current){
+				next = current->next_table_node;
+				value = (Value *)current->value;
 				
 				if(value->type != OBJ_VTYPE){
-					node = next;
+					current = next;
 					continue;
 				}
 				
 				mark_value(value);
-				node = next;
+				current = next;
 			}
 			
             break;
@@ -195,21 +196,21 @@ void mark_value(Value *value){
 			
 			if(!key_values){break;}
 			
-			LZHTableNode *node = key_values->head;
+			LZHTableNode *current = key_values->head;
 			LZHTableNode *next = NULL;
 			Value *value = NULL;
 			
-			while (node){
-				next = node->next_table_node;
-				value = (Value *)node->value;
+			while (current){
+				next = current->next_table_node;
+				value = (Value *)current->value;
 				
 				if(value->type != OBJ_VTYPE){
-					node = next;
+					current = next;
 					continue;
 				}
 				
 				mark_value(value);
-				node = next;
+				current = next;
 			}
 			
 			break;
@@ -217,22 +218,21 @@ void mark_value(Value *value){
             break;
         }case MODULE_OTYPE:{
 			Module *module = obj->value.module;
-            SubModule *submodule = module->submodule;
-			LZHTableNode *node = submodule->globals->head;
+			LZHTableNode *current = MODULE_GLOBALS(module)->head;
 			LZHTableNode *next = NULL;
 			Value *value = NULL;
 			
-			while (node){
-				next = node->next_table_node;
-				value = (Value *)node->value;
+			while (current){
+				next = current->next_table_node;
+				value = (Value *)current->value;
 				
 				if(value->type != OBJ_VTYPE){
-					node = next;
+					current = next;
 					continue;
 				}
 				
 				mark_value(value);
-				node = next;
+				current = next;
 			}
     
             break;
@@ -243,20 +243,20 @@ void mark_value(Value *value){
 }
 
 void mark_objs(VM *vm){
-    // globals
+    //> MARKING GLOBALS
     Module *module = vm->module;
-    SubModule *submodule = module->submodule;
-    LZHTableNode *node = submodule->globals->head;
+    LZHTableNode *current = MODULE_GLOBALS(module)->head;
     LZHTableNode *next = NULL;
+    Value *value = NULL;
     
-    while (node){
-        next = node->next_table_node;
-        Value *value = (Value *)node->value;
+    while (current){
+        next = current->next_table_node;
+        value = (Value *)current->value;
         mark_value(value);
-        node = next;
+        current = next;
     }
-    
-    // locals
+    //< MARKING GLOBALS
+    //> MARKING LOCALS
     Frame *frame = NULL;
     Value *frame_value = NULL;
     
@@ -268,14 +268,15 @@ void mark_objs(VM *vm){
             mark_value(frame_value);
         }
     }
-    
-    //stack
+    //< MARKING LOCALS
+    //> MARKING STACK
     Value *stack_value = NULL;
     
     for(int i = 0; i < vm->stack_ptr; i++){
 		stack_value = &vm->stack[i];
 		mark_value(stack_value);
 	}
+    //< MARKING STACK
 }
 
 void sweep_objs(VM *vm){
@@ -365,12 +366,6 @@ void vm_utils_error(VM *vm, char *msg, ...){
     vm_utils_clean_up(vm);
 
     longjmp(vm->err_jmp, 1);
-}
-
-void *assert_ptr(void *ptr, VM *vm){
-    if(ptr){return ptr;}
-    vm_utils_error(vm, "Out of memory");
-    return NULL;
 }
 
 uint32_t vm_utils_hash_obj(Obj *obj){
