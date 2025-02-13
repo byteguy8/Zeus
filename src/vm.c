@@ -454,11 +454,13 @@ void execute(uint8_t chunk, VM *vm){
             Value *va = pop(vm);
 
             if(IS_STR(va) || IS_STR(vb)){
-                if(!IS_STR(va))
-                     vm_utils_error(vm, "Expect string at left side of string concatenation");
+                if(!IS_STR(va)){
+                    vm_utils_error(vm, "Expect string at left side of string concatenation");
+                }
 
-                if(!IS_STR(vb))
+                if(!IS_STR(vb)){
                     vm_utils_error(vm, "Expect string at right side of string concatenation");
+                }
 
                 Str *astr = TO_STR(va) ;
                 Str *bstr = TO_STR(vb);
@@ -470,11 +472,13 @@ void execute(uint8_t chunk, VM *vm){
             }
 
             if(IS_INT(va) || IS_INT(vb)){
-                if(!IS_INT(va))
+                if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side of sum");
+                }
 
-                if(!IS_INT(vb))
+                if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side of sum");
+                }
 
                 int64_t left = TO_INT(va);
                 int64_t right = TO_INT(vb);
@@ -485,11 +489,13 @@ void execute(uint8_t chunk, VM *vm){
             }
 
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                if(!IS_FLOAT(va))
+                if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of sum");
+                }
 
-                if(!IS_FLOAT(vb))
+                if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of sum");
+                }
 
                 double left = TO_FLOAT(va);
                 double right = TO_FLOAT(vb);
@@ -507,11 +513,13 @@ void execute(uint8_t chunk, VM *vm){
             Value *va = pop(vm);
 
             if(IS_INT(va) || IS_INT(vb)){
-                if(!IS_INT(va))
+                if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side subtraction");
+                }
 
-                if(!IS_INT(vb))
+                if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side subtraction");
+                }
 
                 int64_t left = TO_INT(va);
                 int64_t right = TO_INT(vb);
@@ -522,11 +530,13 @@ void execute(uint8_t chunk, VM *vm){
             }
 
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                if(!IS_FLOAT(va))
+                if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of subtraction");
+                }
 
-                if(!IS_FLOAT(vb))
+                if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of subtraction");
+                }
 
                 double left = TO_FLOAT(va);
                 double right = TO_FLOAT(vb);
@@ -577,11 +587,13 @@ void execute(uint8_t chunk, VM *vm){
             }
 
             if(IS_INT(va) || IS_INT(vb)){
-                if(!IS_INT(va))
+                if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side of multiplication");
+                }
 
-                if(!IS_INT(vb))
+                if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side of multiplication");
+                }
 
                 int64_t left = TO_INT(va);
                 int64_t right = TO_INT(vb);
@@ -592,11 +604,13 @@ void execute(uint8_t chunk, VM *vm){
             }
             
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                if(!IS_FLOAT(va))
+                if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of multiplication");
+                }
 
-                if(!IS_FLOAT(vb))
+                if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of multiplication");
+                }
 
                 double left = TO_FLOAT(va);
                 double right = TO_FLOAT(vb);
@@ -614,11 +628,13 @@ void execute(uint8_t chunk, VM *vm){
             Value *va = pop(vm);
 
             if(IS_INT(va) || IS_INT(vb)){
-                if(!IS_INT(va))
+                if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side of division");
+                }
             
-                if(!IS_INT(vb))
+                if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side of division");
+                }
 
                 int64_t left = TO_INT(va);
                 int64_t right = TO_INT(vb);
@@ -629,11 +645,13 @@ void execute(uint8_t chunk, VM *vm){
             }
 
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                if(!IS_FLOAT(va))
+                if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of division");
+                }
 
-                if(!IS_FLOAT(vb))
+                if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of division");
+                }
 
                 double left = TO_FLOAT(va);
                 double right = TO_FLOAT(vb);
@@ -650,11 +668,13 @@ void execute(uint8_t chunk, VM *vm){
 			Value *vb = pop(vm);
             Value *va = pop(vm);
 
-            if(!IS_INT(va))
+            if(!IS_INT(va)){
                 vm_utils_error(vm, "Expect integer at left side of module");
+            }
         
-            if(!IS_INT(vb))
+            if(!IS_INT(vb)){
                 vm_utils_error(vm, "Expect integer at right side of module");
+            }
 
             int64_t left = TO_INT(va);
             int64_t right = TO_INT(vb);
@@ -667,11 +687,13 @@ void execute(uint8_t chunk, VM *vm){
             Value *va = pop(vm);
 
             if(IS_INT(va) || IS_INT(vb)){
-                if(!IS_INT(va))
+                if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side of comparison");
+                }
             
-                if(!IS_INT(vb))
+                if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side of comparison");
+                }
 
                 int64_t left = TO_INT(va);
                 int64_t right = TO_INT(vb);
@@ -682,11 +704,13 @@ void execute(uint8_t chunk, VM *vm){
             }
 
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                if(!IS_FLOAT(va))
+                if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of comparison");
+                }
 
-                if(!IS_FLOAT(vb))
+                if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of comparison");
+                }
 
                 double left = TO_FLOAT(va);
                 double right = TO_FLOAT(vb);
@@ -704,11 +728,13 @@ void execute(uint8_t chunk, VM *vm){
             Value *va = pop(vm);
 
             if(IS_INT(va) || IS_INT(vb)){
-                if(!IS_INT(va))
+                if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side of comparison");
+                }
             
-                if(!IS_INT(vb))
+                if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side of comparison");
+                }
 
                 int64_t left = TO_INT(va);
                 int64_t right = TO_INT(vb);
@@ -719,11 +745,13 @@ void execute(uint8_t chunk, VM *vm){
             }
 
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                if(!IS_FLOAT(va))
+                if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of comparison");
+                }
 
-                if(!IS_FLOAT(vb))
+                if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of comparison");
+                }
 
                 double left = TO_FLOAT(va);
                 double right = TO_FLOAT(vb);
@@ -741,11 +769,13 @@ void execute(uint8_t chunk, VM *vm){
             Value *va = pop(vm);
 
             if(IS_INT(va) || IS_INT(vb)){
-                if(!IS_INT(va))
+                if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side of comparison");
+                }
             
-                if(!IS_INT(vb))
+                if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side of comparison");
+                }
 
                 int64_t left = TO_INT(va);
                 int64_t right = TO_INT(vb);
@@ -756,11 +786,13 @@ void execute(uint8_t chunk, VM *vm){
             }
 
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                if(!IS_FLOAT(va))
+                if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of comparison");
+                }
 
-                if(!IS_FLOAT(vb))
+                if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of comparison");
+                }
 
                 double left = TO_FLOAT(va);
                 double right = TO_FLOAT(vb);
@@ -778,11 +810,13 @@ void execute(uint8_t chunk, VM *vm){
             Value *va = pop(vm);
 
             if(IS_INT(va) || IS_INT(vb)){
-                if(!IS_INT(va))
+                if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side of comparison");
+                }
             
-                if(!IS_INT(vb))
+                if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side of comparison");
+                }
 
                 int64_t left = TO_INT(va);
                 int64_t right = TO_INT(vb);
@@ -793,11 +827,13 @@ void execute(uint8_t chunk, VM *vm){
             }
 
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                if(!IS_FLOAT(va))
+                if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of comparison");
+                }
 
-                if(!IS_FLOAT(vb))
+                if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of comparison");
+                }
 
                 double left = TO_FLOAT(va);
                 double right = TO_FLOAT(vb);
@@ -815,11 +851,13 @@ void execute(uint8_t chunk, VM *vm){
             Value *va = pop(vm);
 
             if(IS_BOOL(va) || IS_BOOL(vb)){
-                if(!IS_BOOL(va))
+                if(!IS_BOOL(va)){
                     vm_utils_error(vm, "Expect boolean at left side of equality");
+                }
 
-                if(!IS_BOOL(vb))
+                if(!IS_BOOL(vb)){
                     vm_utils_error(vm, "Expect boolean at right side of equality");
+                }
 
                 uint8_t left = TO_BOOL(va);
                 uint8_t right = TO_BOOL(vb);
@@ -830,11 +868,13 @@ void execute(uint8_t chunk, VM *vm){
             }
 
             if(IS_INT(va) || IS_INT(vb)){
-                if(!IS_INT(va))
+                if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side of equality");
+                }
             
-                if(!IS_INT(vb))
+                if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side of equality");
+                }
 
                 int64_t left = TO_INT(va);
                 int64_t right = TO_INT(vb);
@@ -845,11 +885,13 @@ void execute(uint8_t chunk, VM *vm){
             }
 
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                if(!IS_FLOAT(va))
+                if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of equality");
+                }
 
-                if(!IS_FLOAT(vb))
+                if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of equality");
+                }
 
                 double left = TO_FLOAT(va);
                 double right = TO_FLOAT(vb);
@@ -867,11 +909,13 @@ void execute(uint8_t chunk, VM *vm){
             Value *va = pop(vm);
 
             if(IS_BOOL(va) || IS_BOOL(vb)){
-                if(!IS_BOOL(va))
+                if(!IS_BOOL(va)){
                     vm_utils_error(vm, "Expect boolean at left side of equality");
+                }
 
-                if(!IS_BOOL(vb))
+                if(!IS_BOOL(vb)){
                     vm_utils_error(vm, "Expect boolean at right side of equality");
+                }
 
                 uint8_t left = TO_BOOL(va);
                 uint8_t right = TO_BOOL(vb);
@@ -882,11 +926,13 @@ void execute(uint8_t chunk, VM *vm){
             }
 
             if(IS_INT(va) || IS_INT(vb)){
-                if(!IS_INT(va))
+                if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side of equality");
+                }
             
-                if(!IS_INT(vb))
+                if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side of equality");
+                }
 
                 int64_t left = TO_INT(va);
                 int64_t right = TO_INT(vb);
@@ -897,11 +943,13 @@ void execute(uint8_t chunk, VM *vm){
             }
 
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                if(!IS_FLOAT(va))
+                if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of equality");
+                }
 
-                if(!IS_FLOAT(vb))
+                if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of equality");
+                }
 
                 double left = TO_FLOAT(va);
                 double right = TO_FLOAT(vb);
@@ -948,8 +996,9 @@ void execute(uint8_t chunk, VM *vm){
             LZHTable *globals = submodule->globals;
             LZHTableNode *node = NULL;
 
-            if(!lzhtable_hash_contains(hash, globals, &node))
+            if(!lzhtable_hash_contains(hash, globals, &node)){
                 vm_utils_error(vm, "Global symbol '%s' does not exists", symbol);
+            }
             
             PUSH(*(Value *)node->value, vm);
 
@@ -1006,8 +1055,9 @@ void execute(uint8_t chunk, VM *vm){
 			char *symbol = read_str(vm, NULL);
 			Record *record = NULL;
 	
-			if(!IS_RECORD(target))
-				vm_utils_error(vm, "Expect a record, but got something else");
+			if(!IS_RECORD(target)){
+                vm_utils_error(vm, "Expect a record, but got something else");
+            }
 
 			record = TO_RECORD(target);
 
@@ -1016,8 +1066,9 @@ void execute(uint8_t chunk, VM *vm){
 			uint32_t hash = lzhtable_hash(key, key_size);
 			LZHTableNode *node = NULL;
 
-			if(!lzhtable_hash_contains(hash, record->key_values, &node))
-				vm_utils_error(vm, "Record do not contains key '%s'", symbol);
+			if(!lzhtable_hash_contains(hash, record->key_values, &node)){
+                vm_utils_error(vm, "Record do not contains key '%s'", symbol);
+            }
 
             *(Value *)node->value = *value;
 
@@ -1026,11 +1077,12 @@ void execute(uint8_t chunk, VM *vm){
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
-            if(!IS_BOOL(va))
+            if(!IS_BOOL(va)){
                 vm_utils_error(vm, "Expect boolean at left side");
-
-            if(!IS_BOOL(vb))
+            }
+            if(!IS_BOOL(vb)){
                 vm_utils_error(vm, "Expect boolean at right side");
+            }
 
             uint8_t left = TO_BOOL(va);
             uint8_t right = TO_BOOL(vb);
@@ -1042,11 +1094,12 @@ void execute(uint8_t chunk, VM *vm){
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
-            if(!IS_BOOL(va))
+            if(!IS_BOOL(va)){
                 vm_utils_error(vm, "Expect boolean at left side");
-
-            if(!IS_BOOL(vb))
+            }
+            if(!IS_BOOL(vb)){
                 vm_utils_error(vm, "Expect boolean at right side");
+            }
 
             uint8_t left = TO_BOOL(va);
             uint8_t right = TO_BOOL(vb);
@@ -1075,8 +1128,9 @@ void execute(uint8_t chunk, VM *vm){
         }case NOT_OPCODE:{
             Value *vb = pop(vm);
 
-            if(!IS_BOOL(vb))
+            if(!IS_BOOL(vb)){
                 vm_utils_error(vm, "Expect boolean at right side");
+            }
 
             uint8_t right = TO_BOOL(vb);
             PUSH_BOOL(!right, vm)
@@ -1091,43 +1145,54 @@ void execute(uint8_t chunk, VM *vm){
             break;
         }case JMP_OPCODE:{
             int16_t jmp_value = read_i16(vm);
-            if(jmp_value == 0) break;
+            if(jmp_value == 0){break;}
             
-            if(jmp_value > 0) CURRENT_FRAME(vm)->ip += jmp_value - 1;
-            else CURRENT_FRAME(vm)->ip += jmp_value - 3;
+            if(jmp_value > 0){
+                CURRENT_FRAME(vm)->ip += jmp_value - 1;
+            }else{
+                CURRENT_FRAME(vm)->ip += jmp_value - 3;
+            }
 
             break;
         }case JIF_OPCODE:{
             Value *value = pop(vm);
             
-            if(!IS_BOOL(value))
+            if(!IS_BOOL(value)){
                 vm_utils_error(vm, "Expect boolean as conditional value");
+            }
 
 			uint8_t condition = TO_BOOL(value);
 			int16_t jmp_value = read_i16(vm);
 			
-            if(jmp_value == 0) break;
+            if(jmp_value == 0){break;}
 
             if(!condition){
-                if(jmp_value > 0) CURRENT_FRAME(vm)->ip += jmp_value - 1;
-                else CURRENT_FRAME(vm)->ip += jmp_value - 3;
+                if(jmp_value > 0){
+                    CURRENT_FRAME(vm)->ip += jmp_value - 1;
+                }else{
+                    CURRENT_FRAME(vm)->ip += jmp_value - 3;
+                }
             }
 
 			break;
 		}case JIT_OPCODE:{
             Value *value = pop(vm);
 
-            if(!IS_BOOL(value))
+            if(!IS_BOOL(value)){
                 vm_utils_error(vm, "Expect boolean as conditional value");
+            }
 
 			uint8_t condition = TO_BOOL(value);
 			int16_t jmp_value = read_i16(vm);
 
-			if(jmp_value == 0) break;
+			if(jmp_value == 0){break;}
 
 			if(condition){
-                if(jmp_value > 0) CURRENT_FRAME(vm)->ip += jmp_value - 1;
-                else CURRENT_FRAME(vm)->ip += jmp_value - 3;
+                if(jmp_value > 0){
+                    CURRENT_FRAME(vm)->ip += jmp_value - 1;
+                }else{
+                    CURRENT_FRAME(vm)->ip += jmp_value - 3;
+                }
             }
 
 			break;
@@ -1175,8 +1240,9 @@ void execute(uint8_t chunk, VM *vm){
 			for(int32_t i = 0; i < len; i++){
 				Value *value = pop(vm);
 
-				if(dynarr_insert(value, list))
-					vm_utils_error(vm, "Out of memory");		
+				if(dynarr_insert(value, list)){
+                    vm_utils_error(vm, "Out of memory");
+                }
 			}
 
             PUSH(OBJ_VALUE(list_obj), vm);
@@ -1205,8 +1271,9 @@ void execute(uint8_t chunk, VM *vm){
 
                 uint32_t hash = vm_utils_hash_value(key_clone);
                 
-                if(lzhtable_hash_put_key(key_clone, hash, value_clone, dict))
+                if(lzhtable_hash_put_key(key_clone, hash, value_clone, dict)){
                     vm_utils_error(vm, "Out of memory");
+                }
             }
 
             PUSH(OBJ_VALUE(dict_obj), vm);
@@ -1216,7 +1283,7 @@ void execute(uint8_t chunk, VM *vm){
 			uint8_t len = ADVANCE(vm);
             
 			Obj *record_obj = vm_utils_record_obj(len == 0, vm);
-			if(!record_obj) vm_utils_error(vm, "Out of memory");
+			if(!record_obj){vm_utils_error(vm, "Out of memory");}
 
 			if(len == 0){
                 PUSH(OBJ_VALUE(record_obj), vm);
@@ -1260,16 +1327,18 @@ void execute(uint8_t chunk, VM *vm){
 				Fn *fn = TO_FN(fn_value);
                 uint8_t params_count = fn->params ? fn->params->used : 0;
 
-                if(params_count != args_count)
+                if(params_count != args_count){
                     vm_utils_error(vm, "Failed to call function '%s'. Declared with %d parameter(s), but got %d argument(s)", fn->name, params_count, args_count);
+                }
 
                 frame_up_fn(fn, vm);
 
                 if(args_count > 0){
                     int from = (int)(args_count == 0 ? 0 : args_count - 1);
 
-                    for (int i = from; i >= 0; i--)
+                    for (int i = from; i >= 0; i--){
                         CURRENT_FRAME(vm)->locals[i] = *pop(vm);
+                    }
                 }
 
                 pop(vm);
@@ -1289,8 +1358,9 @@ void execute(uint8_t chunk, VM *vm){
 
                 Value values[args_count];
                 
-                for (int i = args_count; i > 0; i--)
+                for (int i = args_count; i > 0; i--){
                     values[i - 1] = *pop(vm);
+                }
                 
                 pop(vm);
 
@@ -1405,16 +1475,28 @@ void execute(uint8_t chunk, VM *vm){
                 void *handler = library->handler;
                 
                 void *(*znative_symbol)(char *symbol_name) = dlsym(handler, "znative_symbol");
-                if(!znative_symbol) vm_utils_error(vm, "Something is wrong with loaded native library. Expect 'znative_symbol' to be present");
+                
+                if(!znative_symbol){
+                    vm_utils_error(vm, "Something is wrong with loaded native library. Expect 'znative_symbol' to be present");
+                }
 
                 RawForeignFn raw_foreign_fn = znative_symbol(symbol);
-                if(!raw_foreign_fn) vm_utils_error(vm, "Failed to get '%s' from native library: do not exists", symbol);
+                
+                if(!raw_foreign_fn){
+                    vm_utils_error(vm, "Failed to get '%s' from native library: do not exists", symbol);
+                }
 
                 Obj *foreign_fn_obj = vm_utils_obj(FOREIGN_FN_OTYPE, vm);
-                if(!foreign_fn_obj) vm_utils_error(vm, "Failed to get native library symbol: out of memory");
+                
+                if(!foreign_fn_obj){
+                    vm_utils_error(vm, "Failed to get native library symbol: out of memory");
+                }
 
                 ForeignFn *foreign_fn = (ForeignFn *)malloc(sizeof(ForeignFn));
-                if(!foreign_fn) vm_utils_error(vm, "Failed to get native library symbol: out of memory");
+                
+                if(!foreign_fn){
+                    vm_utils_error(vm, "Failed to get native library symbol: out of memory");
+                }
 
                 foreign_fn->raw_fn = raw_foreign_fn;
                 foreign_fn_obj->value.foreign_fn = foreign_fn;
@@ -1511,8 +1593,9 @@ void execute(uint8_t chunk, VM *vm){
 
 			break;
 		}case THROW_OPCODE:{
-			if(vm->frame_ptr == 0)
-				vm_utils_error(vm, "Can not throw in a empty frame stack");
+			if(vm->frame_ptr == 0){
+                vm_utils_error(vm, "Can not throw in a empty frame stack");
+            }
             
             Value *value = pop(vm);
             Str *throw_message = NULL;
@@ -1533,8 +1616,9 @@ void execute(uint8_t chunk, VM *vm){
                     if(lzhtable_contains(k, ks, record->key_values, &message_node)){
                         Value *value = (Value *)message_node->value;
 
-                        if(!IS_STR(value))
+                        if(!IS_STR(value)){
                             vm_utils_error(vm, "Expect record attribute 'message' to be of type string");
+                        }
 
                         throw_message = TO_STR(value);   
                     }
@@ -1565,7 +1649,7 @@ void execute(uint8_t chunk, VM *vm){
                         size_t end = try_block->catch;
                         size_t ip = frame->ip;
 
-						if(ip < start || ip > end) continue;
+						if(ip < start || ip > end){continue;}
 
 						try = try_block;
 
@@ -1584,10 +1668,11 @@ void execute(uint8_t chunk, VM *vm){
             }
 
             if(throw){
-                if(throw_message)
+                if(throw_message){
                     vm_utils_error(vm, throw_message->buff);
-                else
+                }else{
                     vm_utils_error(vm, "");
+                }
             }
             
             break;
