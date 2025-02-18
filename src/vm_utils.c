@@ -712,9 +712,8 @@ Obj *vm_utils_array_obj(int32_t len, VM *vm){
         return NULL;
     }
 
-    array->len = (size_t)len;
+    array->len = len;
     array->values = values;
-
     array_obj->value.array = array;
 
     return array_obj;

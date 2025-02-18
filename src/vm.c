@@ -1,16 +1,15 @@
 #include "vm.h"
 #include "vm_utils.h"
+#include "memory.h"
+#include "opcode.h"
+#include "types.h"
 
 #include "native_str.h"
 #include "native_array.h"
 #include "native_list.h"
 #include "native_dict.h"
-
 #include "native_lib.h"
 
-#include "memory.h"
-#include "opcode.h"
-#include "types.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
@@ -174,21 +173,24 @@ char *multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm){
 }
 
 Frame *frame_up(char *name, VM *vm){
-    if(vm->frame_ptr >= FRAME_LENGTH)
+    if(vm->frame_ptr >= FRAME_LENGTH){
         vm_utils_error(vm, "Frame over flow");
+    }
 
     Module *module = vm->module;
     SubModule *submodule = module->submodule;
 	LZHTable *symbols = submodule->symbols;
 	LZHTableNode *symbol_node = NULL;
     
-	if(!lzhtable_contains((uint8_t *)name, strlen(name), symbols, &symbol_node))
+	if(!lzhtable_contains((uint8_t *)name, strlen(name), symbols, &symbol_node)){
         vm_utils_error(vm, "Symbol '%s' do not exists", name);
+    }
 
 	ModuleSymbol *symbol = (ModuleSymbol *)symbol_node->value;
 
-	if(symbol->type != FUNCTION_MSYMTYPE)
-		vm_utils_error(vm, "Expect symbol of type 'function', but got something else");
+	if(symbol->type != FUNCTION_MSYMTYPE){
+        vm_utils_error(vm, "Expect symbol of type 'function', but got something else");
+    }
 
     Fn *fn = symbol->value.fn;
     Frame *frame = &vm->frame_stack[vm->frame_ptr++];
@@ -200,8 +202,9 @@ Frame *frame_up(char *name, VM *vm){
 }
 
 Frame *frame_up_fn(Fn *fn, VM *vm){
-    if(vm->frame_ptr >= FRAME_LENGTH)
+    if(vm->frame_ptr >= FRAME_LENGTH){
         vm_utils_error(vm, "Frame over flow");
+    }
         
     Frame *frame = &vm->frame_stack[vm->frame_ptr++];
 
@@ -212,8 +215,9 @@ Frame *frame_up_fn(Fn *fn, VM *vm){
 }
 
 void frame_down(VM *vm){
-    if(vm->frame_ptr == 0)
+    if(vm->frame_ptr == 0){
         vm_utils_error(vm, "Frame under flow");
+    }
 
     vm->frame_ptr--;
 }
@@ -232,58 +236,47 @@ void print_obj(Obj *object){
             Str *str = object->value.str;
             printf("%s\n", str->buff);
             break;
-        }
-        case ARRAY_OTYPE:{
+        }case ARRAY_OTYPE:{
 			Array *array = object->value.array;
 			printf("<array %d at %p>\n", array->len, array);
 			break;
-		}
-   		case LIST_OTYPE:{
+		}case LIST_OTYPE:{
 			DynArr *list = object->value.list;
 			printf("<list %ld at %p>\n", list->used, list);
 			break;
-		}
-        case DICT_OTYPE:{
+		}case DICT_OTYPE:{
             LZHTable *table = object->value.dict;
             printf("<dict %ld at %p>\n", table->n, table);
             break;
-        }
-		case RECORD_OTYPE:{
+        }case RECORD_OTYPE:{
 			Record *record = object->value.record;
 			printf("<record %ld at %p>\n", record->key_values ? record->key_values->n : 0, record);
 			break;
-		}
-        case FN_OTYPE:{
+		}case FN_OTYPE:{
             Fn *fn = (Fn *)object->value.fn;
             printf("<function '%s' - %d at %p>\n", fn->name, (uint8_t)(fn->params ? fn->params->used : 0), fn);
             break;
-        }
-        case NATIVE_FN_OTYPE:{
+        }case NATIVE_FN_OTYPE:{
             NativeFn *native_fn = object->value.native_fn;
             printf("<native function '%s' - %d at %p>\n", native_fn->name, native_fn->arity, native_fn);
             break;
-        }
-        case NATIVE_MODULE_OTYPE:{
+        }case NATIVE_MODULE_OTYPE:{
             NativeModule *module = object->value.native_module;
             printf("<native module '%s' at %p>\n", module->name, module);
             break;
-        }
-        case MODULE_OTYPE:{
+        }case MODULE_OTYPE:{
             Module *module = object->value.module;
             printf("<module '%s' from '%s' at %p>\n", module->name, module->pathname, module);
             break;
-        }
-        case NATIVE_LIB_OTYPE:{
+        }case NATIVE_LIB_OTYPE:{
             NativeLib *module = object->value.native_lib;
             printf("<native library %p at %p>\n", module->handler, module);
             break;
-        }
-        case FOREIGN_FN_OTYPE:{
+        }case FOREIGN_FN_OTYPE:{
             ForeignFn *foreign = object->value.foreign_fn;
             printf("<foreign function at %p>\n", foreign);
             break;
-        }
-        default:{
+        }default:{
             assert("Illegal object type");
         }
     }
@@ -294,25 +287,20 @@ void print_value(Value *value){
         case EMPTY_VTYPE:{
             printf("empty\n");
             break;
-        }
-        case BOOL_VTYPE:{
+        }case BOOL_VTYPE:{
             uint8_t bool = value->literal.bool;
             printf("%s\n", bool == 0 ? "false" : "true");
             break;
-        }
-        case INT_VTYPE:{
+        }case INT_VTYPE:{
             printf("%ld\n", value->literal.i64);
             break;
-        }
-        case FLOAT_VTYPE:{
+        }case FLOAT_VTYPE:{
 			printf("%.8f\n", value->literal.fvalue);   
             break;
-		}
-        case OBJ_VTYPE:{
+		}case OBJ_VTYPE:{
             print_obj(value->literal.obj);
             break;
-        }
-        default:{
+        }default:{
             assert("Illegal value type");
         }
     }
@@ -332,8 +320,9 @@ void print_stack(VM *vm){
 int16_t read_i16(VM *vm){
     uint8_t bytes[2];
 
-	for(size_t i = 0; i < 2; i++)
-		bytes[i] = ADVANCE(vm);
+	for(size_t i = 0; i < 2; i++){
+        bytes[i] = ADVANCE(vm);
+    }
 
 	return compose_i16(bytes);
 }
@@ -341,8 +330,9 @@ int16_t read_i16(VM *vm){
 int32_t read_i32(VM *vm){
 	uint8_t bytes[4];
 
-	for(size_t i = 0; i < 4; i++)
-		bytes[i] = ADVANCE(vm);
+	for(size_t i = 0; i < 4; i++){
+        bytes[i] = ADVANCE(vm);
+    }
 
 	return compose_i32(bytes);
 }
@@ -364,30 +354,32 @@ char *read_str(VM *vm, uint32_t *out_hash){
     SubModule *submodule = module->submodule;
     LZHTable *strings = submodule->strings;
     uint32_t hash = (uint32_t)read_i32(vm);
-    if(out_hash) *out_hash = hash;
+    if(out_hash){*out_hash = hash;}
     return lzhtable_hash_get(hash, strings);
 }
 
 Value *peek(VM *vm){
-    if(vm->stack_ptr == 0) vm_utils_error(vm, "Stack is empty");
+    if(vm->stack_ptr == 0){vm_utils_error(vm, "Stack is empty");}
     return &vm->stack[vm->stack_ptr - 1];
 }
 
 Value *peek_at(int offset, VM *vm){
-    if(1 + offset > vm->stack_ptr) vm_utils_error(vm, "Illegal offset: %d, stack: %d", offset, vm->stack_ptr);
+    if(1 + offset > vm->stack_ptr){
+        vm_utils_error(vm, "Illegal offset: %d, stack: %d", offset, vm->stack_ptr);
+    }
     size_t at = vm->stack_ptr - 1 - offset;
     return &vm->stack[at];
 }
 
 void push_fn(Fn *fn, VM *vm){
 	Obj *obj = vm_utils_obj(FN_OTYPE, vm);
-	if(!obj) vm_utils_error(vm, "Out of memory");
+	if(!obj){vm_utils_error(vm, "Out of memory");}
 	obj->value.fn = fn;
 	PUSH(OBJ_VALUE(obj), vm);
 }
 
 Value *pop(VM *vm){
-    if(vm->stack_ptr == 0) vm_utils_error(vm, "Stack under flow");
+    if(vm->stack_ptr == 0){vm_utils_error(vm, "Stack under flow");}
     return &vm->stack[--vm->stack_ptr];
 }
 
@@ -449,7 +441,145 @@ void execute(uint8_t chunk, VM *vm){
             PUSH(OBJ_VALUE(str_obj), vm);
             
             break;
-        }case ADD_OPCODE:{
+        }case ARRAY_OPCODE:{
+            uint8_t parameter = ADVANCE(vm);
+            int32_t index = read_i32(vm);
+
+            if(parameter == 1){
+                Value *length_value = pop(vm);
+
+                if(!IS_INT(length_value)){
+                    vm_utils_error(vm, "Expect 'length' to be of type integer, but got something else");
+                }
+                
+                int64_t length = TO_INT(length_value);
+
+                if(length < 0 || length > INT32_MAX){
+                    vm_utils_error(vm, "Illegal 'length' value. Must be 0 <= LENGTH(%ld) <= %d", length, INT32_MAX);
+                }
+
+                Obj *array_obj = vm_utils_array_obj((int32_t)length, vm);
+                
+                if(!array_obj){
+                    vm_utils_error(vm, "Out of memory");
+                }
+
+                PUSH(OBJ_VALUE(array_obj), vm)
+            }else if(parameter == 2){
+                Value *value = pop(vm);
+                Value *array_value = peek(vm);
+
+                if(!IS_ARRAY(array_value)){
+                    vm_utils_error(vm, "Expect an array, but got something else");
+                }
+                if(index < 0){
+                    vm_utils_error(vm, "Illegal 'index' value. Must be: 0 <= INDEX(%d)", index);
+                }
+
+                Array *array = TO_ARRAY(array_value);
+
+                if(index >= array->len){
+                    vm_utils_error(vm, "Index out of bounds. Must be: 0 <= INDEX(%d) < %d", index, array->len);
+                }
+
+                array->values[index] = *value;
+            }else{
+                vm_utils_error(vm, "Illegal ARRAY opcode parameter: %d", parameter);
+            }
+
+            break;
+        }case LIST_OPCODE:{
+            int16_t len = read_i16(vm);
+            
+            Obj *list_obj = vm_utils_list_obj(vm);
+            if(!list_obj) vm_utils_error(vm, "Out of memory");
+
+			DynArr *list = list_obj->value.list;
+
+            for(int32_t i = 0; i < len; i++){
+				Value *value = pop(vm);
+
+    			if(dynarr_insert(value, list)){
+                    vm_utils_error(vm, "Out of memory");
+                }
+			}
+
+            PUSH(OBJ_VALUE(list_obj), vm);
+
+            break;
+        }case DICT_OPCODE:{
+            int32_t len = read_i16(vm);
+            
+            Obj *dict_obj = vm_utils_dict_obj(vm);
+            if(!dict_obj){vm_utils_error(vm, "Out of memory");}
+
+            LZHTable *dict = dict_obj->value.dict;
+
+            for (int32_t i = 0; i < len; i++){
+                Value *value = pop(vm);
+                Value *key = pop(vm);
+                
+                Value *key_clone = vm_utils_clone_value(key, vm);
+                Value *value_clone = vm_utils_clone_value(value, vm);
+
+                if(!key_clone || !value_clone){
+                    free(key_clone);
+                    free(value_clone);
+                    vm_utils_error(vm, "Out of memory");
+                }
+
+                uint32_t hash = vm_utils_hash_value(key_clone);
+                
+                if(lzhtable_hash_put_key(key_clone, hash, value_clone, dict)){
+                    vm_utils_error(vm, "Out of memory");
+                }
+            }
+
+            PUSH(OBJ_VALUE(dict_obj), vm);
+
+            break;
+        }case RECORD_OPCODE:{
+            uint8_t len = ADVANCE(vm);    
+		    Obj *record_obj = vm_utils_record_obj(len == 0, vm);
+		    
+            if(!record_obj){
+                vm_utils_error(vm, "Out of memory");
+            }
+		    if(len == 0){
+                PUSH(OBJ_VALUE(record_obj), vm);
+			    break;
+		    }
+
+			Record *record = record_obj->value.record;
+	
+			for(size_t i = 0; i < len; i++){
+			    char *key = read_str(vm, NULL);
+			    Value *value = pop(vm);
+
+				char *cloned_key = vm_utils_clone_buff(key, vm);
+			    Value *cloned_value = vm_utils_clone_value(value, vm);
+
+				if(!cloned_key || !cloned_value){
+				    free(cloned_key);
+					free(cloned_value);
+					vm_utils_error(vm, "Out of memory");
+				}
+
+				uint8_t *k = (uint8_t *)cloned_key;
+			    size_t k_size = strlen(cloned_key);
+				uint32_t hash = lzhtable_hash(k, k_size);
+
+				if(lzhtable_hash_put_key(cloned_key, hash, cloned_value, record->key_values)){
+					free(cloned_key);
+					free(cloned_value);
+					vm_utils_error(vm, "Out of memory");
+			    }
+			}
+	
+            PUSH(OBJ_VALUE(record_obj), vm);
+
+			break;
+		}case ADD_OPCODE:{
             Value *vb = pop(vm);
             Value *va = pop(vm);
 
@@ -457,7 +587,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_STR(va)){
                     vm_utils_error(vm, "Expect string at left side of string concatenation");
                 }
-
                 if(!IS_STR(vb)){
                     vm_utils_error(vm, "Expect string at right side of string concatenation");
                 }
@@ -475,7 +604,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side of sum");
                 }
-
                 if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side of sum");
                 }
@@ -492,7 +620,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of sum");
                 }
-
                 if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of sum");
                 }
@@ -516,7 +643,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side subtraction");
                 }
-
                 if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side subtraction");
                 }
@@ -533,7 +659,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of subtraction");
                 }
-
                 if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of subtraction");
                 }
@@ -590,7 +715,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side of multiplication");
                 }
-
                 if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side of multiplication");
                 }
@@ -607,7 +731,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of multiplication");
                 }
-
                 if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of multiplication");
                 }
@@ -631,7 +754,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side of division");
                 }
-            
                 if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side of division");
                 }
@@ -648,7 +770,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of division");
                 }
-
                 if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of division");
                 }
@@ -671,7 +792,6 @@ void execute(uint8_t chunk, VM *vm){
             if(!IS_INT(va)){
                 vm_utils_error(vm, "Expect integer at left side of module");
             }
-        
             if(!IS_INT(vb)){
                 vm_utils_error(vm, "Expect integer at right side of module");
             }
@@ -690,7 +810,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side of comparison");
                 }
-            
                 if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side of comparison");
                 }
@@ -707,7 +826,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of comparison");
                 }
-
                 if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of comparison");
                 }
@@ -731,7 +849,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side of comparison");
                 }
-            
                 if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side of comparison");
                 }
@@ -748,7 +865,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of comparison");
                 }
-
                 if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of comparison");
                 }
@@ -771,8 +887,7 @@ void execute(uint8_t chunk, VM *vm){
             if(IS_INT(va) || IS_INT(vb)){
                 if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side of comparison");
-                }
-            
+                }          
                 if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side of comparison");
                 }
@@ -789,7 +904,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of comparison");
                 }
-
                 if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of comparison");
                 }
@@ -813,7 +927,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side of comparison");
                 }
-            
                 if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side of comparison");
                 }
@@ -830,7 +943,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of comparison");
                 }
-
                 if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of comparison");
                 }
@@ -854,7 +966,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_BOOL(va)){
                     vm_utils_error(vm, "Expect boolean at left side of equality");
                 }
-
                 if(!IS_BOOL(vb)){
                     vm_utils_error(vm, "Expect boolean at right side of equality");
                 }
@@ -871,7 +982,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side of equality");
                 }
-            
                 if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side of equality");
                 }
@@ -888,7 +998,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of equality");
                 }
-
                 if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of equality");
                 }
@@ -912,7 +1021,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_BOOL(va)){
                     vm_utils_error(vm, "Expect boolean at left side of equality");
                 }
-
                 if(!IS_BOOL(vb)){
                     vm_utils_error(vm, "Expect boolean at right side of equality");
                 }
@@ -929,7 +1037,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_INT(va)){
                     vm_utils_error(vm, "Expect integer at left side of equality");
                 }
-            
                 if(!IS_INT(vb)){
                     vm_utils_error(vm, "Expect integer at right side of equality");
                 }
@@ -946,7 +1053,6 @@ void execute(uint8_t chunk, VM *vm){
                 if(!IS_FLOAT(va)){
                     vm_utils_error(vm, "Expect float at left side of equality");
                 }
-
                 if(!IS_FLOAT(vb)){
                     vm_utils_error(vm, "Expect float at right side of equality");
                 }
@@ -1196,139 +1302,6 @@ void execute(uint8_t chunk, VM *vm){
             }
 
 			break;
-		}case ARRAY_OPCODE:{
-            uint8_t parameter = ADVANCE(vm);
-            int32_t index = read_i32(vm);
-
-            if(parameter == 1){
-                int64_t length;
-                Value *length_value = pop(vm);
-
-                if(!IS_INT(length_value)){
-                    vm_utils_error(vm, "Expect 'length' to be of type integer, but got something else");
-                }
-                
-                length = TO_INT(length_value);
-
-                if(length < 0 || length > INT32_MAX){
-                    vm_utils_error(vm, "Illegal length value. Must be 0 <= length <= %d", INT32_MAX);
-                }
-
-                Obj *array_obj = vm_utils_array_obj((int32_t)length, vm);
-                
-                if(!array_obj){
-                    vm_utils_error(vm, "Out of memory");
-                }
-
-                PUSH(OBJ_VALUE(array_obj), vm)
-            }else if(parameter == 2){
-                Value *value = pop(vm);
-                Value *array_value = peek(vm);
-
-                if(!IS_ARRAY(array_value)){
-                    vm_utils_error(vm, "Expect an array, but got something else");
-                }
-                if(index < 0){
-                    vm_utils_error(vm, "Illegal index");
-                }
-
-                Array *array = TO_ARRAY(array_value);
-                array->values[index] = *value;
-            }else{
-                vm_utils_error(vm, "Illegal ARRAY opcode parameter: %d", parameter);
-            }
-
-            break;
-        }case LIST_OPCODE:{
-			int16_t len = read_i16(vm);
-            
-            Obj *list_obj = vm_utils_list_obj(vm);
-            if(!list_obj) vm_utils_error(vm, "Out of memory");
-
-			DynArr *list = list_obj->value.list;
-
-			for(int32_t i = 0; i < len; i++){
-				Value *value = pop(vm);
-
-				if(dynarr_insert(value, list)){
-                    vm_utils_error(vm, "Out of memory");
-                }
-			}
-
-            PUSH(OBJ_VALUE(list_obj), vm);
-
-			break;
-		}case DICT_OPCODE:{
-            int32_t len = read_i16(vm);
-            
-            Obj *dict_obj = vm_utils_dict_obj(vm);
-            if(!dict_obj){vm_utils_error(vm, "Out of memory");}
-
-            LZHTable *dict = dict_obj->value.dict;
-
-            for (int32_t i = 0; i < len; i++){
-                Value *value = pop(vm);
-                Value *key = pop(vm);
-                
-                Value *key_clone = vm_utils_clone_value(key, vm);
-                Value *value_clone = vm_utils_clone_value(value, vm);
-
-                if(!key_clone || !value_clone){
-                    free(key_clone);
-                    free(value_clone);
-                    vm_utils_error(vm, "Out of memory");
-                }
-
-                uint32_t hash = vm_utils_hash_value(key_clone);
-                
-                if(lzhtable_hash_put_key(key_clone, hash, value_clone, dict)){
-                    vm_utils_error(vm, "Out of memory");
-                }
-            }
-
-            PUSH(OBJ_VALUE(dict_obj), vm);
-
-            break;
-        }case RECORD_OPCODE:{
-			uint8_t len = ADVANCE(vm);
-            
-			Obj *record_obj = vm_utils_record_obj(len == 0, vm);
-			if(!record_obj){vm_utils_error(vm, "Out of memory");}
-
-			if(len == 0){
-                PUSH(OBJ_VALUE(record_obj), vm);
-				break;
-			}
-
-			Record *record = record_obj->value.record;
-	
-			for(size_t i = 0; i < len; i++){
-				char *key = read_str(vm, NULL);
-				Value *value = pop(vm);
-
-				char *cloned_key = vm_utils_clone_buff(key, vm);
-				Value *cloned_value = vm_utils_clone_value(value, vm);
-
-				if(!cloned_key || !cloned_value){
-					free(cloned_key);
-					free(cloned_value);
-					vm_utils_error(vm, "Out of memory");
-				}
-
-				uint8_t *k = (uint8_t *)cloned_key;
-				size_t k_size = strlen(cloned_key);
-				uint32_t hash = lzhtable_hash(k, k_size);
-
-				if(lzhtable_hash_put_key(cloned_key, hash, cloned_value, record->key_values)){
-					free(cloned_key);
-					free(cloned_value);
-					vm_utils_error(vm, "Out of memory");
-				}
-			}
-	
-            PUSH(OBJ_VALUE(record_obj), vm);
-
-			break;
 		}case CALL_OPCODE:{
             uint8_t args_count = ADVANCE(vm);
 			Value *fn_value = peek_at(args_count, vm);
@@ -1527,19 +1500,19 @@ void execute(uint8_t chunk, VM *vm){
                 Array *array = TO_ARRAY(target_value);
                 
                 if(!IS_INT(index_value)){
-                    vm_utils_error(vm, "Expect integer as index");
+                    vm_utils_error(vm, "Expect integer as index, but got something else");
                 }
 
                 int64_t index = TO_INT(index_value);
                 
-                if(index < 0 || index > INT16_MAX){
-                    vm_utils_error(vm, "Illegal index range. Must be > 0 and < %s", INT16_MAX);
+                if(index < 0 || index > INT32_MAX){
+                    vm_utils_error(vm, "Illegal index value. Must be: 0 <= INDEX(%ld) <= %s", index, INT32_MAX);
                 }
                 if((int16_t)index >= array->len){
-                    vm_utils_error(vm, "Index out of bounds. Array length: %d, index: %d", array->len, index);
+                    vm_utils_error(vm, "Index out of bounds. Must be: 0 <= INDEX(%ld) < %d", index, array->len);
                 }
 
-                Value value = array->values[(int16_t)index];
+                Value value = array->values[(int32_t)index];
 
                 PUSH(value, vm);
 
