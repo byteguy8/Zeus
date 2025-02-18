@@ -23,7 +23,7 @@ Obj *vm_utils_uncore_str_obj(char *buff, VM *vm);
 Obj *vm_utils_empty_str_obj(Value *out_value, VM *vm);
 Obj *vm_utils_clone_str_obj(char *buff, Value *out_value, VM *vm);
 Obj *vm_utils_range_str_obj(size_t from, size_t to, char *buff, Value *out_value, VM *vm);
-Obj *vm_utils_array_obj(int16_t len, VM *vm);
+Obj *vm_utils_array_obj(int32_t len, VM *vm);
 Obj *vm_utils_list_obj(VM *vm);
 Obj *vm_utils_dict_obj(VM *vm);
 Obj *vm_utils_record_obj(char empty, VM *vm);

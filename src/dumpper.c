@@ -298,11 +298,12 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 
 			break;
 		}case ARRAY_OPCODE:{
-			int16_t len = read_i16(dumpper);
+			uint8_t parameter = advance(dumpper);
+            int32_t index = read_i32(dumpper);
             size_t end = dumpper->ip;
 
 			printf("%8.8s %.7ld", "ARRAY", end - start);
-            printf(" | length: %d\n", len);
+            printf(" | parameter: %d index: %d\n", parameter, index);
 			
             break;
 		}case LIST_OPCODE:{

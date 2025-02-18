@@ -1197,36 +1197,46 @@ void execute(uint8_t chunk, VM *vm){
 
 			break;
 		}case ARRAY_OPCODE:{
-            int16_t len = read_i16(vm);
-            int from_stack = 1;
+            uint8_t parameter = ADVANCE(vm);
+            int32_t index = read_i32(vm);
 
-            if(len == -1){
-                Value *len_value = pop(vm);
+            if(parameter == 1){
+                int64_t length;
+                Value *length_value = pop(vm);
+
+                if(!IS_INT(length_value)){
+                    vm_utils_error(vm, "Expect 'length' to be of type integer, but got something else");
+                }
                 
-                if(!IS_INT(len_value)){
-                    vm_utils_error(vm, "Expect integer as length for array");
+                length = TO_INT(length_value);
+
+                if(length < 0 || length > INT32_MAX){
+                    vm_utils_error(vm, "Illegal length value. Must be 0 <= length <= %d", INT32_MAX);
                 }
 
-                len = (int16_t)TO_INT(len_value);
-                from_stack = 0;
-            }
-
-            Obj *array_obj = vm_utils_array_obj(len, vm);
-
-            if(!array_obj){
-                vm_utils_error(vm, "Out of memory");
-            }
-
-            if(from_stack){
-                Array *array = array_obj->value.array;
-
-                for (int16_t i = 0; i < len; i++){
-                    Value *value = pop(vm);
-                    array->values[i] = *value;
+                Obj *array_obj = vm_utils_array_obj((int32_t)length, vm);
+                
+                if(!array_obj){
+                    vm_utils_error(vm, "Out of memory");
                 }
+
+                PUSH(OBJ_VALUE(array_obj), vm)
+            }else if(parameter == 2){
+                Value *value = pop(vm);
+                Value *array_value = peek(vm);
+
+                if(!IS_ARRAY(array_value)){
+                    vm_utils_error(vm, "Expect an array, but got something else");
+                }
+                if(index < 0){
+                    vm_utils_error(vm, "Illegal index");
+                }
+
+                Array *array = TO_ARRAY(array_value);
+                array->values[index] = *value;
+            }else{
+                vm_utils_error(vm, "Illegal ARRAY opcode parameter: %d", parameter);
             }
-            
-            PUSH(OBJ_VALUE(array_obj), vm)
 
             break;
         }case LIST_OPCODE:{

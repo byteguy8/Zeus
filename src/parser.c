@@ -545,7 +545,7 @@ Expr *parse_array(Parser *parser){
                 values = compile_dynarr_ptr();
 
                 do{
-                    if(DYNARR_PTR_LEN(values) >= INT16_MAX){
+                    if(DYNARR_PTR_LEN(values) >= INT32_MAX){
                         error(parser, array_token, "Array expressions only accept up to %d values", INT16_MAX);
                     }
 

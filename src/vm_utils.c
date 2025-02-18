@@ -701,7 +701,7 @@ Str *vm_utils_uncore_alloc_str(char *buff, VM *vm){
     return str;
 }
 
-Obj *vm_utils_array_obj(int16_t len, VM *vm){
+Obj *vm_utils_array_obj(int32_t len, VM *vm){
     Value *values = (Value *)calloc(len, sizeof(Value));
     Array *array = (Array *)malloc(sizeof(Array));
     Obj *array_obj = vm_utils_obj(ARRAY_OTYPE, vm);

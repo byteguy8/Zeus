@@ -54,7 +54,7 @@ typedef struct str{
 }Str;
 
 typedef struct array{
-    int16_t len;
+    int32_t len;
     Value *values;
 }Array;
 

@@ -995,22 +995,29 @@ void compile_expr(Expr *expr, Compiler *compiler){
             if(len_expr){
                 compile_expr(len_expr, compiler);
             }else{
-                if(values){
-                    for (int16_t i = (int16_t)DYNARR_PTR_LEN(values) - 1; i >= 0; i--){
-                        Expr *expr = (Expr *)DYNARR_PTR_GET(i, values);
-                        compile_expr(expr, compiler);
-                    }
-                }
+                write_chunk(INT_OPCODE, compiler);
+                write_location(array_token, compiler);
+
+                write_i64_const((int64_t)values->used, compiler);
             }
 
             write_chunk(ARRAY_OPCODE, compiler);
             write_location(array_token, compiler);
 
-            if(len_expr){
-                write_i16(-1, compiler);
-            }else{
-                int16_t len = values ? DYNARR_PTR_LEN(values) : 0;
-                write_i16(len, compiler);
+            write_chunk(1, compiler);
+            write_i32(0, compiler);
+
+            if(values){
+                for (int32_t i = (int32_t)DYNARR_PTR_LEN(values) - 1; i >= 0; i--){
+                    Expr *expr = (Expr *)DYNARR_PTR_GET(i, values);
+                    compile_expr(expr, compiler);
+
+                    write_chunk(ARRAY_OPCODE, compiler);
+                    write_location(array_token, compiler);
+
+                    write_chunk(2, compiler);
+                    write_i32(i, compiler);
+                }
             }
 
             break;
