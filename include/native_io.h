@@ -8,6 +8,34 @@
 
 NativeModule *io_module = NULL;
 
+Value native_fn_io_read_file(uint8_t argsc, Value *values, void *target, VM *vm){
+    Value *path_value = &values[0];
+
+    if(!IS_STR(path_value)){
+        vm_utils_error(vm, "Expect string at argument 1, but got something else");
+    }
+
+    Str *path = TO_STR(path_value);
+    char *raw_path = path->buff;
+
+    size_t content_len = 0;
+    char *content = NULL;
+    size_t err_len = 1024;
+    char err_str[err_len];
+    
+    if(utils_read_file(raw_path, &content_len, &content, err_len, err_str)){
+        vm_utils_error(vm, err_str);
+    }
+
+    if(!content){
+        vm_utils_error(vm, "Unexpected outcome");
+    }
+
+    Obj *content_obj = vm_utils_uncore_str_obj(content, vm);
+
+    return OBJ_VALUE(content_obj);
+}
+
 Value native_fn_io_readln(uint8_t argsc, Value *values, void *target, VM *vm){
 	size_t buff_len = 1024;
 	char buff[buff_len];
@@ -72,6 +100,7 @@ Value native_fn_io_prterr(uint8_t argsc, Value *values, void *target, VM *vm){
 
 void io_module_init(){
     io_module = runtime_native_module("io");
+    runtime_add_native_fn("read_file", 1, native_fn_io_read_file, io_module);
     runtime_add_native_fn("readln", 0, native_fn_io_readln, io_module);
     runtime_add_native_fn("prt", 1, native_fn_io_prt, io_module);
     runtime_add_native_fn("prterr", 1, native_fn_io_prterr, io_module);

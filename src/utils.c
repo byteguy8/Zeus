@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <libgen.h>
 #include <sys/utsname.h>
+#include <errno.h>
 //< LINUX
 
 int utils_is_integer(char *buff){
@@ -163,6 +164,50 @@ int utils_double_to_str(int buff_len, double value, char *out_value){
     int written = snprintf(buff, buff_len, "%.8f", value);
     memcpy(out_value, buff, written);
     return written == -1 ? -1 : written == buff_len ? -1 : written;
+}
+
+int utils_read_file(char *path, size_t *length, char **out_source, size_t err_len, char *err_str){
+    if(!UTILS_FILE_EXISTS(path)){
+        snprintf(err_str, err_len, "Pathname does not exists");
+        return 1;
+    }
+    if(!UTILS_FILE_CAN_READ(path)){
+        snprintf(err_str, err_len, "Pathname can not be read");
+        return 1;
+    }
+    if(!utils_file_is_regular(path)){
+        snprintf(err_str, err_len, "Pathname is not a regular file");
+        return 1;
+    }
+    
+    FILE *source_file = fopen(path, "r");
+
+    if(!source_file){
+        snprintf(err_str, err_len, "%s", strerror(errno));
+        return 1;
+    }
+
+	  fseek(source_file, 0, SEEK_END);
+
+	  size_t source_len = (size_t)ftell(source_file);
+	  char *buff = malloc(source_len + 1);
+
+    if(!buff){
+        fclose(source_file);
+        snprintf(err_str, err_len, "Failed to allocate memory for buffer");
+        return 1;
+    }
+
+	  fseek(source_file, 0, SEEK_SET);
+	  fread(buff, 1, source_len, source_file);
+	  fclose(source_file);
+
+	  buff[source_len] = '\0';
+
+	  *length = source_len;
+	  *out_source = buff;
+
+	  return 0;
 }
 
 RawStr *compile_read_source(char *path){

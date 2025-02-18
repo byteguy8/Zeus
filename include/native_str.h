@@ -8,6 +8,11 @@
 
 static LZHTable *str_symbols = NULL;
 
+Value native_fn_str_length(uint8_t argsc, Value *values, void *target, VM *vm){
+		Str *str = (Str *)target;
+		return INT_VALUE(str->len);
+}
+
 Value native_fn_str_char_at(uint8_t argc, Value *values, void *target, VM *vm){
     Str *str = (Str *)target;
     Value *index_value = &values[0];
@@ -301,6 +306,7 @@ Value native_fn_str_cmp_ic(uint8_t argsc, Value *values, void *target, VM *vm){
 Obj *native_str_get(char *symbol, void *target, VM *vm){
     if(!str_symbols){
         str_symbols = runtime_lzhtable();
+        runtime_add_native_fn_info("length", 0, native_fn_str_length, str_symbols);
         runtime_add_native_fn_info("char_at", 1, native_fn_str_char_at, str_symbols);
         runtime_add_native_fn_info("sub_str", 2, native_fn_str_sub_str, str_symbols);
         runtime_add_native_fn_info("char_code", 1, native_fn_str_char_code, str_symbols);

@@ -14,7 +14,7 @@ int utils_i64_to_str(int64_t value, char *out_value);
 
 int utils_str_to_double(char *raw_str, double *out_value);
 int utils_double_to_str(int buff_len, double value, char *out_value);
-
+int utils_read_file(char *path, size_t *length, char **source, size_t err_len, char *err_str);
 RawStr *compile_read_source(char *path);
 
 //> SYSTEM DEPENDENT
