@@ -138,7 +138,7 @@ Value native_fn_deg2rad(uint8_t argsc, Value *values, void *target, VM *vm){
 void math_module_init(){
 	  math_module = runtime_native_module("math");
 	
-	  runtime_add_native_fn("sqrt", 1, native_fn_sqrt, math_module);
+	runtime_add_native_fn("sqrt", 1, native_fn_sqrt, math_module);
     runtime_add_native_fn("pow", 2, native_fn_pow, math_module);
     runtime_add_native_fn("cos", 1, native_fn_cos, math_module);
     runtime_add_native_fn("acos", 1, native_fn_acos, math_module);

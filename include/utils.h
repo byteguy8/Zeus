@@ -14,7 +14,14 @@ int utils_i64_to_str(int64_t value, char *out_value);
 
 int utils_str_to_double(char *raw_str, double *out_value);
 int utils_double_to_str(int buff_len, double value, char *out_value);
-int utils_read_file(char *path, size_t *length, char **source, size_t err_len, char *err_str);
+int utils_read_file(
+    char *pathname,
+    size_t *length,
+    char **content,
+    size_t err_len,
+    char *err_str,
+    Allocator *allocator
+);
 RawStr *compile_read_source(char *path);
 
 //> SYSTEM DEPENDENT
@@ -25,7 +32,7 @@ RawStr *compile_read_source(char *path);
 int utils_file_is_regular(char *filename);
 char *utils_parent_pathname(char *pathname);
 char *compile_cwd();
-char *utils_sysname();
+char *utils_sysname(Allocator *allocator);
 //< SYSTEM DEPENDENT
 
 #endif

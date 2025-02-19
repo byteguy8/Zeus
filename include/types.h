@@ -5,6 +5,13 @@
 #include "lzhtable.h"
 #include <stddef.h>
 
+typedef struct allocator{
+    void *ctx;
+    void *(*alloc)(size_t size, void *ctx);
+    void *(*realloc)(void *ptr, size_t new_size, void *ctx);
+    void (*dealloc)(void *ptr, void *ctx);
+} Allocator;
+
 #define NAME_LEN 256
 #define MODULE_TRIES(m)(m->submodule->tries)
 #define MODULE_SYMBOLS(m)(m->submodule->symbols)

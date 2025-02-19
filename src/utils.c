@@ -166,48 +166,55 @@ int utils_double_to_str(int buff_len, double value, char *out_value){
     return written == -1 ? -1 : written == buff_len ? -1 : written;
 }
 
-int utils_read_file(char *path, size_t *length, char **out_source, size_t err_len, char *err_str){
-    if(!UTILS_FILE_EXISTS(path)){
+int utils_read_file(
+    char *pathname,
+    size_t *content_len,
+    char **content,
+    size_t err_len,
+    char *err_str,
+    Allocator *allocator
+){
+    if(!UTILS_FILE_EXISTS(pathname)){
         snprintf(err_str, err_len, "Pathname does not exists");
         return 1;
     }
-    if(!UTILS_FILE_CAN_READ(path)){
+    if(!UTILS_FILE_CAN_READ(pathname)){
         snprintf(err_str, err_len, "Pathname can not be read");
         return 1;
     }
-    if(!utils_file_is_regular(path)){
+    if(!utils_file_is_regular(pathname)){
         snprintf(err_str, err_len, "Pathname is not a regular file");
         return 1;
     }
     
-    FILE *source_file = fopen(path, "r");
+    FILE *file = fopen(pathname, "r");
 
-    if(!source_file){
+    if(!file){
         snprintf(err_str, err_len, "%s", strerror(errno));
         return 1;
     }
 
-	  fseek(source_file, 0, SEEK_END);
+	fseek(file, 0, SEEK_END);
 
-	  size_t source_len = (size_t)ftell(source_file);
-	  char *buff = malloc(source_len + 1);
+	size_t file_len = (size_t)ftell(file);
+	char *file_content = allocator->alloc(file_len + 1, allocator->ctx);
 
-    if(!buff){
-        fclose(source_file);
+    if(!file_content){
+        fclose(file);
         snprintf(err_str, err_len, "Failed to allocate memory for buffer");
         return 1;
     }
 
-	  fseek(source_file, 0, SEEK_SET);
-	  fread(buff, 1, source_len, source_file);
-	  fclose(source_file);
+	fseek(file, 0, SEEK_SET);
+	fread(file_content, 1, file_len, file);
+	fclose(file);
 
-	  buff[source_len] = '\0';
+	file_content[file_len] = '\0';
 
-	  *length = source_len;
-	  *out_source = buff;
+	*content_len = file_len;
+	*content = file_content;
 
-	  return 0;
+	return 0;
 }
 
 RawStr *compile_read_source(char *path){
@@ -263,12 +270,12 @@ char *compile_cwd(){
     return new_pathname;
 }
 
-char *utils_sysname(){
+char *utils_sysname(Allocator *allocator){
     struct utsname sysinfo = {0};
     
     if(uname(&sysinfo) == 0){
         size_t name_len = strlen(sysinfo.sysname);
-        char *name = malloc(name_len + 1);
+        char *name = allocator->alloc(name_len + 1, allocator->ctx);
         
         if(!name){return NULL;}
         

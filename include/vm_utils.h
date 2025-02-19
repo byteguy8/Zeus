@@ -6,6 +6,7 @@
 #include "bstr.h"
 
 void vm_utils_error(VM *vm, char *msg, ...);
+Allocator *vm_utils_allocator();
 
 uint32_t vm_utils_hash_obj(Obj *obj);
 uint32_t vm_utils_hash_value(Value *value);

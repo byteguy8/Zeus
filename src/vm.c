@@ -1722,6 +1722,7 @@ int vm_execute(
         vm->stack_ptr = 0;
         vm->natives = natives;
         vm->module = module;
+        vm->allocator = vm_utils_allocator();
 
         frame_up("main", vm);
 

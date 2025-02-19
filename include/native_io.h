@@ -23,7 +23,7 @@ Value native_fn_io_read_file(uint8_t argsc, Value *values, void *target, VM *vm)
     size_t err_len = 1024;
     char err_str[err_len];
     
-    if(utils_read_file(raw_path, &content_len, &content, err_len, err_str)){
+    if(utils_read_file(raw_path, &content_len, &content, err_len, err_str, vm->allocator)){
         vm_utils_error(vm, err_str);
     }
 

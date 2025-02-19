@@ -5,6 +5,27 @@
 #include <assert.h>
 #include <dlfcn.h>
 
+static Allocator allocator;
+
+static void *raw_alloc(size_t size, void *ctx){
+    return calloc(1, size);
+}
+
+static void *raw_realloc(void *ptr, size_t new_size, void *ctx){
+    return realloc(ptr, new_size);
+}
+
+static void raw_dealloc(void *ptr, void *ctx){
+    free(ptr);
+}
+
+allocator = {
+    .ctx = NULL,
+    .alloc = raw_alloc,
+    .realloc = raw_realloc,
+    .dealloc = raw_dealloc
+};
+
 #define CURRENT_FRAME(vm)(&vm->frame_stack[vm->frame_ptr - 1])
 #define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
 #define CURRENT_LOCATIONS(vm)(CURRENT_FN(vm)->locations)
@@ -12,6 +33,10 @@
 #define FRAME_AT(at, vm)(&vm->frame_stack[at])
 
 //> PRIVATE INTERFACE
+// ALLOCATION
+void *lzalloc(size_t size);
+void *lzrealloc(void *ptr, size_t new_size);
+void lzdealloc(void *ptr);
 // GARBAGE COLLECTOR
 void clean_up_module(Module *module);
 void destroy_dict_values(void *key, void *value);
@@ -26,6 +51,18 @@ int compare_locations(void *a, void *b);
 BStr *prepare_stacktrace(unsigned int spaces, VM *vm);
 //< PRIVATE INTERFACE
 //> PRIVATE IMPLEMENTATION
+void *lzalloc(size_t size){
+    return raw_alloc(size, allocator.ctx);
+}
+
+void *lzrealloc(void *ptr, size_t new_size){
+    return raw_realloc(ptr, new_size, allocator.ctx);
+}
+
+void lzdealloc(void *ptr){
+    raw_dealloc(ptr, allocator.ctx);
+}
+
 void clean_up_module(Module *module){
     if(module->shadow){return;}
 
@@ -39,7 +76,7 @@ void clean_up_module(Module *module){
 
 		while(global_node){
 			LZHTableNode *next = global_node->next_table_node;
-			free(global_node->value);
+			lzdealloc(global_node->value);
 			global_node = next;
 		}
 
@@ -61,12 +98,12 @@ void clean_up_module(Module *module){
 }
 
 void destroy_dict_values(void *key, void *value){
-    free(key);
-    free(value);
+    lzdealloc(key);
+    lzdealloc(value);
 }
 
 void destroy_globals_values(void *ptr){
-	free(ptr);
+	lzdealloc(ptr);
 }
 
 void destroy_obj(Obj *obj, VM *vm){
@@ -82,13 +119,13 @@ void destroy_obj(Obj *obj, VM *vm){
 	switch(obj->type){
 		case STR_OTYPE:{
 			Str *str = obj->value.str;
-			if(!str->core){free(str->buff);}
-            free(str);
+			if(!str->core){lzdealloc(str->buff);}
+            lzdealloc(str);
 			break;
 		}case ARRAY_OTYPE:{
             Array *array = obj->value.array;
-            free(array->values);
-            free(array);
+            lzdealloc(array->values);
+            lzdealloc(array);
             break;
         }case LIST_OTYPE:{
 			DynArr *list = obj->value.list;
@@ -101,11 +138,11 @@ void destroy_obj(Obj *obj, VM *vm){
         }case RECORD_OTYPE:{
 			Record *record = obj->value.record;
 			lzhtable_destroy(destroy_dict_values, record->key_values);
-			free(record);
+			lzdealloc(record);
 			break;
 		}case NATIVE_FN_OTYPE:{
             NativeFn *native_fn = obj->value.native_fn;
-            if(!native_fn->unique){free(native_fn);}
+            if(!native_fn->unique){lzdealloc(native_fn);}
             break;
         }case MODULE_OTYPE:{
             break;
@@ -121,18 +158,18 @@ void destroy_obj(Obj *obj, VM *vm){
             }
 
             dlclose(handler);
-            free(library);
+            lzdealloc(library);
 
             break;
         }case FOREIGN_FN_OTYPE:{
-            free(obj->value.foreign_fn);
+            lzdealloc(obj->value.foreign_fn);
             break;
         }default:{
 			assert("Illegal object type");
 		}
 	}
 
-	free(obj);
+	lzdealloc(obj);
 	vm->objs_size -= sizeof(Obj);
 }
 
@@ -368,6 +405,10 @@ void vm_utils_error(VM *vm, char *msg, ...){
     longjmp(vm->err_jmp, 1);
 }
 
+Allocator *vm_utils_allocator(){
+    return &allocator;
+}
+
 uint32_t vm_utils_hash_obj(Obj *obj){
     switch (obj->type){
         case STR_OTYPE :{
@@ -514,7 +555,7 @@ void vm_utils_clean_up(VM *vm){
 
 char *vm_utils_clone_buff(char *buff, VM *vm){
 	size_t buff_len = strlen(buff);
-	char *cloned_buff = (char *)malloc(buff_len + 1);
+	char *cloned_buff = (char *)lzalloc(buff_len + 1);
 	
 	if(!cloned_buff){return NULL;}
 
@@ -525,7 +566,7 @@ char *vm_utils_clone_buff(char *buff, VM *vm){
 }
 
 Value *vm_utils_clone_value(Value *value, VM *vm){
-    Value *clone = (Value *)malloc(sizeof(Value));
+    Value *clone = (Value *)lzalloc(sizeof(Value));
     if(!clone){return NULL;}
     *clone = *value;
     return clone;
@@ -534,7 +575,7 @@ Value *vm_utils_clone_value(Value *value, VM *vm){
 Obj *vm_utils_obj(ObjType type, VM *vm){
     if(vm->objs_size >= 67108864){gc(vm);}
 
-    Obj *obj = malloc(sizeof(Obj));
+    Obj *obj = lzalloc(sizeof(Obj));
     if(!obj){return NULL;}
 
     memset(obj, 0, sizeof(Obj));
@@ -555,11 +596,11 @@ Obj *vm_utils_obj(ObjType type, VM *vm){
 
 Obj *vm_utils_core_str_obj(char *buff, VM *vm){
     size_t buff_len = strlen(buff);
-    Str *str = (Str *)malloc(sizeof(Str));
+    Str *str = (Str *)lzalloc(sizeof(Str));
     Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
 
     if(!str || !str_obj){
-        free(str);
+        lzdealloc(str);
         return NULL;
     }
 
@@ -574,11 +615,11 @@ Obj *vm_utils_core_str_obj(char *buff, VM *vm){
 
 Obj *vm_utils_uncore_str_obj(char *buff, VM *vm){
     size_t buff_len = strlen(buff);
-    Str *str = (Str *)malloc(sizeof(Str));
+    Str *str = (Str *)lzalloc(sizeof(Str));
     Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
 
     if(!str || !str_obj){
-        free(str);
+        lzdealloc(str);
         return NULL;
     }
 
@@ -592,13 +633,13 @@ Obj *vm_utils_uncore_str_obj(char *buff, VM *vm){
 }
 
 Obj *vm_utils_empty_str_obj(Value *out_value, VM *vm){
-	char *buff = (char *)malloc(1);
-	Str *str = str = (Str *)malloc(sizeof(Str));
+	char *buff = (char *)lzalloc(1);
+	Str *str = str = (Str *)lzalloc(sizeof(Str));
 	Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
 
 	if(!buff || !str || !str_obj){
-        free(buff);
-        free(str);
+        lzdealloc(buff);
+        lzdealloc(str);
         return NULL;
     }
 
@@ -613,13 +654,13 @@ Obj *vm_utils_empty_str_obj(Value *out_value, VM *vm){
 
 Obj *vm_utils_clone_str_obj(char *buff, Value *out_value, VM *vm){
     size_t buff_len = strlen(buff);
-    char *new_buff = (char *)malloc(buff_len + 1);
-	Str *str = (Str *)malloc(sizeof(Str));
+    char *new_buff = (char *)lzalloc(buff_len + 1);
+	Str *str = (Str *)lzalloc(sizeof(Str));
 	Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
 
     if(!new_buff || !str || !str_obj){
-        free(new_buff);
-        free(str);
+        lzdealloc(new_buff);
+        lzdealloc(str);
         return NULL;
     }
 
@@ -641,13 +682,13 @@ Obj *vm_utils_clone_str_obj(char *buff, Value *out_value, VM *vm){
 
 Obj *vm_utils_range_str_obj(size_t from, size_t to, char *buff, Value *out_value, VM *vm){
 	size_t range_buff_len = to - from + 1;
-	char *range_buff = (char *)malloc(range_buff_len + 1);
-	Str *str = (Str *)malloc(sizeof(Str));
+	char *range_buff = (char *)lzalloc(range_buff_len + 1);
+	Str *str = (Str *)lzalloc(sizeof(Str));
 	Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
 
     if(!range_buff || !str || !str_obj){
-        free(range_buff);
-        free(str);
+        lzdealloc(range_buff);
+        lzdealloc(str);
         return NULL;
     }
 
@@ -669,7 +710,7 @@ Obj *vm_utils_range_str_obj(size_t from, size_t to, char *buff, Value *out_value
 
 Str *vm_utils_uncore_nalloc_str(char *buff, VM *vm){
     size_t buff_len = strlen(buff);
-    Str *str = (Str *)malloc(sizeof(Str));
+    Str *str = (Str *)lzalloc(sizeof(Str));
 
     if(!str){return NULL;}
 
@@ -682,12 +723,12 @@ Str *vm_utils_uncore_nalloc_str(char *buff, VM *vm){
 
 Str *vm_utils_uncore_alloc_str(char *buff, VM *vm){
     size_t buff_len = strlen(buff);
-	char *new_buff = (char *)malloc(buff_len + 1);
-    Str *str = (Str *)malloc(sizeof(Str));
+	char *new_buff = (char *)lzalloc(buff_len + 1);
+    Str *str = (Str *)lzalloc(sizeof(Str));
         
     if(!new_buff || !str){
-        free(new_buff);
-        free(str);
+        lzdealloc(new_buff);
+        lzdealloc(str);
         return NULL;
     }
 
@@ -702,13 +743,13 @@ Str *vm_utils_uncore_alloc_str(char *buff, VM *vm){
 }
 
 Obj *vm_utils_array_obj(int32_t len, VM *vm){
-    Value *values = (Value *)calloc(len, sizeof(Value));
-    Array *array = (Array *)malloc(sizeof(Array));
+    Value *values = (Value *)lzalloc(len * sizeof(Value));
+    Array *array = (Array *)lzalloc(sizeof(Array));
     Obj *array_obj = vm_utils_obj(ARRAY_OTYPE, vm);
     
     if(!values || !array || !array_obj){
-        free(values);
-        free(array);
+        lzdealloc(values);
+        lzdealloc(array);
         return NULL;
     }
 
@@ -750,11 +791,11 @@ Obj *vm_utils_dict_obj(VM *vm){
 }
 
 Obj *vm_utils_record_obj(char empty, VM *vm){
-	Record *record = (Record *)malloc(sizeof(record));
+	Record *record = (Record *)lzalloc(sizeof(record));
 	Obj *record_obj = vm_utils_obj(RECORD_OTYPE, vm);
 
 	if(!record || !record_obj){
-		free(record);
+		lzdealloc(record);
 		return NULL;
 	}
 
@@ -764,7 +805,7 @@ Obj *vm_utils_record_obj(char empty, VM *vm){
 		LZHTable *key_values = lzhtable_create(17, NULL);
 
 		if(!key_values){
-			free(record);
+			lzdealloc(record);
 			return NULL;
 		}
 
@@ -786,11 +827,11 @@ Obj *vm_utils_native_fn_obj(
     size_t name_len = strlen(name);
     assert(name_len < NAME_LEN - 1);
 
-    NativeFn *native_fn = (NativeFn *)malloc(sizeof(NativeFn));
+    NativeFn *native_fn = (NativeFn *)lzalloc(sizeof(NativeFn));
     Obj *native_fn_obj = vm_utils_obj(NATIVE_FN_OTYPE, vm);
 
     if(!native_fn || !native_fn_obj){
-        free(native_fn);
+        lzdealloc(native_fn);
         return NULL;
     }
 
@@ -808,11 +849,11 @@ Obj *vm_utils_native_fn_obj(
 }
 
 Obj *vm_utils_native_lib_obj(void *handler, VM *vm){
-    NativeLib *native_lib = (NativeLib *)malloc(sizeof(NativeLib));
+    NativeLib *native_lib = (NativeLib *)lzalloc(sizeof(NativeLib));
     Obj *native_lib_obj = vm_utils_obj(NATIVE_LIB_OTYPE, vm);
 
     if(!native_lib || !native_lib_obj){
-        free(native_lib);
+        lzdealloc(native_lib);
         return NULL;
     }
 
@@ -832,7 +873,7 @@ NativeFn *vm_utils_native_function(
     size_t name_len = strlen(name);
     assert(name_len < NAME_LEN - 1);
 
-    NativeFn *native_fn = (NativeFn *)malloc(sizeof(NativeFn));
+    NativeFn *native_fn = (NativeFn *)lzalloc(sizeof(NativeFn));
     if(!native_fn){return NULL;}
 
     native_fn->unique = 0;

@@ -9,7 +9,7 @@
 NativeModule *os_module = NULL;
 
 Value native_fn_os_name(uint8_t argsc, Value *values, void *target, VM *vm){
-    char *name = utils_sysname();
+    char *name = utils_sysname(vm->allocator);
     
     if(!name){
         vm_utils_error(vm, "Failed to retrieve system name");
@@ -17,7 +17,7 @@ Value native_fn_os_name(uint8_t argsc, Value *values, void *target, VM *vm){
 
     Obj *str_name_obj = vm_utils_clone_str_obj(name, NULL, vm);
     
-    free(name);
+    vm->allocator->dealloc(name, vm->allocator->ctx);
 
     if(!str_name_obj){    
         vm_utils_error(vm, "Out of memory");
