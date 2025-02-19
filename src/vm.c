@@ -139,39 +139,6 @@ static Value *pop(VM *vm);
 static void execute(uint8_t chunk, VM *vm);
 static void resolve_module(Module *module, VM *vm);
 //< Private Interface
-
-char *join_buff(char *buffa, size_t sza, char *buffb, size_t szb, VM *vm){
-    size_t szc = sza + szb;
-    char *buff = malloc(szc + 1);
-
-	if(!buff){
-        vm_utils_error(vm, "Failed to create buffer: out of memory");
-    }
-
-    memcpy(buff, buffa, sza);
-    memcpy(buff + sza, buffb, szb);
-    buff[szc] = '\0';
-
-    return buff;
-}
-
-char *multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm){
-	size_t sz = szbuff * by;
-	char *b = malloc(sz + 1);
-
-	if(!b){
-        vm_utils_error(vm, "Failed to create buffer: out of memory");
-    }
-
-	for(size_t i = 0; i < by; i++){
-        memcpy(b + (i * szbuff), buff, szbuff);
-    }
-
-	b[sz] = '\0';
-
-	return b;
-}
-
 Frame *frame_up(char *name, VM *vm){
     if(vm->frame_ptr >= FRAME_LENGTH){
         vm_utils_error(vm, "Frame over flow");
@@ -594,7 +561,7 @@ void execute(uint8_t chunk, VM *vm){
                 Str *astr = TO_STR(va) ;
                 Str *bstr = TO_STR(vb);
 
-                char *buff = join_buff(astr->buff, astr->len, bstr->buff, bstr->len, vm);
+                char *buff = vm_utils_join_buff(astr->buff, astr->len, bstr->buff, bstr->len, vm);
                 PUSH_UNCORE_STR(buff, vm);
 
                 break;
@@ -705,7 +672,7 @@ void execute(uint8_t chunk, VM *vm){
                     by = TO_INT(va);
                 }
 
-                char *buff = multiply_buff(in_buff, in_buff_len, (size_t)by, vm);
+                char *buff = vm_utils_multiply_buff(in_buff, in_buff_len, (size_t)by, vm);
                 PUSH_UNCORE_STR(buff, vm);
 
                 break;

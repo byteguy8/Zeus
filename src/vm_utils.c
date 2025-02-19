@@ -1,11 +1,10 @@
 #include "vm_utils.h"
 #include "bstr.h"
+#include "types.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
 #include <dlfcn.h>
-
-static Allocator allocator;
 
 static void *raw_alloc(size_t size, void *ctx){
     return calloc(1, size);
@@ -19,7 +18,7 @@ static void raw_dealloc(void *ptr, void *ctx){
     free(ptr);
 }
 
-allocator = {
+static Allocator allocator = {
     .ctx = NULL,
     .alloc = raw_alloc,
     .realloc = raw_realloc,
@@ -563,6 +562,38 @@ char *vm_utils_clone_buff(char *buff, VM *vm){
 	cloned_buff[buff_len] = '\0';
 
 	return cloned_buff;
+}
+
+char *vm_utils_join_buff(char *buffa, size_t sza, char *buffb, size_t szb, VM *vm){
+    size_t szc = sza + szb;
+    char *buff = lzalloc(szc + 1);
+
+	  if(!buff){
+        vm_utils_error(vm, "Failed to create buffer: out of memory");
+    }
+
+    memcpy(buff, buffa, sza);
+    memcpy(buff + sza, buffb, szb);
+    buff[szc] = '\0';
+
+    return buff;
+}
+
+char *vm_utils_multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm){
+	size_t sz = szbuff * by;
+	char *b = lzalloc(sz + 1);
+
+	if(!b){
+        vm_utils_error(vm, "Failed to create buffer: out of memory");
+    }
+
+	for(size_t i = 0; i < by; i++){
+        memcpy(b + (i * szbuff), buff, szbuff);
+    }
+
+	b[sz] = '\0';
+
+	return b;
 }
 
 Value *vm_utils_clone_value(Value *value, VM *vm){

@@ -16,6 +16,8 @@ int vm_utils_value_to_str(Value *value, BStr *bstr);
 void vm_utils_clean_up(VM *vm);
 
 char *vm_utils_clone_buff(char *buff, VM *vm);
+char *vm_utils_join_buff(char *buffa, size_t sza, char *buffb, size_t szb, VM *vm);
+char *vm_utils_multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm);
 Value *vm_utils_clone_value(Value *value, VM *vm);
 
 Obj *vm_utils_obj(ObjType type, VM *vm);
