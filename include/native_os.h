@@ -15,9 +15,10 @@ Value native_fn_os_name(uint8_t argsc, Value *values, void *target, VM *vm){
         vm_utils_error(vm, "Failed to retrieve system name");
     }
 
+    size_t name_len = strlen(name);
     Obj *str_name_obj = vm_utils_clone_str_obj(name, NULL, vm);
     
-    vm->allocator->dealloc(name, vm->allocator->ctx);
+    vm->allocator->dealloc(name, name_len, vm->allocator->ctx);
 
     if(!str_name_obj){    
         vm_utils_error(vm, "Out of memory");

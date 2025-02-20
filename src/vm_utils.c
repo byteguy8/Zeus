@@ -10,11 +10,11 @@ static void *raw_alloc(size_t size, void *ctx){
     return calloc(1, size);
 }
 
-static void *raw_realloc(void *ptr, size_t new_size, void *ctx){
+static void *raw_realloc(void *ptr, size_t old_size, size_t new_size, void *ctx){
     return realloc(ptr, new_size);
 }
 
-static void raw_dealloc(void *ptr, void *ctx){
+static void raw_dealloc(void *ptr, size_t size, void *ctx){
     free(ptr);
 }
 
@@ -34,8 +34,8 @@ static Allocator allocator = {
 //> PRIVATE INTERFACE
 // ALLOCATION
 void *lzalloc(size_t size);
-void *lzrealloc(void *ptr, size_t new_size);
-void lzdealloc(void *ptr);
+void *lzrealloc(void *ptr, size_t old_size, size_t new_size);
+void lzdealloc(void *ptr, size_t size);
 // GARBAGE COLLECTOR
 void clean_up_module(Module *module);
 void destroy_dict_values(void *key, void *value);
@@ -54,12 +54,12 @@ void *lzalloc(size_t size){
     return raw_alloc(size, allocator.ctx);
 }
 
-void *lzrealloc(void *ptr, size_t new_size){
-    return raw_realloc(ptr, new_size, allocator.ctx);
+void *lzrealloc(void *ptr, size_t old_size, size_t new_size){
+    return raw_realloc(ptr, old_size, new_size, allocator.ctx);
 }
 
-void lzdealloc(void *ptr){
-    raw_dealloc(ptr, allocator.ctx);
+void lzdealloc(void *ptr, size_t size){
+    raw_dealloc(ptr, size, allocator.ctx);
 }
 
 void clean_up_module(Module *module){
@@ -75,7 +75,7 @@ void clean_up_module(Module *module){
 
 		while(global_node){
 			LZHTableNode *next = global_node->next_table_node;
-			lzdealloc(global_node->value);
+			lzdealloc(global_node->value, sizeof(Value));
 			global_node = next;
 		}
 
@@ -97,12 +97,12 @@ void clean_up_module(Module *module){
 }
 
 void destroy_dict_values(void *key, void *value){
-    lzdealloc(key);
-    lzdealloc(value);
+    lzdealloc(key, sizeof(Value));
+    lzdealloc(value, sizeof(Value));
 }
 
 void destroy_globals_values(void *ptr){
-	lzdealloc(ptr);
+	lzdealloc(ptr, sizeof(Value));
 }
 
 void destroy_obj(Obj *obj, VM *vm){
@@ -118,13 +118,13 @@ void destroy_obj(Obj *obj, VM *vm){
 	switch(obj->type){
 		case STR_OTYPE:{
 			Str *str = obj->value.str;
-			if(!str->core){lzdealloc(str->buff);}
-            lzdealloc(str);
+			if(!str->core){lzdealloc(str->buff, str->len + 1);}
+            lzdealloc(str, sizeof(Str));
 			break;
 		}case ARRAY_OTYPE:{
             Array *array = obj->value.array;
-            lzdealloc(array->values);
-            lzdealloc(array);
+            lzdealloc(array->values, sizeof(Value) * array->len);
+            lzdealloc(array, sizeof(Array));
             break;
         }case LIST_OTYPE:{
 			DynArr *list = obj->value.list;
@@ -137,11 +137,11 @@ void destroy_obj(Obj *obj, VM *vm){
         }case RECORD_OTYPE:{
 			Record *record = obj->value.record;
 			lzhtable_destroy(destroy_dict_values, record->key_values);
-			lzdealloc(record);
+			lzdealloc(record, sizeof(Record));
 			break;
 		}case NATIVE_FN_OTYPE:{
             NativeFn *native_fn = obj->value.native_fn;
-            if(!native_fn->unique){lzdealloc(native_fn);}
+            if(!native_fn->unique){lzdealloc(native_fn, sizeof(NativeFn));}
             break;
         }case MODULE_OTYPE:{
             break;
@@ -157,18 +157,18 @@ void destroy_obj(Obj *obj, VM *vm){
             }
 
             dlclose(handler);
-            lzdealloc(library);
+            lzdealloc(library, sizeof(NativeLib));
 
             break;
         }case FOREIGN_FN_OTYPE:{
-            lzdealloc(obj->value.foreign_fn);
+            lzdealloc(obj->value.foreign_fn, sizeof(ForeignFn));
             break;
         }default:{
 			assert("Illegal object type");
 		}
 	}
 
-	lzdealloc(obj);
+	lzdealloc(obj, sizeof(Obj));
 	vm->objs_size -= sizeof(Obj);
 }
 
@@ -631,7 +631,7 @@ Obj *vm_utils_core_str_obj(char *buff, VM *vm){
     Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
 
     if(!str || !str_obj){
-        lzdealloc(str);
+        lzdealloc(str, sizeof(Str));
         return NULL;
     }
 
@@ -650,7 +650,7 @@ Obj *vm_utils_uncore_str_obj(char *buff, VM *vm){
     Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
 
     if(!str || !str_obj){
-        lzdealloc(str);
+        lzdealloc(str, sizeof(Str));
         return NULL;
     }
 
@@ -669,8 +669,8 @@ Obj *vm_utils_empty_str_obj(Value *out_value, VM *vm){
 	Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
 
 	if(!buff || !str || !str_obj){
-        lzdealloc(buff);
-        lzdealloc(str);
+        lzdealloc(buff, 1);
+        lzdealloc(str, sizeof(Str));
         return NULL;
     }
 
@@ -690,8 +690,8 @@ Obj *vm_utils_clone_str_obj(char *buff, Value *out_value, VM *vm){
 	Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
 
     if(!new_buff || !str || !str_obj){
-        lzdealloc(new_buff);
-        lzdealloc(str);
+        lzdealloc(new_buff, buff_len + 1);
+        lzdealloc(str, sizeof(Str));
         return NULL;
     }
 
@@ -718,8 +718,8 @@ Obj *vm_utils_range_str_obj(size_t from, size_t to, char *buff, Value *out_value
 	Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
 
     if(!range_buff || !str || !str_obj){
-        lzdealloc(range_buff);
-        lzdealloc(str);
+        lzdealloc(range_buff, range_buff_len + 1);
+        lzdealloc(str, sizeof(Str));
         return NULL;
     }
 
@@ -758,8 +758,8 @@ Str *vm_utils_uncore_alloc_str(char *buff, VM *vm){
     Str *str = (Str *)lzalloc(sizeof(Str));
         
     if(!new_buff || !str){
-        lzdealloc(new_buff);
-        lzdealloc(str);
+        lzdealloc(new_buff, buff_len + 1);
+        lzdealloc(str, sizeof(Str));
         return NULL;
     }
 
@@ -779,8 +779,8 @@ Obj *vm_utils_array_obj(int32_t len, VM *vm){
     Obj *array_obj = vm_utils_obj(ARRAY_OTYPE, vm);
     
     if(!values || !array || !array_obj){
-        lzdealloc(values);
-        lzdealloc(array);
+        lzdealloc(values, len * sizeof(Value));
+        lzdealloc(array, sizeof(Array));
         return NULL;
     }
 
@@ -822,11 +822,11 @@ Obj *vm_utils_dict_obj(VM *vm){
 }
 
 Obj *vm_utils_record_obj(char empty, VM *vm){
-	Record *record = (Record *)lzalloc(sizeof(record));
+	Record *record = (Record *)lzalloc(sizeof(Record));
 	Obj *record_obj = vm_utils_obj(RECORD_OTYPE, vm);
 
 	if(!record || !record_obj){
-		lzdealloc(record);
+		lzdealloc(record, sizeof(Record));
 		return NULL;
 	}
 
@@ -836,7 +836,7 @@ Obj *vm_utils_record_obj(char empty, VM *vm){
 		LZHTable *key_values = lzhtable_create(17, NULL);
 
 		if(!key_values){
-			lzdealloc(record);
+			lzdealloc(record, sizeof(Record));
 			return NULL;
 		}
 
@@ -862,7 +862,7 @@ Obj *vm_utils_native_fn_obj(
     Obj *native_fn_obj = vm_utils_obj(NATIVE_FN_OTYPE, vm);
 
     if(!native_fn || !native_fn_obj){
-        lzdealloc(native_fn);
+        lzdealloc(native_fn, sizeof(NativeFn));
         return NULL;
     }
 
@@ -884,7 +884,7 @@ Obj *vm_utils_native_lib_obj(void *handler, VM *vm){
     Obj *native_lib_obj = vm_utils_obj(NATIVE_LIB_OTYPE, vm);
 
     if(!native_lib || !native_lib_obj){
-        lzdealloc(native_lib);
+        lzdealloc(native_lib, sizeof(NativeLib));
         return NULL;
     }
 
