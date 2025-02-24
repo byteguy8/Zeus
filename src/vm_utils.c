@@ -1,4 +1,5 @@
 #include "vm_utils.h"
+#include "memory.h"
 #include "bstr.h"
 #include "types.h"
 #include <stdio.h>
@@ -7,15 +8,15 @@
 #include <dlfcn.h>
 
 static void *raw_alloc(size_t size, void *ctx){
-    return calloc(1, size);
+    return memory_alloc(size);
 }
 
 static void *raw_realloc(void *ptr, size_t old_size, size_t new_size, void *ctx){
-    return realloc(ptr, new_size);
+    return memory_realloc(ptr, new_size);
 }
 
 static void raw_dealloc(void *ptr, size_t size, void *ctx){
-    free(ptr);
+    memory_dealloc(ptr);
 }
 
 static Allocator allocator = {

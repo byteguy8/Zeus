@@ -9,7 +9,7 @@ cflags.release := -O2
 CFLAGS := ${cflags.common} ${cflags.${BUILD}}
 
 COMPILER = gcc
-OBJS = lzarena.o \
+OBJS = lzarena.o lzflist.o \
 bstr.o \
 dynarr.o lzhtable.o \
 memory.o utils.o \
@@ -43,3 +43,5 @@ bstr.o:
 	$(COMPILER) -c -o $(OUT_DIR)/bstr.o $(CFLAGS) $(SRC)/bstr.c
 lzarena.o:
 	$(COMPILER) -c -o $(OUT_DIR)/lzarena.o  $(CFLAGS) $(SRC)/lzarena.c
+lzflist.o:
+	$(COMPILER) -c -o $(OUT_DIR)/lzflist.o  $(CFLAGS) $(SRC)/lzflist.c

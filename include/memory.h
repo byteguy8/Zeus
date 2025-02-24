@@ -44,4 +44,8 @@ Fn *runtime_fn(char *name, Module *module);
 Module *runtime_module(char *name, char *filepath);
 Module *runtime_clone_module(char *new_name, char *filepath, Module *module);
 
+void *memory_alloc(size_t size);
+void *memory_realloc(void *ptr, size_t size);
+void *memory_dealloc(void *ptr);
+
 #endif

@@ -126,6 +126,7 @@ int main(int argc, char const *argv[]){
     add_native("is_str_int", 1, native_fn_is_str_int, natives);
     add_native("is_str_float", 1, native_fn_is_str_float, natives);
 	add_native("str_to_int", 1, native_fn_str_to_int, natives);
+    add_native("str_to_float", 1, native_fn_str_to_float, natives);
     add_native("int_to_str", 1, native_fn_int_to_str, natives);
     add_native("int_to_float", 1, native_fn_int_to_float, natives);
     add_native("float_to_int", 1, native_fn_float_to_int, natives);

@@ -1,4 +1,5 @@
 #include "memory.h"
+#include "lzflist.h"
 #include "lzarena.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,6 +13,8 @@ static LZHTableAllocator lzhtable_allocator = {0};
 static LZArena *runtime_arena = NULL;
 static DynArrAllocator runtime_dynarr_allocator = {0};
 static LZHTableAllocator runtime_lzhtable_allocator = {0};
+
+static LZFList *flist_allocator = NULL;
 
 void *arena_alloc(size_t size, void *ctx){
 	void *ptr = LZARENA_ALLOC(size, ctx);
@@ -73,12 +76,15 @@ int memory_init(){
 	runtime_lzhtable_allocator.dealloc = arena_dealloc;
 	runtime_lzhtable_allocator.ctx = runtime_arena;
 
+    flist_allocator = lzflist_create();
+
     return 0;
 }
 
 void memory_deinit(){
 	lzarena_destroy(compile_arena);
     lzarena_destroy(runtime_arena);
+    lzflist_destroy(flist_allocator);
 }
 
 void memory_report(){
@@ -270,4 +276,32 @@ Module *runtime_clone_module(char *new_name, char *filepath, Module *module){
     new_module->submodule = module->submodule;
 
     return new_module;
+}
+
+void *memory_alloc(size_t size){
+    void *ptr = lzflist_alloc(size, flist_allocator);
+    
+    if(!ptr){
+        fprintf(stderr, "out of memory\n");
+		memory_deinit();
+		exit(EXIT_FAILURE);
+	}
+    
+    return ptr;
+}
+
+void *memory_realloc(void *ptr, size_t size){
+    void *new_ptr = lzflist_realloc(ptr, size, flist_allocator);
+    
+    if(!new_ptr){
+        fprintf(stderr, "out of memory\n");
+		memory_deinit();
+		exit(EXIT_FAILURE);
+	}
+
+    return new_ptr;
+}
+
+void *memory_dealloc(void *ptr){
+    lzflist_dealloc(ptr, flist_allocator);
 }
