@@ -21,7 +21,7 @@ Value native_fn_dict_contains(uint8_t argsc, Value *values, void *target, VM *vm
     LZHTable *dict = (LZHTable *)target;
     Value *value = &values[0];
 
-    uint32_t hash = vm_utils_hash_value(value);
+    uint32_t hash = vmu_hash_value(value);
     uint8_t contains = lzhtable_hash_contains(hash, dict, NULL) != NULL;
 
     return BOOL_VALUE(contains);
@@ -31,7 +31,7 @@ Value native_fn_dict_get(uint8_t argsc, Value *values, void *target, VM *vm){
     LZHTable *dict = (LZHTable *)target;
     Value *key = &values[0];
 
-    uint32_t hash = vm_utils_hash_value(key);
+    uint32_t hash = vmu_hash_value(key);
     LZHTableNode *node = NULL;
 
     lzhtable_hash_contains(hash, dict, &node);
@@ -45,21 +45,21 @@ Value native_fn_dict_put(uint8_t argsc, Value *values, void *target, VM *vm){
     Value *key = &values[0];
     Value *value = &values[1];
 
-    uint32_t hash = vm_utils_hash_value(key);
+    uint32_t hash = vmu_hash_value(key);
 	LZHTableNode *node = NULL;
 
 	if(lzhtable_hash_contains(hash, dict, &node)){
 		Value *dict_value = (Value *)node->value;
 		memcpy(dict_value, value, sizeof(Value));
 	}else{
-        Value *key_clone = vm_utils_clone_value(key, vm);
-		Value *value_clone = vm_utils_clone_value(value, vm);
+        Value *key_clone = vmu_clone_value(key, vm);
+		Value *value_clone = vmu_clone_value(value, vm);
 
         if(!key_clone || !value_clone)
-            vm_utils_error(vm, "Out of memory");
+            vmu_error(vm, "Out of memory");
 
         if(lzhtable_hash_put_key(key_clone, hash, value_clone, dict))
-            vm_utils_error(vm, "Out of memory");
+            vmu_error(vm, "Out of memory");
 	}
 
     return EMPTY_VALUE;
@@ -68,11 +68,11 @@ Value native_fn_dict_put(uint8_t argsc, Value *values, void *target, VM *vm){
 Value native_fn_dict_remove(uint8_t argsc, Value *values, void *target, VM *vm){
     LZHTable *dict = (LZHTable *)target;
     Value *key = &values[0];
-    uint32_t key_hash = vm_utils_hash_value(key);
+    uint32_t key_hash = vmu_hash_value(key);
     LZHTableNode *node = NULL;
 
     if(!lzhtable_hash_contains(key_hash, dict, &node))
-		vm_utils_error(vm, "Unknown dictionary key");
+		vmu_error(vm, "Unknown dictionary key");
 
     Value *bucket_key = node->key;
     Value *bucket_value = NULL;
@@ -89,7 +89,7 @@ Value native_fn_dict_clear(uint8_t argsc, Value *values, void *target, VM *vm){
     LZHTable *dict = (LZHTable *)target;
     
     if(lzhtable_clear_shrink(clear_dict, dict)){
-        vm_utils_error(vm, "Fatal error when cleaning dictionary");
+        vmu_error(vm, "Fatal error when cleaning dictionary");
     }
 
     return EMPTY_VALUE;
@@ -97,10 +97,10 @@ Value native_fn_dict_clear(uint8_t argsc, Value *values, void *target, VM *vm){
 
 Value native_fn_dict_keys(uint8_t argsc, Value *values, void *target, VM *vm){
     LZHTable *dict = (LZHTable *)target;
-    Obj *array_obj = vm_utils_array_obj(dict->n, vm);
+    Obj *array_obj = vmu_array_obj(dict->n, vm);
     
     if(!array_obj){
-        vm_utils_error(vm, "Out of memory");
+        vmu_error(vm, "Out of memory");
     }
 
     LZHTableNode *node = dict->head;
@@ -117,10 +117,10 @@ Value native_fn_dict_keys(uint8_t argsc, Value *values, void *target, VM *vm){
 
 Value native_fn_dict_values(uint8_t argsc, Value *values, void *target, VM *vm){
     LZHTable *dict = (LZHTable *)target;
-    Obj *array_obj = vm_utils_array_obj(dict->n, vm);
+    Obj *array_obj = vmu_array_obj(dict->n, vm);
     
     if(!array_obj){
-        vm_utils_error(vm, "Out of memory");
+        vmu_error(vm, "Out of memory");
     }
 
     LZHTableNode *current = dict->head;
@@ -152,7 +152,7 @@ Obj *native_dict_get(char *symbol, void *target, VM *vm){
     NativeFnInfo *native_fn_info = (NativeFnInfo *)lzhtable_get((uint8_t *)symbol, key_size, dict_symbols);
     
     if(native_fn_info){
-        Obj *native_fn_obj = vm_utils_native_fn_obj(
+        Obj *native_fn_obj = vmu_native_fn_obj(
             native_fn_info->arity,
             symbol,
             target,
@@ -161,7 +161,7 @@ Obj *native_dict_get(char *symbol, void *target, VM *vm){
         );
 
         if(!native_fn_obj){
-            vm_utils_error(vm, "Out of memory");
+            vmu_error(vm, "Out of memory");
         }
 
         return native_fn_obj;

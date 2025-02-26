@@ -5,7 +5,7 @@
 #include "lzhtable.h"
 #include <stddef.h>
 
-typedef struct allocator{
+typedef struct runtime_allocator_interface{
     void *ctx;
     void *(*alloc)(size_t size, void *ctx);
     void *(*realloc)(void *ptr, size_t old_size, size_t new_size, void *ctx);
@@ -89,7 +89,7 @@ typedef struct foreign_fn{
 }ForeignFn;
 
 typedef struct record{
-	LZHTable *key_values;
+	LZHTable *attributes;
 }Record;
 
 //> NATIVE MODULE RELATED

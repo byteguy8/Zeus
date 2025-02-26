@@ -41,6 +41,7 @@ static int bucket_key_insert(
 );
 static void relocate(LZHTable *table);
 static int grow(LZHTable *table);
+static int shrink_to(size_t to, int update, LZHTable *table);
 static void print_bucket(LZHTableBucket *bucket);
 
 // PRIVATE IMPLEMENTATION

@@ -57,10 +57,10 @@ static Value *obj_value(void *raw){
 }
 
 static void *str_create(char *buff){
-    Obj *str_obj = vm_utils_clone_str_obj(buff, NULL, vm);
+    Obj *str_obj = vmu_clone_str_obj(buff, NULL, vm);
     
     if(!str_obj){
-        vm_utils_error(vm, "Out of memory");
+        vmu_error(vm, "Out of memory");
     }
 
     return str_obj;
@@ -74,13 +74,13 @@ char *str_buff(void *raw){
 
 static void *array_create(int64_t len){
     if(len < 0 || len >= INT16_MAX){
-        vm_utils_error(vm, "Illegal length. Must be 0 <= length <= %d", INT16_MAX);
+        vmu_error(vm, "Illegal length. Must be 0 <= length <= %d", INT16_MAX);
     }
     
-    Obj *array_obj = vm_utils_array_obj(len, vm);
+    Obj *array_obj = vmu_array_obj(len, vm);
     
     if(!array_obj){
-        vm_utils_error(vm, "Out of memory");
+        vmu_error(vm, "Out of memory");
     }
 
     return array_obj;
@@ -91,7 +91,7 @@ static void array_set_bool_at(int64_t index, uint8_t value, void *raw){
     Array *array = array_obj->value.array;
 
     if(index < 0 || index >= array->len){
-        vm_utils_error(vm, "Index out of bounds. Must be 0 <= index < %ld", array->len);
+        vmu_error(vm, "Index out of bounds. Must be 0 <= index < %ld", array->len);
     }
 
     array->values[index] = BOOL_VALUE(value);
@@ -102,7 +102,7 @@ static void array_set_int_at(int64_t index, int64_t value, void *raw){
     Array *array = array_obj->value.array;
 
     if(index < 0 || index >= array->len){
-        vm_utils_error(vm, "Index out of bounds. Must be 0 <= index < %ld", array->len);
+        vmu_error(vm, "Index out of bounds. Must be 0 <= index < %ld", array->len);
     }
 
     array->values[index] = INT_VALUE(value);
@@ -113,13 +113,13 @@ static void array_set_str_at(int64_t index, void * value, void *raw){
     Array *array = array_obj->value.array;
 
     if(index < 0 || index >= array->len){
-        vm_utils_error(vm, "Index out of bounds. Must be 0 <= index < %ld", array->len);
+        vmu_error(vm, "Index out of bounds. Must be 0 <= index < %ld", array->len);
     }
 
     Obj *value_obj = (Obj *)value;
 
     if(value_obj->type != STR_OTYPE){
-        vm_utils_error(vm, "Expect string, but got something else");
+        vmu_error(vm, "Expect string, but got something else");
     }
 
     array->values[index] = OBJ_VALUE(value);
@@ -130,13 +130,13 @@ static void array_set_array_at(int64_t index, void * value, void *raw){
     Array *array = array_obj->value.array;
 
     if(index < 0 || index >= array->len){
-        vm_utils_error(vm, "Index out of bounds. Must be 0 <= index < %ld", array->len);
+        vmu_error(vm, "Index out of bounds. Must be 0 <= index < %ld", array->len);
     }
 
     Obj *value_obj = (Obj *)value;
 
     if(value_obj->type != ARRAY_OTYPE){
-        vm_utils_error(vm, "Expect array, but got something else");
+        vmu_error(vm, "Expect array, but got something else");
     }
 
     array->values[index] = OBJ_VALUE(value);
@@ -144,10 +144,10 @@ static void array_set_array_at(int64_t index, void * value, void *raw){
 
 //> LIST RELATED
 static void *list_create(){
-    Obj *list_obj = vm_utils_list_obj(vm);
+    Obj *list_obj = vmu_list_obj(vm);
     
     if(!list_obj){
-        vm_utils_error(vm, "Out of memory");
+        vmu_error(vm, "Out of memory");
     }
 
     return list_obj;
@@ -159,7 +159,7 @@ static void list_add_bool(uint8_t value, void *raw){
     Value literal_value = BOOL_VALUE(value);
     
     if(dynarr_insert(&literal_value, list)){
-        vm_utils_error(vm, "Out of memory");
+        vmu_error(vm, "Out of memory");
     }
 }
 
@@ -169,7 +169,7 @@ static void list_add_int(int64_t value, void *raw){
     Value literal_value = INT_VALUE(value);
     
     if(dynarr_insert(&literal_value, list)){
-        vm_utils_error(vm, "Out of memory");
+        vmu_error(vm, "Out of memory");
     }
 }
 
@@ -179,13 +179,13 @@ static void list_add_str(void * value, void *raw){
     Obj *value_obj = (Obj *)value;
 
     if(value_obj->type != STR_OTYPE){
-        vm_utils_error(vm, "Expect string, but got something else");
+        vmu_error(vm, "Expect string, but got something else");
     }
 
     Value obj_value = OBJ_VALUE(value_obj);
 
     if(dynarr_insert(&obj_value, list)){
-        vm_utils_error(vm, "Out of memory");
+        vmu_error(vm, "Out of memory");
     }
 }
 
@@ -195,13 +195,13 @@ static void list_add_array(void * value, void *raw){
     Obj *value_obj = (Obj *)value;
 
     if(value_obj->type != ARRAY_OTYPE){
-        vm_utils_error(vm, "Expect array, but got something else");
+        vmu_error(vm, "Expect array, but got something else");
     }
 
     Value obj_value = OBJ_VALUE(value_obj);
     
     if(dynarr_insert(&obj_value, list)){
-        vm_utils_error(vm, "Out of memory");
+        vmu_error(vm, "Out of memory");
     }
 }
 
@@ -211,13 +211,13 @@ static void list_add_list(void * value, void *raw){
     Obj *value_obj = (Obj *)value;
 
     if(value_obj->type != LIST_OTYPE){
-        vm_utils_error(vm, "Expect list, but got something else");
+        vmu_error(vm, "Expect list, but got something else");
     }
 
     Value obj_value = OBJ_VALUE(value_obj);
     
     if(dynarr_insert(&obj_value, list)){
-        vm_utils_error(vm, "Out of memory");
+        vmu_error(vm, "Out of memory");
     }
 }
 //< LIST RELATED
@@ -226,7 +226,7 @@ static void *get_native_lib_symbol(char *name, void *handler){
     void *symbol = dlsym(handler, name);
     
     if(!symbol){
-        vm_utils_error(vm, "Failed to initialize native library. Essential interface function not found");
+        vmu_error(vm, "Failed to initialize native library. Essential interface function not found");
     }
 
     return symbol;

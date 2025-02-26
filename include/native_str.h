@@ -22,8 +22,8 @@ Value native_fn_str_char_at(uint8_t argc, Value *values, void *target, VM *vm){
     
     Value value = {0};
 
-    if(!vm_utils_range_str_obj(index, index, str->buff, &value, vm))
-		vm_utils_error(vm, "Out of memory");
+    if(!vmu_range_str_obj(index, index, str->buff, &value, vm))
+		vmu_error(vm, "Out of memory");
     
     return value;
 }
@@ -39,12 +39,12 @@ Value native_fn_str_sub_str(uint8_t argc, Value *values, void *target, VM *vm){
     VALIDATE_INDEX_NAME(to_value, to, str->len, "to")
 
     if(from > to) 
-        vm_utils_error(vm, "Illegal index 'from'(%ld). Must be less or equals to 'to'(%ld)", from, to);
+        vmu_error(vm, "Illegal index 'from'(%ld). Must be less or equals to 'to'(%ld)", from, to);
 
     Value value = {0};
 
-    if(!vm_utils_range_str_obj(from, to, str->buff, &value, vm))
-		vm_utils_error(vm, "Out of memory");
+    if(!vmu_range_str_obj(from, to, str->buff, &value, vm))
+		vmu_error(vm, "Out of memory");
 
     return value;
 }
@@ -67,15 +67,15 @@ Value native_fn_str_split(uint8_t argc, Value *values, void *target, VM *vm){
     Str *by = NULL;
 
     if(!IS_STR(by_value))
-        vm_utils_error(vm, "Expect string as 'by' to split");
+        vmu_error(vm, "Expect string as 'by' to split");
     
     by = TO_STR(by_value);
 
     if(by->len != 1)
-		vm_utils_error(vm, "Expect string of length 1 as 'by' to split");
+		vmu_error(vm, "Expect string of length 1 as 'by' to split");
 
-    Obj *list_obj = vm_utils_list_obj(vm);
-    if(!list_obj) vm_utils_error(vm, "Out of memory");
+    Obj *list_obj = vmu_list_obj(vm);
+    if(!list_obj) vmu_error(vm, "Out of memory");
 
     DynArr *list = list_obj->value.list;
 	char coincidence = 0;
@@ -95,15 +95,15 @@ Value native_fn_str_split(uint8_t argc, Value *values, void *target, VM *vm){
 			Value str_value = {0};
 
 			if(len == 0){
-                if(!vm_utils_empty_str_obj(&str_value, vm))
-                    vm_utils_error(vm, "Out of memory");
+                if(!vmu_empty_str_obj(&str_value, vm))
+                    vmu_error(vm, "Out of memory");
             }else{
-                if(!vm_utils_range_str_obj(from, to - 1, str->buff, &str_value, vm))
-                    vm_utils_error(vm, "Out of memory");
+                if(!vmu_range_str_obj(from, to - 1, str->buff, &str_value, vm))
+                    vmu_error(vm, "Out of memory");
             }
 
 			if(dynarr_insert(&str_value, list))
-                vm_utils_error(vm, "Out of memory");
+                vmu_error(vm, "Out of memory");
 
             from = i;
         }
@@ -112,11 +112,11 @@ Value native_fn_str_split(uint8_t argc, Value *values, void *target, VM *vm){
 	if(coincidence){
 		Value str_value = {0};
 
-    	if(!vm_utils_range_str_obj(from, i - 1, str->buff, &str_value, vm))
-            vm_utils_error(vm, "Out of memory");
+    	if(!vmu_range_str_obj(from, i - 1, str->buff, &str_value, vm))
+            vmu_error(vm, "Out of memory");
 
 		if(dynarr_insert(&str_value, list))
-            vm_utils_error(vm, "Out of memory");
+            vmu_error(vm, "Out of memory");
 	}
 
     return OBJ_VALUE(list_obj);
@@ -126,7 +126,7 @@ Value native_fn_str_lstrip(uint8_t argsc, Value *values, void *target, VM *vm){
 	Str *str = (Str *)target;
 
 	if(str->len == 0)
-		vm_utils_error(vm, "Expect a not empty string");
+		vmu_error(vm, "Expect a not empty string");
 
 	size_t from = 0;
 
@@ -138,8 +138,8 @@ Value native_fn_str_lstrip(uint8_t argsc, Value *values, void *target, VM *vm){
 
 	Value value = {0};
 
-	if(!vm_utils_range_str_obj(from - 1, str->len - 1, str->buff, &value, vm))
-		vm_utils_error(vm, "Out of memory");
+	if(!vmu_range_str_obj(from - 1, str->len - 1, str->buff, &value, vm))
+		vmu_error(vm, "Out of memory");
 
 	return value;
 }
@@ -148,7 +148,7 @@ Value native_fn_str_rstrip(uint8_t argsc, Value *values, void *target, VM *vm){
 	Str *str = (Str *)target;
 
 	if(str->len == 0)
-		vm_utils_error(vm, "Expect a not empty string");
+		vmu_error(vm, "Expect a not empty string");
 
 	size_t to = str->len;
 	
@@ -160,8 +160,8 @@ Value native_fn_str_rstrip(uint8_t argsc, Value *values, void *target, VM *vm){
 
 	Value value = {0};
 
-	if(!vm_utils_range_str_obj(0, to, str->buff, &value, vm))
-		vm_utils_error(vm, "Out of memory");
+	if(!vmu_range_str_obj(0, to, str->buff, &value, vm))
+		vmu_error(vm, "Out of memory");
 
 	return value;
 }
@@ -170,7 +170,7 @@ Value native_fn_str_strip(uint8_t argsc, Value *values, void *target, VM *vm){
 	Str *str = (Str *)target;
 
 	if(str->len == 0)
-		vm_utils_error(vm, "Expect a not empty string");
+		vmu_error(vm, "Expect a not empty string");
 
 	char from_set = 0;
 	size_t from = 0;
@@ -197,8 +197,8 @@ Value native_fn_str_strip(uint8_t argsc, Value *values, void *target, VM *vm){
 
 	Value value = {0};
 
-	if(!vm_utils_range_str_obj(from, to, str->buff, &value, vm))
-		vm_utils_error(vm, "Out of memory");
+	if(!vmu_range_str_obj(from, to, str->buff, &value, vm))
+		vmu_error(vm, "Out of memory");
 
 	return value;
 }
@@ -207,8 +207,8 @@ Value native_fn_str_lower(uint8_t argsc, Value *values, void *target, VM *vm){
 	Str *str = (Str *)target;
 	Value value = {0};
 
-	if(!vm_utils_clone_str_obj(str->buff, &value, vm))
-		vm_utils_error(vm, "Out of memory");
+	if(!vmu_clone_str_obj(str->buff, &value, vm))
+		vmu_error(vm, "Out of memory");
 
 	Str *out_str = TO_STR(&value);
 
@@ -225,8 +225,8 @@ Value native_fn_str_upper(uint8_t argsc, Value *values, void *target, VM *vm){
 	Str *str = (Str *)target;
 	Value value = {0};
 
-	if(!vm_utils_clone_str_obj(str->buff, &value, vm))
-		vm_utils_error(vm, "Out of memory");
+	if(!vmu_clone_str_obj(str->buff, &value, vm))
+		vmu_error(vm, "Out of memory");
 
 	Str *out_str = value.literal.obj->value.str;
 
@@ -243,8 +243,8 @@ Value native_fn_str_title(uint8_t argsc, Value *values, void *target, VM *vm){
     Str *str = (Str *)target;
     Value value = {0};
 
-    if(!vm_utils_clone_str_obj(str->buff, &value, vm))
-		vm_utils_error(vm, "Out of memory");
+    if(!vmu_clone_str_obj(str->buff, &value, vm))
+		vmu_error(vm, "Out of memory");
 
     Str *out_str = value.literal.obj->value.str;
 
@@ -267,7 +267,7 @@ Value native_fn_str_cmp(uint8_t argsc, Value *values, void *target, VM *vm){
 	Str *s1 = NULL;
 
 	if(!IS_STR(vs1))
-		vm_utils_error(vm, "Expect a string, but got something else");
+		vmu_error(vm, "Expect a string, but got something else");
 
 	s1 = TO_STR(vs1);
 
@@ -280,7 +280,7 @@ Value native_fn_str_cmp_ic(uint8_t argsc, Value *values, void *target, VM *vm){
 	Str *s1 = NULL;
 
 	if(!IS_STR(vs1))
-		vm_utils_error(vm, "Expect a string, but got something else");
+		vmu_error(vm, "Expect a string, but got something else");
 
 	s1 = TO_STR(vs1);
 
@@ -325,7 +325,7 @@ Obj *native_str_get(char *symbol, void *target, VM *vm){
     NativeFnInfo *native_fn_info = (NativeFnInfo *)lzhtable_get((uint8_t *)symbol, key_size, str_symbols);
     
     if(native_fn_info){
-        Obj *native_obj_fn = vm_utils_native_fn_obj(
+        Obj *native_obj_fn = vmu_native_fn_obj(
             native_fn_info->arity,
             symbol,
             target,
@@ -334,7 +334,7 @@ Obj *native_str_get(char *symbol, void *target, VM *vm){
         );
 
         if(!native_obj_fn){
-            vm_utils_error(vm, "Out of memory");
+            vmu_error(vm, "Out of memory");
         }
 
         return native_obj_fn;

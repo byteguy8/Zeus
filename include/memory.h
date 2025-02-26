@@ -4,6 +4,7 @@
 #include "types.h"
 #include "bstr.h"
 #include "lzarena.h"
+#include "lzflist.h"
 #include "dynarr.h"
 #include "lzhtable.h"
 #include <stddef.h>
@@ -44,8 +45,9 @@ Fn *runtime_fn(char *name, Module *module);
 Module *runtime_module(char *name, char *filepath);
 Module *runtime_clone_module(char *new_name, char *filepath, Module *module);
 
+Allocator *memory_allocator();
 void *memory_alloc(size_t size);
 void *memory_realloc(void *ptr, size_t size);
-void *memory_dealloc(void *ptr);
+void memory_dealloc(void *ptr);
 
 #endif

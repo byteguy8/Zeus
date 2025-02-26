@@ -28,7 +28,7 @@ static Value *peek(VM *vm);
 
 #define PUSH(value, vm) {                      \
     if(vm->stack_ptr >= STACK_LENGTH){         \
-        vm_utils_error(vm, "Stack over flow"); \
+        vmu_error(vm, "Stack over flow"); \
     }                                          \
     vm->stack[vm->stack_ptr++] = value;        \
 }
@@ -54,43 +54,43 @@ static Value *peek(VM *vm);
 }
 
 #define PUSH_CORE_STR(buff, vm){                    \
-    Obj *str_obj = vm_utils_core_str_obj(buff, vm); \
+    Obj *str_obj = vmu_core_str_obj(buff, vm); \
     Value obj_value = OBJ_VALUE(str_obj);           \
     PUSH(obj_value, vm);                            \
 }
 
 #define PUSH_UNCORE_STR(buff, vm){                    \
-    Obj *str_obj = vm_utils_uncore_str_obj(buff, vm); \
+    Obj *str_obj = vmu_uncore_str_obj(buff, vm); \
     Value obj_value = OBJ_VALUE(str_obj);             \
     PUSH(obj_value, vm);                              \
 }
 
 #define PUSH_NON_NATIVE_FN(fn, vm) {               \
-    Obj *obj = vm_utils_obj(FN_OTYPE, vm);         \
-    if(!obj){vm_utils_error(vm, "Out of memory");} \
+    Obj *obj = vmu_obj(FN_OTYPE, vm);         \
+    if(!obj){vmu_error(vm, "Out of memory");} \
     obj->value.f##n = fn;                          \
     Value fn_value = OBJ_VALUE(obj);               \
     PUSH(fn_value, vm)                             \
 }
 
 #define PUSH_NATIVE_FN(fn, vm) {                   \
-    Obj *obj = vm_utils_obj(NATIVE_FN_OTYPE, vm);  \
-    if(!obj){vm_utils_error(vm, "Out of memory");} \
+    Obj *obj = vmu_obj(NATIVE_FN_OTYPE, vm);  \
+    if(!obj){vmu_error(vm, "Out of memory");} \
     obj->value.native_fn = fn;                     \
     Value fn_value = OBJ_VALUE(obj);               \
     PUSH(fn_value, vm)                             \
 }
 
 #define PUSH_NATIVE_MODULE(m, vm){                    \
-	Obj *obj = vm_utils_obj(NATIVE_MODULE_OTYPE, vm); \
-	if(!obj){vm_utils_error(vm, "out of memory");}    \
+	Obj *obj = vmu_obj(NATIVE_MODULE_OTYPE, vm); \
+	if(!obj){vmu_error(vm, "out of memory");}    \
 	obj->value.native_module = (m);                   \
 	PUSH(OBJ_VALUE(obj), vm);                         \
 }
 
 #define PUSH_MODULE(m, vm) {                       \
-    Obj *obj = vm_utils_obj(MODULE_OTYPE, vm);     \
-	if(!obj){vm_utils_error(vm, "Out of memory");} \
+    Obj *obj = vmu_obj(MODULE_OTYPE, vm);     \
+	if(!obj){vmu_error(vm, "Out of memory");} \
 	obj->value.module = m;                         \
 	PUSH(OBJ_VALUE(obj), vm);                      \
 }
@@ -100,7 +100,7 @@ static Value *peek(VM *vm);
 	LZHTable *symbols = (m)->symbols;               										\
 	LZHTableNode *symbol_node = NULL;                                                       \
 	if(!lzhtable_contains((uint8_t *)(n), key_size, symbols, &symbol_node)){                \
-		vm_utils_error(vm, "Module '%s' do not contains a symbol '%s'", (m)->name, (n));    \
+		vmu_error(vm, "Module '%s' do not contains a symbol '%s'", (m)->name, (n));    \
     }                                                                                       \
 	NativeModuleSymbol *symbol = (NativeModuleSymbol *)symbol_node->value;					\
 	if(symbol->type == NATIVE_FUNCTION_NMSYMTYPE){											\
@@ -117,11 +117,11 @@ static Value *peek(VM *vm);
    	LZHTable *symbols = submodule->symbols;                                                 \
 	LZHTableNode *node = NULL;                                                              \
 	if(!lzhtable_contains((uint8_t *)(n), key_size, symbols, &node)){                       \
-        vm_utils_error(vm, "Module '%s' do not contains a symbol '%s'", module->name, (n)); \
+        vmu_error(vm, "Module '%s' do not contains a symbol '%s'", module->name, (n)); \
     }                                                                                       \
 	ModuleSymbol *module_symbol = (ModuleSymbol *)node->value;                                     \
     if((m) != CURRENT_FRAME(vm)->fn->module && module_symbol->access == PRIVATE_MSYMATYPE){        \
-        vm_utils_error(vm, "Symbol '%s' not public", (n));                                  \
+        vmu_error(vm, "Symbol '%s' not public", (n));                                  \
     }                                                                                       \
 	if(module_symbol->type == NATIVE_MODULE_MSYMTYPE){                                             \
         PUSH_NATIVE_MODULE(module_symbol->value.native_module, vm);							    \
@@ -141,7 +141,7 @@ static void resolve_module(Module *module, VM *vm);
 //< Private Interface
 Frame *frame_up(char *name, VM *vm){
     if(vm->frame_ptr >= FRAME_LENGTH){
-        vm_utils_error(vm, "Frame over flow");
+        vmu_error(vm, "Frame over flow");
     }
 
     Module *module = vm->module;
@@ -150,13 +150,13 @@ Frame *frame_up(char *name, VM *vm){
 	LZHTableNode *symbol_node = NULL;
     
 	if(!lzhtable_contains((uint8_t *)name, strlen(name), symbols, &symbol_node)){
-        vm_utils_error(vm, "Symbol '%s' do not exists", name);
+        vmu_error(vm, "Symbol '%s' do not exists", name);
     }
 
 	ModuleSymbol *symbol = (ModuleSymbol *)symbol_node->value;
 
 	if(symbol->type != FUNCTION_MSYMTYPE){
-        vm_utils_error(vm, "Expect symbol of type 'function', but got something else");
+        vmu_error(vm, "Expect symbol of type 'function', but got something else");
     }
 
     Fn *fn = symbol->value.fn;
@@ -170,7 +170,7 @@ Frame *frame_up(char *name, VM *vm){
 
 Frame *frame_up_fn(Fn *fn, VM *vm){
     if(vm->frame_ptr >= FRAME_LENGTH){
-        vm_utils_error(vm, "Frame over flow");
+        vmu_error(vm, "Frame over flow");
     }
         
     Frame *frame = &vm->frame_stack[vm->frame_ptr++];
@@ -183,7 +183,7 @@ Frame *frame_up_fn(Fn *fn, VM *vm){
 
 void frame_down(VM *vm){
     if(vm->frame_ptr == 0){
-        vm_utils_error(vm, "Frame under flow");
+        vmu_error(vm, "Frame under flow");
     }
 
     vm->frame_ptr--;
@@ -217,7 +217,7 @@ void print_obj(Obj *object){
             break;
         }case RECORD_OTYPE:{
 			Record *record = object->value.record;
-			printf("<record %ld at %p>\n", record->key_values ? record->key_values->n : 0, record);
+			printf("<record %ld at %p>\n", record->attributes ? record->attributes->n : 0, record);
 			break;
 		}case FN_OTYPE:{
             Fn *fn = (Fn *)object->value.fn;
@@ -326,27 +326,27 @@ char *read_str(VM *vm, uint32_t *out_hash){
 }
 
 Value *peek(VM *vm){
-    if(vm->stack_ptr == 0){vm_utils_error(vm, "Stack is empty");}
+    if(vm->stack_ptr == 0){vmu_error(vm, "Stack is empty");}
     return &vm->stack[vm->stack_ptr - 1];
 }
 
 Value *peek_at(int offset, VM *vm){
     if(1 + offset > vm->stack_ptr){
-        vm_utils_error(vm, "Illegal offset: %d, stack: %d", offset, vm->stack_ptr);
+        vmu_error(vm, "Illegal offset: %d, stack: %d", offset, vm->stack_ptr);
     }
     size_t at = vm->stack_ptr - 1 - offset;
     return &vm->stack[at];
 }
 
 void push_fn(Fn *fn, VM *vm){
-	Obj *obj = vm_utils_obj(FN_OTYPE, vm);
-	if(!obj){vm_utils_error(vm, "Out of memory");}
+	Obj *obj = vmu_obj(FN_OTYPE, vm);
+	if(!obj){vmu_error(vm, "Out of memory");}
 	obj->value.fn = fn;
 	PUSH(OBJ_VALUE(obj), vm);
 }
 
 Value *pop(VM *vm){
-    if(vm->stack_ptr == 0){vm_utils_error(vm, "Stack under flow");}
+    if(vm->stack_ptr == 0){vmu_error(vm, "Stack under flow");}
     return &vm->stack[--vm->stack_ptr];
 }
 
@@ -385,24 +385,24 @@ void execute(uint8_t chunk, VM *vm){
             BStr *bstr = bstr_create_empty(NULL);
             
             if(!bstr){
-                vm_utils_error(vm, "Failed to create template: out of memory");
+                vmu_error(vm, "Failed to create template: out of memory");
             }
             
             for (int16_t i = 0; i < len; i++){
                 Value *value = pop(vm);
                 
-                if(vm_utils_value_to_str(value, bstr)){
+                if(vmu_value_to_str(value, bstr)){
                     bstr_destroy(bstr);
-                    vm_utils_error(vm, "Failed to create template: out of memory");
+                    vmu_error(vm, "Failed to create template: out of memory");
                 }
             }
 
-            Obj *str_obj = vm_utils_clone_str_obj((char *)bstr->buff, NULL, vm);
+            Obj *str_obj = vmu_clone_str_obj((char *)bstr->buff, NULL, vm);
 
             bstr_destroy(bstr);
 
             if(!str_obj){
-                vm_utils_error(vm, "Failed to create template: out of memory");
+                vmu_error(vm, "Failed to create template: out of memory");
             }
 
             PUSH(OBJ_VALUE(str_obj), vm);
@@ -416,19 +416,19 @@ void execute(uint8_t chunk, VM *vm){
                 Value *length_value = pop(vm);
 
                 if(!IS_INT(length_value)){
-                    vm_utils_error(vm, "Expect 'length' to be of type integer, but got something else");
+                    vmu_error(vm, "Expect 'length' to be of type integer, but got something else");
                 }
                 
                 int64_t length = TO_INT(length_value);
 
                 if(length < 0 || length > INT32_MAX){
-                    vm_utils_error(vm, "Illegal 'length' value. Must be 0 <= LENGTH(%ld) <= %d", length, INT32_MAX);
+                    vmu_error(vm, "Illegal 'length' value. Must be 0 <= LENGTH(%ld) <= %d", length, INT32_MAX);
                 }
 
-                Obj *array_obj = vm_utils_array_obj((int32_t)length, vm);
+                Obj *array_obj = vmu_array_obj((int32_t)length, vm);
                 
                 if(!array_obj){
-                    vm_utils_error(vm, "Out of memory");
+                    vmu_error(vm, "Out of memory");
                 }
 
                 PUSH(OBJ_VALUE(array_obj), vm)
@@ -437,29 +437,29 @@ void execute(uint8_t chunk, VM *vm){
                 Value *array_value = peek(vm);
 
                 if(!IS_ARRAY(array_value)){
-                    vm_utils_error(vm, "Expect an array, but got something else");
+                    vmu_error(vm, "Expect an array, but got something else");
                 }
                 if(index < 0){
-                    vm_utils_error(vm, "Illegal 'index' value. Must be: 0 <= INDEX(%d)", index);
+                    vmu_error(vm, "Illegal 'index' value. Must be: 0 <= INDEX(%d)", index);
                 }
 
                 Array *array = TO_ARRAY(array_value);
 
                 if(index >= array->len){
-                    vm_utils_error(vm, "Index out of bounds. Must be: 0 <= INDEX(%d) < %d", index, array->len);
+                    vmu_error(vm, "Index out of bounds. Must be: 0 <= INDEX(%d) < %d", index, array->len);
                 }
 
                 array->values[index] = *value;
             }else{
-                vm_utils_error(vm, "Illegal ARRAY opcode parameter: %d", parameter);
+                vmu_error(vm, "Illegal ARRAY opcode parameter: %d", parameter);
             }
 
             break;
         }case LIST_OPCODE:{
             int16_t len = read_i16(vm);
             
-            Obj *list_obj = vm_utils_list_obj(vm);
-            if(!list_obj) vm_utils_error(vm, "Out of memory");
+            Obj *list_obj = vmu_list_obj(vm);
+            if(!list_obj) vmu_error(vm, "Out of memory");
 
 			DynArr *list = list_obj->value.list;
 
@@ -467,7 +467,7 @@ void execute(uint8_t chunk, VM *vm){
 				Value *value = pop(vm);
 
     			if(dynarr_insert(value, list)){
-                    vm_utils_error(vm, "Out of memory");
+                    vmu_error(vm, "Out of memory");
                 }
 			}
 
@@ -477,8 +477,8 @@ void execute(uint8_t chunk, VM *vm){
         }case DICT_OPCODE:{
             int32_t len = read_i16(vm);
             
-            Obj *dict_obj = vm_utils_dict_obj(vm);
-            if(!dict_obj){vm_utils_error(vm, "Out of memory");}
+            Obj *dict_obj = vmu_dict_obj(vm);
+            if(!dict_obj){vmu_error(vm, "Out of memory");}
 
             LZHTable *dict = dict_obj->value.dict;
 
@@ -486,19 +486,19 @@ void execute(uint8_t chunk, VM *vm){
                 Value *value = pop(vm);
                 Value *key = pop(vm);
                 
-                Value *key_clone = vm_utils_clone_value(key, vm);
-                Value *value_clone = vm_utils_clone_value(value, vm);
+                Value *key_clone = vmu_clone_value(key, vm);
+                Value *value_clone = vmu_clone_value(value, vm);
 
                 if(!key_clone || !value_clone){
-                    free(key_clone);
-                    free(value_clone);
-                    vm_utils_error(vm, "Out of memory");
+                    vmu_dealloc(key_clone);
+                    vmu_dealloc(value_clone);
+                    vmu_error(vm, "Out of memory");
                 }
 
-                uint32_t hash = vm_utils_hash_value(key_clone);
+                uint32_t hash = vmu_hash_value(key_clone);
                 
                 if(lzhtable_hash_put_key(key_clone, hash, value_clone, dict)){
-                    vm_utils_error(vm, "Out of memory");
+                    vmu_error(vm, "Out of memory");
                 }
             }
 
@@ -507,10 +507,10 @@ void execute(uint8_t chunk, VM *vm){
             break;
         }case RECORD_OPCODE:{
             uint8_t len = ADVANCE(vm);    
-		    Obj *record_obj = vm_utils_record_obj(len == 0, vm);
+		    Obj *record_obj = vmu_record_obj(len, vm);
 		    
             if(!record_obj){
-                vm_utils_error(vm, "Out of memory");
+                vmu_error(vm, "Out of memory");
             }
 		    if(len == 0){
                 PUSH(OBJ_VALUE(record_obj), vm);
@@ -518,28 +518,31 @@ void execute(uint8_t chunk, VM *vm){
 		    }
 
 			Record *record = record_obj->value.record;
+            LZHTable *attributes = record->attributes;
 	
 			for(size_t i = 0; i < len; i++){
 			    char *key = read_str(vm, NULL);
 			    Value *value = pop(vm);
+                size_t key_size = strlen(key);
+                uint32_t hash = lzhtable_hash((uint8_t *)key, key_size);
 
-				char *cloned_key = vm_utils_clone_buff(key, vm);
-			    Value *cloned_value = vm_utils_clone_value(value, vm);
+                if(lzhtable_hash_contains(hash, attributes, NULL)){
+                    vmu_error(vm, "Record already contains attribute '%s'", key);
+                }
+
+				char *cloned_key = vmu_clone_buff(key, vm);
+			    Value *cloned_value = vmu_clone_value(value, vm);
 
 				if(!cloned_key || !cloned_value){
-				    free(cloned_key);
-					free(cloned_value);
-					vm_utils_error(vm, "Out of memory");
+                    vmu_dealloc(cloned_key);
+                    vmu_dealloc(cloned_value);
+					vmu_error(vm, "Out of memory");
 				}
 
-				uint8_t *k = (uint8_t *)cloned_key;
-			    size_t k_size = strlen(cloned_key);
-				uint32_t hash = lzhtable_hash(k, k_size);
-
-				if(lzhtable_hash_put_key(cloned_key, hash, cloned_value, record->key_values)){
-					free(cloned_key);
-					free(cloned_value);
-					vm_utils_error(vm, "Out of memory");
+				if(lzhtable_hash_put_key(cloned_key, hash, cloned_value, record->attributes)){
+					vmu_dealloc(cloned_key);
+                    vmu_dealloc(cloned_value);
+					vmu_error(vm, "Out of memory");
 			    }
 			}
 	
@@ -552,16 +555,16 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_STR(va) || IS_STR(vb)){
                 if(!IS_STR(va)){
-                    vm_utils_error(vm, "Expect string at left side of string concatenation");
+                    vmu_error(vm, "Expect string at left side of string concatenation");
                 }
                 if(!IS_STR(vb)){
-                    vm_utils_error(vm, "Expect string at right side of string concatenation");
+                    vmu_error(vm, "Expect string at right side of string concatenation");
                 }
 
                 Str *astr = TO_STR(va) ;
                 Str *bstr = TO_STR(vb);
 
-                char *buff = vm_utils_join_buff(astr->buff, astr->len, bstr->buff, bstr->len, vm);
+                char *buff = vmu_join_buff(astr->buff, astr->len, bstr->buff, bstr->len, vm);
                 PUSH_UNCORE_STR(buff, vm);
 
                 break;
@@ -569,10 +572,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_INT(va) || IS_INT(vb)){
                 if(!IS_INT(va)){
-                    vm_utils_error(vm, "Expect integer at left side of sum");
+                    vmu_error(vm, "Expect integer at left side of sum");
                 }
                 if(!IS_INT(vb)){
-                    vm_utils_error(vm, "Expect integer at right side of sum");
+                    vmu_error(vm, "Expect integer at right side of sum");
                 }
 
                 int64_t left = TO_INT(va);
@@ -585,10 +588,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
                 if(!IS_FLOAT(va)){
-                    vm_utils_error(vm, "Expect float at left side of sum");
+                    vmu_error(vm, "Expect float at left side of sum");
                 }
                 if(!IS_FLOAT(vb)){
-                    vm_utils_error(vm, "Expect float at right side of sum");
+                    vmu_error(vm, "Expect float at right side of sum");
                 }
 
                 double left = TO_FLOAT(va);
@@ -599,7 +602,7 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            vm_utils_error(vm, "Unsuported types using + operator");
+            vmu_error(vm, "Unsuported types using + operator");
             
             break;
         }case SUB_OPCODE:{
@@ -608,10 +611,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_INT(va) || IS_INT(vb)){
                 if(!IS_INT(va)){
-                    vm_utils_error(vm, "Expect integer at left side subtraction");
+                    vmu_error(vm, "Expect integer at left side subtraction");
                 }
                 if(!IS_INT(vb)){
-                    vm_utils_error(vm, "Expect integer at right side subtraction");
+                    vmu_error(vm, "Expect integer at right side subtraction");
                 }
 
                 int64_t left = TO_INT(va);
@@ -624,10 +627,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
                 if(!IS_FLOAT(va)){
-                    vm_utils_error(vm, "Expect float at left side of subtraction");
+                    vmu_error(vm, "Expect float at left side of subtraction");
                 }
                 if(!IS_FLOAT(vb)){
-                    vm_utils_error(vm, "Expect float at right side of subtraction");
+                    vmu_error(vm, "Expect float at right side of subtraction");
                 }
 
                 double left = TO_FLOAT(va);
@@ -638,7 +641,7 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            vm_utils_error(vm, "Unsuported types using - operator");
+            vmu_error(vm, "Unsuported types using - operator");
 
             break;
         }case MUL_OPCODE:{
@@ -656,7 +659,7 @@ void execute(uint8_t chunk, VM *vm){
                     in_buff_len = astr->len;
                     
                     if(!IS_INT(vb))
-                        vm_utils_error(vm, "Expect integer at right side of string multiplication");
+                        vmu_error(vm, "Expect integer at right side of string multiplication");
 
                     by = TO_INT(vb);
                 }
@@ -667,12 +670,12 @@ void execute(uint8_t chunk, VM *vm){
                     in_buff_len = bstr->len;
 
                     if(!IS_INT(va))
-                        vm_utils_error(vm, "Expect integer at left side of string multiplication");
+                        vmu_error(vm, "Expect integer at left side of string multiplication");
 
                     by = TO_INT(va);
                 }
 
-                char *buff = vm_utils_multiply_buff(in_buff, in_buff_len, (size_t)by, vm);
+                char *buff = vmu_multiply_buff(in_buff, in_buff_len, (size_t)by, vm);
                 PUSH_UNCORE_STR(buff, vm);
 
                 break;
@@ -680,10 +683,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_INT(va) || IS_INT(vb)){
                 if(!IS_INT(va)){
-                    vm_utils_error(vm, "Expect integer at left side of multiplication");
+                    vmu_error(vm, "Expect integer at left side of multiplication");
                 }
                 if(!IS_INT(vb)){
-                    vm_utils_error(vm, "Expect integer at right side of multiplication");
+                    vmu_error(vm, "Expect integer at right side of multiplication");
                 }
 
                 int64_t left = TO_INT(va);
@@ -696,10 +699,10 @@ void execute(uint8_t chunk, VM *vm){
             
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
                 if(!IS_FLOAT(va)){
-                    vm_utils_error(vm, "Expect float at left side of multiplication");
+                    vmu_error(vm, "Expect float at left side of multiplication");
                 }
                 if(!IS_FLOAT(vb)){
-                    vm_utils_error(vm, "Expect float at right side of multiplication");
+                    vmu_error(vm, "Expect float at right side of multiplication");
                 }
 
                 double left = TO_FLOAT(va);
@@ -710,7 +713,7 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            vm_utils_error(vm, "Unsuported types using * operator");
+            vmu_error(vm, "Unsuported types using * operator");
 
             break;
         }case DIV_OPCODE:{
@@ -719,10 +722,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_INT(va) || IS_INT(vb)){
                 if(!IS_INT(va)){
-                    vm_utils_error(vm, "Expect integer at left side of division");
+                    vmu_error(vm, "Expect integer at left side of division");
                 }
                 if(!IS_INT(vb)){
-                    vm_utils_error(vm, "Expect integer at right side of division");
+                    vmu_error(vm, "Expect integer at right side of division");
                 }
 
                 int64_t left = TO_INT(va);
@@ -735,10 +738,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
                 if(!IS_FLOAT(va)){
-                    vm_utils_error(vm, "Expect float at left side of division");
+                    vmu_error(vm, "Expect float at left side of division");
                 }
                 if(!IS_FLOAT(vb)){
-                    vm_utils_error(vm, "Expect float at right side of division");
+                    vmu_error(vm, "Expect float at right side of division");
                 }
 
                 double left = TO_FLOAT(va);
@@ -749,7 +752,7 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            vm_utils_error(vm, "Unsuported types using / operator");
+            vmu_error(vm, "Unsuported types using / operator");
 
             break;
         }case MOD_OPCODE:{
@@ -757,10 +760,10 @@ void execute(uint8_t chunk, VM *vm){
             Value *va = pop(vm);
 
             if(!IS_INT(va)){
-                vm_utils_error(vm, "Expect integer at left side of module");
+                vmu_error(vm, "Expect integer at left side of module");
             }
             if(!IS_INT(vb)){
-                vm_utils_error(vm, "Expect integer at right side of module");
+                vmu_error(vm, "Expect integer at right side of module");
             }
 
             int64_t left = TO_INT(va);
@@ -775,10 +778,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_INT(va) || IS_INT(vb)){
                 if(!IS_INT(va)){
-                    vm_utils_error(vm, "Expect integer at left side of comparison");
+                    vmu_error(vm, "Expect integer at left side of comparison");
                 }
                 if(!IS_INT(vb)){
-                    vm_utils_error(vm, "Expect integer at right side of comparison");
+                    vmu_error(vm, "Expect integer at right side of comparison");
                 }
 
                 int64_t left = TO_INT(va);
@@ -791,10 +794,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
                 if(!IS_FLOAT(va)){
-                    vm_utils_error(vm, "Expect float at left side of comparison");
+                    vmu_error(vm, "Expect float at left side of comparison");
                 }
                 if(!IS_FLOAT(vb)){
-                    vm_utils_error(vm, "Expect float at right side of comparison");
+                    vmu_error(vm, "Expect float at right side of comparison");
                 }
 
                 double left = TO_FLOAT(va);
@@ -805,7 +808,7 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            vm_utils_error(vm, "Unsuported types using < operator");
+            vmu_error(vm, "Unsuported types using < operator");
 
             break;
         }case GT_OPCODE:{
@@ -814,10 +817,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_INT(va) || IS_INT(vb)){
                 if(!IS_INT(va)){
-                    vm_utils_error(vm, "Expect integer at left side of comparison");
+                    vmu_error(vm, "Expect integer at left side of comparison");
                 }
                 if(!IS_INT(vb)){
-                    vm_utils_error(vm, "Expect integer at right side of comparison");
+                    vmu_error(vm, "Expect integer at right side of comparison");
                 }
 
                 int64_t left = TO_INT(va);
@@ -830,10 +833,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
                 if(!IS_FLOAT(va)){
-                    vm_utils_error(vm, "Expect float at left side of comparison");
+                    vmu_error(vm, "Expect float at left side of comparison");
                 }
                 if(!IS_FLOAT(vb)){
-                    vm_utils_error(vm, "Expect float at right side of comparison");
+                    vmu_error(vm, "Expect float at right side of comparison");
                 }
 
                 double left = TO_FLOAT(va);
@@ -844,7 +847,7 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            vm_utils_error(vm, "Unsuported types using > operator");
+            vmu_error(vm, "Unsuported types using > operator");
 
             break;
         }case LE_OPCODE:{
@@ -853,10 +856,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_INT(va) || IS_INT(vb)){
                 if(!IS_INT(va)){
-                    vm_utils_error(vm, "Expect integer at left side of comparison");
+                    vmu_error(vm, "Expect integer at left side of comparison");
                 }          
                 if(!IS_INT(vb)){
-                    vm_utils_error(vm, "Expect integer at right side of comparison");
+                    vmu_error(vm, "Expect integer at right side of comparison");
                 }
 
                 int64_t left = TO_INT(va);
@@ -869,10 +872,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
                 if(!IS_FLOAT(va)){
-                    vm_utils_error(vm, "Expect float at left side of comparison");
+                    vmu_error(vm, "Expect float at left side of comparison");
                 }
                 if(!IS_FLOAT(vb)){
-                    vm_utils_error(vm, "Expect float at right side of comparison");
+                    vmu_error(vm, "Expect float at right side of comparison");
                 }
 
                 double left = TO_FLOAT(va);
@@ -883,7 +886,7 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            vm_utils_error(vm, "Unsuported types using <= operator");
+            vmu_error(vm, "Unsuported types using <= operator");
 
             break;
         }case GE_OPCODE:{
@@ -892,10 +895,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_INT(va) || IS_INT(vb)){
                 if(!IS_INT(va)){
-                    vm_utils_error(vm, "Expect integer at left side of comparison");
+                    vmu_error(vm, "Expect integer at left side of comparison");
                 }
                 if(!IS_INT(vb)){
-                    vm_utils_error(vm, "Expect integer at right side of comparison");
+                    vmu_error(vm, "Expect integer at right side of comparison");
                 }
 
                 int64_t left = TO_INT(va);
@@ -908,10 +911,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
                 if(!IS_FLOAT(va)){
-                    vm_utils_error(vm, "Expect float at left side of comparison");
+                    vmu_error(vm, "Expect float at left side of comparison");
                 }
                 if(!IS_FLOAT(vb)){
-                    vm_utils_error(vm, "Expect float at right side of comparison");
+                    vmu_error(vm, "Expect float at right side of comparison");
                 }
 
                 double left = TO_FLOAT(va);
@@ -922,7 +925,7 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            vm_utils_error(vm, "Unsuported types using >= operator");
+            vmu_error(vm, "Unsuported types using >= operator");
 
             break;
         }case EQ_OPCODE:{
@@ -931,10 +934,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_BOOL(va) || IS_BOOL(vb)){
                 if(!IS_BOOL(va)){
-                    vm_utils_error(vm, "Expect boolean at left side of equality");
+                    vmu_error(vm, "Expect boolean at left side of equality");
                 }
                 if(!IS_BOOL(vb)){
-                    vm_utils_error(vm, "Expect boolean at right side of equality");
+                    vmu_error(vm, "Expect boolean at right side of equality");
                 }
 
                 uint8_t left = TO_BOOL(va);
@@ -947,10 +950,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_INT(va) || IS_INT(vb)){
                 if(!IS_INT(va)){
-                    vm_utils_error(vm, "Expect integer at left side of equality");
+                    vmu_error(vm, "Expect integer at left side of equality");
                 }
                 if(!IS_INT(vb)){
-                    vm_utils_error(vm, "Expect integer at right side of equality");
+                    vmu_error(vm, "Expect integer at right side of equality");
                 }
 
                 int64_t left = TO_INT(va);
@@ -963,10 +966,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
                 if(!IS_FLOAT(va)){
-                    vm_utils_error(vm, "Expect float at left side of equality");
+                    vmu_error(vm, "Expect float at left side of equality");
                 }
                 if(!IS_FLOAT(vb)){
-                    vm_utils_error(vm, "Expect float at right side of equality");
+                    vmu_error(vm, "Expect float at right side of equality");
                 }
 
                 double left = TO_FLOAT(va);
@@ -977,7 +980,7 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            vm_utils_error(vm, "Unsuported types using == operator");
+            vmu_error(vm, "Unsuported types using == operator");
 
             break;
         }case NE_OPCODE:{
@@ -986,10 +989,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_BOOL(va) || IS_BOOL(vb)){
                 if(!IS_BOOL(va)){
-                    vm_utils_error(vm, "Expect boolean at left side of equality");
+                    vmu_error(vm, "Expect boolean at left side of equality");
                 }
                 if(!IS_BOOL(vb)){
-                    vm_utils_error(vm, "Expect boolean at right side of equality");
+                    vmu_error(vm, "Expect boolean at right side of equality");
                 }
 
                 uint8_t left = TO_BOOL(va);
@@ -1002,10 +1005,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_INT(va) || IS_INT(vb)){
                 if(!IS_INT(va)){
-                    vm_utils_error(vm, "Expect integer at left side of equality");
+                    vmu_error(vm, "Expect integer at left side of equality");
                 }
                 if(!IS_INT(vb)){
-                    vm_utils_error(vm, "Expect integer at right side of equality");
+                    vmu_error(vm, "Expect integer at right side of equality");
                 }
 
                 int64_t left = TO_INT(va);
@@ -1018,10 +1021,10 @@ void execute(uint8_t chunk, VM *vm){
 
             if(IS_FLOAT(va) || IS_FLOAT(vb)){
                 if(!IS_FLOAT(va)){
-                    vm_utils_error(vm, "Expect float at left side of equality");
+                    vmu_error(vm, "Expect float at left side of equality");
                 }
                 if(!IS_FLOAT(vb)){
-                    vm_utils_error(vm, "Expect float at right side of equality");
+                    vmu_error(vm, "Expect float at right side of equality");
                 }
 
                 double left = TO_FLOAT(va);
@@ -1032,7 +1035,7 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            vm_utils_error(vm, "Unsuported types using != operator");
+            vmu_error(vm, "Unsuported types using != operator");
 
             break;
         }case LSET_OPCODE:{
@@ -1056,7 +1059,7 @@ void execute(uint8_t chunk, VM *vm){
             if(lzhtable_hash_contains(hash, globals, &node)){
                 *(Value *)node->value = *value;
             }else{
-                Value *new_value = vm_utils_clone_value(value, vm);
+                Value *new_value = vmu_clone_value(value, vm);
                 lzhtable_hash_put(hash, new_value, globals);
             }
 
@@ -1070,7 +1073,7 @@ void execute(uint8_t chunk, VM *vm){
             LZHTableNode *node = NULL;
 
             if(!lzhtable_hash_contains(hash, globals, &node)){
-                vm_utils_error(vm, "Global symbol '%s' does not exists", symbol);
+                vmu_error(vm, "Global symbol '%s' does not exists", symbol);
             }
             
             PUSH(*(Value *)node->value, vm);
@@ -1087,7 +1090,7 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            vm_utils_error(vm, "Unknown native '%s'", (char *)key);
+            vmu_error(vm, "Unknown native '%s'", (char *)key);
 
             break;
         }case SGET_OPCODE:{
@@ -1101,22 +1104,22 @@ void execute(uint8_t chunk, VM *vm){
             Value *value =  peek(vm);
 
             if(!IS_ARRAY(target_value)){
-                vm_utils_error(vm, "Expect array, but got something else");
+                vmu_error(vm, "Expect array, but got something else");
             }
 
             Array *array = TO_ARRAY(target_value);
                 
             if(!IS_INT(index_value)){
-                vm_utils_error(vm, "Expect integer as index");
+                vmu_error(vm, "Expect integer as index");
             }
 
             int64_t index = TO_INT(index_value);
             
             if(index < 0 || index > INT16_MAX){
-                vm_utils_error(vm, "Illegal index range. Must be > 0 and < %s", INT16_MAX);
+                vmu_error(vm, "Illegal index range. Must be > 0 and < %s", INT16_MAX);
             }
             if((int16_t)index >= array->len){
-                vm_utils_error(vm, "Index out of bounds. Array length: %d, index: %d", array->len, INT16_MAX);
+                vmu_error(vm, "Index out of bounds. Array length: %d, index: %d", array->len, INT16_MAX);
             }
 
             array->values[index] = *value;
@@ -1129,7 +1132,7 @@ void execute(uint8_t chunk, VM *vm){
 			Record *record = NULL;
 	
 			if(!IS_RECORD(target)){
-                vm_utils_error(vm, "Expect a record, but got something else");
+                vmu_error(vm, "Expect a record, but got something else");
             }
 
 			record = TO_RECORD(target);
@@ -1139,8 +1142,8 @@ void execute(uint8_t chunk, VM *vm){
 			uint32_t hash = lzhtable_hash(key, key_size);
 			LZHTableNode *node = NULL;
 
-			if(!lzhtable_hash_contains(hash, record->key_values, &node)){
-                vm_utils_error(vm, "Record do not contains key '%s'", symbol);
+			if(!lzhtable_hash_contains(hash, record->attributes, &node)){
+                vmu_error(vm, "Record do not contains key '%s'", symbol);
             }
 
             *(Value *)node->value = *value;
@@ -1151,10 +1154,10 @@ void execute(uint8_t chunk, VM *vm){
             Value *va = pop(vm);
 
             if(!IS_BOOL(va)){
-                vm_utils_error(vm, "Expect boolean at left side");
+                vmu_error(vm, "Expect boolean at left side");
             }
             if(!IS_BOOL(vb)){
-                vm_utils_error(vm, "Expect boolean at right side");
+                vmu_error(vm, "Expect boolean at right side");
             }
 
             uint8_t left = TO_BOOL(va);
@@ -1168,10 +1171,10 @@ void execute(uint8_t chunk, VM *vm){
             Value *va = pop(vm);
 
             if(!IS_BOOL(va)){
-                vm_utils_error(vm, "Expect boolean at left side");
+                vmu_error(vm, "Expect boolean at left side");
             }
             if(!IS_BOOL(vb)){
-                vm_utils_error(vm, "Expect boolean at right side");
+                vmu_error(vm, "Expect boolean at right side");
             }
 
             uint8_t left = TO_BOOL(va);
@@ -1195,14 +1198,14 @@ void execute(uint8_t chunk, VM *vm){
 				break;
 			}
             
-            vm_utils_error(vm, "Expect integer or float at right side");
+            vmu_error(vm, "Expect integer or float at right side");
             
             break;
         }case NOT_OPCODE:{
             Value *vb = pop(vm);
 
             if(!IS_BOOL(vb)){
-                vm_utils_error(vm, "Expect boolean at right side");
+                vmu_error(vm, "Expect boolean at right side");
             }
 
             uint8_t right = TO_BOOL(vb);
@@ -1231,7 +1234,7 @@ void execute(uint8_t chunk, VM *vm){
             Value *value = pop(vm);
             
             if(!IS_BOOL(value)){
-                vm_utils_error(vm, "Expect boolean as conditional value");
+                vmu_error(vm, "Expect boolean as conditional value");
             }
 
 			uint8_t condition = TO_BOOL(value);
@@ -1252,7 +1255,7 @@ void execute(uint8_t chunk, VM *vm){
             Value *value = pop(vm);
 
             if(!IS_BOOL(value)){
-                vm_utils_error(vm, "Expect boolean as conditional value");
+                vmu_error(vm, "Expect boolean as conditional value");
             }
 
 			uint8_t condition = TO_BOOL(value);
@@ -1278,7 +1281,7 @@ void execute(uint8_t chunk, VM *vm){
                 uint8_t params_count = fn->params ? fn->params->used : 0;
 
                 if(params_count != args_count){
-                    vm_utils_error(vm, "Failed to call function '%s'. Declared with %d parameter(s), but got %d argument(s)", fn->name, params_count, args_count);
+                    vmu_error(vm, "Failed to call function '%s'. Declared with %d parameter(s), but got %d argument(s)", fn->name, params_count, args_count);
                 }
 
                 frame_up_fn(fn, vm);
@@ -1298,7 +1301,7 @@ void execute(uint8_t chunk, VM *vm){
                 RawNativeFn raw_fn = native_fn->raw_fn;
 
                 if(native_fn->arity != args_count)
-                    vm_utils_error(
+                    vmu_error(
                         vm,
                         "Failed to call function '%s'.\n\tDeclared with %d parameter(s), but got %d argument(s)",
                         native_fn->name,
@@ -1331,7 +1334,7 @@ void execute(uint8_t chunk, VM *vm){
 
                 PUSH(out_value, vm);
             }else{
-                vm_utils_error(vm, "Expect function after %d parameters count", args_count);
+                vmu_error(vm, "Expect function after %d parameters count", args_count);
             }
 
             break;
@@ -1344,7 +1347,7 @@ void execute(uint8_t chunk, VM *vm){
                 Obj *native_fn_obj = native_str_get(symbol, str, vm);
 
                 if(!native_fn_obj){
-                    vm_utils_error(vm, "String does not have symbol '%s'", symbol);
+                    vmu_error(vm, "String does not have symbol '%s'", symbol);
                 }
 
                 PUSH(OBJ_VALUE(native_fn_obj), vm)
@@ -1357,7 +1360,7 @@ void execute(uint8_t chunk, VM *vm){
                 Obj *native_fn_obj = native_array_get(symbol, array, vm);
 
                 if(!native_fn_obj){
-                    vm_utils_error(vm, "Array does not have symbol '%s'", symbol);
+                    vmu_error(vm, "Array does not have symbol '%s'", symbol);
                 }
 
                 PUSH(OBJ_VALUE(native_fn_obj), vm)
@@ -1370,7 +1373,7 @@ void execute(uint8_t chunk, VM *vm){
                 Obj *native_fn_obj = native_list_get(symbol, list, vm);
                 
                 if(!native_fn_obj){
-                    vm_utils_error(vm, "List does not have symbol '%s'", symbol);
+                    vmu_error(vm, "List does not have symbol '%s'", symbol);
                 }
 
                 PUSH(OBJ_VALUE(native_fn_obj), vm)
@@ -1383,7 +1386,7 @@ void execute(uint8_t chunk, VM *vm){
 				Obj *native_fn_obj = native_dict_get(symbol, dict, vm);
 
                 if(!native_fn_obj){
-                    vm_utils_error(vm, "List does not have symbol '%s'", symbol);
+                    vmu_error(vm, "List does not have symbol '%s'", symbol);
                 }
 
                 PUSH(OBJ_VALUE(native_fn_obj), vm)
@@ -1393,9 +1396,14 @@ void execute(uint8_t chunk, VM *vm){
 
 			if(IS_RECORD(value)){
 				Record *record = TO_RECORD(value);
+                LZHTable *key_values = record->attributes;
+
+                if(!key_values){
+                    vmu_error(vm, "Record has no attributes");
+                }
+
 				uint8_t *key = (uint8_t *)symbol;
 				size_t key_size = strlen(symbol);
-                LZHTable *key_values = record->key_values;
                 Value *value = (Value *)lzhtable_get(key, key_size, key_values);
 
                 if(value){
@@ -1403,7 +1411,7 @@ void execute(uint8_t chunk, VM *vm){
                     break;
                 }
 
-				vm_utils_error(vm, "Record do not constains key '%s'", symbol);
+				vmu_error(vm, "Record do not constains key '%s'", symbol);
 
 				break;
 			}
@@ -1427,25 +1435,25 @@ void execute(uint8_t chunk, VM *vm){
                 void *(*znative_symbol)(char *symbol_name) = dlsym(handler, "znative_symbol");
                 
                 if(!znative_symbol){
-                    vm_utils_error(vm, "Something is wrong with loaded native library. Expect 'znative_symbol' to be present");
+                    vmu_error(vm, "Something is wrong with loaded native library. Expect 'znative_symbol' to be present");
                 }
 
                 RawForeignFn raw_foreign_fn = znative_symbol(symbol);
                 
                 if(!raw_foreign_fn){
-                    vm_utils_error(vm, "Failed to get '%s' from native library: do not exists", symbol);
+                    vmu_error(vm, "Failed to get '%s' from native library: do not exists", symbol);
                 }
 
-                Obj *foreign_fn_obj = vm_utils_obj(FOREIGN_FN_OTYPE, vm);
+                Obj *foreign_fn_obj = vmu_obj(FOREIGN_FN_OTYPE, vm);
                 
                 if(!foreign_fn_obj){
-                    vm_utils_error(vm, "Failed to get native library symbol: out of memory");
+                    vmu_error(vm, "Failed to get native library symbol: out of memory");
                 }
 
                 ForeignFn *foreign_fn = (ForeignFn *)malloc(sizeof(ForeignFn));
                 
                 if(!foreign_fn){
-                    vm_utils_error(vm, "Failed to get native library symbol: out of memory");
+                    vmu_error(vm, "Failed to get native library symbol: out of memory");
                 }
 
                 foreign_fn->raw_fn = raw_foreign_fn;
@@ -1456,7 +1464,7 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            vm_utils_error(vm, "Illegal target to access");
+            vmu_error(vm, "Illegal target to access");
 
             break;
         }case INDEX_OPCODE:{
@@ -1467,16 +1475,16 @@ void execute(uint8_t chunk, VM *vm){
                 Array *array = TO_ARRAY(target_value);
                 
                 if(!IS_INT(index_value)){
-                    vm_utils_error(vm, "Expect integer as index, but got something else");
+                    vmu_error(vm, "Expect integer as index, but got something else");
                 }
 
                 int64_t index = TO_INT(index_value);
                 
                 if(index < 0 || index > INT32_MAX){
-                    vm_utils_error(vm, "Illegal index value. Must be: 0 <= INDEX(%ld) <= %s", index, INT32_MAX);
+                    vmu_error(vm, "Illegal index value. Must be: 0 <= INDEX(%ld) <= %s", index, INT32_MAX);
                 }
                 if((int16_t)index >= array->len){
-                    vm_utils_error(vm, "Index out of bounds. Must be: 0 <= INDEX(%ld) < %d", index, array->len);
+                    vmu_error(vm, "Index out of bounds. Must be: 0 <= INDEX(%ld) < %d", index, array->len);
                 }
 
                 Value value = array->values[(int32_t)index];
@@ -1486,7 +1494,7 @@ void execute(uint8_t chunk, VM *vm){
                 break;
             }
 
-            vm_utils_error(vm, "Illegal target");
+            vmu_error(vm, "Illegal target");
 
             break;
         }case RET_OPCODE:{
@@ -1516,7 +1524,7 @@ void execute(uint8_t chunk, VM *vm){
 						PUSH(BOOL_VALUE(type == 8), vm);
 						break;
 					}default:{
-						vm_utils_error(vm, "Illegal object type");
+						vmu_error(vm, "Illegal object type");
                         break;
 					}
 				}
@@ -1535,7 +1543,7 @@ void execute(uint8_t chunk, VM *vm){
 						PUSH(BOOL_VALUE(type == 3), vm);
 						break;
 					}default:{
-						vm_utils_error(vm, "Illegal value type");
+						vmu_error(vm, "Illegal value type");
                         break;
 					}
 				}
@@ -1544,7 +1552,7 @@ void execute(uint8_t chunk, VM *vm){
 			break;
 		}case THROW_OPCODE:{
 			if(vm->frame_ptr == 0){
-                vm_utils_error(vm, "Can not throw in a empty frame stack");
+                vmu_error(vm, "Can not throw in a empty frame stack");
             }
             
             Value *value = pop(vm);
@@ -1555,7 +1563,7 @@ void execute(uint8_t chunk, VM *vm){
             }else if(IS_RECORD(value)){
                 Record *record = TO_RECORD(value);
 
-                if(record->key_values){
+                if(record->attributes){
                     char *key = "message";
                     
                     uint8_t *k = (uint8_t *)key;
@@ -1563,11 +1571,11 @@ void execute(uint8_t chunk, VM *vm){
                     
                     LZHTableNode *message_node = NULL;
 
-                    if(lzhtable_contains(k, ks, record->key_values, &message_node)){
+                    if(lzhtable_contains(k, ks, record->attributes, &message_node)){
                         Value *value = (Value *)message_node->value;
 
                         if(!IS_STR(value)){
-                            vm_utils_error(vm, "Expect record attribute 'message' to be of type string");
+                            vmu_error(vm, "Expect record attribute 'message' to be of type string");
                         }
 
                         throw_message = TO_STR(value);   
@@ -1619,9 +1627,9 @@ void execute(uint8_t chunk, VM *vm){
 
             if(throw){
                 if(throw_message){
-                    vm_utils_error(vm, throw_message->buff);
+                    vmu_error(vm, throw_message->buff);
                 }else{
-                    vm_utils_error(vm, "");
+                    vmu_error(vm, "");
                 }
             }
             
@@ -1631,13 +1639,13 @@ void execute(uint8_t chunk, VM *vm){
             void *handler = dlopen(path, RTLD_LAZY);
 
             if(!handler){
-                vm_utils_error(vm, "Failed to load native library: %s", dlerror());
+                vmu_error(vm, "Failed to load native library: %s", dlerror());
             }
 
             native_lib_init(handler, vm);
 
-            Obj *native_lib_obj = vm_utils_native_lib_obj(handler, vm);
-            if(!native_lib_obj){vm_utils_error(vm, "Out of memory");}
+            Obj *native_lib_obj = vmu_native_lib_obj(handler, vm);
+            if(!native_lib_obj){vmu_error(vm, "Out of memory");}
 
             PUSH(OBJ_VALUE(native_lib_obj), vm);
 
@@ -1689,7 +1697,6 @@ int vm_execute(
         vm->stack_ptr = 0;
         vm->natives = natives;
         vm->module = module;
-        vm->allocator = vm_utils_allocator();
 
         frame_up("main", vm);
 
@@ -1700,7 +1707,7 @@ int vm_execute(
 
         frame_down(vm);
 
-        vm_utils_clean_up(vm);
+        vmu_clean_up(vm);
 
         return 0;
     }

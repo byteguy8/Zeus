@@ -63,7 +63,7 @@ Value native_fn_list_insert(uint8_t argsc, Value *values, void *target, VM *vm){
     DynArr *list = (DynArr *)target;
 
     if(dynarr_insert(value, list)){
-        vm_utils_error(vm, "Failed to insert value in list: out of memory");
+        vmu_error(vm, "Failed to insert value in list: out of memory");
     }
 
     return EMPTY_VALUE;
@@ -80,7 +80,7 @@ Value native_fn_list_insert_at(uint8_t argsc, Value *values, void *target, VM *v
     Value out_value = DYNARR_GET_AS(Value, (size_t)index, list);
 
     if(dynarr_insert_at((size_t) index, value, list)){
-        vm_utils_error(vm, "Failed to insert value in list: out of memory");
+        vmu_error(vm, "Failed to insert value in list: out of memory");
     }
 
     return out_value;
@@ -107,14 +107,14 @@ Value native_fn_list_append(uint8_t argsc, Value *values, void *target, VM *vm){
     DynArr *from = NULL;
 
     if(!IS_LIST(vfrom)){
-        vm_utils_error(vm, "Failed to append list: expect another list, but got something else");
+        vmu_error(vm, "Failed to append list: expect another list, but got something else");
     }
 
 	from = TO_LIST(vfrom);
     int64_t from_len = (int64_t)from->used;
 
     if(dynarr_append(from, to)){
-        vm_utils_error(vm, "Failed to append to list: out of memory");
+        vmu_error(vm, "Failed to append to list: out of memory");
     }
     
     return INT_VALUE(from_len);
@@ -140,24 +140,24 @@ Value native_fn_list_append_new(uint8_t argsc, Value *values, void *target, VM *
     DynArr *from = NULL;
 
     if(!IS_LIST(vfrom)){
-        vm_utils_error(vm, "Failed to append list: expect another list, but got something else");
+        vmu_error(vm, "Failed to append list: expect another list, but got something else");
     }
 		
 	from = TO_LIST(vfrom);
-	Obj *list_obj = vm_utils_list_obj(vm);
+	Obj *list_obj = vmu_list_obj(vm);
 	
-	if(!list_obj){vm_utils_error(vm, "Out of memory");}
+	if(!list_obj){vmu_error(vm, "Out of memory");}
 
 	DynArr *list = list_obj->value.list;
 
 	for(size_t i = 0; i < to->used; i++){
 		Value value = DYNARR_GET_AS(Value, i, to);
-		if(dynarr_insert(&value, list)){vm_utils_error(vm, "Out of memory");}
+		if(dynarr_insert(&value, list)){vmu_error(vm, "Out of memory");}
 	}
 
 	for(size_t i = 0; i < from->used; i++){
 		Value value = DYNARR_GET_AS(Value, i, from);
-		if(dynarr_insert(&value, list)){vm_utils_error(vm, "Out of memory");}
+		if(dynarr_insert(&value, list)){vmu_error(vm, "Out of memory");}
 	}
 
     return OBJ_VALUE(list_obj);
@@ -168,7 +168,7 @@ Value native_fn_list_clear(uint8_t argsc, Value *values, void *target, VM *vm){
     int64_t list_len = (int64_t)list->used;
 
     if(!dynarr_remove_all(list)){
-        vm_utils_error(vm, "Failed to clear list. Memory error");
+        vmu_error(vm, "Failed to clear list. Memory error");
     }
 
     return INT_VALUE(list_len);
@@ -196,7 +196,7 @@ Obj *native_list_get(char *symbol, void *target, VM *vm){
     NativeFnInfo *native_fn_info = (NativeFnInfo *)lzhtable_get((uint8_t *)symbol, key_size, list_symbols);
     
     if(native_fn_info){
-        Obj *native_fn_obj = vm_utils_native_fn_obj(
+        Obj *native_fn_obj = vmu_native_fn_obj(
             native_fn_info->arity,
             symbol,
             target,
@@ -205,7 +205,7 @@ Obj *native_list_get(char *symbol, void *target, VM *vm){
         );
 
         if(!native_fn_obj){
-            vm_utils_error(vm, "Out of memory");
+            vmu_error(vm, "Out of memory");
         }
 
         return native_fn_obj;

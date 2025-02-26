@@ -8,10 +8,10 @@
 #include <string.h>
 
 typedef struct lzhtable_allocator{
+    void *ctx;
     void *(*alloc)(size_t byes, void *ctx);
     void *(*realloc)(void *ptr, size_t old_size, size_t new_size, void *ctx);
     void (*dealloc)(void *ptr, size_t size, void *ctx);
-    void *ctx;
 }LZHTableAllocator;
 
 typedef struct lzhtable_node{

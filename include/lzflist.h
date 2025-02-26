@@ -3,17 +3,20 @@
 
 #include <stddef.h>
 
+#define LZFLIST_DETAULT_ALIGNMENT 16
 #define LZFLIST_DEFAULT_BUFFER_SIZE 4096
 
 typedef struct lzflheader LZFLHeader;
+typedef struct lzflfoot LZFLFoot;
 typedef struct lzflregion LZFLRegion;
 typedef struct lzflist LZFList;
 
 struct lzflheader{
-    size_t magic;
+	size_t magic;
 	char used;
 	size_t size;
-    LZFLHeader *prev;
+    size_t padding;
+	LZFLHeader *prev;
 	LZFLHeader *next;
 	LZFLHeader *free_prev;
 	LZFLHeader *free_next;
@@ -23,17 +26,17 @@ struct lzflregion{
 	size_t buff_len;
 	char *buff;
 	char *offset;
-    LZFLHeader *head;
-    LZFLHeader *tail;
+	LZFLHeader *head;
+  LZFLHeader *tail;
 };
 
 struct lzflist{
 	size_t rused;
 	size_t rcount;
 	LZFLRegion *regions;
-    size_t len;
+	size_t len;
 	LZFLHeader *head;
-    LZFLHeader *tail;
+  LZFLHeader *tail;
 };
 
 LZFList *lzflist_create();

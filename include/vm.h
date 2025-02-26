@@ -33,7 +33,6 @@ typedef struct vm{
     Obj *tail;
     size_t objs_size;
 //< GARBAGE COLLECTOR
-    Allocator *allocator;
 }VM;
 
 VM *vm_create();

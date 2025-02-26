@@ -7,25 +7,6 @@
 #include <assert.h>
 #include <dlfcn.h>
 
-static void *raw_alloc(size_t size, void *ctx){
-    return memory_alloc(size);
-}
-
-static void *raw_realloc(void *ptr, size_t old_size, size_t new_size, void *ctx){
-    return memory_realloc(ptr, new_size);
-}
-
-static void raw_dealloc(void *ptr, size_t size, void *ctx){
-    memory_dealloc(ptr);
-}
-
-static Allocator allocator = {
-    .ctx = NULL,
-    .alloc = raw_alloc,
-    .realloc = raw_realloc,
-    .dealloc = raw_dealloc
-};
-
 #define CURRENT_FRAME(vm)(&vm->frame_stack[vm->frame_ptr - 1])
 #define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
 #define CURRENT_LOCATIONS(vm)(CURRENT_FN(vm)->locations)
@@ -33,10 +14,6 @@ static Allocator allocator = {
 #define FRAME_AT(at, vm)(&vm->frame_stack[at])
 
 //> PRIVATE INTERFACE
-// ALLOCATION
-void *lzalloc(size_t size);
-void *lzrealloc(void *ptr, size_t old_size, size_t new_size);
-void lzdealloc(void *ptr, size_t size);
 // GARBAGE COLLECTOR
 void clean_up_module(Module *module);
 void destroy_dict_values(void *key, void *value);
@@ -51,18 +28,6 @@ int compare_locations(void *a, void *b);
 BStr *prepare_stacktrace(unsigned int spaces, VM *vm);
 //< PRIVATE INTERFACE
 //> PRIVATE IMPLEMENTATION
-void *lzalloc(size_t size){
-    return raw_alloc(size, allocator.ctx);
-}
-
-void *lzrealloc(void *ptr, size_t old_size, size_t new_size){
-    return raw_realloc(ptr, old_size, new_size, allocator.ctx);
-}
-
-void lzdealloc(void *ptr, size_t size){
-    raw_dealloc(ptr, size, allocator.ctx);
-}
-
 void clean_up_module(Module *module){
     if(module->shadow){return;}
 
@@ -76,7 +41,7 @@ void clean_up_module(Module *module){
 
 		while(global_node){
 			LZHTableNode *next = global_node->next_table_node;
-			lzdealloc(global_node->value, sizeof(Value));
+			vmu_dealloc(global_node->value);
 			global_node = next;
 		}
 
@@ -98,12 +63,12 @@ void clean_up_module(Module *module){
 }
 
 void destroy_dict_values(void *key, void *value){
-    lzdealloc(key, sizeof(Value));
-    lzdealloc(value, sizeof(Value));
+    vmu_dealloc(key);
+    vmu_dealloc(value);
 }
 
 void destroy_globals_values(void *ptr){
-	lzdealloc(ptr, sizeof(Value));
+	vmu_dealloc(ptr);
 }
 
 void destroy_obj(Obj *obj, VM *vm){
@@ -119,13 +84,13 @@ void destroy_obj(Obj *obj, VM *vm){
 	switch(obj->type){
 		case STR_OTYPE:{
 			Str *str = obj->value.str;
-			if(!str->core){lzdealloc(str->buff, str->len + 1);}
-            lzdealloc(str, sizeof(Str));
+			if(!str->core){vmu_dealloc(str->buff);}
+            vmu_dealloc(str);
 			break;
 		}case ARRAY_OTYPE:{
             Array *array = obj->value.array;
-            lzdealloc(array->values, sizeof(Value) * array->len);
-            lzdealloc(array, sizeof(Array));
+            vmu_dealloc(array->values);
+            vmu_dealloc(array);
             break;
         }case LIST_OTYPE:{
 			DynArr *list = obj->value.list;
@@ -137,12 +102,12 @@ void destroy_obj(Obj *obj, VM *vm){
             break;
         }case RECORD_OTYPE:{
 			Record *record = obj->value.record;
-			lzhtable_destroy(destroy_dict_values, record->key_values);
-			lzdealloc(record, sizeof(Record));
+			lzhtable_destroy(destroy_dict_values, record->attributes);
+			vmu_dealloc(record);
 			break;
 		}case NATIVE_FN_OTYPE:{
             NativeFn *native_fn = obj->value.native_fn;
-            if(!native_fn->unique){lzdealloc(native_fn, sizeof(NativeFn));}
+            if(!native_fn->unique){vmu_dealloc(native_fn);}
             break;
         }case MODULE_OTYPE:{
             break;
@@ -158,18 +123,19 @@ void destroy_obj(Obj *obj, VM *vm){
             }
 
             dlclose(handler);
-            lzdealloc(library, sizeof(NativeLib));
+            vmu_dealloc(library);
 
             break;
         }case FOREIGN_FN_OTYPE:{
-            lzdealloc(obj->value.foreign_fn, sizeof(ForeignFn));
+            vmu_dealloc(obj->value.foreign_fn);
             break;
         }default:{
 			assert("Illegal object type");
 		}
 	}
 
-	lzdealloc(obj, sizeof(Obj));
+	vmu_dealloc(obj);
+
 	vm->objs_size -= sizeof(Obj);
 }
 
@@ -229,7 +195,7 @@ void mark_value(Value *value){
             break;
         }case RECORD_OTYPE:{
 			Record *record = obj->value.record;
-			LZHTable *key_values = record->key_values;
+			LZHTable *key_values = record->attributes;
 			
 			if(!key_values){break;}
 			
@@ -387,7 +353,7 @@ BStr *prepare_stacktrace(unsigned int spaces, VM *vm){
 	return st;
 }
 //< Private Implementation
-void vm_utils_error(VM *vm, char *msg, ...){
+void vmu_error(VM *vm, char *msg, ...){
 	BStr *st = prepare_stacktrace(4, vm);
 
     va_list args;
@@ -400,16 +366,25 @@ void vm_utils_error(VM *vm, char *msg, ...){
 
 	va_end(args);
 	bstr_destroy(st);
-    vm_utils_clean_up(vm);
+    vmu_clean_up(vm);
 
     longjmp(vm->err_jmp, 1);
 }
 
-Allocator *vm_utils_allocator(){
-    return &allocator;
+//> PUBLIC IMPLEMENTATION
+void *vmu_alloc(size_t size){
+    return memory_alloc(size);
 }
 
-uint32_t vm_utils_hash_obj(Obj *obj){
+void *vmu_realloc(void *ptr, size_t new_size){
+    return memory_realloc(ptr, new_size);
+}
+
+void vmu_dealloc(void *ptr){
+    memory_dealloc(ptr);
+}
+
+uint32_t vmu_hash_obj(Obj *obj){
     switch (obj->type){
         case STR_OTYPE :{
             Str *str = obj->value.str;
@@ -422,7 +397,7 @@ uint32_t vm_utils_hash_obj(Obj *obj){
     }
 }
 
-uint32_t vm_utils_hash_value(Value *value){
+uint32_t vmu_hash_value(Value *value){
     switch (value->type){
         case EMPTY_VTYPE:
         case BOOL_VTYPE:
@@ -431,12 +406,12 @@ uint32_t vm_utils_hash_value(Value *value){
             return hash;
         }default:{
             Obj *obj = value->literal.obj;
-            return vm_utils_hash_obj(obj);
+            return vmu_hash_obj(obj);
         }
     }   
 }
 
-int vm_utils_obj_to_str(Obj *object, BStr *bstr){
+int vmu_obj_to_str(Obj *object, BStr *bstr){
     switch (object->type){
         case STR_OTYPE:{
             Str *str = object->value.str;
@@ -463,7 +438,7 @@ int vm_utils_obj_to_str(Obj *object, BStr *bstr){
             size_t buff_len = 1024;
             char buff[buff_len];
 			Record *record = object->value.record;
-            snprintf(buff, buff_len, "<record %ld at %p>", record->key_values ? record->key_values->n : 0, record);
+            snprintf(buff, buff_len, "<record %ld at %p>", record->attributes ? record->attributes->n : 0, record);
 			return bstr_append(buff, bstr);
 		}case FN_OTYPE:{
             size_t buff_len = 1024;
@@ -509,7 +484,7 @@ int vm_utils_obj_to_str(Obj *object, BStr *bstr){
     return 1;
 }
 
-int vm_utils_value_to_str(Value *value, BStr *bstr){
+int vmu_value_to_str(Value *value, BStr *bstr){
     switch (value->type){
         case EMPTY_VTYPE:{
             return bstr_append("empty", bstr);
@@ -532,7 +507,7 @@ int vm_utils_value_to_str(Value *value, BStr *bstr){
             snprintf(buff, buff_len, "%.8f", value->literal.fvalue);
             return bstr_append(buff, bstr);
 		}case OBJ_VTYPE:{
-            return vm_utils_obj_to_str(value->literal.obj, bstr);
+            return vmu_obj_to_str(value->literal.obj, bstr);
         }default:{
             assert("Illegal value type");
         }
@@ -541,7 +516,7 @@ int vm_utils_value_to_str(Value *value, BStr *bstr){
     return 1;
 }
 
-void vm_utils_clean_up(VM *vm){
+void vmu_clean_up(VM *vm){
 	Obj *obj = vm->head;
 
 	while(obj){
@@ -553,9 +528,9 @@ void vm_utils_clean_up(VM *vm){
     clean_up_module(vm->module);
 }
 
-char *vm_utils_clone_buff(char *buff, VM *vm){
+char *vmu_clone_buff(char *buff, VM *vm){
 	size_t buff_len = strlen(buff);
-	char *cloned_buff = (char *)lzalloc(buff_len + 1);
+	char *cloned_buff = (char *)vmu_alloc(buff_len + 1);
 	
 	if(!cloned_buff){return NULL;}
 
@@ -565,12 +540,12 @@ char *vm_utils_clone_buff(char *buff, VM *vm){
 	return cloned_buff;
 }
 
-char *vm_utils_join_buff(char *buffa, size_t sza, char *buffb, size_t szb, VM *vm){
+char *vmu_join_buff(char *buffa, size_t sza, char *buffb, size_t szb, VM *vm){
     size_t szc = sza + szb;
-    char *buff = lzalloc(szc + 1);
+    char *buff = vmu_alloc(szc + 1);
 
 	  if(!buff){
-        vm_utils_error(vm, "Failed to create buffer: out of memory");
+        vmu_error(vm, "Failed to create buffer: out of memory");
     }
 
     memcpy(buff, buffa, sza);
@@ -580,12 +555,12 @@ char *vm_utils_join_buff(char *buffa, size_t sza, char *buffb, size_t szb, VM *v
     return buff;
 }
 
-char *vm_utils_multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm){
+char *vmu_multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm){
 	size_t sz = szbuff * by;
-	char *b = lzalloc(sz + 1);
+	char *b = vmu_alloc(sz + 1);
 
 	if(!b){
-        vm_utils_error(vm, "Failed to create buffer: out of memory");
+        vmu_error(vm, "Failed to create buffer: out of memory");
     }
 
 	for(size_t i = 0; i < by; i++){
@@ -597,17 +572,17 @@ char *vm_utils_multiply_buff(char *buff, size_t szbuff, size_t by, VM *vm){
 	return b;
 }
 
-Value *vm_utils_clone_value(Value *value, VM *vm){
-    Value *clone = (Value *)lzalloc(sizeof(Value));
+Value *vmu_clone_value(Value *value, VM *vm){
+    Value *clone = (Value *)vmu_alloc(sizeof(Value));
     if(!clone){return NULL;}
     *clone = *value;
     return clone;
 }
 
-Obj *vm_utils_obj(ObjType type, VM *vm){
+Obj *vmu_obj(ObjType type, VM *vm){
     if(vm->objs_size >= 67108864){gc(vm);}
 
-    Obj *obj = lzalloc(sizeof(Obj));
+    Obj *obj = vmu_alloc(sizeof(Obj));
     if(!obj){return NULL;}
 
     memset(obj, 0, sizeof(Obj));
@@ -626,13 +601,13 @@ Obj *vm_utils_obj(ObjType type, VM *vm){
     return obj;
 }
 
-Obj *vm_utils_core_str_obj(char *buff, VM *vm){
+Obj *vmu_core_str_obj(char *buff, VM *vm){
     size_t buff_len = strlen(buff);
-    Str *str = (Str *)lzalloc(sizeof(Str));
-    Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
+    Str *str = (Str *)vmu_alloc(sizeof(Str));
+    Obj *str_obj = vmu_obj(STR_OTYPE, vm);
 
     if(!str || !str_obj){
-        lzdealloc(str, sizeof(Str));
+        vmu_dealloc(str);
         return NULL;
     }
 
@@ -645,13 +620,13 @@ Obj *vm_utils_core_str_obj(char *buff, VM *vm){
     return str_obj;
 }
 
-Obj *vm_utils_uncore_str_obj(char *buff, VM *vm){
+Obj *vmu_uncore_str_obj(char *buff, VM *vm){
     size_t buff_len = strlen(buff);
-    Str *str = (Str *)lzalloc(sizeof(Str));
-    Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
+    Str *str = (Str *)vmu_alloc(sizeof(Str));
+    Obj *str_obj = vmu_obj(STR_OTYPE, vm);
 
     if(!str || !str_obj){
-        lzdealloc(str, sizeof(Str));
+        vmu_dealloc(str);
         return NULL;
     }
 
@@ -664,14 +639,14 @@ Obj *vm_utils_uncore_str_obj(char *buff, VM *vm){
     return str_obj;
 }
 
-Obj *vm_utils_empty_str_obj(Value *out_value, VM *vm){
-	char *buff = (char *)lzalloc(1);
-	Str *str = str = (Str *)lzalloc(sizeof(Str));
-	Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
+Obj *vmu_empty_str_obj(Value *out_value, VM *vm){
+	char *buff = (char *)vmu_alloc(1);
+	Str *str = str = (Str *)vmu_alloc(sizeof(Str));
+	Obj *str_obj = vmu_obj(STR_OTYPE, vm);
 
 	if(!buff || !str || !str_obj){
-        lzdealloc(buff, 1);
-        lzdealloc(str, sizeof(Str));
+        vmu_dealloc(buff);
+        vmu_dealloc(str);
         return NULL;
     }
 
@@ -684,15 +659,15 @@ Obj *vm_utils_empty_str_obj(Value *out_value, VM *vm){
 	return str_obj;
 }
 
-Obj *vm_utils_clone_str_obj(char *buff, Value *out_value, VM *vm){
+Obj *vmu_clone_str_obj(char *buff, Value *out_value, VM *vm){
     size_t buff_len = strlen(buff);
-    char *new_buff = (char *)lzalloc(buff_len + 1);
-	Str *str = (Str *)lzalloc(sizeof(Str));
-	Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
+    char *new_buff = (char *)vmu_alloc(buff_len + 1);
+	Str *str = (Str *)vmu_alloc(sizeof(Str));
+	Obj *str_obj = vmu_obj(STR_OTYPE, vm);
 
     if(!new_buff || !str || !str_obj){
-        lzdealloc(new_buff, buff_len + 1);
-        lzdealloc(str, sizeof(Str));
+        vmu_dealloc(new_buff);
+        vmu_dealloc(str);
         return NULL;
     }
 
@@ -712,15 +687,15 @@ Obj *vm_utils_clone_str_obj(char *buff, Value *out_value, VM *vm){
     return str_obj;
 }
 
-Obj *vm_utils_range_str_obj(size_t from, size_t to, char *buff, Value *out_value, VM *vm){
+Obj *vmu_range_str_obj(size_t from, size_t to, char *buff, Value *out_value, VM *vm){
 	size_t range_buff_len = to - from + 1;
-	char *range_buff = (char *)lzalloc(range_buff_len + 1);
-	Str *str = (Str *)lzalloc(sizeof(Str));
-	Obj *str_obj = vm_utils_obj(STR_OTYPE, vm);
+	char *range_buff = (char *)vmu_alloc(range_buff_len + 1);
+	Str *str = (Str *)vmu_alloc(sizeof(Str));
+	Obj *str_obj = vmu_obj(STR_OTYPE, vm);
 
     if(!range_buff || !str || !str_obj){
-        lzdealloc(range_buff, range_buff_len + 1);
-        lzdealloc(str, sizeof(Str));
+        vmu_dealloc(range_buff);
+        vmu_dealloc(str);
         return NULL;
     }
 
@@ -742,7 +717,7 @@ Obj *vm_utils_range_str_obj(size_t from, size_t to, char *buff, Value *out_value
 
 Str *vm_utils_uncore_nalloc_str(char *buff, VM *vm){
     size_t buff_len = strlen(buff);
-    Str *str = (Str *)lzalloc(sizeof(Str));
+    Str *str = (Str *)vmu_alloc(sizeof(Str));
 
     if(!str){return NULL;}
 
@@ -755,12 +730,12 @@ Str *vm_utils_uncore_nalloc_str(char *buff, VM *vm){
 
 Str *vm_utils_uncore_alloc_str(char *buff, VM *vm){
     size_t buff_len = strlen(buff);
-	char *new_buff = (char *)lzalloc(buff_len + 1);
-    Str *str = (Str *)lzalloc(sizeof(Str));
+	char *new_buff = (char *)vmu_alloc(buff_len + 1);
+    Str *str = (Str *)vmu_alloc(sizeof(Str));
         
     if(!new_buff || !str){
-        lzdealloc(new_buff, buff_len + 1);
-        lzdealloc(str, sizeof(Str));
+        vmu_dealloc(new_buff);
+        vmu_dealloc(str);
         return NULL;
     }
 
@@ -774,14 +749,14 @@ Str *vm_utils_uncore_alloc_str(char *buff, VM *vm){
     return str;
 }
 
-Obj *vm_utils_array_obj(int32_t len, VM *vm){
-    Value *values = (Value *)lzalloc(len * sizeof(Value));
-    Array *array = (Array *)lzalloc(sizeof(Array));
-    Obj *array_obj = vm_utils_obj(ARRAY_OTYPE, vm);
+Obj *vmu_array_obj(int32_t len, VM *vm){
+    Value *values = (Value *)vmu_alloc(len * sizeof(Value));
+    Array *array = (Array *)vmu_alloc(sizeof(Array));
+    Obj *array_obj = vmu_obj(ARRAY_OTYPE, vm);
     
     if(!values || !array || !array_obj){
-        lzdealloc(values, len * sizeof(Value));
-        lzdealloc(array, sizeof(Array));
+        vmu_dealloc(values);
+        vmu_dealloc(array);
         return NULL;
     }
 
@@ -792,9 +767,9 @@ Obj *vm_utils_array_obj(int32_t len, VM *vm){
     return array_obj;
 }
 
-Obj *vm_utils_list_obj(VM *vm){
-    DynArr *list = dynarr_create(sizeof(Value), NULL);
-    Obj *list_obj = vm_utils_obj(LIST_OTYPE, vm);
+Obj *vmu_list_obj(VM *vm){
+    DynArr *list = dynarr_create(sizeof(Value), (DynArrAllocator *)memory_allocator());
+    Obj *list_obj = vmu_obj(LIST_OTYPE, vm);
 
     if(!list || !list_obj){
         dynarr_destroy(list);
@@ -806,11 +781,11 @@ Obj *vm_utils_list_obj(VM *vm){
     return list_obj;
 }
 
-Obj *vm_utils_dict_obj(VM *vm){
-    LZHTable *dict = lzhtable_create(17, NULL);
+Obj *vmu_dict_obj(VM *vm){
+    LZHTable *dict = lzhtable_create(16, (LZHTableAllocator *)memory_allocator());
     if(!dict){return NULL;}
 
-    Obj *dict_obj = vm_utils_obj(DICT_OTYPE, vm);
+    Obj *dict_obj = vmu_obj(DICT_OTYPE, vm);
     
     if(!dict_obj){
         lzhtable_destroy(NULL, dict);
@@ -822,26 +797,29 @@ Obj *vm_utils_dict_obj(VM *vm){
     return dict_obj;
 }
 
-Obj *vm_utils_record_obj(char empty, VM *vm){
-	Record *record = (Record *)lzalloc(sizeof(Record));
-	Obj *record_obj = vm_utils_obj(RECORD_OTYPE, vm);
+Obj *vmu_record_obj(uint8_t length, VM *vm){
+	Record *record = (Record *)vmu_alloc(sizeof(Record));
+	Obj *record_obj = vmu_obj(RECORD_OTYPE, vm);
 
 	if(!record || !record_obj){
-		lzdealloc(record, sizeof(Record));
+		vmu_dealloc(record);
 		return NULL;
 	}
 
-	if(empty){
-		record->key_values = NULL;
+	if(length == 0){
+		record->attributes = NULL;
 	}else{
-		LZHTable *key_values = lzhtable_create(17, NULL);
+		LZHTable *key_values = lzhtable_create(
+            (size_t)length,
+            (LZHTableAllocator *)memory_allocator()
+        );
 
 		if(!key_values){
-			lzdealloc(record, sizeof(Record));
+			vmu_dealloc(record);
 			return NULL;
 		}
 
-		record->key_values= key_values;
+		record->attributes= key_values;
 	}
 
 	record_obj->value.record = record;
@@ -849,7 +827,7 @@ Obj *vm_utils_record_obj(char empty, VM *vm){
 	return record_obj;
 }
 
-Obj *vm_utils_native_fn_obj(
+Obj *vmu_native_fn_obj(
     int arity,
     char *name,
     void *target,
@@ -859,11 +837,11 @@ Obj *vm_utils_native_fn_obj(
     size_t name_len = strlen(name);
     assert(name_len < NAME_LEN - 1);
 
-    NativeFn *native_fn = (NativeFn *)lzalloc(sizeof(NativeFn));
-    Obj *native_fn_obj = vm_utils_obj(NATIVE_FN_OTYPE, vm);
+    NativeFn *native_fn = (NativeFn *)vmu_alloc(sizeof(NativeFn));
+    Obj *native_fn_obj = vmu_obj(NATIVE_FN_OTYPE, vm);
 
     if(!native_fn || !native_fn_obj){
-        lzdealloc(native_fn, sizeof(NativeFn));
+        vmu_dealloc(native_fn);
         return NULL;
     }
 
@@ -880,12 +858,12 @@ Obj *vm_utils_native_fn_obj(
     return native_fn_obj;
 }
 
-Obj *vm_utils_native_lib_obj(void *handler, VM *vm){
-    NativeLib *native_lib = (NativeLib *)lzalloc(sizeof(NativeLib));
-    Obj *native_lib_obj = vm_utils_obj(NATIVE_LIB_OTYPE, vm);
+Obj *vmu_native_lib_obj(void *handler, VM *vm){
+    NativeLib *native_lib = (NativeLib *)vmu_alloc(sizeof(NativeLib));
+    Obj *native_lib_obj = vmu_obj(NATIVE_LIB_OTYPE, vm);
 
     if(!native_lib || !native_lib_obj){
-        lzdealloc(native_lib, sizeof(NativeLib));
+        vmu_dealloc(native_lib);
         return NULL;
     }
 
@@ -895,7 +873,7 @@ Obj *vm_utils_native_lib_obj(void *handler, VM *vm){
     return native_lib_obj;
 }
 
-NativeFn *vm_utils_native_function(
+NativeFn *vmu_native_function(
     int arity,
     char *name,
     void *target,
@@ -905,7 +883,7 @@ NativeFn *vm_utils_native_function(
     size_t name_len = strlen(name);
     assert(name_len < NAME_LEN - 1);
 
-    NativeFn *native_fn = (NativeFn *)lzalloc(sizeof(NativeFn));
+    NativeFn *native_fn = (NativeFn *)vmu_alloc(sizeof(NativeFn));
     if(!native_fn){return NULL;}
 
     native_fn->unique = 0;
@@ -918,3 +896,4 @@ NativeFn *vm_utils_native_function(
 
     return native_fn;
 }
+//< PUBLIC IMPLEMENTATION

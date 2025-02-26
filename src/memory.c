@@ -14,9 +14,10 @@ static LZArena *runtime_arena = NULL;
 static DynArrAllocator runtime_dynarr_allocator = {0};
 static LZHTableAllocator runtime_lzhtable_allocator = {0};
 
-static LZFList *flist_allocator = NULL;
+static LZFList *runtime_allocator = NULL;
+static Allocator runtime_allocator_interface = {0};
 
-void *arena_alloc(size_t size, void *ctx){
+void *lzarena_link_alloc(size_t size, void *ctx){
 	void *ptr = LZARENA_ALLOC(size, ctx);
 
 	if(!ptr){
@@ -28,7 +29,7 @@ void *arena_alloc(size_t size, void *ctx){
 	return ptr;
 }
 
-void *arena_realloc(void *ptr, size_t old_size, size_t new_size, void *ctx){
+void *lzarena_link_realloc(void *ptr, size_t old_size, size_t new_size, void *ctx){
     void *new_ptr = LZARENA_REALLOC(ptr, old_size, new_size, ctx);
 
 	if(!new_ptr){
@@ -40,43 +41,77 @@ void *arena_realloc(void *ptr, size_t old_size, size_t new_size, void *ctx){
 	return new_ptr;
 }
 
-void arena_dealloc(void *ptr, size_t size, void *ctx){
+void lzarena_link_dealloc(void *ptr, size_t size, void *ctx){
 	// do nothing
 }
 
+void *lzflist_link_alloc(size_t size, void *ctx){
+    LZFList *allocator = (LZFList *)ctx;
+    void *ptr = lzflist_alloc(size, allocator);
+
+    if(!ptr){
+        fprintf(stderr, "out of memory\n");
+		memory_deinit();
+		exit(EXIT_FAILURE);
+	}
+
+	return ptr;
+}
+
+void *lzflist_link_realloc(void *ptr, size_t old_size, size_t new_size, void *ctx){
+    LZFList *allocator = (LZFList *)ctx;
+    void *new_ptr = lzflist_realloc(ptr, new_size, allocator);
+
+    if(!new_ptr){
+        fprintf(stderr, "out of memory\n");
+		memory_deinit();
+		exit(EXIT_FAILURE);
+	}
+
+    return new_ptr;
+}
+
+void lzflist_link_dealloc(void *ptr, size_t size, void *ctx){
+	LZFList *allocator = (LZFList *)ctx;
+    lzflist_dealloc(ptr, allocator);
+}
+
 int memory_init(){
-    // compile time
+    // COMPILE TIME
 	compile_arena = lzarena_create();
-
-    compile_bstr_allocator.alloc = arena_alloc;
-    compile_bstr_allocator.realloc = arena_realloc;
-    compile_bstr_allocator.dealloc = arena_dealloc;
-    compile_bstr_allocator.ctx = compile_arena;
-
-	compile_dynarr_allocator.alloc = arena_alloc;
-	compile_dynarr_allocator.realloc = arena_realloc;
-	compile_dynarr_allocator.dealloc = arena_dealloc;
-	compile_dynarr_allocator.ctx = compile_arena;
-
-    lzhtable_allocator.alloc = arena_alloc;
-	lzhtable_allocator.realloc = arena_realloc;
-	lzhtable_allocator.dealloc = arena_dealloc;
-	lzhtable_allocator.ctx = compile_arena;
-
-    // runtime
+    // RUNTIME
     runtime_arena = lzarena_create();
+    runtime_allocator = lzflist_create();
 
-	runtime_dynarr_allocator.alloc = arena_alloc;
-	runtime_dynarr_allocator.realloc = arena_realloc;
-	runtime_dynarr_allocator.dealloc = arena_dealloc;
-	runtime_dynarr_allocator.ctx = runtime_arena;
+    compile_bstr_allocator.ctx = compile_arena;
+    compile_bstr_allocator.alloc = lzarena_link_alloc;
+    compile_bstr_allocator.realloc = lzarena_link_realloc;
+    compile_bstr_allocator.dealloc = lzarena_link_dealloc;
 
-    runtime_lzhtable_allocator.alloc = arena_alloc;
-	runtime_lzhtable_allocator.realloc = arena_realloc;
-	runtime_lzhtable_allocator.dealloc = arena_dealloc;
-	runtime_lzhtable_allocator.ctx = runtime_arena;
+    compile_dynarr_allocator.ctx = compile_arena;
+	compile_dynarr_allocator.alloc = lzarena_link_alloc;
+	compile_dynarr_allocator.realloc = lzarena_link_realloc;
+	compile_dynarr_allocator.dealloc = lzarena_link_dealloc;
 
-    flist_allocator = lzflist_create();
+    lzhtable_allocator.ctx = compile_arena;
+    lzhtable_allocator.alloc = lzarena_link_alloc;
+	lzhtable_allocator.realloc = lzarena_link_realloc;
+	lzhtable_allocator.dealloc = lzarena_link_dealloc;
+
+    runtime_dynarr_allocator.ctx = runtime_arena;
+	runtime_dynarr_allocator.alloc = lzarena_link_alloc;
+	runtime_dynarr_allocator.realloc = lzarena_link_realloc;
+	runtime_dynarr_allocator.dealloc = lzarena_link_dealloc;
+
+    runtime_lzhtable_allocator.ctx = runtime_arena;
+    runtime_lzhtable_allocator.alloc = lzarena_link_alloc;
+	runtime_lzhtable_allocator.realloc = lzarena_link_realloc;
+	runtime_lzhtable_allocator.dealloc = lzarena_link_dealloc;
+
+    runtime_allocator_interface.ctx = runtime_allocator;
+    runtime_allocator_interface.alloc = lzflist_link_alloc;
+    runtime_allocator_interface.realloc = lzflist_link_realloc;
+    runtime_allocator_interface.dealloc = lzflist_link_dealloc;
 
     return 0;
 }
@@ -84,7 +119,7 @@ int memory_init(){
 void memory_deinit(){
 	lzarena_destroy(compile_arena);
     lzarena_destroy(runtime_arena);
-    lzflist_destroy(flist_allocator);
+    lzflist_destroy(runtime_allocator);
 }
 
 void memory_report(){
@@ -278,30 +313,18 @@ Module *runtime_clone_module(char *new_name, char *filepath, Module *module){
     return new_module;
 }
 
+Allocator *memory_allocator(){
+    return &runtime_allocator_interface;
+}
+
 void *memory_alloc(size_t size){
-    void *ptr = lzflist_alloc(size, flist_allocator);
-    
-    if(!ptr){
-        fprintf(stderr, "out of memory\n");
-		memory_deinit();
-		exit(EXIT_FAILURE);
-	}
-    
-    return ptr;
+    return lzflist_link_alloc(size, runtime_allocator);
 }
 
 void *memory_realloc(void *ptr, size_t size){
-    void *new_ptr = lzflist_realloc(ptr, size, flist_allocator);
-    
-    if(!new_ptr){
-        fprintf(stderr, "out of memory\n");
-		memory_deinit();
-		exit(EXIT_FAILURE);
-	}
-
-    return new_ptr;
+    return lzflist_link_realloc(ptr, 0, size, runtime_allocator);
 }
 
-void *memory_dealloc(void *ptr){
-    lzflist_dealloc(ptr, flist_allocator);
+void memory_dealloc(void *ptr){
+    return lzflist_link_dealloc(ptr, 0, runtime_allocator);
 }
