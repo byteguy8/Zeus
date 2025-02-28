@@ -1,4 +1,5 @@
 #include "parser.h"
+#include "expr.h"
 #include "memory.h"
 #include "token.h"
 #include "stmt.h"
@@ -23,6 +24,7 @@ DynArrPtr *record_key_values(Token *record_token, Parser *parser);
 Expr *parse_expr(Parser *paser);
 Expr *parse_assign(Parser *parser);
 Expr *parse_is_expr(Parser *parser);
+Expr *parse_tenary_expr(Parser *parser);
 Expr *parse_or(Parser *parser);
 Expr *parse_and(Parser *parser);
 Expr *parse_comparison(Parser *parser);
@@ -168,7 +170,7 @@ Expr *parse_expr(Parser *parser){
 }
 
 Expr *parse_assign(Parser *parser){
-    Expr *expr = parse_is_expr(parser);
+    Expr *expr = parse_tenary_expr(parser);
 	
 	if(match(parser, 4, 
 		COMPOUND_ADD_TOKTYPE, 
@@ -208,6 +210,28 @@ Expr *parse_assign(Parser *parser){
     }
 
     return expr;
+}
+
+Expr *parse_tenary_expr(Parser *parser){
+    Expr *condition = parse_is_expr(parser);
+
+    if(match(parser, 1, QUESTION_MARK_TOKTYPE)){
+        Token *mark_token = previous(parser);
+        Expr *left = parse_tenary_expr(parser);
+        consume(parser, COLON_TOKTYPE, "Expect ':' after left side expression");
+        Expr *right = parse_tenary_expr(parser);
+
+        TenaryExpr *tenary_expr = (TenaryExpr *)A_COMPILE_ALLOC(sizeof(TenaryExpr));
+
+        tenary_expr->condition = condition;
+        tenary_expr->left = left;
+        tenary_expr->mark_token = mark_token;
+        tenary_expr->right = right;
+
+        return create_expr(TENARY_EXPRTYPE, tenary_expr);
+    }
+
+    return condition;
 }
 
 Expr *parse_is_expr(Parser *parser){

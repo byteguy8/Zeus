@@ -1,5 +1,5 @@
 #ifndef EXPR_H
-#define XPR_H
+#define EXPR_H
 
 #include "token.h"
 #include <stdint.h>
@@ -27,6 +27,7 @@ typedef enum expr_type{
     DICT_EXPRTYPE,
 	RECORD_EXPRTYPE,
 	IS_EXPRTYPE,
+		TENARY_EXPRTYPE
 }ExprType;
 
 typedef struct expr{
@@ -159,5 +160,12 @@ typedef struct is_expr{
 	Token *is_token;
 	Token *type_token;
 }IsExpr;
+
+typedef struct tenary_expr{
+    Expr *condition;
+    Expr *left;
+    Token *mark_token;
+    Expr *right;
+}TenaryExpr;
 
 #endif

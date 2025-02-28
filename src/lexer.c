@@ -510,6 +510,9 @@ Token *scan_token(char c, Lexer *lexer){
 			}else{
 				return create_token(EXCLAMATION_TOKTYPE, lexer);
 			}
+        }case '?':{
+        	return create_token(QUESTION_MARK_TOKTYPE, lexer);
+        	break;
         }case ':':{
 			return create_token(COLON_TOKTYPE, lexer);
 		}case ';':{

@@ -1,4 +1,5 @@
 #include "compiler.h"
+#include "expr.h"
 #include "memory.h"
 #include "utils.h"
 #include "opcode.h"
@@ -10,6 +11,7 @@
 #include "native_time.h"
 #include "native_io.h"
 #include "native_os.h"
+#include <bits/stdint-intn.h>
 #include <stdint.h>
 #include <assert.h>
 #include <stdarg.h>
@@ -1133,6 +1135,40 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			}
 
 			break;
+		}case TENARY_EXPRTYPE:{
+		     TenaryExpr *tenary_expr = (TenaryExpr *)expr->sub_expr;
+		     Expr *condition = tenary_expr->condition;
+		     Expr *left = tenary_expr->left;
+		     Token *mark_token = tenary_expr->mark_token;
+		     Expr *right = tenary_expr->right;
+
+		     compile_expr(condition, compiler);
+
+		     write_chunk(JIF_OPCODE, compiler);
+		     write_location(mark_token, compiler);
+
+             size_t jif_index = write_i16(0, compiler);
+
+             size_t left_before = chunks_len(compiler);
+		     compile_expr(left, compiler);
+            
+             write_chunk(JMP_OPCODE, compiler);
+             write_location(mark_token, compiler);
+             
+             size_t jmp_index = write_i16(0, compiler);
+		     
+		     size_t left_after = chunks_len(compiler);
+		     size_t left_len = left_after - left_before;
+
+		     size_t right_before =chunks_len(compiler);
+		     compile_expr(right, compiler);
+		     size_t right_after = chunks_len(compiler);
+		     size_t right_len = right_after - right_before;
+
+             update_i16(jmp_index, (int16_t)right_len + 1, compiler);
+		     update_i16(jif_index, (int16_t)left_len + 1, compiler);
+
+		     break;
 		}default:{
             assert("Illegal expression type");
         }
