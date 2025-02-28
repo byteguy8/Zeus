@@ -8,7 +8,8 @@
 #include <unistd.h>
 #include <sys/mman.h>
 
-//#define DEBUG_LOG
+// comment this out to enable logs
+// #define DEBUG_LOG
 
 #ifdef DEBUG_LOG
     #define LOG(fmt, ...) do {                                                   \
@@ -27,105 +28,10 @@
 #define LIST_SIZE (sizeof(LZFList))
 
 #define MAGIC_NUMBER 0xDEADBEEF
-#define PTR_HEADER(ptr) ((LZFLHeader *)(((char *)(ptr)) - HEADER_SIZE))
 
-#define CALC_AREA_SIZE(size)(HEADER_SIZE + (size) + FOOT_SIZE)
-#define AREA_END(header)((void *)((char *)(header)) + HEADER_SIZE + (header)->size + FOOT_SIZE)
-
-#define HEADER_CHUNK(header)(((char *)(header)) + HEADER_SIZE)
-#define HEADER_FOOT(header)((((char *)(header)) + HEADER_SIZE) + ((header)->padding) + ((header)->size))
-
-#define IS_HEADER_VALID(header)((header)->magic == MAGIC_NUMBER)
-#define IS_HEADER_FOOT_VALID(header)((*(uint32_t *)HEADER_FOOT(header)) == MAGIC_NUMBER)
-
-#define VALIDATE_HEADER(header)(assert(IS_HEADER_VALID(header) && "memory's header invalid state"))
-#define VALIDATE_HEADER_USED(header)(assert((header)->used && "memory's header should be in use"))
-#define VALIDATE_HEADER_NOT_USED(header)(assert(!((header)->used) && "memory's header should not be in use"))
-#define VALIDATE_HEADER_FOOT(header)(assert(IS_HEADER_FOOT_VALID(header) && "memory's foot invalid state"))
-
-static int grow(LZFList *list){
-    size_t new_count = list->rcount == 0 ? 8 : list->rcount * 2;    
-    void *new_regions = realloc(list->regions, REGION_SIZE * new_count);
-    
-    LOG("growing regions array from %ld to %ld", list->rcount, new_count);
-
-    if(!new_regions){
-        LOG("failed to grow regions array");
-        return 1;
-    }
-
-    list->rcount = new_count;
-    list->regions = (LZFLRegion *)new_regions;
-
-    LOG("regions array grew");
-    return 0;
-}
-
-static int append_region(size_t buff_len, LZFList *list){
-    LOG("appending new region of %ld bytes", buff_len);
-    
-    char *buff = (char *)mmap(
-        NULL,
-		    buff_len,
-		    PROT_READ | PROT_WRITE,
-		    MAP_PRIVATE | MAP_ANONYMOUS,
-		    -1,
-		    0
-    );
-    
-    if (buff == MAP_FAILED){
-        LOG("failed to append region. MAP_FAILED");
-        return 1;
-    }
-
-    if(list->rused >= list->rcount && grow(list)){
-        LOG("failed to append region");
-        munmap(buff, buff_len);
-        return 1;
-    }
-
-    LOG("region appended");
-
-    LZFLRegion *region = &list->regions[list->rused++];
-
-    region->buff_len = buff_len;
-    region->buff = buff;
-    region->offset = buff;
-    region->head = NULL;
-    region->tail = NULL;
-    
-    return 0;
-}
-
-static int region_has_space(size_t size, LZFLRegion *region){
-    LOG("verifying region available space");
-
-    uintptr_t start = (uintptr_t)region->buff;
-    uintptr_t end = start + region->buff_len;
-    uintptr_t offset = (uintptr_t)region->offset;
-
-#ifdef LZFLIST_DEBUG
-    assert(offset <= end && "I'm sure I did something wrong");
-#endif
-
-    size_t available = end - offset;
-    size_t required = CALC_AREA_SIZE(size);
-    
-    LOG("region (start: %ld - end: %ld) with offset %ld", start, end, offset);
-    LOG("region has %ld bytes available for %ld bytes required", available, required);
-
-    if(available < required){
-        LOG("region has not enough space");
-    }else{
-        LOG("region has enough space");
-    }
-    
-    return available >= required;
-}
-
-static uintptr_t align_size(size_t alignment, size_t size){
-    size_t mod = size % alignment;
-    size_t padding = mod == 0 ? 0 : alignment - mod;
+static size_t round_size(size_t to, size_t size){
+    size_t mod = size % to;
+    size_t padding = mod == 0 ? 0 : to - mod;
     return padding + size;
 }
 
@@ -135,133 +41,222 @@ static uintptr_t align_addr(size_t alignment, uintptr_t addr){
     return padding + addr;
 }
 
-static LZFLHeader *get_header(void *ptr){
-    uintptr_t chunk_start = (uintptr_t)ptr;
-    uintptr_t header_start = chunk_start - HEADER_SIZE;
-    size_t mod = header_start % LZFLIST_DETAULT_ALIGNMENT;
+static void *header_chunk(LZFLHeader *header){
+    uintptr_t offset = (uintptr_t)header;
     
-    return (LZFLHeader *)(header_start - mod);
+    offset += HEADER_SIZE;
+    offset = align_addr(LZFLIST_DETAULT_ALIGNMENT, offset);
+    
+    return (void *)offset;
 }
 
-static void *alloc_from_region_aligned(size_t alignment, size_t size, LZFLRegion *region){
+static size_t *header_foot(LZFLHeader *header){
+    uintptr_t offset = (uintptr_t)header_chunk(header);
+    
+    offset += header->size;
+    offset = align_addr(LZFLIST_DETAULT_ALIGNMENT, offset);
+
+    return (size_t *)offset;
+}
+
+static LZFLHeader *ptr_header(void *ptr){
+    uintptr_t offset = (uintptr_t)ptr;
+    
+    offset -= HEADER_SIZE;
+    size_t mod = offset % LZFLIST_DETAULT_ALIGNMENT;
+    offset -= mod;
+    
+    return (LZFLHeader *)offset;
+}
+
+static void validate_subregion(LZFLHeader *header){
+    size_t *foot = header_foot(header);
+    assert(header->magic == MAGIC_NUMBER);
+    assert(*foot == MAGIC_NUMBER);
+}
+
+static size_t calc_required_size(size_t size){
+    uintptr_t header_start = 0;
+    uintptr_t header_end = header_start + HEADER_SIZE;
+
+    uintptr_t chunk_start = align_addr(LZFLIST_DETAULT_ALIGNMENT, header_end);
+    uintptr_t chunk_end = chunk_start + size;
+    
+    uintptr_t foot_start = align_addr(LZFLIST_DETAULT_ALIGNMENT, chunk_end);
+    uintptr_t foot_end = foot_start + FOOT_SIZE;
+
+    return foot_end;
+}
+
+static LZFLRegion *create_region(size_t size){
+    size += REGION_SIZE;
+    
+    size_t raw_buff_len = PAGE_SIZE;
+    size = calc_required_size(size);
+    
+    if(size >= raw_buff_len){
+        size_t factor = size / PAGE_SIZE;
+        if((PAGE_SIZE * factor) < size){factor += 1;}
+        raw_buff_len = PAGE_SIZE * factor;
+    }
+
+    char *raw_buff = (char *)mmap(
+        NULL,
+		raw_buff_len,
+		PROT_READ | PROT_WRITE,
+		MAP_PRIVATE | MAP_ANONYMOUS,
+		-1,
+		0
+    );
+    
+    if (raw_buff == MAP_FAILED){return NULL;}
+
+    LZFLRegion *region = (LZFLRegion *)raw_buff;
+    char *buff = raw_buff + REGION_SIZE;
+
+    region->buff_len = raw_buff_len - REGION_SIZE;
+    region->buff = buff;
+    region->offset = buff;
+    region->prev = NULL;
+    region->next = NULL;
+
+    return region;
+}
+
+static int insert_region(LZFLRegion *region, LZFList *list){
+    region->prev = NULL;
+    region->next = NULL;
+
+    if(list->regions_tail){
+        region->prev = list->regions_tail;
+        list->regions_tail->next = region;
+    }else{
+        list->regions_head = region;
+    }
+
+    list->regions_len++;
+    list->regions_tail = region;
+
+    return 0;
+}
+
+static void remove_region(LZFLRegion *region, LZFList *list){
+    if(region == list->regions_head){
+        list->regions_head = region->next;
+    }
+    if(region == list->regions_tail){
+        list->regions_tail = region->prev;
+    }
+
+    if(region->prev){
+        region->prev->next = region->next;
+    }
+    if(region->next){
+        region->next->prev = region->prev;
+    }
+
+    list->regions_len--;
+
+    region->prev = NULL;
+    region->next = NULL;
+}
+
+static int create_and_insert_region(size_t size, LZFList *list){
+    LZFLRegion *region = create_region(size);
+    if(!region){return 1;}
+
+    insert_region(region, list);
+
+    return 0;
+}
+
+static void *alloc_from_region(size_t size, LZFLRegion *region){
     uintptr_t buff_start = (uintptr_t)region->buff;
     uintptr_t buff_end = buff_start + region->buff_len;
     uintptr_t offset = (uintptr_t)region->offset;
-
-    size_t aligned_size = align_size(LZFLIST_DETAULT_ALIGNMENT, size);
     
+    if(offset >= buff_end){return NULL;}
+
     uintptr_t header_start = align_addr(LZFLIST_DETAULT_ALIGNMENT, offset);
     uintptr_t header_end = header_start + HEADER_SIZE;
-
-    uintptr_t chunk_start = align_addr(alignment, header_end);
-    uintptr_t chunk_end = chunk_start + aligned_size;
-
-    header_start = chunk_start - HEADER_SIZE;
-    size_t mod = header_start % LZFLIST_DETAULT_ALIGNMENT;
-    header_start -= mod;
-    header_end = header_start + HEADER_SIZE;
-
-    uintptr_t foot_start = chunk_end;
+    uintptr_t chunk_start = align_addr(LZFLIST_DETAULT_ALIGNMENT, header_end);
+    uintptr_t chunk_end = chunk_start + size;
+    uintptr_t foot_start = align_addr(LZFLIST_DETAULT_ALIGNMENT, chunk_end);
     uintptr_t foot_end = foot_start + FOOT_SIZE;
 
-    if(foot_end > buff_end){
-        LOG("region with %ld bytes need %ld bytes to allocate %ld bytes", buff_end - offset, foot_end - offset, size);
-        return NULL;
-    }
+    // there is no room to allocate
+    if(foot_end > buff_end){return NULL;}
 
     LZFLHeader *header = (LZFLHeader *)header_start;
-    char *chunk = (char *)chunk_start;
-    uint32_t *foot = (uint32_t *)foot_start;
-
     header->magic = MAGIC_NUMBER;
     header->used = 1;
-    header->size = aligned_size;
-    header->padding = chunk_start - header_end;
+    header->size = size;
     header->prev = NULL;
     header->next = NULL;
-    header->free_prev = NULL;
-    header->free_next = NULL;
 
+    uint32_t *foot = (uint32_t *)foot_start;
     *foot = MAGIC_NUMBER;
 
-    header->prev = region->tail;
+    // UPDATING REGION OFFSET
+    region->offset = (char *)foot_end;
 
-    if(region->tail){
-        region->tail->next = header;
-    }else{
-        region->head = header;
-    }
-
-    region->tail = header;
-
-    offset = foot_end;
-    region->offset = (char *)offset;
-
-    return chunk;
+    return (void *)chunk_start;
 }
 
 static void insert_to_free_list(LZFLHeader *header, LZFList *list){
-    LOG("inserting chunk %p of %ld bytes in free list", HEADER_CHUNK(header), header->size);
-    LOG("validating chunk's header and foot");
-
-    VALIDATE_HEADER(header);
-    VALIDATE_HEADER_FOOT(header);
-    VALIDATE_HEADER_USED(header);
-
-    LOG("chunk's header and foot validated");
+    validate_subregion(header);
 
     header->used = 0;
-    header->free_prev = list->tail;
-    header->free_next = NULL;
+    header->prev = list->frees_tail;
+    header->next = NULL;
 
-    if(list->tail){
-        list->tail->free_next = header;
+    if(list->frees_tail){
+        list->frees_tail->next = header;
     }else{
-        list->head = header;
+        list->frees_head = header;
     }
 
-    list->len++;
-    list->tail = header;
+    list->frees_len++;
+    list->bytes += header->size;
+    list->frees_tail = header;
 
-    LOG("chunk inserted in free list");
+    if(!list->auxiliar || header->size > list->auxiliar->size){
+        list->auxiliar = header;
+    }
 }
 
 static void remove_from_free_list(LZFLHeader *header, LZFList *list){
-    VALIDATE_HEADER(header);
-    VALIDATE_HEADER_FOOT(header);
-    VALIDATE_HEADER_NOT_USED(header);
-
-    if(header->free_prev){
-        header->free_prev->free_next = header->free_next;
+    validate_subregion(header);
+    
+    if(header->prev){
+        header->prev->next = header->next;
     }
-    if(header->free_next){
-        header->free_next->free_prev = header->free_prev;
+    if(header->next){
+        header->next->prev = header->prev;
     }
-    if(header == list->head){
-        list->head = header->free_next;
+    if(header == list->frees_head){
+        list->frees_head = header->next;
     }
-    if(header == list->tail){
-        list->tail = header->free_prev;
+    if(header == list->frees_tail){
+        list->frees_tail = header->prev;
     }
-
-    list->len--;
 
     header->used = 1;
-    header->free_prev = NULL;
-    header->free_next = NULL;
+    header->prev = NULL;
+    header->next = NULL;
+
+    assert(list->bytes >= header->size && "ups!");
+
+    list->frees_len--;
+    list->bytes -= header->size;
 }
 
 static void *look_first_find(size_t size, LZFList *list){
-    LOG("looking free chunk of %ld bytes by first find", size);
-    
-    if(!list->head){
-        LOG("there aren't free chunks");
-        return NULL;
-    }
+    if(!list->frees_head){return NULL;}
 
     LZFLHeader *selected = NULL;
 
-    for(LZFLHeader *header = list->head; header; header = header->free_next){
+    for(LZFLHeader *header = list->frees_head; header; header = header->next){
         if(header->size >= size){
             selected = header;
             break;
@@ -269,53 +264,11 @@ static void *look_first_find(size_t size, LZFList *list){
     }
 
     if(selected){
-        LOG("free chunk found of %ld bytes", selected->size);
         remove_from_free_list(selected, list);
-        return HEADER_CHUNK(selected);
+        return header_chunk(selected);
     }
 
-    LOG("free chunk not found");
     return NULL;
-}
-
-static void coalesce(LZFList *list){
-    for (size_t i = 0; i < list->rused; i++){
-        LZFLRegion *region = &list->regions[i];
-
-        for (LZFLHeader *header = region->head; header; header = header->next){
-            LZFLHeader *next = header->next;
-
-            if(next && !next->used){
-                // Updating region list
-                if(next->prev){
-                    next->prev->next = next->next;
-                }
-                if(next->next){
-                    next->next->prev = next->prev;
-                }
-                if(next == region->tail){
-                    region->tail = next->prev;
-                }
-
-                // Updating free list
-                if(next->free_prev){
-                    next->free_prev->free_next = next->free_next;
-                }
-                if(next->free_next){
-                    next->free_next->free_prev = next->free_prev;
-                }
-                if(next == list->head){
-                    list->head = next->free_next;
-                }
-                if(next == list->tail){
-                    list->tail = next->free_prev;
-                }
-
-                list->len--;
-                header->size += CALC_AREA_SIZE(next->size);
-            }
-        }
-    }
 }
 
 #ifdef LZFLIST_VALIDATE_PTR
@@ -348,12 +301,18 @@ LZFList *lzflist_create(){
         return NULL;
     }
 
-    list->rused = 0;
-    list->rcount = 0;
-    list->regions = NULL;
-    list->len = 0;
-    list->head = NULL;
-    list->tail = NULL;
+    //> REGION LIST
+    list->regions_len = 0;
+    list->regions_head = NULL;
+    list->regions_tail = NULL;
+    //< REGION LIST
+    //> FREE LIST
+    list->bytes = 0;
+    list->frees_len = 0;
+    list->frees_head = NULL;
+    list->frees_tail = NULL;
+    list->auxiliar = NULL;
+    //> FREE LIST
     
     return list;
 }
@@ -361,83 +320,201 @@ LZFList *lzflist_create(){
 void lzflist_destroy(LZFList *list){
     if(!list){return;}
 
-    for(size_t i = 0; i < list->rused; i++){
-        LZFLRegion *region = &list->regions[i];
+    for(LZFLRegion *region = list->regions_head; region; region = region->next){
         char *buff = region->buff;
         munmap(buff, region->buff_len);
     }
 
-    free(list->regions);
     free(list);
 }
 
+size_t lzflist_free_regions(LZFList *list){
+    size_t unallocated_bytes = 0;
+
+    LZFLRegion *current = list->regions_head;
+    
+    while (current){
+        LZFLRegion *next = current->next;
+        
+        if(current->offset == current->buff){continue;}
+
+        int is_free = 1;
+        uintptr_t offset = (uintptr_t)current->offset;
+        uintptr_t current_offset = (uintptr_t)current->buff;
+
+        while (1){
+            current_offset = align_addr(LZFLIST_DETAULT_ALIGNMENT, current_offset);
+            LZFLHeader *header = (LZFLHeader *)current_offset;
+
+            if(header->used){
+                is_free = 0;
+                break;
+            }
+
+            current_offset = (uintptr_t)(((char *)header_foot(header)) + FOOT_SIZE);
+            if(current_offset >= offset){break;}
+        }
+        
+        if(is_free){
+            size_t size = REGION_SIZE + current->buff_len;
+            unallocated_bytes += size;
+            
+            remove_region(current, list);
+            munmap(current, size);
+        }
+
+        current = next;
+    }
+
+    return unallocated_bytes;
+}
+
 size_t lzflist_ptr_size(void *ptr){
-    LZFLHeader *header = PTR_HEADER(ptr);
-    assert(header->used && "block of memory not available");
+    LZFLHeader *header = ptr_header(ptr);
+    validate_subregion(header);
     return header->size;
 }
 
-size_t calc_required_size_aligned(size_t alignment, size_t size){
-    size_t aligned_size = align_size(LZFLIST_DETAULT_ALIGNMENT, size);
-    
-    uintptr_t header_start = 0;
-    uintptr_t header_end = header_start + HEADER_SIZE;
-
-    uintptr_t chunk_start = align_addr(alignment, header_end);
-    uintptr_t chunk_end = chunk_start + aligned_size;
-
-    uintptr_t foot_start = chunk_end;
-    uintptr_t foot_end = foot_start + FOOT_SIZE;
-
-    return foot_end;
-}
-
-size_t region_has_space_aligned(size_t alignment, size_t size, LZFLRegion *region){
-    size_t required_size = calc_required_size_aligned(alignment, size);
+size_t has_region_space(size_t size, LZFLRegion *region){
+    size_t required_size = calc_required_size(size);
     
     uintptr_t start = (uintptr_t)region->buff;
     uintptr_t end = start + region->buff_len;
     uintptr_t offset = (uintptr_t)region->offset;
 
-    assert(offset <= end && "UPS!");
+    assert(offset <= end && "ups!");
 
     offset = align_addr(LZFLIST_DETAULT_ALIGNMENT, offset);
-    if(offset > end){return NULL;}
+    if(offset > end){return 0;}
 
     return ((end - offset) >= required_size);
+}
+
+LZFLHeader *split_chunk(size_t size, void *ptr){
+    LZFLHeader *left_header = ptr_header(ptr);
+
+    uintptr_t buff_start = (uintptr_t)ptr;
+    uintptr_t buff_end = ((uintptr_t)header_foot(left_header)) + FOOT_SIZE;
+
+    uintptr_t left_chunk_start = buff_start;
+    uintptr_t left_chunk_end = left_chunk_start + size;
+    uintptr_t left_foot_start = align_addr(LZFLIST_DETAULT_ALIGNMENT, left_chunk_end);
+    uintptr_t left_foot_end = left_foot_start + FOOT_SIZE;
+
+    if(left_foot_end >= buff_end){return NULL;}
+
+    size_t available = buff_end - left_foot_end;
+    
+    if(HEADER_SIZE + FOOT_SIZE >= available){return NULL;}
+    size_t remaining = available - (HEADER_SIZE + FOOT_SIZE);
+
+    uintptr_t right_header_start = align_addr(LZFLIST_DETAULT_ALIGNMENT, left_foot_end);
+    uintptr_t right_header_end = right_header_start + HEADER_SIZE;
+    uintptr_t right_chunk_start = align_addr(LZFLIST_DETAULT_ALIGNMENT, right_header_end);
+    uintptr_t right_chunk_end = right_chunk_start + remaining;
+    uintptr_t right_foot_start = align_addr(LZFLIST_DETAULT_ALIGNMENT, right_chunk_end);
+    uintptr_t right_foot_end = right_foot_start + FOOT_SIZE;
+
+    if(right_foot_end > buff_end){
+        size_t header_chunk_padding = right_chunk_start - right_header_end;
+        size_t chunk_foot_padding = right_foot_start - right_chunk_end;
+        
+        if(header_chunk_padding + chunk_foot_padding >= remaining){return NULL;}
+        remaining -= header_chunk_padding + chunk_foot_padding;
+
+        right_chunk_end = right_chunk_start + remaining;
+        right_foot_start = align_addr(LZFLIST_DETAULT_ALIGNMENT, right_chunk_end);
+        right_foot_end = right_foot_start + FOOT_SIZE;
+
+        if(right_foot_end > buff_end){return NULL;}
+    }
+
+    size_t *left_foot = (size_t *)left_foot_start;
+
+    left_header->size = size;
+    *left_foot = MAGIC_NUMBER;
+
+    LZFLHeader *right_header = (LZFLHeader *)right_header_start;
+    size_t *right_foot = (size_t *)right_foot_start;
+
+    right_header->magic = MAGIC_NUMBER;
+    right_header->used = 0;
+    right_header->size = remaining;
+    right_header->prev = NULL;
+    right_header->next = NULL;
+
+    *right_foot = MAGIC_NUMBER;
+
+    return right_header;
 }
 
 void *lzflist_alloc(size_t size, LZFList *list){
     LOG("----------------ALLOC REQUEST OF %ld BYTES----------------", size);
 
+    size = round_size(LZFLIST_MIN_CHUNK_SIZE, size);
+    
+    LOG("requested allocation rounded to %ld bytes", size);
+    LOG("looking chunk in frees list");
+
     void *ptr = look_first_find(size, list);
 
-    if(!ptr){
-        size_t buff_len = PAGE_SIZE;
-        size_t required_size = calc_required_size_aligned(LZFLIST_DETAULT_ALIGNMENT, size);
-        
-        if(required_size >= buff_len){
-            buff_len = PAGE_SIZE * (required_size / PAGE_SIZE + 1);
-        }
+    if(ptr){
+        LZFLHeader *left_header = ptr_header(ptr);
 
-        if(list->rused == 0){
-            if(append_region(buff_len, list)){
+        LOG("chunk of %ld found", left_header->size);
+        
+        if(left_header->size >= LZFLIST_MIN_SPLIT_SIZE){
+            LOG("chunk of %ld bytes is candidate for splitting", left_header->size);
+            
+            double available = ((double)(left_header->size - size)) / ((double)left_header->size) * 100.0;
+            
+            LOG("requested bytes %ld let %f%% available from the chunk", size, available);
+
+            if(available >= LZFLIST_MIN_SPLIT_PERCENTAGE){
+                LZFLHeader *right_header = split_chunk(size, ptr);
+                
+                if(right_header){
+                    LOG("chunk splitted and created a %ld bytes one", right_header->size);
+                    insert_to_free_list(right_header, list);
+                }else{
+                    LOG("chunk not splitted");
+                }
+            }else{
+                LOG("chunk has not enough space to be splitted");
+            }
+        }
+    }else{
+        LOG("no chunk found in frees list to satifies the request");
+
+        if(list->regions_len == 0){
+            LOG("appending new region");
+
+            if(create_and_insert_region(size, list)){
+                LOG("region not appended");
                 LOG("alloc request failed");
                 return NULL;
             }
-        }else{
-            LZFLRegion *region = &list->regions[list->rused - 1];
 
-            if(!region_has_space_aligned(LZFLIST_DETAULT_ALIGNMENT, size, region)){
-                if(append_region(buff_len, list)){
+            LOG("new region appended");
+        }else{
+            LZFLRegion *region = list->regions_tail;
+
+            if(!has_region_space(size, region)){
+                LOG("current region has not space for %ld bytes", size);
+                LOG("appending new region");
+
+                if(create_and_insert_region(size, list)){
+                    LOG("failed to append new region");
                     LOG("alloc request failed");
                     return NULL;    
                 }
+
+                LOG("new region appended");
             }
         }
         
-        LZFLRegion *region = &list->regions[list->rused - 1];
-        void *ptr = alloc_from_region_aligned(LZFLIST_DETAULT_ALIGNMENT, size, region);
+        LZFLRegion *region = list->regions_tail;
+        void *ptr = alloc_from_region(size, region);
 
         LOG("alloc request succeed");
 
@@ -480,10 +557,7 @@ void *lzflist_realloc(void *ptr, size_t new_size, LZFList *list){
         return ptr;
     }
     
-    LZFLHeader *header = PTR_HEADER(ptr);
-    VALIDATE_HEADER(header);
-    VALIDATE_HEADER_FOOT(header);
-    VALIDATE_HEADER_USED(header);
+    LZFLHeader *header = ptr_header(ptr);
 
     LOG("chunk %p to be reallocated is of %ld bytes", ptr, header->size);
 
@@ -521,7 +595,7 @@ void lzflist_dealloc(void *ptr, LZFList *list){
     validate_ptr(ptr, list);
 #endif
 
-    LZFLHeader *header = get_header(ptr);
+    LZFLHeader *header = ptr_header(ptr);
     
     LOG("chunk %p to deallocate is of %ld bytes", ptr, header->size);
 

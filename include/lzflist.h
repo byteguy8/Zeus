@@ -3,46 +3,52 @@
 
 #include <stddef.h>
 
+#define LZFLIST_MIN_CHUNK_SIZE 32
+#define LZFLIST_MIN_SPLIT_SIZE 512
+#define LZFLIST_MIN_SPLIT_PERCENTAGE 50
 #define LZFLIST_DETAULT_ALIGNMENT 16
-#define LZFLIST_DEFAULT_BUFFER_SIZE 4096
 
 typedef struct lzflheader LZFLHeader;
-typedef struct lzflfoot LZFLFoot;
 typedef struct lzflregion LZFLRegion;
 typedef struct lzflist LZFList;
 
 struct lzflheader{
-	size_t magic;
-	char used;
-	size_t size;
-    size_t padding;
-	LZFLHeader *prev;
-	LZFLHeader *next;
-	LZFLHeader *free_prev;
-	LZFLHeader *free_next;
+    size_t magic;
+    char used;
+    size_t size;
+    LZFLHeader *prev;
+    LZFLHeader *next;
 };
 
 struct lzflregion{
-	size_t buff_len;
-	char *buff;
+    size_t buff_len;
+    char *buff;
 	char *offset;
-	LZFLHeader *head;
-  LZFLHeader *tail;
+    LZFLRegion *prev;
+    LZFLRegion *next;
 };
 
 struct lzflist{
-	size_t rused;
-	size_t rcount;
-	LZFLRegion *regions;
-	size_t len;
-	LZFLHeader *head;
-  LZFLHeader *tail;
+//> REGION LIST
+    size_t regions_len;
+    LZFLRegion *regions_head;
+    LZFLRegion *regions_tail;
+//< REGION LIST
+//> FREE LIST
+    size_t bytes;
+    size_t frees_len;
+	LZFLHeader *frees_head;
+    LZFLHeader *frees_tail;
+    LZFLHeader *auxiliar;
+//< FREE LIST
 };
 
 LZFList *lzflist_create();
 void lzflist_destroy(LZFList *list);
 
+size_t lzflist_free_regions(LZFList *list);
 size_t lzflist_ptr_size(void *ptr);
+
 void *lzflist_alloc(size_t size, LZFList *list);
 void *lzflist_calloc(size_t size, LZFList *list);
 void *lzflist_realloc(void *ptr, size_t new_size, LZFList *list);
