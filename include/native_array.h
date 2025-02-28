@@ -5,8 +5,21 @@
 #include "value.h"
 #include "memory.h"
 #include "vm_utils.h"
+#include <bits/stdint-uintn.h>
 
 static LZHTable *array_symbols = NULL;
+
+Value native_fn_array_first(uint8_t argsc, Value *values, void *target, VM *vm){
+    Array *array = (Array *)target;
+    if(array->len == 0){return EMPTY_VALUE;}
+    return array->values[0];
+}
+
+Value native_fn_array_last(uint8_t argsc, Value *values, void *target, VM *vm){
+    Array *array = (Array *)target;
+    if(array->len == 0){return EMPTY_VALUE;}
+    return array->values[array->len - 1];
+}
 
 Value native_fn_array_length(uint8_t argsc, Value *values, void *target, VM *vm){
     Array *array = (Array *)target;
@@ -69,6 +82,8 @@ Value native_fn_array_to_list(uint8_t argsc, Value *values, void *target, VM *vm
 Obj *native_array_get(char *symbol, void *target, VM *vm){
     if(!array_symbols){
         array_symbols = runtime_lzhtable();
+        runtime_add_native_fn_info("first", 0, native_fn_array_first, array_symbols);
+        runtime_add_native_fn_info("last", 0, native_fn_array_last, array_symbols);
         runtime_add_native_fn_info("length", 0, native_fn_array_length, array_symbols);
         runtime_add_native_fn_info("join", 1, native_fn_array_join, array_symbols);
         runtime_add_native_fn_info("to_list", 0, native_fn_array_to_list, array_symbols);
