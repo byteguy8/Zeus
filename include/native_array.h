@@ -5,7 +5,9 @@
 #include "value.h"
 #include "memory.h"
 #include "vm_utils.h"
+#include <bits/stdint-intn.h>
 #include <bits/stdint-uintn.h>
+#include <stdint.h>
 
 static LZHTable *array_symbols = NULL;
 
@@ -19,6 +21,34 @@ Value native_fn_array_last(uint8_t argsc, Value *values, void *target, VM *vm){
     Array *array = (Array *)target;
     if(array->len == 0){return EMPTY_VALUE;}
     return array->values[array->len - 1];
+}
+
+Value native_fn_array_make_room(uint8_t argsc, Value *values, void *target, VM *vm){
+    Array *array = (Array *)target;
+    Value *plus_value = &values[0];
+
+    if(!IS_INT(plus_value)){
+        vmu_error(vm, "Expect integer at argument 1, but got something else");
+    }
+
+    int64_t plus = TO_INT(plus_value);
+
+    if(plus < 0 || plus > INT32_MAX){
+        vmu_error(vm, "Illegal array length. Must be 0 <= Argument 1(%ld) <= %d", plus, INT32_MAX);
+    }
+    
+    Obj *new_array_obj = vmu_array_obj(array->len + plus, vm);
+    Array *new_array = new_array_obj->value.array;
+
+    if(!new_array_obj){
+        vmu_error(vm, "Out of memory");
+    }
+
+    for(int32_t i = 0; i < array->len; i++){
+        new_array->values[i] = array->values[i];
+    }
+
+    return OBJ_VALUE(new_array_obj);
 }
 
 Value native_fn_array_length(uint8_t argsc, Value *values, void *target, VM *vm){
@@ -84,6 +114,7 @@ Obj *native_array_get(char *symbol, void *target, VM *vm){
         array_symbols = runtime_lzhtable();
         runtime_add_native_fn_info("first", 0, native_fn_array_first, array_symbols);
         runtime_add_native_fn_info("last", 0, native_fn_array_last, array_symbols);
+        runtime_add_native_fn_info("make_room", 1, native_fn_array_make_room, array_symbols);
         runtime_add_native_fn_info("length", 0, native_fn_array_length, array_symbols);
         runtime_add_native_fn_info("join", 1, native_fn_array_join, array_symbols);
         runtime_add_native_fn_info("to_list", 0, native_fn_array_to_list, array_symbols);
