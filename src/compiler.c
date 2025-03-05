@@ -1000,7 +1000,11 @@ void compile_expr(Expr *expr, Compiler *compiler){
                 write_chunk(INT_OPCODE, compiler);
                 write_location(array_token, compiler);
 
-                write_i64_const((int64_t)values->used, compiler);
+                if(values){                    
+                    write_i64_const((int64_t)values->used, compiler);
+                }else{
+                     write_i64_const((int64_t)0, compiler);
+                }
             }
 
             write_chunk(ARRAY_OPCODE, compiler);
