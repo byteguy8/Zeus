@@ -6,11 +6,11 @@
 #include <assert.h>
 
 static int16_t compose_i16(uint8_t *bytes){
-    return ((int16_t)bytes[1] << 8) | ((int16_t)bytes[0]);
+    return (int16_t)((uint16_t)bytes[1] << 8) | ((uint16_t)bytes[0]);
 }
 
 static int32_t compose_i32(uint8_t *bytes){
-    return ((int32_t)bytes[3] << 24) | ((int32_t)bytes[2] << 16) | ((int32_t)bytes[1] << 8) | ((int32_t)bytes[0]);
+    return (int32_t)((uint32_t)bytes[3] << 24) | ((uint32_t)bytes[2] << 16) | ((uint32_t)bytes[1] << 8) | ((uint32_t)bytes[0]);
 }
 
 #define CURRENT_MODULE(d)(d->current_module)
@@ -186,6 +186,31 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | slot: %d\n", slot);
            	
             break;
+        }case OSET_OPCODE:{
+            uint8_t slot = advance(dumpper);
+            size_t end = dumpper->ip;
+
+			printf("%8.8s %.7ld", "OSET", end - start);
+            printf(" | slot: %d\n", slot);
+           	
+            break;
+        }case OGET_OPCODE:{
+            uint8_t slot = advance(dumpper);
+            size_t end = dumpper->ip;
+
+			printf("%8.8s %.7ld", "OGET", end - start);
+            printf(" | slot: %d\n", slot);
+           	
+            break;
+        }case GDEF_OPCODE:{
+            uint32_t hash = 0;
+            char *value = read_str(dumpper, &hash);
+            size_t end = dumpper->ip;
+
+            printf("%8.8s %.7ld", "GDEF", end - start);
+            printf(" | %u '%s'\n", hash, value);
+
+            break;
         }case GSET_OPCODE:{
             uint32_t hash = 0;
             char *value = read_str(dumpper, &hash);
@@ -204,6 +229,15 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | hash: %u value: '%s'\n", hash, value);
             
             break;
+        }case GASET_OPCODE:{
+            char *value = read_str(dumpper, NULL);
+            uint8_t access_type = advance(dumpper);
+            size_t end = dumpper->ip;
+
+            printf("%8.8s %.7ld", "GASET", end - start);
+            printf(" | '%s' %s\n", value, access_type == 0 ? "private" : "public");
+            
+            break;
         }case NGET_OPCODE:{
             uint32_t hash = 0;
             char *value = read_str(dumpper, &hash);
@@ -214,17 +248,16 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             
             break;
         }case SGET_OPCODE:{
-            uint32_t hash = 0;
-            char *value = read_str(dumpper, &hash);
+            int32_t symbol_index = read_i32(dumpper);
             size_t end = dumpper->ip;
 
             printf("%8.8s %.7ld", "SGET", end - start);
-            printf(" | hash: %u value: '%s'\n", hash, value);
+            printf(" | symbol: '%d'\n", symbol_index);
             
             break;
         }case ASET_OPCODE:{
             size_t end = dumpper->ip;
-            printf("%8.8s %.7ld", "ASET", end - start);
+            printf("%8.8s %.7ld\n", "ASET", end - start);
             break;
         }case PUT_OPCODE:{
 			char *target = read_str(dumpper, NULL);
@@ -352,7 +385,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             break;
         }case INDEX_OPCODE:{
             size_t end = dumpper->ip;
-            printf("%8.8s %.7ld", "INDEX", end - start);
+            printf("%8.8s %.7ld\n", "INDEX", end - start);
             break;
         }case RET_OPCODE:{
             size_t end = dumpper->ip;
@@ -411,18 +444,21 @@ static void dump_module(Module *module, Dumpper *dumpper){
     
     dumpper->current_module = module;
 
-    LZHTableNode *node = submodule->symbols->head;
+    DynArr *symbols = submodule->symbols;
     
-    while (node){
-        LZHTableNode *next = node->next_table_node;
-        ModuleSymbol *symbol = (ModuleSymbol *)node->value;
+    for (size_t i = 0; i < DYNARR_LEN(symbols); i++){
+        ModuleSymbol symbol = DYNARR_GET_AS(ModuleSymbol, i, symbols);
         
-        if(symbol->type == FUNCTION_MSYMTYPE){
-            Fn *fn = symbol->value.fn;
+        if(symbol.type == FUNCTION_MSYMTYPE){
+            Fn *fn = symbol.value.fn;
             dump_function(fn, dumpper);
         }
 
-        node = next;
+        if(symbol.type == CLOSURE_MSYMTYPE){
+            MetaClosure *meta_closure = symbol.value.meta_closure;
+            Fn *fn = meta_closure->fn;
+            dump_function(fn, dumpper);
+        }
     }
 
     dumpper->current_module = prev;

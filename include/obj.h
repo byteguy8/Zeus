@@ -12,6 +12,7 @@ typedef enum obj_type{
     DICT_OTYPE,
 	RECORD_OTYPE,
     FN_OTYPE,
+    CLOSURE_OTYPE,
     NATIVE_FN_OTYPE,
     NATIVE_MODULE_OTYPE,
     MODULE_OTYPE,
@@ -33,6 +34,7 @@ typedef struct obj{
 		Record *record;
         NativeFn *native_fn;
         Fn *fn;
+        Closure *closure;
         ForeignFn *foreign_fn;
         NativeModule *native_module;
         Module *module;

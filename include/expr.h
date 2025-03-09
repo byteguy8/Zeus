@@ -11,6 +11,7 @@ typedef enum expr_type{
     FLOAT_EXPRTYPE,
 	STRING_EXPRTYPE,
     TEMPLATE_EXPRTYPE,
+    ANON_EXPRTYPE,
     GROUP_EXPRTYPE,
     IDENTIFIER_EXPRTYPE,
     CALL_EXPRTYPE,
@@ -61,6 +62,12 @@ typedef struct template_expr{
     Token *template_token;
     DynArrPtr *exprs; //expressions statements
 }TemplateExpr;
+
+typedef struct anon_expr{
+    Token *anon_token;
+    DynArrPtr *params;
+    DynArrPtr *stmts;
+}AnonExpr;
 
 typedef struct group_expr{
     Token *left_paren_token;

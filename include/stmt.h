@@ -89,7 +89,7 @@ typedef struct var_decl_stmt{
 }VarDeclStmt;
 
 typedef struct function_stmt{
-    Token *name_token;
+    Token *identifier_token;
     DynArrPtr *params;
     DynArrPtr *stmts;
 }FunctionStmt;

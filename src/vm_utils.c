@@ -48,17 +48,14 @@ void clean_up_module(Module *module){
 		submodule->globals = NULL;
 	}
 
-	LZHTableNode *symbol_node = submodule->symbols->head;
+    DynArr *symbols = submodule->symbols;
     
-    while (symbol_node){
-        LZHTableNode *next = symbol_node->next_table_node;
-		ModuleSymbol *symbol = (ModuleSymbol *)symbol_node->value;
+    for (size_t i = 0; i < DYNARR_LEN(symbols); i++){
+        ModuleSymbol symbol = DYNARR_GET_AS(ModuleSymbol, i, symbols);
 
-        if(symbol->type == MODULE_MSYMTYPE){
-            clean_up_module(symbol->value.module);
+        if(symbol.type == MODULE_MSYMTYPE){
+            clean_up_module(symbol.value.module);
         }
-
-        symbol_node = next;
     }
 }
 
@@ -105,7 +102,22 @@ void destroy_obj(Obj *obj, VM *vm){
 			lzhtable_destroy(destroy_dict_values, record->attributes);
 			vmu_dealloc(record);
 			break;
-		}case NATIVE_FN_OTYPE:{
+		}case CLOSURE_OTYPE:{
+            Closure *closure = obj->value.closure;
+            
+            for (int i = 0; i < closure->values_len; i++){
+                OutValue closure_value = closure->values[i];
+                
+                if(!closure_value.linked){
+                    vmu_dealloc(closure_value.value);
+                }
+            }
+
+            vmu_dealloc(closure->values);
+            vmu_dealloc(closure);
+            
+            break;
+        }case NATIVE_FN_OTYPE:{
             NativeFn *native_fn = obj->value.native_fn;
             if(!native_fn->unique){vmu_dealloc(native_fn);}
             break;
@@ -217,17 +229,31 @@ void mark_value(Value *value){
 			}
 			
 			break;
-		}case NATIVE_FN_OTYPE:{
+		}case CLOSURE_OTYPE:{
+            Closure *closure = obj->value.closure;
+            
+            for (int i = 0; i < closure->values_len; i++){
+                Value *value = closure->values[i].value;
+                mark_value(value);
+            }
+            
+            break;
+        }case NATIVE_FN_OTYPE:{
             break;
         }case MODULE_OTYPE:{
 			Module *module = obj->value.module;
-			LZHTableNode *current = MODULE_GLOBALS(module)->head;
+            LZHTable *globals = MODULE_GLOBALS(module);
+
+			LZHTableNode *current = globals->head;
 			LZHTableNode *next = NULL;
-			Value *value = NULL;
-			
+
+			GlobalValue *global_value = NULL;
+            Value *value = NULL;
+
 			while (current){
 				next = current->next_table_node;
-				value = (Value *)current->value;
+				global_value = (GlobalValue *)current->value;
+                value = global_value->value;
 				
 				if(value->type != OBJ_VTYPE){
 					current = next;
@@ -235,6 +261,7 @@ void mark_value(Value *value){
 				}
 				
 				mark_value(value);
+
 				current = next;
 			}
     
@@ -248,14 +275,22 @@ void mark_value(Value *value){
 void mark_objs(VM *vm){
     //> MARKING GLOBALS
     Module *module = vm->module;
-    LZHTableNode *current = MODULE_GLOBALS(module)->head;
+    LZHTable *globals = MODULE_GLOBALS(module);
+    
+    LZHTableNode *current = globals->head;
     LZHTableNode *next = NULL;
+    
+    GlobalValue *global_value = NULL;
     Value *value = NULL;
     
     while (current){
         next = current->next_table_node;
-        value = (Value *)current->value;
+        
+        global_value = (GlobalValue *)current->value;
+        value = global_value->value;
+
         mark_value(value);
+        
         current = next;
     }
     //< MARKING GLOBALS

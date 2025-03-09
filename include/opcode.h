@@ -28,17 +28,23 @@ typedef enum opcode{
     NE_OPCODE, // not equals
 
     // LOGICAL
-    OR_OPCODE, AND_OPCODE,
-    NOT_OPCODE, NNOT_OPCODE,
+    OR_OPCODE,
+    AND_OPCODE,
+    NOT_OPCODE,
+    NNOT_OPCODE,
 
-    LSET_OPCODE,
-    LGET_OPCODE,
-    GSET_OPCODE,
-    GGET_OPCODE,
-    NGET_OPCODE,
-    SGET_OPCODE,
-	ASET_OPCODE,
-    PUT_OPCODE,
+    LSET_OPCODE,  // set local symbol
+    LGET_OPCODE,  // get local symbol
+    OSET_OPCODE,  // set out value symbol (for closures)
+    OGET_OPCODE,  // get out value symbol (for closures)
+    GDEF_OPCODE,  // define a global symbol
+    GSET_OPCODE,  // get global symbol
+    GGET_OPCODE,  // set global symbol
+    GASET_OPCODE, // set global symbol access
+    NGET_OPCODE,  // get native symbol
+    SGET_OPCODE,  // get symbol from list of symbols
+	ASET_OPCODE,  // set a value inside array
+    PUT_OPCODE,   // set a value inside record
 
     PRT_OPCODE,
     POP_OPCODE,

@@ -280,7 +280,7 @@ Module *runtime_module(char *name, char *filepath){
     char *module_name = runtime_clone_str(name);
     char *module_pathname = runtime_clone_str(filepath);
     LZHTable *strings = runtime_lzhtable();
-	LZHTable *symbols = runtime_lzhtable();
+	DynArr *symbols = runtime_dynarr(sizeof(ModuleSymbol));
     LZHTable *tries = runtime_lzhtable();
     LZHTable *globals = runtime_lzhtable();
     SubModule *submodule = A_RUNTIME_ALLOC(sizeof(SubModule));

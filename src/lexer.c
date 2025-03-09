@@ -437,9 +437,10 @@ Token *string(Lexer *lexer){
     advance(lexer);
 
     size_t str_len = bstr->used;
-    char *str = runtime_clone_str_range(0, bstr->used, (char *)bstr->buff);
+    char *str = str_len == 0 ? "\0" : (char *)bstr->buff;
+    char *cloned_str = runtime_clone_str_range(0, bstr->used, (char *)str);
 
-	uint32_t *hash = str_to_table(str_len, str, lexer);
+	uint32_t *hash = str_to_table(str_len, cloned_str, lexer);
     Token *str_token = create_token_literal(
 		hash,
 		sizeof(uint32_t),

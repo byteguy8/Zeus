@@ -18,6 +18,7 @@ typedef enum symbol_type{
     MUT_SYMTYPE,
     IMUT_SYMTYPE,
     FN_SYMTYPE,
+    CLOSURE_SYMTYPE,
     NATIVE_FN_SYMTYPE,
     MODULE_SYMTYPE,
     NATIVE_MODULE_SYMTYPE,
@@ -26,6 +27,7 @@ typedef enum symbol_type{
 typedef struct symbol{
     int depth;
     int local;
+    int index;
     SymbolType type;
     size_t name_len;
     char name[SYMBOL_NAME_LENGTH];
@@ -45,8 +47,12 @@ typedef struct scope{
     int locals;
     TryBlock *try;
     ScopeType type;
-    size_t symbols_len;
+    
+    uint8_t symbols_len;
     Symbol symbols[SYMBOLS_LENGTH];
+
+    int captured_symbols_len;
+    Symbol *captured_symbols[SYMBOLS_LENGTH];
 }Scope;
 
 typedef struct loop_mark{

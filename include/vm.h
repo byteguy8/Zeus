@@ -10,11 +10,27 @@
 #define LOCALS_LENGTH 255
 #define FRAME_LENGTH 255
 
+typedef enum global_value_access_type{
+    PRIVATE_GVATYPE,
+    PUBLIC_GVATYPE,
+}GlobalValueAccessType;
+
+typedef struct global_value{
+    GlobalValueAccessType access;
+    Value *value;
+}GlobalValue;
+
 typedef struct frame{
     size_t ip;
     size_t last_offset;
+    
     Fn *fn;
+    Closure *closure;
+    
     Value locals[LOCALS_LENGTH];
+    
+    OutValue *values_head;
+    OutValue *values_tail;
 }Frame;
 
 typedef struct vm{

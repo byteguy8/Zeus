@@ -80,6 +80,7 @@ LZHTable *create_keywords_table(){
     add_keyword("dict", DICT_TOKTYPE, keywords);
 	add_keyword("record", RECORD_TOKTYPE, keywords);
     add_keyword("proc", PROC_TOKTYPE, keywords);
+    add_keyword("anon", ANON_TOKTYPE, keywords);
     add_keyword("ret", RET_TOKTYPE, keywords);
     add_keyword("import", IMPORT_TOKTYPE, keywords);
     add_keyword("as", AS_TOKTYPE, keywords);

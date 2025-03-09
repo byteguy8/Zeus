@@ -17,20 +17,32 @@
 #include <dlfcn.h>
 
 //> PRIVATE INTERFACE
-#define CURRENT_FRAME(vm)(&(vm)->frame_stack[(vm)->frame_ptr - 1])
-#define CURRENT_LOCALS(vm)(CURRENT_FRAME(vm)->locals)
-#define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
-#define CURRENT_CHUNKS(vm)(CURRENT_FN(vm)->chunks)
-#define CURRENT_CONSTANTS(vm)(CURRENT_FN(vm)->constants)
-#define CURRENT_FLOAT_VALUES(vm)(CURRENT_FN(vm)->float_values)
+// UTILS FUNCTIONS
+#define IS_AT_END(vm)(CURRENT_FRAME(vm)->ip >= CURRENT_CHUNKS(vm)->used)
+#define ADVANCE(vm)(DYNARR_GET_AS(uint8_t, CURRENT_FRAME(vm)->ip++, CURRENT_CHUNKS(vm)))
 
+static int16_t compose_i16(uint8_t *bytes);
+static int32_t compose_i32(uint8_t *bytes);
+static int16_t read_i16(VM *vm);
+static int32_t read_i32(VM *vm);
+static int64_t read_i64_const(VM *vm);
+static double read_float_const(VM *vm);
+static char *read_str(VM *vm, uint32_t *out_hash);
+
+static void resolve_module(Module *module, VM *vm);
+
+static void print_obj(Obj *object);
+static void print_value(Value *value);
+static void print_stack(VM *vm);
+// STACK FUNCTIONS
 static Value *peek(VM *vm);
+static Value *peek_at(int offset, VM *vm);
 
-#define PUSH(value, vm) {                      \
-    if(vm->stack_ptr >= STACK_LENGTH){         \
+#define PUSH(value, vm) {                 \
+    if(vm->stack_ptr >= STACK_LENGTH){    \
         vmu_error(vm, "Stack over flow"); \
-    }                                          \
-    vm->stack[vm->stack_ptr++] = value;        \
+    }                                     \
+    vm->stack[vm->stack_ptr++] = value;   \
 }
 
 #define PUSH_EMPTY(vm) {             \
@@ -53,148 +65,135 @@ static Value *peek(VM *vm);
     PUSH(float_value, vm)                   \
 }
 
-#define PUSH_CORE_STR(buff, vm){                    \
+#define PUSH_CORE_STR(buff, vm){               \
     Obj *str_obj = vmu_core_str_obj(buff, vm); \
-    Value obj_value = OBJ_VALUE(str_obj);           \
-    PUSH(obj_value, vm);                            \
+    Value obj_value = OBJ_VALUE(str_obj);      \
+    PUSH(obj_value, vm);                       \
 }
 
-#define PUSH_UNCORE_STR(buff, vm){                    \
+#define PUSH_UNCORE_STR(buff, vm){               \
     Obj *str_obj = vmu_uncore_str_obj(buff, vm); \
-    Value obj_value = OBJ_VALUE(str_obj);             \
-    PUSH(obj_value, vm);                              \
+    Value obj_value = OBJ_VALUE(str_obj);        \
+    PUSH(obj_value, vm);                         \
 }
 
-#define PUSH_NON_NATIVE_FN(fn, vm) {               \
+#define PUSH_NON_NATIVE_FN(fn, vm) {          \
     Obj *obj = vmu_obj(FN_OTYPE, vm);         \
     if(!obj){vmu_error(vm, "Out of memory");} \
-    obj->value.f##n = fn;                          \
-    Value fn_value = OBJ_VALUE(obj);               \
-    PUSH(fn_value, vm)                             \
+    obj->value.f##n = fn;                     \
+    Value fn_value = OBJ_VALUE(obj);          \
+    PUSH(fn_value, vm)                        \
 }
 
-#define PUSH_NATIVE_FN(fn, vm) {                   \
+#define PUSH_NATIVE_FN(fn, vm) {              \
     Obj *obj = vmu_obj(NATIVE_FN_OTYPE, vm);  \
     if(!obj){vmu_error(vm, "Out of memory");} \
-    obj->value.native_fn = fn;                     \
-    Value fn_value = OBJ_VALUE(obj);               \
-    PUSH(fn_value, vm)                             \
+    obj->value.native_fn = fn;                \
+    Value fn_value = OBJ_VALUE(obj);          \
+    PUSH(fn_value, vm)                        \
 }
 
-#define PUSH_NATIVE_MODULE(m, vm){                    \
+#define PUSH_NATIVE_MODULE(m, vm){               \
 	Obj *obj = vmu_obj(NATIVE_MODULE_OTYPE, vm); \
 	if(!obj){vmu_error(vm, "out of memory");}    \
-	obj->value.native_module = (m);                   \
-	PUSH(OBJ_VALUE(obj), vm);                         \
+	obj->value.native_module = (m);              \
+	PUSH(OBJ_VALUE(obj), vm);                    \
 }
 
-#define PUSH_MODULE(m, vm) {                       \
+#define PUSH_MODULE(m, vm) {                  \
     Obj *obj = vmu_obj(MODULE_OTYPE, vm);     \
 	if(!obj){vmu_error(vm, "Out of memory");} \
-	obj->value.module = m;                         \
-	PUSH(OBJ_VALUE(obj), vm);                      \
+	obj->value.module = m;                    \
+	PUSH(OBJ_VALUE(obj), vm);                 \
 }
 
-#define PUSH_NATIVE_MODULE_SYMBOL(n, m, vm){												\
-	size_t key_size = strlen((n));															\
-	LZHTable *symbols = (m)->symbols;               										\
-	LZHTableNode *symbol_node = NULL;                                                       \
-	if(!lzhtable_contains((uint8_t *)(n), key_size, symbols, &symbol_node)){                \
-		vmu_error(vm, "Module '%s' do not contains a symbol '%s'", (m)->name, (n));    \
-    }                                                                                       \
-	NativeModuleSymbol *symbol = (NativeModuleSymbol *)symbol_node->value;					\
-	if(symbol->type == NATIVE_FUNCTION_NMSYMTYPE){											\
-		PUSH_NATIVE_FN(symbol->value.fn, vm);												\
-    }                                                                                       \
-}
-
-#define PUSH_MODULE_SYMBOL(n, m, vm) {                                                      \
-    SubModule *submodule = (m)->submodule;                                                  \
-    if(!submodule->resolve){                                                                \
-        resolve_module((m), vm);                                                            \
-    }                                                                                       \
-   	size_t key_size = strlen((n));                                                          \
-   	LZHTable *symbols = submodule->symbols;                                                 \
-	LZHTableNode *node = NULL;                                                              \
-	if(!lzhtable_contains((uint8_t *)(n), key_size, symbols, &node)){                       \
-        vmu_error(vm, "Module '%s' do not contains a symbol '%s'", module->name, (n)); \
-    }                                                                                       \
-	ModuleSymbol *module_symbol = (ModuleSymbol *)node->value;                                     \
-    if((m) != CURRENT_FRAME(vm)->fn->module && module_symbol->access == PRIVATE_MSYMATYPE){        \
-        vmu_error(vm, "Symbol '%s' not public", (n));                                  \
-    }                                                                                       \
-	if(module_symbol->type == NATIVE_MODULE_MSYMTYPE){                                             \
-        PUSH_NATIVE_MODULE(module_symbol->value.native_module, vm);							    \
-    }                                                                                       \
-	if(module_symbol->type == FUNCTION_MSYMTYPE){                                                  \
-        push_fn(module_symbol->value.fn, vm);                                                      \
-    }                                                                                       \
-	if(module_symbol->type == MODULE_MSYMTYPE){                                                    \
-        PUSH_MODULE(module_symbol->value.module, vm);                                              \
-    }                                                                                       \
-}
-
+static void push_fn(Fn *fn, VM *vm);
+static void push_closure(MetaClosure *meta, VM *vm);
+static void push_native_module_symbol(char *name, NativeModule *module, VM *vm);
+static void push_module_symbol(int32_t index, Module *module, VM *vm);
 static Value *pop(VM *vm);
+// FRAMES FUNCTIONS
+static void add_value_to_frame(OutValue *value, VM *vm);
+static void remove_value_from_frame(OutValue *value, VM *vm);
+#define CURRENT_FRAME(vm)(&(vm)->frame_stack[(vm)->frame_ptr - 1])
+#define CURRENT_LOCALS(vm)(CURRENT_FRAME(vm)->locals)
+#define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
+#define CURRENT_CHUNKS(vm)(CURRENT_FN(vm)->chunks)
+#define CURRENT_CONSTANTS(vm)(CURRENT_FN(vm)->constants)
+#define CURRENT_FLOAT_VALUES(vm)(CURRENT_FN(vm)->float_values)
 
+static Frame *frame_up_fn(Fn *fn, VM *vm);
+static Frame *frame_up(int32_t index, VM *vm);
+static void frame_down(VM *vm);
+// OTHERS
 static void execute(uint8_t chunk, VM *vm);
-static void resolve_module(Module *module, VM *vm);
-//< Private Interface
-Frame *frame_up(char *name, VM *vm){
-    if(vm->frame_ptr >= FRAME_LENGTH){
-        vmu_error(vm, "Frame over flow");
-    }
-
-    Module *module = vm->module;
-    SubModule *submodule = module->submodule;
-	LZHTable *symbols = submodule->symbols;
-	LZHTableNode *symbol_node = NULL;
-    
-	if(!lzhtable_contains((uint8_t *)name, strlen(name), symbols, &symbol_node)){
-        vmu_error(vm, "Symbol '%s' do not exists", name);
-    }
-
-	ModuleSymbol *symbol = (ModuleSymbol *)symbol_node->value;
-
-	if(symbol->type != FUNCTION_MSYMTYPE){
-        vmu_error(vm, "Expect symbol of type 'function', but got something else");
-    }
-
-    Fn *fn = symbol->value.fn;
-    Frame *frame = &vm->frame_stack[vm->frame_ptr++];
-
-    frame->ip = 0;
-    frame->fn = fn;
-
-    return frame;
-}
-
-Frame *frame_up_fn(Fn *fn, VM *vm){
-    if(vm->frame_ptr >= FRAME_LENGTH){
-        vmu_error(vm, "Frame over flow");
-    }
-        
-    Frame *frame = &vm->frame_stack[vm->frame_ptr++];
-
-    frame->ip = 0;
-    frame->fn = fn;
-
-    return frame;
-}
-
-void frame_down(VM *vm){
-    if(vm->frame_ptr == 0){
-        vmu_error(vm, "Frame under flow");
-    }
-
-    vm->frame_ptr--;
-}
-
+//< PRIVATE INTERFACE
+//> PRIVATE IMPLEMENTATION
 int16_t compose_i16(uint8_t *bytes){
-    return ((int16_t)bytes[1] << 8) | ((int16_t)bytes[0]);
+    return (int16_t)((uint16_t)bytes[1] << 8) | ((uint16_t)bytes[0]);
 }
 
 int32_t compose_i32(uint8_t *bytes){
-    return ((int32_t)bytes[3] << 24) | ((int32_t)bytes[2] << 16) | ((int32_t)bytes[1] << 8) | ((int32_t)bytes[0]);
+    return (int32_t)((uint32_t)bytes[3] << 24) | ((uint32_t)bytes[2] << 16) | ((uint32_t)bytes[1] << 8) | ((uint32_t)bytes[0]);
+}
+
+int16_t read_i16(VM *vm){
+    uint8_t bytes[2];
+
+	for(size_t i = 0; i < 2; i++){
+        bytes[i] = ADVANCE(vm);
+    }
+
+	return compose_i16(bytes);
+}
+
+int32_t read_i32(VM *vm){
+	uint8_t bytes[4];
+
+	for(size_t i = 0; i < 4; i++){
+        bytes[i] = ADVANCE(vm);
+    }
+
+	return compose_i32(bytes);
+}
+
+int64_t read_i64_const(VM *vm){
+    DynArr *constants = CURRENT_CONSTANTS(vm);
+    int16_t index = read_i16(vm);
+    return DYNARR_GET_AS(int64_t, index, constants);
+}
+
+double read_float_const(VM *vm){
+	DynArr *float_values = CURRENT_FLOAT_VALUES(vm);
+	int16_t index = read_i16(vm);
+	return DYNARR_GET_AS(double, index, float_values);
+}
+
+char *read_str(VM *vm, uint32_t *out_hash){
+    Module *module = CURRENT_FRAME(vm)->fn->module;
+    SubModule *submodule = module->submodule;
+    LZHTable *strings = submodule->strings;
+    uint32_t hash = (uint32_t)read_i32(vm);
+    if(out_hash){*out_hash = hash;}
+    return lzhtable_hash_get(hash, strings);
+}
+
+void resolve_module(Module *module, VM *vm){
+    Module *old_module = vm->module;
+
+    vm->module = module;
+    frame_up(0, vm);
+
+    module->submodule->resolve = 1;
+
+    while (!IS_AT_END(vm)){
+        uint8_t chunk = ADVANCE(vm);
+        execute(chunk, vm);
+    }
+
+    frame_down(vm);
+
+    vm->module = old_module;
 }
 
 void print_obj(Obj *object){
@@ -222,6 +221,11 @@ void print_obj(Obj *object){
 		}case FN_OTYPE:{
             Fn *fn = (Fn *)object->value.fn;
             printf("<function '%s' - %d at %p>\n", fn->name, (uint8_t)(fn->params ? fn->params->used : 0), fn);
+            break;
+        }case CLOSURE_OTYPE:{
+            Closure *closure = object->value.closure;
+            Fn *fn = closure->meta->fn;
+            printf("<closure '%s' - %d at %p>\n", fn->name, (uint8_t)(fn->params ? fn->params->used : 0), fn);
             break;
         }case NATIVE_FN_OTYPE:{
             NativeFn *native_fn = object->value.native_fn;
@@ -281,50 +285,6 @@ void print_stack(VM *vm){
     }
 }
 
-#define IS_AT_END(vm)(CURRENT_FRAME(vm)->ip >= CURRENT_CHUNKS(vm)->used)
-#define ADVANCE(vm)(DYNARR_GET_AS(uint8_t, CURRENT_FRAME(vm)->ip++, CURRENT_CHUNKS(vm)))
-
-int16_t read_i16(VM *vm){
-    uint8_t bytes[2];
-
-	for(size_t i = 0; i < 2; i++){
-        bytes[i] = ADVANCE(vm);
-    }
-
-	return compose_i16(bytes);
-}
-
-int32_t read_i32(VM *vm){
-	uint8_t bytes[4];
-
-	for(size_t i = 0; i < 4; i++){
-        bytes[i] = ADVANCE(vm);
-    }
-
-	return compose_i32(bytes);
-}
-
-int64_t read_i64_const(VM *vm){
-    DynArr *constants = CURRENT_CONSTANTS(vm);
-    int16_t index = read_i16(vm);
-    return DYNARR_GET_AS(int64_t, index, constants);
-}
-
-double read_float_const(VM *vm){
-	DynArr *float_values = CURRENT_FLOAT_VALUES(vm);
-	int16_t index = read_i16(vm);
-	return DYNARR_GET_AS(double, index, float_values);
-}
-
-char *read_str(VM *vm, uint32_t *out_hash){
-    Module *module = CURRENT_FRAME(vm)->fn->module;
-    SubModule *submodule = module->submodule;
-    LZHTable *strings = submodule->strings;
-    uint32_t hash = (uint32_t)read_i32(vm);
-    if(out_hash){*out_hash = hash;}
-    return lzhtable_hash_get(hash, strings);
-}
-
 Value *peek(VM *vm){
     if(vm->stack_ptr == 0){vmu_error(vm, "Stack is empty");}
     return &vm->stack[vm->stack_ptr - 1];
@@ -345,9 +305,176 @@ void push_fn(Fn *fn, VM *vm){
 	PUSH(OBJ_VALUE(obj), vm);
 }
 
+void push_closure(MetaClosure *meta, VM *vm){
+    OutValue *values = (OutValue *)vmu_alloc(sizeof(OutValue) * meta->values_len);
+    Closure *closure = (Closure *)vmu_alloc(sizeof(Closure));
+    Obj *obj = vmu_obj(CLOSURE_OTYPE, vm);
+
+    if(!values || !closure || !obj){
+        memory_dealloc(values);
+        memory_dealloc(closure);
+        vmu_error(vm, "Out of memory");
+    }
+
+    for (int i = 0; i < meta->values_len; i++){
+        OutValue *value = &values[i];
+        MetaOutValue *out_value = meta->values + i;
+
+        value->linked = 1;
+        value->at = out_value->at;
+        value->value = CURRENT_LOCALS(vm) + out_value->at;
+        value->prev = NULL;
+        value->next = NULL;
+
+        add_value_to_frame(value, vm);
+    }
+
+    closure->values_len = meta->values_len;
+    closure->values = values;
+    closure->meta = meta;
+    
+    obj->value.closure = closure;
+
+    PUSH(OBJ_VALUE(obj), vm);
+}
+
+void push_native_module_symbol(char *name, NativeModule *module, VM *vm){
+    size_t key_size = strlen(name);
+
+    LZHTable *symbols = module->symbols;
+    LZHTableNode *symbol_node = NULL;
+
+    if(!lzhtable_contains((uint8_t *)name, key_size, symbols, &symbol_node)){
+        vmu_error(vm, "Module '%s' do not contains a symbol '%s'", module->name, name);
+    }
+
+    NativeModuleSymbol *symbol = (NativeModuleSymbol *)symbol_node->value;
+
+    if(symbol->type == NATIVE_FUNCTION_NMSYMTYPE){
+        PUSH_NATIVE_FN(symbol->value.fn, vm);
+    }
+}
+
+void push_module_symbol(int32_t index, Module *module, VM *vm){
+    SubModule *submodule = (module)->submodule;
+    if(!submodule->resolve){resolve_module((module), vm);}
+
+   	DynArr *symbols = submodule->symbols;
+    
+    if((size_t)index >= DYNARR_LEN(symbols)){
+        vmu_error(vm, "Failed to push module symbol: index out of bounds");
+    }
+	
+    ModuleSymbol *module_symbol = &(DYNARR_GET_AS(ModuleSymbol, (size_t)index, symbols));
+
+	if(module_symbol->type == NATIVE_MODULE_MSYMTYPE){
+        PUSH_NATIVE_MODULE(module_symbol->value.native_module, vm);
+    }
+	if(module_symbol->type == FUNCTION_MSYMTYPE){
+        Fn *fn = module_symbol->value.fn;
+        push_fn(fn, vm);
+    }
+    if(module_symbol->type == CLOSURE_MSYMTYPE){
+        MetaClosure *meta_closure = module_symbol->value.meta_closure;
+        push_closure(meta_closure, vm);
+    }
+	if(module_symbol->type == MODULE_MSYMTYPE){
+        PUSH_MODULE(module_symbol->value.module, vm);
+    }
+}
+
 Value *pop(VM *vm){
     if(vm->stack_ptr == 0){vmu_error(vm, "Stack under flow");}
     return &vm->stack[--vm->stack_ptr];
+}
+
+void add_value_to_frame(OutValue *value, VM *vm){
+    Frame *frame = CURRENT_FRAME(vm);
+
+    if(frame->values_tail){
+        value->prev = frame->values_tail;
+        frame->values_tail->next = value;
+    }else{
+        frame->values_head = value;
+    }
+
+    frame->values_tail = value;
+}
+
+void remove_value_from_frame(OutValue *value, VM *vm){
+    Frame *frame = CURRENT_FRAME(vm);
+
+    if(value == frame->values_head){
+        frame->values_head = value->next;
+    }
+    if(value == frame->values_tail){
+        frame->values_tail = value->prev;
+    }
+
+    if(value->prev){
+        value->prev->next = value->next;
+    }
+    if(value->next){
+        value->next->prev = value->prev;
+    }
+
+    Value *v = vmu_clone_value(value->value, vm);
+    if(!v){vmu_error(vm, "Out of memory");}
+
+    value->value = v;
+}
+
+Frame *frame_up_fn(Fn *fn, VM *vm){
+    if(vm->frame_ptr >= FRAME_LENGTH){
+        vmu_error(vm, "Frame stack over flow");
+    }
+        
+    Frame *frame = &vm->frame_stack[vm->frame_ptr++];
+
+    frame->ip = 0;
+    frame->last_offset = 0;
+    frame->fn = fn;
+    frame->closure = NULL;
+    frame->values_head = NULL;
+    frame->values_tail = NULL;
+
+    return frame;
+}
+
+Frame *frame_up(int32_t index, VM *vm){
+    if(vm->frame_ptr >= FRAME_LENGTH){
+        vmu_error(vm, "Frame stack over flow");
+    }
+
+    Module *module = vm->module;
+	DynArr *symbols = MODULE_SYMBOLS(module);
+
+    if((size_t)index >= DYNARR_LEN(symbols)){
+        vmu_error(vm, "Failed to push frame: illegal index");
+    }
+
+	ModuleSymbol *symbol = &(DYNARR_GET_AS(ModuleSymbol, (size_t)index, symbols));
+
+	if(symbol->type != FUNCTION_MSYMTYPE){
+        vmu_error(vm, "Expect symbol of type 'function', but got something else");
+    }
+
+    Fn *fn = symbol->value.fn;
+
+    return frame_up_fn(fn, vm);
+}
+
+void frame_down(VM *vm){
+    if(vm->frame_ptr == 0){vmu_error(vm, "Frame under flow");}
+
+    Frame *current = CURRENT_FRAME(vm);
+
+    for (OutValue *closure_value = current->values_head; closure_value; closure_value = closure_value->next){
+        closure_value->linked = 0;
+        remove_value_from_frame(closure_value, vm);
+    }
+
+    vm->frame_ptr--;
 }
 
 void execute(uint8_t chunk, VM *vm){
@@ -1048,37 +1175,133 @@ void execute(uint8_t chunk, VM *vm){
             Value value = CURRENT_FRAME(vm)->locals[index];
             PUSH(value, vm);
             break;
+        }case OSET_OPCODE:{
+            Value *value = peek(vm);
+            uint8_t index = ADVANCE(vm);
+            Frame *current = CURRENT_FRAME(vm);
+            Closure *closure = current->closure;
+
+            for (int i = 0; i < closure->values_len; i++){
+                OutValue *closure_value = &closure->values[i];
+                
+                if(closure_value->at == index){
+                    *closure_value->value = *value;
+                    break;
+                }
+            }
+
+            break;
+        }case OGET_OPCODE:{
+            uint8_t index = ADVANCE(vm);
+            Frame *current = CURRENT_FRAME(vm);
+            Closure *closure = current->closure;
+
+            for (int i = 0; i < closure->values_len; i++){
+                OutValue *value = &closure->values[i];
+                
+                if(value->at == index){
+                    PUSH(*value->value, vm);
+                    break;
+                }
+            }
+            
+            break;
+        }case GDEF_OPCODE:{
+            Value *value = pop(vm);
+            
+            uint32_t hash = 0;
+            char *name = read_str(vm, &hash);
+
+            Module *module = CURRENT_FRAME(vm)->fn->module;
+            LZHTable *globals = MODULE_GLOBALS(module);
+
+            if(lzhtable_hash_contains(hash, globals, NULL)){
+                vmu_error(vm, "Already exists a global variable name as '%s'", name);
+            }
+
+            Value *new_value = vmu_clone_value(value, vm);
+            GlobalValue *global_value = (GlobalValue *)vmu_alloc(sizeof(GlobalValue));
+
+            if(!new_value || !global_value){
+                vmu_dealloc(new_value);
+                vmu_dealloc(global_value);
+                vmu_error(vm, "Out of memory");
+            }
+
+            global_value->access = PRIVATE_GVATYPE;
+            global_value->value = new_value;
+
+            lzhtable_hash_put(hash, global_value, globals);
+
+            break;
         }case GSET_OPCODE:{
             Value *value = peek(vm);
-            uint32_t hash = (uint32_t)read_i32(vm);
+            
+            uint32_t hash = 0;
+            char *name = read_str(vm, &hash);
+            
             Module *module = CURRENT_FRAME(vm)->fn->module;
-            SubModule *submodule = module->submodule;
-            LZHTable *globals = submodule->globals;
-            LZHTableNode *node = NULL;
+            LZHTable *globals = MODULE_GLOBALS(module);
+            
+            LZHTableNode *value_node = NULL;
 
-            if(lzhtable_hash_contains(hash, globals, &node)){
-                *(Value *)node->value = *value;
+            if(lzhtable_hash_contains(hash, globals, &value_node)){
+                GlobalValue *global_value = (GlobalValue *)value_node->value;
+                *global_value->value = *value;
             }else{
-                Value *new_value = vmu_clone_value(value, vm);
-                lzhtable_hash_put(hash, new_value, globals);
+                vmu_error(vm, "Global '%s' does not exists", name);
             }
 
             break;
         }case GGET_OPCODE:{
             uint32_t hash = 0;
             char *symbol = read_str(vm, &hash);
+            
             Module *module = CURRENT_FRAME(vm)->fn->module;
-            SubModule *submodule = module->submodule;
-            LZHTable *globals = submodule->globals;
-            LZHTableNode *node = NULL;
+            LZHTable *globals = MODULE_GLOBALS(module);
+            
+            LZHTableNode *value_node = NULL;
 
-            if(!lzhtable_hash_contains(hash, globals, &node)){
+            if(!lzhtable_hash_contains(hash, globals, &value_node)){
                 vmu_error(vm, "Global symbol '%s' does not exists", symbol);
             }
             
-            PUSH(*(Value *)node->value, vm);
+            GlobalValue *global_value = (GlobalValue *)value_node->value;
+            Value *value = global_value->value;
+
+            PUSH(*value, vm);
 
             break;
+        }case GASET_OPCODE:{
+            Module *module = CURRENT_FRAME(vm)->fn->module;
+            LZHTable *globals = MODULE_GLOBALS(module);
+
+            uint32_t hash = 0;
+            char *symbol = read_str(vm, &hash);
+
+            LZHTableNode *value_node = NULL;
+
+            if(!lzhtable_hash_contains(hash, globals, &value_node)){
+                vmu_error(vm, "Global symbol '%s' does not exists", symbol);
+            }
+
+            GlobalValue *global_value = (GlobalValue *)value_node->value;
+            Value *value = global_value->value;
+            uint8_t access_type = ADVANCE(vm);
+
+            if(IS_NATIVE_MODULE(value) || IS_MODULE(value)){
+                vmu_error(vm, "Modules cannot modify its access");
+            }
+            
+            if(access_type == 0){
+                global_value->access = PRIVATE_GVATYPE;
+            }else if(access_type == 1){
+                global_value->access = PUBLIC_GVATYPE;
+            }else{
+                vmu_error(vm, "Illegal access type: %d", access_type);
+            }
+
+            break;   
         }case NGET_OPCODE:{
             char *key = read_str(vm, NULL);
             size_t key_size = strlen(key);
@@ -1094,9 +1317,9 @@ void execute(uint8_t chunk, VM *vm){
 
             break;
         }case SGET_OPCODE:{
-			char *key = read_str(vm, NULL);
+            int32_t index = read_i32(vm);
             Module *module = CURRENT_FRAME(vm)->fn->module;
-            PUSH_MODULE_SYMBOL(key, module, vm);
+            push_module_symbol(index, module, vm);
 			break;
 		}case ASET_OPCODE:{
 			Value *target_value =  pop(vm);
@@ -1295,12 +1518,33 @@ void execute(uint8_t chunk, VM *vm){
                 }
 
                 pop(vm);
+            }else if(IS_CLOSURE(fn_value)){
+                Closure *closure = TO_CLOSURE(fn_value);
+                Fn *fn = closure->meta->fn;
+                uint8_t params_count = fn->params ? fn->params->used : 0;
+
+                if(params_count != args_count){
+                    vmu_error(vm, "Failed to call function '%s'. Declared with %d parameter(s), but got %d argument(s)", fn->name, params_count, args_count);
+                }
+
+                Frame *frame = frame_up_fn(fn, vm);
+                frame->closure = closure;
+
+                if(args_count > 0){
+                    int from = (int)(args_count == 0 ? 0 : args_count - 1);
+
+                    for (int i = from; i >= 0; i--){
+                        CURRENT_FRAME(vm)->locals[i] = *pop(vm);
+                    }
+                }
+
+                pop(vm);
             }else if(IS_NATIVE_FN(fn_value)){
 				NativeFn *native_fn = TO_NATIVE_FN(fn_value);
                 void *target = native_fn->target;
                 RawNativeFn raw_fn = native_fn->raw_fn;
 
-                if(native_fn->arity != args_count)
+                if(native_fn->arity != args_count){
                     vmu_error(
                         vm,
                         "Failed to call function '%s'.\n\tDeclared with %d parameter(s), but got %d argument(s)",
@@ -1308,16 +1552,19 @@ void execute(uint8_t chunk, VM *vm){
                         native_fn->arity,
                         args_count
                     );
+                }
 
-                Value values[args_count];
+                // VLA must not be declared with a zero length
+                Value args[args_count == 0 ? 1 : args_count];
                 
                 for (int i = args_count; i > 0; i--){
-                    values[i - 1] = *pop(vm);
+                    args[i - 1] = *pop(vm);
                 }
                 
                 pop(vm);
 
-                Value out_value = raw_fn(args_count, values, target, vm);
+                Value out_value = raw_fn(args_count, args, target, vm);
+                
                 PUSH(out_value, vm);
             }else if(IS_FOREIGN_FN(fn_value)){
                 ForeignFn *foreign_fn = TO_FOREIGN_FN(fn_value);
@@ -1339,7 +1586,8 @@ void execute(uint8_t chunk, VM *vm){
 
             break;
         }case ACCESS_OPCODE:{
-            char *symbol = read_str(vm, NULL);
+            uint32_t hash = 0;
+            char *symbol = read_str(vm, &hash);
             Value *value = pop(vm);
 
             if(IS_STR(value)){
@@ -1418,14 +1666,32 @@ void execute(uint8_t chunk, VM *vm){
 
 			if(IS_NATIVE_MODULE(value)){
 				NativeModule *module = TO_NATIVE_MODULE(value);
-				PUSH_NATIVE_MODULE_SYMBOL(symbol, module, vm);
+                push_native_module_symbol(symbol, module, vm);
 				break;
 			}
 
 			if(IS_MODULE(value)){
 				Module *module = TO_MODULE(value);
-                PUSH_MODULE_SYMBOL(symbol, module, vm);
-				break;
+                LZHTable *globals = MODULE_GLOBALS(module);
+
+                resolve_module(module, vm);
+
+                LZHTableNode *value_node = NULL;
+                
+                if(lzhtable_hash_contains(hash, globals, &value_node)){
+                    GlobalValue *global_value = (GlobalValue *)value_node->value;
+                    Value *value = global_value->value;
+
+                    if(global_value->access == PRIVATE_GVATYPE){
+                        vmu_error(vm, "Symbol '%s' has private access in module '%s'", symbol, module->name);
+                    }
+
+                    PUSH(*value, vm);
+                }else{
+                    vmu_error(vm, "Module '%s' does not contains symbol '%s'", module->name, symbol);
+                }
+				
+                break;
 			}
 
             if(IS_NATIVE_LIBRARY(value)){
@@ -1522,6 +1788,11 @@ void execute(uint8_t chunk, VM *vm){
 						break;
 					}case RECORD_OTYPE:{
 						PUSH(BOOL_VALUE(type == 8), vm);
+						break;
+					}case FN_OTYPE:
+                     case CLOSURE_OTYPE:
+					 case NATIVE_FN_OTYPE:{
+						PUSH(BOOL_VALUE(type == 9), vm);
 						break;
 					}default:{
 						vmu_error(vm, "Illegal object type");
@@ -1655,25 +1926,8 @@ void execute(uint8_t chunk, VM *vm){
         }
     }
 }
-
-void resolve_module(Module *module, VM *vm){
-    Module *old_module = vm->module;
-
-    vm->module = module;
-    frame_up("import", vm);
-
-    module->submodule->resolve = 1;
-
-    while (!IS_AT_END(vm)){
-        uint8_t chunk = ADVANCE(vm);
-        execute(chunk, vm);
-    }
-
-    frame_down(vm);
-
-    vm->module = old_module;
-}
-
+//> PRIVATE IMPLEMENTATION
+//> PUBLIC IMPLEMENTATION
 VM *vm_create(){
     VM *vm = (VM *)A_RUNTIME_ALLOC(sizeof(VM));
     memset(vm, 0, sizeof(VM));
@@ -1698,7 +1952,7 @@ int vm_execute(
         vm->natives = natives;
         vm->module = module;
 
-        frame_up("main", vm);
+        frame_up(0, vm);
 
         while (!IS_AT_END(vm)){
             uint8_t chunk = ADVANCE(vm);
@@ -1712,3 +1966,4 @@ int vm_execute(
         return 0;
     }
 }
+//< PUBLIC IMPLEMENTATION

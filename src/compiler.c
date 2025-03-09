@@ -29,16 +29,22 @@ static void mark_continue(size_t len, size_t index, Compiler *compiler);
 static void unmark_continue(size_t which, Compiler *compiler);
 Scope *scope_in(ScopeType type, Compiler *compiler);
 Scope *scope_in_soft(ScopeType type, Compiler *compiler);
-Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function);
+Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function, size_t *out_fn_index);
 void scope_out(Compiler *compiler);
 void scope_out_fn(Compiler *compiler);
 Scope *inside_while(Compiler *compiler);
 Scope *inside_function(Compiler *compiler);
+Scope *symbol_fn_scope(Symbol *symbol, Compiler *compiler);
+int count_fn_scopes(int from, int to, Compiler *compiler);
 Scope *current_scope(Compiler *compiler);
 Scope *previous_scope(Scope *scope, Compiler *compiler);
+int resolve_symbol(Token *identifier, Symbol *symbol, Compiler *compiler);
 Symbol *exists_scope(char *name, Scope *scope, Compiler *compiler);
 Symbol *exists_local(char *name, Compiler *compiler);
 Symbol *get(Token *identifier_token, Compiler *compiler);
+void to_local(Symbol *symbol, Compiler *compiler);
+void from_symbols_to_global(size_t symbol_index, Token *location_token, char *name, Compiler *compiler);
+Symbol *declare_raw(SymbolType type, Compiler *compiler);
 Symbol *declare_native(char *identifier, Compiler *compiler);
 Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler);
 DynArr *current_chunks(Compiler *compiler);
@@ -68,16 +74,49 @@ char *resolve_module_location(
     size_t *out_module_pathname_len
 );
 void compile_expr(Expr *expr, Compiler *compiler);
-void add_native_module_symbol(
-    char *key,
-    size_t key_size,
-    NativeModule *module,
-    LZHTable *symbols
-);
-void add_module_symbol(char *key, size_t key_size, Module *module, LZHTable *symbols);
+size_t add_native_module_symbol(NativeModule *module, DynArr *symbols);
+size_t add_module_symbol(Module *module, DynArr *symbols);
 void compile_stmt(Stmt *stmt, Compiler *compiler);
 void define_natives(Compiler *compiler);
 //<PRIVATE INTERFACE
+
+void add_captured_symbol(Token *identifier, Symbol *symbol, Scope *scope, Compiler *compiler){
+    if(scope->captured_symbols_len >= SYMBOLS_LENGTH){
+        error(compiler, identifier, "Cannot capture more than %d symbols", SYMBOLS_LENGTH);
+    }
+
+    Scope *sfn_scope = symbol_fn_scope(symbol, compiler);
+    int fns_between = count_fn_scopes(sfn_scope->depth - 1, scope->depth - 1, compiler);
+
+    if(fns_between > 0){
+        error(compiler, identifier, "Cannot capture symbols from a distance greater than 1");
+    }
+
+    scope->captured_symbols[scope->captured_symbols_len++] = symbol;
+}
+
+void set_fn(size_t index, Fn *fn, Compiler *compiler){
+    Module *module = compiler->current_module;
+	DynArr *symbols = MODULE_SYMBOLS(module);
+	ModuleSymbol symbol = (ModuleSymbol){
+        .type = FUNCTION_MSYMTYPE,
+        .value.fn = fn
+    };
+    
+    DYNARR_SET(&symbol, index, symbols);
+}
+
+void set_closure(size_t index, MetaClosure *closure, Compiler *compiler){
+    Module *module = compiler->current_module;
+	DynArr *symbols = MODULE_SYMBOLS(module);
+	ModuleSymbol symbol = (ModuleSymbol){
+        .type = CLOSURE_MSYMTYPE,
+        .value.meta_closure = closure
+    };
+    
+    DYNARR_SET(&symbol, index, symbols);
+}
+
 //>PRIVATE IMPLEMENTATION
 static void error(Compiler *compiler, Token *token, char *msg, ...){
     va_list args;
@@ -163,6 +202,7 @@ Scope *scope_in(ScopeType type, Compiler *compiler){
     scope->try = NULL;
 	scope->type = type;
     scope->symbols_len = 0;
+    scope->captured_symbols_len = 0;
     
     return scope;
 }
@@ -179,24 +219,19 @@ Scope *scope_in_soft(ScopeType type, Compiler *compiler){
     return scope;
 }
 
-Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function){
+Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function, size_t *out_symbol_index){
     assert(compiler->fn_ptr < FUNCTIONS_LENGTH);
 
     Fn *fn = runtime_fn(name, compiler->current_module);
     compiler->fn_stack[compiler->fn_ptr++] = fn;
-    
-    Module *module = compiler->current_module;
-    SubModule *submodule = module->submodule;
-	LZHTable *symbols = submodule->symbols;
-	ModuleSymbol *symbol = (ModuleSymbol *)A_RUNTIME_ALLOC(sizeof(ModuleSymbol));
 
-	symbol->type = FUNCTION_MSYMTYPE;
-    symbol->access = PRIVATE_MSYMATYPE;
-	symbol->value.fn = fn;
+    DynArr *symbols = MODULE_SYMBOLS(compiler->current_module);
     
-    lzhtable_put((uint8_t *)name, strlen(name), symbol, symbols, NULL);
+    ModuleSymbol module_symbol = {0};
+    dynarr_insert(&module_symbol, symbols);
 
     if(out_function) *out_function = fn;
+    if(out_symbol_index) *out_symbol_index = DYNARR_LEN(symbols) - 1;
 
     return scope_in(FUNCTION_SCOPE, compiler);
 }
@@ -235,7 +270,41 @@ Scope *inside_function(Compiler *compiler){
 	}
 
 	return NULL;
+}
 
+Scope *symbol_fn_scope(Symbol *symbol, Compiler *compiler){
+    assert(compiler->depth > 0);
+
+	for(int i = (int)symbol->depth - 1; i >= 0; i--){
+		Scope *scope = compiler->scopes + i;
+		if(scope->type == FUNCTION_SCOPE){
+            if(i == 0) return NULL;
+            return scope;
+        }
+	}
+
+	return NULL;
+}
+
+int count_fn_scopes(int from, int to, Compiler *compiler){
+    assert(compiler->depth > 1);
+
+    assert(from < to);
+    assert(to < compiler->depth);
+    assert(compiler->scopes[from].type == FUNCTION_SCOPE);
+    assert(compiler->scopes[to].type == FUNCTION_SCOPE);
+
+    int count = 0;
+
+    for(int i = from + 1; i < to; i++){
+		Scope *scope = compiler->scopes + i;
+		
+        if(scope->type == FUNCTION_SCOPE){
+            count++;
+        }
+	}
+
+    return count;
 }
 
 Scope *current_scope(Compiler *compiler){
@@ -246,6 +315,22 @@ Scope *current_scope(Compiler *compiler){
 Scope *previous_scope(Scope *scope, Compiler *compiler){
     if(scope->depth == 1) return NULL;
     return &compiler->scopes[scope->depth - 1];
+}
+
+int resolve_symbol(Token *identifier, Symbol *symbol, Compiler *compiler){
+    int is_out = 0;
+
+    if(symbol->depth > 1 && compiler->depth >= 2){
+        // depth 1 means we are in the global scope or the main function
+        Scope *fn_scope = inside_function(compiler);
+
+        if(symbol->depth < fn_scope->depth){
+            is_out = 1;
+            add_captured_symbol(identifier, symbol, fn_scope, compiler);
+        }
+    }
+
+    return is_out;
 }
 
 Symbol *exists_scope(char *name, Scope *scope, Compiler *compiler){
@@ -268,8 +353,7 @@ Symbol *get(Token *identifier_token, Compiler *compiler){
     assert(compiler->depth > 0);
     char *identifier = identifier_token->lexeme;
 
-    for (int i = compiler->depth - 1; i >= 0; i--)
-    {
+    for (int i = compiler->depth - 1; i >= 0; i--){
         Scope *scope = &compiler->scopes[i];
         Symbol *symbol = exists_scope(identifier, scope, compiler);
         if(symbol != NULL) return symbol;
@@ -278,6 +362,51 @@ Symbol *get(Token *identifier_token, Compiler *compiler){
     error(compiler, identifier_token, "Symbol '%s' doesn't exists.", identifier);
 
     return NULL;
+}
+
+void to_local(Symbol *symbol, Compiler *compiler){
+    assert(symbol->identifier_token);
+
+    Scope *scope = &compiler->scopes[symbol->depth - 1];
+
+    if(scope->symbols_len >= SYMBOLS_LENGTH){
+        error(compiler, symbol->identifier_token, "Cannot define more than %d symbols per scope", SYMBOLS_LENGTH);
+    }
+    if(scope->locals >= LOCALS_LENGTH){
+        error(compiler, symbol->identifier_token, "Cannot define more than %d locals", LOCALS_LENGTH);
+    }
+
+    symbol->local = scope->locals++;
+}
+
+void from_symbols_to_global(
+    size_t symbol_index,
+    Token *location_token,
+    char *name,
+    Compiler *compiler
+){
+    write_chunk(SGET_OPCODE, compiler);
+    write_location(location_token, compiler);
+    write_i32(symbol_index, compiler);
+
+    write_chunk(GDEF_OPCODE, compiler);
+    write_location(location_token, compiler);
+    write_str(name, compiler);
+}
+
+Symbol *declare_raw(SymbolType type, Compiler *compiler){
+    Scope *scope = current_scope(compiler);
+    Symbol *symbol = &scope->symbols[scope->symbols_len++];
+
+    symbol->depth = scope->depth;
+    symbol->local = -1;
+    symbol->index = -1;
+    symbol->type = type;
+    symbol->name_len = 0;
+    symbol->name[0] = '\0';
+    symbol->identifier_token = NULL;
+
+    return symbol;
 }
 
 Symbol *declare_native(char *identifier, Compiler *compiler){
@@ -297,23 +426,40 @@ Symbol *declare_native(char *identifier, Compiler *compiler){
 }
 
 Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler){
+    Scope *scope = current_scope(compiler);
+    
+    if(scope->symbols_len >= SYMBOLS_LENGTH){
+        error(compiler, identifier_token, "Cannot define more than %d symbols per scope", SYMBOLS_LENGTH);
+    }
+
     char *identifier = identifier_token->lexeme;
     size_t identifier_len = strlen(identifier);
 
-	if(identifier_len + 1 >= SYMBOL_NAME_LENGTH)
-		error(compiler, identifier_token, "Symbol name '%s' too long.", identifier);
-    if(exists_local(identifier, compiler) != NULL)
+	if(identifier_len + 1 >= SYMBOL_NAME_LENGTH){
+        error(compiler, identifier_token, "Symbol name '%s' too long.", identifier);
+    }
+    if(exists_local(identifier, compiler) != NULL){
         error(compiler, identifier_token, "Already exists a symbol named as '%s'.", identifier);
+    }
 
     int local = 0;
-    Scope *scope = current_scope(compiler);
     Symbol *symbol = &scope->symbols[scope->symbols_len++];
 
-	if(type == MUT_SYMTYPE || type == IMUT_SYMTYPE)
-		local = scope->depth == 1 ? -1 : scope->locals++;
+	if(type == MUT_SYMTYPE || type == IMUT_SYMTYPE){
+        if(scope->depth == 1){
+            local = -1;
+        }else{
+            if(scope->locals >= LOCALS_LENGTH){
+                error(compiler, identifier_token, "Cannot define more than %d locals", LOCALS_LENGTH);
+            }
+
+            local = scope->locals++;
+        }
+    }
     
     symbol->depth = scope->depth;
     symbol->local = local;
+    symbol->index = -1;
     symbol->type = type;
     symbol->name_len = identifier_len;
     memcpy(symbol->name, identifier, identifier_len);
@@ -646,38 +792,94 @@ void compile_expr(Expr *expr, Compiler *compiler){
             write_i16((int16_t)DYNARR_PTR_LEN(stmts), compiler);
 
             break;
-        }case IDENTIFIER_EXPRTYPE:{
-            IdentifierExpr *identifier_expr = (IdentifierExpr *)expr->sub_expr;
-            Token *identifier_token = identifier_expr->identifier_token;
+        }case ANON_EXPRTYPE:{
+            AnonExpr *anon_expr = (AnonExpr *)expr->sub_expr;
+            Token *anon_token = anon_expr->anon_token;
+            DynArrPtr *params = anon_expr->params;
+            DynArrPtr *stmts = anon_expr->stmts;
 
-            Symbol *symbol = get(identifier_token, compiler);
+            Fn *fn = NULL;
+            size_t symbol_index = 0;
 
-            if(symbol->type == MUT_SYMTYPE || symbol->type == IMUT_SYMTYPE || symbol->type == NATIVE_MODULE_SYMTYPE){
-                if(symbol->depth == 1){
-                    write_chunk(GGET_OPCODE, compiler);
-					write_location(identifier_token, compiler);
+            Symbol *fn_symbol = declare_raw(FN_SYMTYPE, compiler);
+            Scope *fn_scope = scope_in_fn("anonymous", compiler, &fn, &symbol_index);
 
-                    write_str(identifier_token->lexeme, compiler);
-                }else{
-                    write_chunk(LGET_OPCODE, compiler);
-					write_location(identifier_token, compiler);
+            fn_symbol->index = ((int)symbol_index);
 
-                    write_chunk((uint8_t)symbol->local, compiler);
+            if(params){
+                for (size_t i = 0; i < DYNARR_PTR_LEN(params); i++){
+                    Token *param_identifier = (Token *)DYNARR_PTR_GET(i, params);
+                    declare(MUT_SYMTYPE, param_identifier, compiler);
+
+                    char *name = runtime_clone_str(param_identifier->lexeme);
+                    dynarr_ptr_insert(name, fn->params);
                 }
             }
 
-			if(symbol->type == NATIVE_FN_SYMTYPE){
-                write_chunk(NGET_OPCODE, compiler);
-				write_location(identifier_token, compiler);
-           
-		        write_str(identifier_token->lexeme, compiler);
+            char returned = 0;
+
+            for (size_t i = 0; i < stmts->used; i++){
+                Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
+                compile_stmt(stmt, compiler);
+                if(i + 1 >= stmts->used && stmt->type == RETURN_STMTTYPE){returned = 1;}
             }
 
-			if(symbol->type == FN_SYMTYPE || symbol->type == MODULE_SYMTYPE){
-                write_chunk(SGET_OPCODE, compiler);
-          		write_location(identifier_token, compiler);
-			
-		        write_str(identifier_token->lexeme, compiler);
+            if(!returned){
+                write_chunk(EMPTY_OPCODE, compiler);
+                write_location(anon_token, compiler);
+
+                write_chunk(RET_OPCODE, compiler);
+                write_location(anon_token, compiler);
+            }
+
+            if(fn_scope->captured_symbols_len > 0){
+                MetaClosure *closure = (MetaClosure *)A_RUNTIME_ALLOC(sizeof(MetaClosure));
+
+                closure->values_len = fn_scope->captured_symbols_len;
+
+                for (int i = 0; i < fn_scope->captured_symbols_len; i++){
+                    closure->values[i].at = fn_scope->captured_symbols[i]->local;
+                }
+
+                closure->fn = fn;
+
+                set_closure(symbol_index, closure, compiler);
+            }else{
+                set_fn(symbol_index, fn, compiler);
+            }
+
+            scope_out_fn(compiler);
+
+            write_chunk(SGET_OPCODE, compiler);
+            write_location(anon_token, compiler);
+            write_i32((int32_t)symbol_index, compiler);
+
+            break;
+        }case IDENTIFIER_EXPRTYPE:{
+            IdentifierExpr *identifier_expr = (IdentifierExpr *)expr->sub_expr;
+            Token *identifier = identifier_expr->identifier_token;
+
+            Symbol *symbol = get(identifier, compiler);
+            int is_out = resolve_symbol(identifier, symbol, compiler);
+
+            if(symbol->type == NATIVE_FN_SYMTYPE){
+                write_chunk(NGET_OPCODE, compiler);
+                write_location(identifier, compiler);
+                write_str(identifier->lexeme, compiler);
+                
+                break;
+            }
+
+            if(symbol->depth == 1){
+                write_chunk(GGET_OPCODE, compiler);
+                write_location(identifier, compiler);
+                write_str(identifier->lexeme, compiler);
+            }else{
+                uint8_t opcode = is_out ? OGET_OPCODE : LGET_OPCODE;
+                
+                write_chunk(opcode, compiler);
+                write_location(identifier, compiler);
+                write_chunk((uint8_t)symbol->local, compiler);
             }
 
             break;
@@ -873,21 +1075,25 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
 			if(left->type == IDENTIFIER_EXPRTYPE){
 				IdentifierExpr *identifier_expr = (IdentifierExpr *)left->sub_expr;
-				Token *identifier_token = identifier_expr->identifier_token;
-	            Symbol *symbol = get(identifier_token, compiler);
+				Token *identifier = identifier_expr->identifier_token;
+	            Symbol *symbol = get(identifier, compiler);
             
     	        if(symbol->type == IMUT_SYMTYPE)
-        	        error(compiler, identifier_token, "'%s' declared as constant. Can't change its value.", identifier_token->lexeme);
+        	        error(compiler, identifier, "'%s' declared as constant. Can't change its value.", identifier->lexeme);
             
+                int is_out = resolve_symbol(identifier, symbol, compiler);
+
             	compile_expr(value_expr, compiler);
 
 	            if(symbol->depth == 1){
                 	write_chunk(GSET_OPCODE, compiler);
    					write_location(equals_token, compiler);
 
-                	write_str(identifier_token->lexeme, compiler);
+                	write_str(identifier->lexeme, compiler);
             	}else{
-                	write_chunk(LSET_OPCODE, compiler);
+                    uint8_t opcode = is_out ? OSET_OPCODE : LSET_OPCODE;
+
+                	write_chunk(opcode, compiler);
 					write_location(equals_token, compiler);
 
                 	write_chunk(symbol->local, compiler);
@@ -1133,7 +1339,12 @@ void compile_expr(Expr *expr, Compiler *compiler){
 				}case RECORD_TOKTYPE:{
                     write_chunk(8, compiler);
 					break;
-                } default:{
+                }case FN_OTYPE:
+                 case CLOSURE_OTYPE:
+                 case NATIVE_FN_OTYPE:{
+                    write_chunk(9, compiler);
+                    break;
+                }default:{
 					assert("Illegal type value");
 				}
 			}
@@ -1179,20 +1390,26 @@ void compile_expr(Expr *expr, Compiler *compiler){
     }
 }
 
-void add_native_module_symbol(char *key, size_t key_size, NativeModule *module, LZHTable *symbols){
-	ModuleSymbol *symbol = (ModuleSymbol *)A_RUNTIME_ALLOC(sizeof(ModuleSymbol));
-	symbol->type = NATIVE_MODULE_MSYMTYPE;
-    symbol->access = PUBLIC_MSYMATYPE;
-	symbol->value.native_module = module;
-    lzhtable_put((uint8_t *)key, key_size, symbol, symbols, NULL);
+size_t add_native_module_symbol(NativeModule *module, DynArr *symbols){
+    ModuleSymbol module_symbol = (ModuleSymbol ){
+        .type = NATIVE_MODULE_MSYMTYPE,
+        .value.native_module = module
+    };
+	
+    dynarr_insert(&module_symbol, symbols);
+
+    return DYNARR_LEN(symbols) - 1;
 }
 
-void add_module_symbol(char *key, size_t key_size, Module *module, LZHTable *symbols){
-	ModuleSymbol *symbol = (ModuleSymbol *)A_RUNTIME_ALLOC(sizeof(ModuleSymbol));
-	symbol->type = MODULE_MSYMTYPE;
-    symbol->access = PUBLIC_MSYMATYPE;
-	symbol->value.module = module;
-    lzhtable_put((uint8_t *)key, key_size, symbol, symbols, NULL);
+size_t add_module_symbol(Module *module, DynArr *symbols){
+	ModuleSymbol module_symbol = (ModuleSymbol ){
+        .type = MODULE_MSYMTYPE,
+        .value.module = module
+    };
+	
+    dynarr_insert(&module_symbol, symbols);
+
+    return DYNARR_LEN(symbols) - 1;
 }
 
 void compile_stmt(Stmt *stmt, Compiler *compiler){
@@ -1231,19 +1448,18 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             else compile_expr(initializer_expr, compiler);
 
             if(symbol->depth == 1){
-                write_chunk(GSET_OPCODE, compiler);
+                write_chunk(GDEF_OPCODE, compiler);
 				write_location(identifier_token, compiler);
 
                 write_str(identifier_token->lexeme, compiler);
             }else{
                 write_chunk(LSET_OPCODE, compiler);
 				write_location(identifier_token, compiler);
-
                 write_chunk((uint8_t)symbol->local, compiler);
-            }
 
-            write_chunk(POP_OPCODE, compiler);
-			write_location(identifier_token, compiler);
+                write_chunk(POP_OPCODE, compiler);
+			    write_location(identifier_token, compiler);
+            }
 
             break;
         }case BLOCK_STMTTYPE:{
@@ -1430,19 +1646,19 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             break;
         }case FUNCTION_STMTTYPE:{
             FunctionStmt *function_stmt = (FunctionStmt *)stmt->sub_stmt;
-            Token *name_token = function_stmt->name_token;
+            Token *identifier_token = function_stmt->identifier_token;
             DynArrPtr *params = function_stmt->params;
             DynArrPtr *stmts = function_stmt->stmts;
 
-            Scope *previous_scope = inside_function(compiler);
-            
-            if(previous_scope && previous_scope->depth > 1)
-                error(compiler, name_token, "Can not declare a function inside another function.");
+            Scope *enclosing = inside_function(compiler);
 
             Fn *fn = NULL;
+            size_t symbol_index = 0;
 
-            declare(FN_SYMTYPE, name_token, compiler);
-            scope_in_fn(name_token->lexeme, compiler, &fn);
+            Symbol *fn_symbol = declare(FN_SYMTYPE, identifier_token, compiler);
+            Scope *fn_scope = scope_in_fn(identifier_token->lexeme, compiler, &fn, &symbol_index);
+
+            fn_symbol->index = ((int)symbol_index);
 
             if(params){
                 for (size_t i = 0; i < params->used; i++){
@@ -1466,13 +1682,47 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             if(!returned){
                 write_chunk(EMPTY_OPCODE, compiler);
-                write_location(name_token, compiler);
+                write_location(identifier_token, compiler);
 
                 write_chunk(RET_OPCODE, compiler);
-                write_location(name_token, compiler);
+                write_location(identifier_token, compiler);
             }
+
+            int is_normal = enclosing == NULL;
             
+            if(fn_scope->captured_symbols_len > 0){
+                MetaClosure *closure = (MetaClosure *)A_RUNTIME_ALLOC(sizeof(MetaClosure));
+
+                closure->values_len = fn_scope->captured_symbols_len;
+
+                for (int i = 0; i < fn_scope->captured_symbols_len; i++){
+                    closure->values[i].at = fn_scope->captured_symbols[i]->local;
+                }
+
+                closure->fn = fn;
+
+                set_closure(symbol_index, closure, compiler);
+            }else{
+                set_fn(symbol_index, fn, compiler);
+            }
+
+            if(!is_normal){to_local(fn_symbol, compiler);}
+
             scope_out_fn(compiler);
+
+            write_chunk(SGET_OPCODE, compiler);
+            write_location(identifier_token, compiler);
+            write_i32(symbol_index, compiler);
+
+            if(is_normal){
+                write_chunk(GDEF_OPCODE, compiler);
+                write_location(identifier_token, compiler);
+                write_str(identifier_token->lexeme, compiler);
+            }else{
+                write_chunk(LSET_OPCODE, compiler);
+                write_location(identifier_token, compiler);
+                write_chunk(fn_symbol->local, compiler);
+            }
 
             break;
         }case IMPORT_STMTTYPE:{
@@ -1486,37 +1736,30 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             LZHTable *modules = compiler->modules;
             Module *current_module = compiler->current_module;
             Module *previous_module = compiler->previous_module;
-            LZHTable *current_symbols = MODULE_SYMBOLS(current_module);
+            DynArr *current_symbols = MODULE_SYMBOLS(current_module);
             
             Token *name = NULL;
             
             char *module_name = NULL;
-            size_t module_name_len = 0;
 
             char *module_absolute_name = names_to_name(names, &name);
             size_t module_absolute_name_len;
 
             module_name = name->lexeme;
-            module_name_len = strlen(module_name);
             
             char *module_alt_name = alt_name ? alt_name->lexeme : NULL;
-            size_t module_alt_name_len = module_alt_name ? strlen(module_alt_name) : 0;
-
             char *module_real_name = module_alt_name ? module_alt_name : module_name;
-            size_t module_real_name_len = module_alt_name ? module_alt_name_len : module_name_len;
 
 			NativeModule *native_module = resolve_native_module(module_name);
 			
 			if(native_module){
-				add_native_module_symbol(
-					module_real_name,
-                    module_real_name_len,
-                    native_module,
-                    current_symbols
-				);
-				
-				declare(MODULE_SYMTYPE, alt_name ? alt_name : name, compiler);
-				
+				size_t symbol_index = add_native_module_symbol(native_module, current_symbols);
+				Symbol *symbol = declare(MODULE_SYMTYPE, alt_name ? alt_name : name, compiler);
+
+                symbol->index = symbol_index;
+
+                from_symbols_to_global(symbol_index, import_token, module_real_name, compiler);
+
 				break;
 			}
 
@@ -1537,14 +1780,13 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 Module *imported_module = (Module *)module_node->value;
                 Module *cloned_module = runtime_clone_module(module_name, module_pathname, imported_module);
                 
-                add_module_symbol(
-                    module_real_name,
-                    module_real_name_len,
-                    cloned_module,
-                    current_symbols
-                );
-                declare(MODULE_SYMTYPE, alt_name ? alt_name : name, compiler);
+                size_t symbol_index = add_module_symbol(cloned_module, current_symbols);
+                Symbol *symbol = declare(MODULE_SYMTYPE, alt_name ? alt_name : name, compiler);
+
+                symbol->index = symbol_index;
                 
+                from_symbols_to_global(symbol_index, import_token, module_real_name, compiler);
+
                 break;
             }
 
@@ -1602,13 +1844,10 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             uint32_t module_pathname_hash = lzhtable_hash((uint8_t *)module_pathname, module_pathname_len);
             lzhtable_hash_put(module_pathname_hash, module, modules);
             
-            add_module_symbol(
-                module_real_name,
-                module_real_name_len,
-                module,
-                current_symbols
-            );
+            size_t symbol_index = add_module_symbol(module, current_symbols);
             declare(MODULE_SYMTYPE, alt_name ? alt_name : name, compiler);
+
+            from_symbols_to_global(symbol_index, import_token, module_real_name, compiler);
 
             break;
         }case THROW_STMTTYPE:{
@@ -1729,26 +1968,17 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             break;
         }case EXPORT_STMTTYPE:{
             ExportStmt *export_stmt = (ExportStmt *)stmt->sub_stmt;
-            Token *export_token = export_stmt->export_token;
             DynArrPtr *symbols = export_stmt->symbols;
 
             for (size_t i = 0; i < DYNARR_PTR_LEN(symbols); i++){
-                Token *identifier = (Token *)DYNARR_PTR_GET(i, symbols);
-                Module *module = compiler->current_module;
-                LZHTable *symbols = MODULE_SYMBOLS(module);
+                Token *symbol_identifier = DYNARR_PTR_GET(i, symbols);
                 
-                char *key = identifier->lexeme;
-                size_t key_size = strlen(key);
-                LZHTableNode *symbol_node = NULL;
-                
-                if(!lzhtable_contains((uint8_t *)key, key_size, symbols, &symbol_node)){
-                    error(compiler, identifier, "Symbol '%s' do not exists", key);
-                }
-
-                ModuleSymbol *symbol = (ModuleSymbol *)symbol_node->value;
-                symbol->access = PUBLIC_MSYMATYPE;
+                write_chunk(GASET_OPCODE, compiler);
+                write_location(symbol_identifier, compiler);
+                write_str(symbol_identifier->lexeme, compiler);
+                write_chunk(1, compiler);
             }
-            
+
             break;
         }default:{
             assert("Illegal stmt type");
@@ -1758,13 +1988,15 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
 void define_natives(Compiler *compiler){
     assert(compiler->depth > 0);
-    LZHTableNode *node = compiler->natives->head;
+    LZHTableNode *current = compiler->natives->head;
     
-    while (node){
-        LZHTableNode *next = node->next_table_node;
-        NativeFn *native = (NativeFn *)node->value;
+    while (current){
+        LZHTableNode *next = current->next_table_node;
+        
+        NativeFn *native = (NativeFn *)current->value;
         declare_native(native->name, compiler);
-        node = next;
+        
+        current = next;
     }
 }
 //<PRIVATE IMPLEMENTATION
@@ -1792,7 +2024,10 @@ int compiler_compile(
         compiler->modules = modules;
         compiler->stmts = stmts;
 
-        scope_in_fn("main", compiler, NULL);
+        Fn *fn = NULL;
+        size_t symbol_index = 0;
+
+        scope_in_fn("main", compiler, &fn, &symbol_index);
         define_natives(compiler);
 
         for (size_t i = 0; i < stmts->used; i++){
@@ -1800,6 +2035,7 @@ int compiler_compile(
             compile_stmt(stmt, compiler);
         }
 
+        set_fn(symbol_index, fn, compiler);
         scope_out_fn(compiler);
         
         return compiler->is_err;
@@ -1824,7 +2060,10 @@ int compiler_import(
         compiler->current_module = current_module;
         compiler->modules = modules;
 
-        scope_in_fn("import", compiler, NULL);
+        Fn *fn = NULL;
+        size_t symbol_index = 0;
+
+        scope_in_fn("import", compiler, &fn, &symbol_index);
         define_natives(compiler);
 
         for (size_t i = 0; i < stmts->used; i++){
@@ -1832,6 +2071,7 @@ int compiler_import(
             compile_stmt(stmt, compiler);
         }
 
+        set_fn(symbol_index, fn, compiler);
 		scope_out(compiler);
         
         return compiler->is_err;

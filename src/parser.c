@@ -669,6 +669,35 @@ Expr *parse_literal(Parser *parser){
         return create_expr(TEMPLATE_EXPRTYPE, template_expr);
     }
 
+    if(match(parser, 1, ANON_TOKTYPE)){
+        Token *anon_token = NULL;
+        DynArrPtr *params = NULL;
+        DynArrPtr *stmts = NULL;
+
+        anon_token = previous(parser);
+        consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'anon' keyword");
+        
+        if(!check(parser, RIGHT_PAREN_TOKTYPE)){
+            params = compile_dynarr_ptr();
+
+            do{
+                Token *param_identifier = consume(parser, IDENTIFIER_TOKTYPE, "Expect parameter identifier");
+                dynarr_ptr_insert(param_identifier, params);
+            } while (match(parser, 1, COMMA_TOKTYPE));
+        }
+
+        consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' at end of function parameters");
+        consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of function body");
+        stmts = parse_block_stmt(parser);
+
+        AnonExpr *anon_expr = (AnonExpr *)A_COMPILE_ALLOC(sizeof(AnonExpr));
+        anon_expr->anon_token = anon_token;
+        anon_expr->params = params;
+        anon_expr->stmts = stmts;
+
+        return create_expr(ANON_EXPRTYPE, anon_expr);
+    }
+
     if(match(parser, 1, LEFT_PAREN_TOKTYPE)){
         Token *left_paren_token = previous(parser);
         Expr *group_sub_expr = parse_expr(parser);
@@ -997,7 +1026,7 @@ Stmt *parse_function_stmt(Parser *parser){
 	}
 
     FunctionStmt *function_stmt = (FunctionStmt *)A_COMPILE_ALLOC(sizeof(FunctionStmt));
-    function_stmt->name_token = name_token;
+    function_stmt->identifier_token = name_token;
     function_stmt->params = params;
     function_stmt->stmts = stmts;
 

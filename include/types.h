@@ -13,6 +13,8 @@ typedef struct runtime_allocator_interface{
 } Allocator;
 
 #define NAME_LEN 256
+#define OUT_VALUES_LENGTH 255
+
 #define MODULE_TRIES(m)(m->submodule->tries)
 #define MODULE_SYMBOLS(m)(m->submodule->symbols)
 #define MODULE_STRINGS(m)(m->submodule->strings)
@@ -75,6 +77,30 @@ typedef struct fn{
     Module *module;
 }Fn;
 
+typedef struct meta_out_value{
+    uint8_t at;
+}MetaOutValue;
+
+typedef struct meta_closure{
+    int values_len;
+    MetaOutValue values[OUT_VALUES_LENGTH];
+    Fn *fn;
+}MetaClosure;
+
+typedef struct out_value{
+    uint8_t linked;
+    uint8_t at;
+    Value *value;
+    struct out_value *prev;
+    struct out_value *next;
+}OutValue;
+
+typedef struct closure{
+    int values_len;
+    OutValue *values;
+    MetaClosure *meta;
+}Closure;
+
 typedef struct native_fn{
     char unique;
     int arity;
@@ -114,7 +140,7 @@ typedef struct native_module_symbol{
 typedef struct submodule{
     char resolve;
     LZHTable *tries;
-	LZHTable *symbols;
+	DynArr *symbols;
     LZHTable *strings;
     LZHTable *globals;
 }SubModule;
@@ -127,22 +153,18 @@ typedef struct module{
 }Module;
 
 typedef enum module_symbol_type{
+    FUNCTION_MSYMTYPE,
+    CLOSURE_MSYMTYPE,
 	NATIVE_MODULE_MSYMTYPE,
-	FUNCTION_MSYMTYPE,
-	MODULE_MSYMTYPE
+    MODULE_MSYMTYPE
 }ModuleSymbolType;
-
-typedef enum module_symbol_access_type{
-    PRIVATE_MSYMATYPE,
-    PUBLIC_MSYMATYPE
-}ModuleSymbolAccessType;
 
 typedef struct module_symbol{
 	ModuleSymbolType type;
-    ModuleSymbolAccessType access;
 	union{
+        Fn *fn;
+        MetaClosure *meta_closure;
 		NativeModule *native_module;
-		Fn *fn;
 		Module *module;
 	}value;
 }ModuleSymbol;
