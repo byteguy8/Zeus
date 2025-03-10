@@ -1,6 +1,19 @@
 #ifndef NATIVE_H
 #define NATIVE_H
 
+Value native_fn_exit(uint8_t argsc, Value *values, void *target, VM *vm){
+	Value *exit_code_value = &values[0];
+	
+    if(!IS_INT(exit_code_value)){
+        vmu_error(vm, "Expect integer, but got something else");
+    }
+
+    vm->halt = 1;
+    vm->exit_code = (unsigned char)TO_INT(exit_code_value);
+
+	return EMPTY_VALUE;
+}
+
 Value native_fn_assert(uint8_t argsc, Value *values, void *target, VM *vm){
 	Value *raw_value = &values[0];
 	

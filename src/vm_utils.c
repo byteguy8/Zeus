@@ -403,6 +403,8 @@ void vmu_error(VM *vm, char *msg, ...){
 	bstr_destroy(st);
     vmu_clean_up(vm);
 
+    vm->exit_code = ERR_VMRESULT;
+    
     longjmp(vm->err_jmp, 1);
 }
 

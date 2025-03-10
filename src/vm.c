@@ -26,8 +26,6 @@ static int64_t read_i64_const(VM *vm);
 static double read_float_const(VM *vm);
 static char *read_str(VM *vm, uint32_t *out_hash);
 
-static void resolve_module(Module *module, VM *vm);
-
 static void print_obj(Obj *object);
 static void print_value(Value *value);
 static void print_stack(VM *vm);
@@ -120,14 +118,14 @@ static void remove_value_from_frame(OutValue *value, VM *vm);
 #define CURRENT_FLOAT_VALUES(vm)(CURRENT_FN(vm)->float_values)
 #define CURRENT_MODULE(vm)((vm)->modules[(vm)->module_ptr - 1])
 
-#define IS_AT_END(vm)(CURRENT_FRAME(vm)->ip >= CURRENT_CHUNKS(vm)->used)
+#define IS_AT_END(vm)((vm)->frame_ptr == 0 || CURRENT_FRAME(vm)->ip >= CURRENT_CHUNKS(vm)->used)
 #define ADVANCE(vm)(DYNARR_GET_AS(uint8_t, CURRENT_FRAME(vm)->ip++, CURRENT_CHUNKS(vm)))
 
 static Frame *frame_up_fn(Fn *fn, VM *vm);
 static Frame *frame_up(int32_t index, VM *vm);
 static void frame_down(VM *vm);
 // OTHERS
-static void execute(VM *vm);
+static int execute(VM *vm);
 //< PRIVATE INTERFACE
 //> PRIVATE IMPLEMENTATION
 int16_t compose_i16(uint8_t *bytes){
@@ -177,10 +175,6 @@ char *read_str(VM *vm, uint32_t *out_hash){
     uint32_t hash = (uint32_t)read_i32(vm);
     if(out_hash){*out_hash = hash;}
     return lzhtable_hash_get(hash, strings);
-}
-
-void resolve_module(Module *module, VM *vm){
-    execute(vm);
 }
 
 void print_obj(Obj *object){
@@ -458,17 +452,28 @@ void frame_down(VM *vm){
     vm->frame_ptr--;
 }
 
-static void execute(VM *vm){
+static int execute(VM *vm){
     frame_up(0, vm);
 
     for (;;){
+        if(vm->halt){break;}
         if(IS_AT_END(vm)){
+            // When resolving modules, 'module_ptr' is greater than 1.
+            // In that case, is expected that the current frame contains
+            // the 'import' function which must be remove from the call stack
+            // in order to the normal execution of the previous frame continues
             if(vm->module_ptr > 1){
                 CURRENT_MODULE(vm)->submodule->resolve = 1;
                 CURRENT_MODULE(vm) = NULL;
                 vm->module_ptr--;
                 frame_down(vm);
             }else{
+                // The only frame that is allowed to not contains a return
+                // instruction at the end is the one which contains the main function
+                if(vm->frame_ptr > 1){
+                    vmu_error(vm, "Unexpected frame at end of execution");
+                }
+
                 break;
             }
         }
@@ -1934,6 +1939,8 @@ static void execute(VM *vm){
     }
 
     frame_down(vm);
+
+    return vm->exit_code;
 }
 //> PRIVATE IMPLEMENTATION
 //> PUBLIC IMPLEMENTATION
@@ -1948,20 +1955,23 @@ void vm_print_stack(VM *vm){
 }
 
 int vm_execute(LZHTable *natives, Module *module, VM *vm){
-    if(setjmp(vm->err_jmp) == 1) return 1;
-    else{
+    if(setjmp(vm->err_jmp) == 1){
+        return vm->exit_code;
+    }else{
         module->submodule->resolve = 1;
 
+        vm->halt = 0;
+        vm->exit_code = OK_VMRESULT;
         vm->stack_ptr = 0;
         vm->frame_ptr = 0;
         vm->module_ptr = 0;
         vm->natives = natives;
         vm->modules[vm->module_ptr++] = module;
 
-        execute(vm);
+        int result = execute(vm);
         vmu_clean_up(vm);
 
-        return 0;
+        return result;
     }
 }
 //< PUBLIC IMPLEMENTATION

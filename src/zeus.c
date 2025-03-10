@@ -99,10 +99,12 @@ LZHTable *create_keywords_table(){
 }
 
 int main(int argc, char const *argv[]){
-	Args args = {0};
+	int result = 0;
+
+    Args args = {0};
 	get_args(argc, argv, &args);
 
-	 char *source_path = args.source_path;
+	char *source_path = args.source_path;
 
 	if(!source_path){
 		fprintf(stderr, "Expect path to input source file\n");
@@ -122,6 +124,7 @@ int main(int argc, char const *argv[]){
 	memory_init();
 
     LZHTable *natives = runtime_lzhtable();
+    add_native("exit", 1, native_fn_exit, natives);
 	add_native("assert", 1, native_fn_assert, natives);
     add_native("assertm", 2, native_fn_assertm, natives);
     add_native("is_str_int", 1, native_fn_is_str_int, natives);
@@ -160,59 +163,70 @@ int main(int argc, char const *argv[]){
 
     if(args.lex){
         if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)){
+            result = 1;
 			goto CLEAN_UP;
 		}
 		
 		printf("no errors in lexer phase\n");
     }else if(args.parse){
         if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)){
+            result = 1;
 			goto CLEAN_UP;
 		}
         if(parser_parse(tokens, stmts, parser)){
+            result = 1;
 			goto CLEAN_UP;
 		}
 		
 		printf("no errors in parse phase\n");
     }else if(args.compile){
         if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)){
+            result = 1;
 			goto CLEAN_UP;
 		}
         if(parser_parse(tokens, stmts, parser)){
+            result = 1;
 			goto CLEAN_UP;
 		}
         if(compiler_compile(keywords, natives, stmts, module, modules, compiler)){
+            result = 1;
 			goto CLEAN_UP;
 		}
 		
 		printf("no errors in compile phase\n");
     }else if(args.dump){
         if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)){
+            result = 1;
 			goto CLEAN_UP;
 		}
         if(parser_parse(tokens, stmts, parser)){
+            result = 1;
 			goto CLEAN_UP;
 		}
         if(compiler_compile(keywords, natives, stmts, module, modules, compiler)){
+            result = 1;
 			goto CLEAN_UP;
 		}
         
         dumpper_dump(modules, module, dumpper);
     }else{
         if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)){
-			goto CLEAN_UP;
+			result = 1;
+            goto CLEAN_UP;
 		}
         if(parser_parse(tokens, stmts, parser)){
+            result = 1;
 			goto CLEAN_UP;
 		}
         if(compiler_compile(keywords, natives, stmts, module, modules, compiler)){
+            result = 1;
 			goto CLEAN_UP;
 		}
         
         memory_free_compile();
         
-        if(vm_execute(natives, module, vm)){
-			goto CLEAN_UP;
-		}
+        result = vm_execute(natives, module, vm);
+        if(result){goto CLEAN_UP;}
     }
 
 	if(args.memuse){
@@ -221,4 +235,6 @@ int main(int argc, char const *argv[]){
 
 CLEAN_UP:
     memory_deinit();
+
+    return result;
 }

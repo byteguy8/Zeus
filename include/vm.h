@@ -11,6 +11,11 @@
 #define FRAME_LENGTH 255
 #define MODULES_LENGTH 255
 
+typedef enum vm_result{
+    OK_VMRESULT,
+    ERR_VMRESULT,
+}VMResult;
+
 typedef enum global_value_access_type{
     PRIVATE_GVATYPE,
     PUBLIC_GVATYPE,
@@ -35,7 +40,9 @@ typedef struct frame{
 }Frame;
 
 typedef struct vm{
+    char halt;
     jmp_buf err_jmp;
+    unsigned char exit_code;
     
     int stack_ptr;
     Value stack[STACK_LENGTH];
