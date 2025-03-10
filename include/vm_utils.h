@@ -4,6 +4,7 @@
 #include "value.h"
 #include "vm.h"
 #include "bstr.h"
+#include <stdio.h>
 
 void vmu_error(VM *vm, char *msg, ...);
 
@@ -13,8 +14,12 @@ void vmu_dealloc(void *ptr);
 
 uint32_t vmu_hash_obj(Obj *obj);
 uint32_t vmu_hash_value(Value *value);
+
 int vmu_obj_to_str(Obj *obj, BStr *bstr);
 int vmu_value_to_str(Value *value, BStr *bstr);
+
+void vmu_print_obj(FILE *stream, Obj *obj);
+void vmu_print_value(FILE *stream, Value *value);
 
 void vmu_clean_up(VM *vm);
 

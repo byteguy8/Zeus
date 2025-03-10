@@ -7,7 +7,6 @@
 
 typedef enum stmt_type{
     EXPR_STMTTYPE,
-    PRINT_STMTTYPE,
     BLOCK_STMTTYPE,
     IF_STMTTYPE,
     STOP_STMTTYPE,
@@ -32,11 +31,6 @@ typedef struct stmt{
 typedef struct expr_stmt{
     Expr *expr;
 }ExprStmt;
-
-typedef struct print_stmt{
-    Expr *expr;
-    Token *print_token;
-}PrintStmt;
 
 typedef struct block_stmt{
     DynArrPtr *stmts;

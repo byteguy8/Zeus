@@ -170,4 +170,16 @@ Value native_fn_float_to_int(uint8_t argsc, Value *values, void *target, VM *vm)
     return INT_VALUE((uint64_t)TO_FLOAT(raw_value));
 }
 
+Value native_fn_print(uint8_t argsc, Value *values, void *target, VM *vm){
+    Value *raw_value = &values[0];
+    vmu_print_value(stdout, raw_value);
+    return EMPTY_VALUE;
+}
+
+Value native_fn_printerr(uint8_t argsc, Value *values, void *target, VM *vm){
+    Value *raw_value = &values[0];
+    vmu_print_value(stderr, raw_value);
+    return EMPTY_VALUE;
+}
+
 #endif

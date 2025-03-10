@@ -64,7 +64,6 @@ LZHTable *create_keywords_table(){
 	add_keyword("empty", EMPTY_TOKTYPE, keywords);
     add_keyword("false", FALSE_TOKTYPE, keywords);
     add_keyword("true", TRUE_TOKTYPE, keywords);
-    add_keyword("print", PRINT_TOKTYPE, keywords);
     add_keyword("mut", MUT_TOKTYPE, keywords);
     add_keyword("imut", IMUT_TOKTYPE, keywords);
     add_keyword("or", OR_TOKTYPE, keywords);
@@ -135,6 +134,8 @@ int main(int argc, char const *argv[]){
     add_native("int_to_float", 1, native_fn_int_to_float, natives);
     add_native("float_to_int", 1, native_fn_float_to_int, natives);
     add_native("float_to_str", 1, native_fn_float_to_str, natives);
+    add_native("print", 1, native_fn_print, natives);
+    add_native("printerr", 1, native_fn_printerr, natives);
 
 	RawStr *source = compile_read_source(source_path);
     char *module_path = compile_clone_str(source_path);

@@ -1422,16 +1422,6 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             write_chunk(POP_OPCODE, compiler);
 
             break;
-        }case PRINT_STMTTYPE:{
-            PrintStmt *print_stmt = (PrintStmt *)stmt->sub_stmt;
-            Expr *expr = print_stmt->expr;
-
-            compile_expr(expr, compiler);
-
-            write_chunk(PRT_OPCODE, compiler);
-            write_location(print_stmt->print_token, compiler);
-
-            break;
         }case VAR_DECL_STMTTYPE:{
             VarDeclStmt *var_decl_stmt = (VarDeclStmt *)stmt->sub_stmt;
             char is_const = var_decl_stmt->is_const;

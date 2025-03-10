@@ -25,10 +25,6 @@ static int32_t read_i32(VM *vm);
 static int64_t read_i64_const(VM *vm);
 static double read_float_const(VM *vm);
 static char *read_str(VM *vm, uint32_t *out_hash);
-
-static void print_obj(Obj *object);
-static void print_value(Value *value);
-static void print_stack(VM *vm);
 // STACK FUNCTIONS
 static Value *peek(VM *vm);
 static Value *peek_at(int offset, VM *vm);
@@ -175,95 +171,6 @@ char *read_str(VM *vm, uint32_t *out_hash){
     uint32_t hash = (uint32_t)read_i32(vm);
     if(out_hash){*out_hash = hash;}
     return lzhtable_hash_get(hash, strings);
-}
-
-void print_obj(Obj *object){
-    switch (object->type){
-        case STR_OTYPE:{
-            Str *str = object->value.str;
-            printf("%s\n", str->buff);
-            break;
-        }case ARRAY_OTYPE:{
-			Array *array = object->value.array;
-			printf("<array %d at %p>\n", array->len, array);
-			break;
-		}case LIST_OTYPE:{
-			DynArr *list = object->value.list;
-			printf("<list %ld at %p>\n", list->used, list);
-			break;
-		}case DICT_OTYPE:{
-            LZHTable *table = object->value.dict;
-            printf("<dict %ld at %p>\n", table->n, table);
-            break;
-        }case RECORD_OTYPE:{
-			Record *record = object->value.record;
-			printf("<record %ld at %p>\n", record->attributes ? record->attributes->n : 0, record);
-			break;
-		}case FN_OTYPE:{
-            Fn *fn = (Fn *)object->value.fn;
-            printf("<function '%s' - %d at %p>\n", fn->name, (uint8_t)(fn->params ? fn->params->used : 0), fn);
-            break;
-        }case CLOSURE_OTYPE:{
-            Closure *closure = object->value.closure;
-            Fn *fn = closure->meta->fn;
-            printf("<closure '%s' - %d at %p>\n", fn->name, (uint8_t)(fn->params ? fn->params->used : 0), fn);
-            break;
-        }case NATIVE_FN_OTYPE:{
-            NativeFn *native_fn = object->value.native_fn;
-            printf("<native function '%s' - %d at %p>\n", native_fn->name, native_fn->arity, native_fn);
-            break;
-        }case NATIVE_MODULE_OTYPE:{
-            NativeModule *module = object->value.native_module;
-            printf("<native module '%s' at %p>\n", module->name, module);
-            break;
-        }case MODULE_OTYPE:{
-            Module *module = object->value.module;
-            printf("<module '%s' from '%s' at %p>\n", module->name, module->pathname, module);
-            break;
-        }case NATIVE_LIB_OTYPE:{
-            NativeLib *module = object->value.native_lib;
-            printf("<native library %p at %p>\n", module->handler, module);
-            break;
-        }case FOREIGN_FN_OTYPE:{
-            ForeignFn *foreign = object->value.foreign_fn;
-            printf("<foreign function at %p>\n", foreign);
-            break;
-        }default:{
-            assert("Illegal object type");
-        }
-    }
-}
-
-void print_value(Value *value){
-    switch (value->type){
-        case EMPTY_VTYPE:{
-            printf("empty\n");
-            break;
-        }case BOOL_VTYPE:{
-            uint8_t bool = value->literal.bool;
-            printf("%s\n", bool == 0 ? "false" : "true");
-            break;
-        }case INT_VTYPE:{
-            printf("%ld\n", value->literal.i64);
-            break;
-        }case FLOAT_VTYPE:{
-			printf("%.8f\n", value->literal.fvalue);   
-            break;
-		}case OBJ_VTYPE:{
-            print_obj(value->literal.obj);
-            break;
-        }default:{
-            assert("Illegal value type");
-        }
-    }
-}
-
-void print_stack(VM *vm){
-    for (int i = 0; i < vm->stack_ptr; i++){
-        Value *value = &vm->stack[i];
-        printf("%d --> ", i + 1);
-        print_value(value);
-    }
 }
 
 Value *peek(VM *vm){
@@ -1435,10 +1342,6 @@ static int execute(VM *vm){
                 PUSH_BOOL(!right, vm)
 
                 break;
-            }case PRT_OPCODE:{
-                Value *value = pop(vm);
-                print_value(value);
-                break;
             }case POP_OPCODE:{
                 pop(vm);
                 break;
@@ -1948,10 +1851,6 @@ VM *vm_create(){
     VM *vm = (VM *)A_RUNTIME_ALLOC(sizeof(VM));
     memset(vm, 0, sizeof(VM));
     return vm;
-}
-
-void vm_print_stack(VM *vm){
-    print_stack(vm);
 }
 
 int vm_execute(LZHTable *natives, Module *module, VM *vm){

@@ -46,7 +46,6 @@ typedef enum opcode{
 	ASET_OPCODE,  // set a value inside array
     PUT_OPCODE,   // set a value inside record
 
-    PRT_OPCODE,
     POP_OPCODE,
 
     JMP_OPCODE,

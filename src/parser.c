@@ -40,7 +40,6 @@ Expr *parse_literal(Parser *parser);
 // STATEMENTS
 Stmt *parse_stmt(Parser *parser);
 Stmt *parse_expr_stmt(Parser *parser);
-Stmt *parse_print_stmt(Parser *parser);
 DynArrPtr *parse_block_stmt(Parser *parser);
 Stmt *parse_if_stmt(Parser *parser);
 Stmt *parse_while_stmt(Parser *parser);
@@ -733,9 +732,6 @@ Expr *parse_literal(Parser *parser){
 }
 
 Stmt *parse_stmt(Parser *parser){
-    if(match(parser, 1, PRINT_TOKTYPE))
-        return parse_print_stmt(parser);
-
     if(match(parser, 2, MUT_TOKTYPE, IMUT_TOKTYPE))
         return parse_var_decl_stmt(parser);
 
@@ -810,19 +806,6 @@ Stmt *parse_expr_stmt(Parser *parser){
     stmt->sub_stmt = expr_stmt;
 
     return stmt;
-}
-
-Stmt *parse_print_stmt(Parser *parser){
-    Token *print_token = previous(parser);
-    Expr *expr = parse_expr(parser);
-
-    consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of statement expression.");
-
-    PrintStmt *print_stmt = (PrintStmt *)A_COMPILE_ALLOC(sizeof(PrintStmt));
-    print_stmt->expr = expr;
-    print_stmt->print_token = print_token;
-
-    return create_stmt(PRINT_STMTTYPE, print_stmt);
 }
 
 DynArrPtr *parse_block_stmt(Parser *parser){

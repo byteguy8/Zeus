@@ -62,7 +62,6 @@ typedef struct vm{
 }VM;
 
 VM *vm_create();
-void vm_print_stack(VM *vm);
 int vm_execute(LZHTable *natives, Module *module, VM *vm);
 
 #endif

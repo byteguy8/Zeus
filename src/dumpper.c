@@ -283,10 +283,6 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             size_t end = dumpper->ip;
 			printf("%8.8s %.7ld\n", "NOT", end - start);
           	break;
-        }case PRT_OPCODE:{
-            size_t end = dumpper->ip;
-			printf("%8.8s %.7ld\n", "PRT", end - start);
-            break;
         }case POP_OPCODE:{
             size_t end = dumpper->ip;
             printf("%8.8s %.7ld\n", "POP", end - start);

@@ -66,44 +66,10 @@ Value native_fn_io_readln(uint8_t argsc, Value *values, void *target, VM *vm){
 	return value;
 }
 
-Value native_fn_io_prt(uint8_t argsc, Value *values, void *target, VM *vm){
-    Value *arg0 = &values[0];
-    BStr *bstr = bstr_create_empty(NULL);
-    
-    if(!bstr || vmu_value_to_str(arg0, bstr)){
-        bstr_destroy(bstr);
-        vmu_error(vm, "Out of memory");
-    }
-
-    printf("%s", bstr->buff);
-
-    bstr_destroy(bstr);
-    
-    return EMPTY_VALUE;
-}
-
-Value native_fn_io_prterr(uint8_t argsc, Value *values, void *target, VM *vm){
-    Value *arg0 = &values[0];
-    BStr *bstr = bstr_create_empty(NULL);
-    
-    if(!bstr || vmu_value_to_str(arg0, bstr)){
-        bstr_destroy(bstr);
-        vmu_error(vm, "Out of memory");
-    }
-
-    fprintf(stderr, "%s", bstr->buff);
-
-    bstr_destroy(bstr);
-    
-    return EMPTY_VALUE;
-}
-
 void io_module_init(){
     io_module = runtime_native_module("io");
     runtime_add_native_fn("read_file", 1, native_fn_io_read_file, io_module);
     runtime_add_native_fn("readln", 0, native_fn_io_readln, io_module);
-    runtime_add_native_fn("prt", 1, native_fn_io_prt, io_module);
-    runtime_add_native_fn("prterr", 1, native_fn_io_prterr, io_module);
 }
 
 #endif
