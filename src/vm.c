@@ -220,7 +220,7 @@ void push_closure(MetaClosure *meta, VM *vm){
     closure->values_len = meta->values_len;
     closure->values = values;
     closure->meta = meta;
-    
+
     obj->value.closure = closure;
 
     PUSH(OBJ_VALUE(obj), vm);
@@ -245,11 +245,11 @@ void push_native_module_symbol(char *name, NativeModule *module, VM *vm){
 
 void push_module_symbol(int32_t index, Module *module, VM *vm){
    	DynArr *symbols = MODULE_SYMBOLS(module);
-    
+
     if((size_t)index >= DYNARR_LEN(symbols)){
         vmu_error(vm, "Failed to push module symbol: index out of bounds");
     }
-	
+
     ModuleSymbol *module_symbol = &(DYNARR_GET_AS(ModuleSymbol, (size_t)index, symbols));
 
 	if(module_symbol->type == NATIVE_MODULE_MSYMTYPE){
@@ -310,7 +310,7 @@ Frame *frame_up_fn(Fn *fn, VM *vm){
     if(vm->frame_ptr >= FRAME_LENGTH){
         vmu_error(vm, "Frame stack over flow");
     }
-        
+
     Frame *frame = &vm->frame_stack[vm->frame_ptr++];
 
     frame->ip = 0;
@@ -417,14 +417,14 @@ static int execute(VM *vm){
             }case TEMPLATE_OPCODE:{
                 int16_t len = read_i16(vm);
                 BStr *bstr = bstr_create_empty(NULL);
-                
+
                 if(!bstr){
                     vmu_error(vm, "Failed to create template: out of memory");
                 }
-                
+
                 for (int16_t i = 0; i < len; i++){
                     Value *value = pop(vm);
-                    
+
                     if(vmu_value_to_str(value, bstr)){
                         bstr_destroy(bstr);
                         vmu_error(vm, "Failed to create template: out of memory");
@@ -440,7 +440,7 @@ static int execute(VM *vm){
                 }
 
                 PUSH(OBJ_VALUE(str_obj), vm);
-                
+
                 break;
             }case ARRAY_OPCODE:{
                 uint8_t parameter = ADVANCE(vm);
@@ -452,7 +452,7 @@ static int execute(VM *vm){
                     if(!IS_INT(length_value)){
                         vmu_error(vm, "Expect 'length' to be of type integer, but got something else");
                     }
-                    
+
                     int64_t length = TO_INT(length_value);
 
                     if(length < 0 || length > INT32_MAX){
@@ -460,7 +460,7 @@ static int execute(VM *vm){
                     }
 
                     Obj *array_obj = vmu_array_obj((int32_t)length, vm);
-                    
+
                     if(!array_obj){
                         vmu_error(vm, "Out of memory");
                     }
@@ -491,7 +491,7 @@ static int execute(VM *vm){
                 break;
             }case LIST_OPCODE:{
                 int16_t len = read_i16(vm);
-                
+
                 Obj *list_obj = vmu_list_obj(vm);
                 if(!list_obj) vmu_error(vm, "Out of memory");
 
@@ -510,7 +510,7 @@ static int execute(VM *vm){
                 break;
             }case DICT_OPCODE:{
                 int32_t len = read_i16(vm);
-                
+
                 Obj *dict_obj = vmu_dict_obj(vm);
                 if(!dict_obj){vmu_error(vm, "Out of memory");}
 
@@ -519,7 +519,7 @@ static int execute(VM *vm){
                 for (int32_t i = 0; i < len; i++){
                     Value *value = pop(vm);
                     Value *key = pop(vm);
-                    
+
                     Value *key_clone = vmu_clone_value(key, vm);
                     Value *value_clone = vmu_clone_value(value, vm);
 
@@ -530,7 +530,7 @@ static int execute(VM *vm){
                     }
 
                     uint32_t hash = vmu_hash_value(key_clone);
-                    
+
                     if(lzhtable_hash_put_key(key_clone, hash, value_clone, dict)){
                         vmu_error(vm, "Out of memory");
                     }
@@ -540,9 +540,9 @@ static int execute(VM *vm){
 
                 break;
             }case RECORD_OPCODE:{
-                uint8_t len = ADVANCE(vm);    
+                uint8_t len = ADVANCE(vm);
                 Obj *record_obj = vmu_record_obj(len, vm);
-                
+
                 if(!record_obj){
                     vmu_error(vm, "Out of memory");
                 }
@@ -553,7 +553,7 @@ static int execute(VM *vm){
 
                 Record *record = record_obj->value.record;
                 LZHTable *attributes = record->attributes;
-        
+
                 for(size_t i = 0; i < len; i++){
                     char *key = read_str(vm, NULL);
                     Value *value = pop(vm);
@@ -579,7 +579,7 @@ static int execute(VM *vm){
                         vmu_error(vm, "Out of memory");
                     }
                 }
-        
+
                 PUSH(OBJ_VALUE(record_obj), vm);
 
                 break;
@@ -637,7 +637,7 @@ static int execute(VM *vm){
                 }
 
                 vmu_error(vm, "Unsuported types using + operator");
-                
+
                 break;
             }case SUB_OPCODE:{
                 Value *vb = pop(vm);
@@ -692,12 +692,12 @@ static int execute(VM *vm){
 
                     int64_t left = TO_INT(va);
                     int64_t right = TO_INT(vb);
-                    
+
                     PUSH_INT(left * right, vm);
 
                     break;
                 }
-                
+
                 if(IS_FLOAT(va) || IS_FLOAT(vb)){
                     if(!IS_FLOAT(va)){
                         vmu_error(vm, "Expect float at left side of multiplication");
@@ -723,7 +723,7 @@ static int execute(VM *vm){
                         Str *astr = TO_STR(va);
                         in_buff = astr->buff;
                         in_buff_len = astr->len;
-                        
+
                         if(!IS_INT(vb))
                             vmu_error(vm, "Expect integer at right side of string multiplication");
 
@@ -1090,7 +1090,7 @@ static int execute(VM *vm){
 
                 for (int i = 0; i < closure->values_len; i++){
                     OutValue *closure_value = &closure->values[i];
-                    
+
                     if(closure_value->at == index){
                         *closure_value->value = *value;
                         break;
@@ -1105,17 +1105,17 @@ static int execute(VM *vm){
 
                 for (int i = 0; i < closure->values_len; i++){
                     OutValue *value = &closure->values[i];
-                    
+
                     if(value->at == index){
                         PUSH(*value->value, vm);
                         break;
                     }
                 }
-                
+
                 break;
             }case GDEF_OPCODE:{
                 Value *value = pop(vm);
-                
+
                 uint32_t hash = 0;
                 char *name = read_str(vm, &hash);
 
@@ -1143,13 +1143,13 @@ static int execute(VM *vm){
                 break;
             }case GSET_OPCODE:{
                 Value *value = peek(vm);
-                
+
                 uint32_t hash = 0;
                 char *name = read_str(vm, &hash);
-                
+
                 Module *module = CURRENT_FRAME(vm)->fn->module;
                 LZHTable *globals = MODULE_GLOBALS(module);
-                
+
                 LZHTableNode *value_node = NULL;
 
                 if(lzhtable_hash_contains(hash, globals, &value_node)){
@@ -1163,18 +1163,32 @@ static int execute(VM *vm){
             }case GGET_OPCODE:{
                 uint32_t hash = 0;
                 char *symbol = read_str(vm, &hash);
-                
+
                 Module *module = CURRENT_FRAME(vm)->fn->module;
                 LZHTable *globals = MODULE_GLOBALS(module);
-                
+
                 LZHTableNode *value_node = NULL;
 
                 if(!lzhtable_hash_contains(hash, globals, &value_node)){
                     vmu_error(vm, "Global symbol '%s' does not exists", symbol);
                 }
-                
+
                 GlobalValue *global_value = (GlobalValue *)value_node->value;
                 Value *value = global_value->value;
+
+                if(IS_MODULE(value) && !(TO_MODULE(value)->submodule->resolve)){
+                    Module *module = TO_MODULE(value);
+
+                    if(vm->module_ptr >= MODULES_LENGTH){
+                        vmu_error(vm, "Cannot resolve module '%s'. No space available", module->name);
+                    }
+
+                    CURRENT_FRAME(vm)->ip = CURRENT_FRAME(vm)->last_offset;
+                    vm->modules[vm->module_ptr++] = module;
+                    frame_up(0, vm);
+
+                    break;
+                }
 
                 PUSH(*value, vm);
 
@@ -1199,7 +1213,7 @@ static int execute(VM *vm){
                 if(IS_NATIVE_MODULE(value) || IS_MODULE(value)){
                     vmu_error(vm, "Modules cannot modify its access");
                 }
-                
+
                 if(access_type == 0){
                     global_value->access = PRIVATE_GVATYPE;
                 }else if(access_type == 1){
@@ -1208,7 +1222,7 @@ static int execute(VM *vm){
                     vmu_error(vm, "Illegal access type: %d", access_type);
                 }
 
-                break;   
+                break;
             }case NGET_OPCODE:{
                 char *key = read_str(vm, NULL);
                 size_t key_size = strlen(key);
@@ -1238,13 +1252,13 @@ static int execute(VM *vm){
                 }
 
                 Array *array = TO_ARRAY(target_value);
-                    
+
                 if(!IS_INT(index_value)){
                     vmu_error(vm, "Expect integer as index");
                 }
 
                 int64_t index = TO_INT(index_value);
-                
+
                 if(index < 0 || index > INT16_MAX){
                     vmu_error(vm, "Illegal index range. Must be > 0 and < %s", INT16_MAX);
                 }
@@ -1260,7 +1274,7 @@ static int execute(VM *vm){
                 Value *value = peek(vm);
                 char *symbol = read_str(vm, NULL);
                 Record *record = NULL;
-        
+
                 if(!IS_RECORD(target)){
                     vmu_error(vm, "Expect a record, but got something else");
                 }
@@ -1294,7 +1308,7 @@ static int execute(VM *vm){
                 uint8_t right = TO_BOOL(vb);
 
                 PUSH_BOOL(left || right, vm)
-                
+
                 break;
             }case AND_OPCODE:{
                 Value *vb = pop(vm);
@@ -1311,7 +1325,7 @@ static int execute(VM *vm){
                 uint8_t right = TO_BOOL(vb);
 
                 PUSH_BOOL(left && right, vm)
-                
+
                 break;
             }case NNOT_OPCODE:{
                 Value *vb = pop(vm);
@@ -1321,15 +1335,15 @@ static int execute(VM *vm){
                     PUSH_INT(-right, vm)
                     break;
                 }
-                
+
                 if(IS_FLOAT(vb)){
                     double right = TO_FLOAT(vb);
                     PUSH_FLOAT(-right, vm)
                     break;
                 }
-                
+
                 vmu_error(vm, "Expect integer or float at right side");
-                
+
                 break;
             }case NOT_OPCODE:{
                 Value *vb = pop(vm);
@@ -1348,7 +1362,7 @@ static int execute(VM *vm){
             }case JMP_OPCODE:{
                 int16_t jmp_value = read_i16(vm);
                 if(jmp_value == 0){break;}
-                
+
                 if(jmp_value > 0){
                     CURRENT_FRAME(vm)->ip += jmp_value - 1;
                 }else{
@@ -1358,14 +1372,14 @@ static int execute(VM *vm){
                 break;
             }case JIF_OPCODE:{
                 Value *value = pop(vm);
-                
+
                 if(!IS_BOOL(value)){
                     vmu_error(vm, "Expect boolean as conditional value");
                 }
 
                 uint8_t condition = TO_BOOL(value);
                 int16_t jmp_value = read_i16(vm);
-                
+
                 if(jmp_value == 0){break;}
 
                 if(!condition){
@@ -1401,7 +1415,7 @@ static int execute(VM *vm){
             }case CALL_OPCODE:{
                 uint8_t args_count = ADVANCE(vm);
                 Value *fn_value = peek_at(args_count, vm);
-                
+
                 if(IS_FN(fn_value)){
                     Fn *fn = TO_FN(fn_value);
                     uint8_t params_count = fn->params ? fn->params->used : 0;
@@ -1459,25 +1473,25 @@ static int execute(VM *vm){
 
                     // VLA must not be declared with a zero length
                     Value args[args_count == 0 ? 1 : args_count];
-                    
+
                     for (int i = args_count; i > 0; i--){
                         args[i - 1] = *pop(vm);
                     }
-                    
+
                     pop(vm);
 
                     Value out_value = raw_fn(args_count, args, target, vm);
-                    
+
                     PUSH(out_value, vm);
                 }else if(IS_FOREIGN_FN(fn_value)){
                     ForeignFn *foreign_fn = TO_FOREIGN_FN(fn_value);
                     RawForeignFn raw_fn = foreign_fn->raw_fn;
                     Value values[args_count];
-                    
+
                     for (int i = args_count; i > 0; i--){
                         values[i - 1] = *pop(vm);
                     }
-                    
+
                     pop(vm);
 
                     Value out_value = *raw_fn(values);
@@ -1522,7 +1536,7 @@ static int execute(VM *vm){
                 if(IS_LIST(value)){
                     DynArr *list = TO_LIST(value);
                     Obj *native_fn_obj = native_list_get(symbol, list, vm);
-                    
+
                     if(!native_fn_obj){
                         vmu_error(vm, "List does not have symbol '%s'", symbol);
                     }
@@ -1576,69 +1590,56 @@ static int execute(VM *vm){
                 if(IS_MODULE(value)){
                     Module *module = TO_MODULE(value);
 
-                    if(module->submodule->resolve){
-                        LZHTable *globals = MODULE_GLOBALS(module);
-                        LZHTableNode *value_node = NULL;
-                        
-                        if(lzhtable_hash_contains(hash, globals, &value_node)){
-                            GlobalValue *global_value = (GlobalValue *)value_node->value;
-                            Value *value = global_value->value;
+                    LZHTable *globals = MODULE_GLOBALS(module);
+                    LZHTableNode *value_node = NULL;
 
-                            if(global_value->access == PRIVATE_GVATYPE){
-                                vmu_error(vm, "Symbol '%s' has private access in module '%s'", symbol, module->name);
-                            }
+                    if(lzhtable_hash_contains(hash, globals, &value_node)){
+                        GlobalValue *global_value = (GlobalValue *)value_node->value;
+                        Value *value = global_value->value;
 
-                            PUSH(*value, vm);
-                        }else{
-                            vmu_error(vm, "Module '%s' does not contains symbol '%s'", module->name, symbol);
-                        }   
-                    }else{
-                        if(vm->module_ptr >= MODULES_LENGTH){
-                            vmu_error(vm, "Cannot resolve module '%s'. No space available", module->name);
+                        if(global_value->access == PRIVATE_GVATYPE){
+                            vmu_error(vm, "Symbol '%s' has private access in module '%s'", symbol, module->name);
                         }
 
                         PUSH(*value, vm);
-                        CURRENT_FRAME(vm)->ip = CURRENT_FRAME(vm)->last_offset;
-
-                        vm->modules[vm->module_ptr++] = module;
-
-                        frame_up(0, vm);
+                    }else{
+                        vmu_error(vm, "Module '%s' does not contains symbol '%s'", module->name, symbol);
                     }
-                    
+
                     break;
                 }
 
                 if(IS_NATIVE_LIBRARY(value)){
                     NativeLib *library = TO_NATIVE_LIBRARY(value);
                     void *handler = library->handler;
-                    
+
                     void *(*znative_symbol)(char *symbol_name) = dlsym(handler, "znative_symbol");
-                    
+
                     if(!znative_symbol){
                         vmu_error(vm, "Something is wrong with loaded native library. Expect 'znative_symbol' to be present");
                     }
 
                     RawForeignFn raw_foreign_fn = znative_symbol(symbol);
-                    
+
                     if(!raw_foreign_fn){
                         vmu_error(vm, "Failed to get '%s' from native library: do not exists", symbol);
                     }
 
                     Obj *foreign_fn_obj = vmu_obj(FOREIGN_FN_OTYPE, vm);
-                    
+
                     if(!foreign_fn_obj){
                         vmu_error(vm, "Failed to get native library symbol: out of memory");
                     }
 
                     ForeignFn *foreign_fn = (ForeignFn *)malloc(sizeof(ForeignFn));
-                    
+
                     if(!foreign_fn){
                         vmu_error(vm, "Failed to get native library symbol: out of memory");
                     }
 
                     foreign_fn->raw_fn = raw_foreign_fn;
                     foreign_fn_obj->value.foreign_fn = foreign_fn;
-                    
+
                     PUSH(OBJ_VALUE(foreign_fn_obj), vm);
 
                     break;
@@ -1653,13 +1654,13 @@ static int execute(VM *vm){
 
                 if(IS_ARRAY(target_value)){
                     Array *array = TO_ARRAY(target_value);
-                    
+
                     if(!IS_INT(index_value)){
                         vmu_error(vm, "Expect integer as index, but got something else");
                     }
 
                     int64_t index = TO_INT(index_value);
-                    
+
                     if(index < 0 || index > INT32_MAX){
                         vmu_error(vm, "Illegal index value. Must be: 0 <= INDEX(%ld) <= %s", index, INT32_MAX);
                     }
@@ -1739,7 +1740,7 @@ static int execute(VM *vm){
                 if(vm->frame_ptr == 0){
                     vmu_error(vm, "Can not throw in a empty frame stack");
                 }
-                
+
                 Value *value = pop(vm);
                 Str *throw_message = NULL;
 
@@ -1750,10 +1751,10 @@ static int execute(VM *vm){
 
                     if(record->attributes){
                         char *key = "message";
-                        
+
                         uint8_t *k = (uint8_t *)key;
                         size_t ks = strlen(key);
-                        
+
                         LZHTableNode *message_node = NULL;
 
                         if(lzhtable_contains(k, ks, record->attributes, &message_node)){
@@ -1763,11 +1764,11 @@ static int execute(VM *vm){
                                 vmu_error(vm, "Expect record attribute 'message' to be of type string");
                             }
 
-                            throw_message = TO_STR(value);   
+                            throw_message = TO_STR(value);
                         }
                     }
                 }
-                
+
                 char throw = 1;
                 int ptr = (int)vm->frame_ptr;
 
@@ -1781,7 +1782,7 @@ static int execute(VM *vm){
 
                     uint8_t *key = (uint8_t *)fn;
                     size_t key_size = sizeof(Fn);
-                    
+
                     if(lzhtable_contains(key, key_size, fn_tries, &node)){
                         TryBlock *try = NULL;
                         DynArrPtr *tries = (DynArrPtr *)node->value;
@@ -1817,7 +1818,7 @@ static int execute(VM *vm){
                         vmu_error(vm, "");
                     }
                 }
-                
+
                 break;
             }case LOAD_OPCODE:{
                 char *path = read_str(vm, NULL);

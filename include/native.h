@@ -1,9 +1,81 @@
 #ifndef NATIVE_H
 #define NATIVE_H
 
+Value native_fn_ls(uint8_t argsc, Value *values, void *target, VM *vm){
+	Value *module_value = &values[0];
+    Obj *array_obj = NULL;
+
+    if(IS_NATIVE_MODULE(module_value)){
+        NativeModule *module = TO_NATIVE_MODULE(module_value);
+        LZHTable *symbols = module->symbols;
+
+        if(LZHTABLE_COUNT(symbols) > (size_t)INT32_MAX){
+            vmu_error(vm, "Module too long to analyze");
+        }
+
+        array_obj = vmu_array_obj((int32_t)LZHTABLE_COUNT(symbols), vm);
+
+        if(!array_obj){
+            vmu_error(vm, "Out of memory");
+        }
+
+        Array *array = array_obj->value.array;
+        int32_t i = 0;
+
+        for(LZHTableNode *current = symbols->head; current; current = current->next_table_node){
+            NativeModuleSymbol *symbol = (NativeModuleSymbol *)current->value;
+            Obj *native_fn_obj = vmu_obj(NATIVE_FN_OTYPE, vm);
+
+            if(!native_fn_obj){
+                vmu_error(vm, "Out of memory");
+            }
+
+            native_fn_obj->value.native_fn = symbol->value.fn;
+            array->values[i++] = OBJ_VALUE(native_fn_obj);
+        }
+    }else if(IS_MODULE(module_value)){
+        Module *module = TO_MODULE(module_value);
+        LZHTable *global_values = MODULE_GLOBALS(module);
+
+        DynArr *values = memory_dynarr(sizeof(Value));
+        if(!values){vmu_error(vm, "Out of memory");}
+
+        for(LZHTableNode *current = global_values->head; current; current = current->next_table_node){
+            GlobalValue *global_value = (GlobalValue *)current->value;
+            if(global_value->access == PRIVATE_GVATYPE){continue;}
+
+            Value *value = global_value->value;
+
+            if(dynarr_insert(value, values)){
+                dynarr_destroy(values);
+                vmu_error(vm, "Out of memory");
+            }
+        }
+
+        if(DYNARR_LEN(values) > (size_t)INT32_MAX){
+            vmu_error(vm, "Module too long to analyze");
+        }
+
+        array_obj = vmu_array_obj((int32_t)DYNARR_LEN(values), vm);
+        if(!array_obj){vmu_error(vm, "Out of memory");}
+
+        Array *array = array_obj->value.array;
+
+        for (int32_t i = 0; i < array->len; i++){
+            array->values[i] = DYNARR_GET_AS(Value, (size_t)i, values);
+        }
+
+        dynarr_destroy(values);
+    }else{
+        vmu_error(vm, "Expect module, but got something else");
+    }
+
+	return OBJ_VALUE(array_obj);
+}
+
 Value native_fn_exit(uint8_t argsc, Value *values, void *target, VM *vm){
 	Value *exit_code_value = &values[0];
-	
+
     if(!IS_INT(exit_code_value)){
         vmu_error(vm, "Expect integer, but got something else");
     }
@@ -16,7 +88,7 @@ Value native_fn_exit(uint8_t argsc, Value *values, void *target, VM *vm){
 
 Value native_fn_assert(uint8_t argsc, Value *values, void *target, VM *vm){
 	Value *raw_value = &values[0];
-	
+
     if(!IS_BOOL(raw_value))
         vmu_error(vm, "Expect boolean, but got something else");
 

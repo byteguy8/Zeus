@@ -328,3 +328,7 @@ void *memory_realloc(void *ptr, size_t size){
 void memory_dealloc(void *ptr){
     return lzflist_link_dealloc(ptr, 0, runtime_allocator);
 }
+
+DynArr *memory_dynarr(size_t size){
+    return dynarr_create(size, (DynArrAllocator *)&runtime_allocator_interface);
+}

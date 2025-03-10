@@ -123,6 +123,8 @@ int main(int argc, char const *argv[]){
 	memory_init();
 
     LZHTable *natives = runtime_lzhtable();
+    
+    add_native("ls", 1, native_fn_ls, natives);
     add_native("exit", 1, native_fn_exit, natives);
 	add_native("assert", 1, native_fn_assert, natives);
     add_native("assertm", 2, native_fn_assertm, natives);

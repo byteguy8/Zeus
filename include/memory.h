@@ -50,4 +50,6 @@ void *memory_alloc(size_t size);
 void *memory_realloc(void *ptr, size_t size);
 void memory_dealloc(void *ptr);
 
+DynArr *memory_dynarr(size_t size);
+
 #endif
