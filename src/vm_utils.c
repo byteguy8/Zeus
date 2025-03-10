@@ -274,7 +274,7 @@ void mark_value(Value *value){
 
 void mark_objs(VM *vm){
     //> MARKING GLOBALS
-    Module *module = vm->module;
+    Module *module = vm->modules[0];
     LZHTable *globals = MODULE_GLOBALS(module);
     
     LZHTableNode *current = globals->head;
@@ -560,7 +560,7 @@ void vmu_clean_up(VM *vm){
 		obj = next;
 	}
 
-    clean_up_module(vm->module);
+    clean_up_module(vm->modules[0]);
 }
 
 char *vmu_clone_buff(char *buff, VM *vm){

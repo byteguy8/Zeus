@@ -9,6 +9,7 @@
 #define STACK_LENGTH 255
 #define LOCALS_LENGTH 255
 #define FRAME_LENGTH 255
+#define MODULES_LENGTH 255
 
 typedef enum global_value_access_type{
     PRIVATE_GVATYPE,
@@ -43,7 +44,9 @@ typedef struct vm{
     Frame frame_stack[FRAME_LENGTH];
 
     LZHTable *natives;
-    Module *module;
+    //Module *module;
+    int module_ptr;
+    Module *modules[MODULES_LENGTH];
 //> GARBAGE COLLECTOR
     Obj *head;
     Obj *tail;
