@@ -1,7 +1,7 @@
 #ifndef MEMORY_H
 #define MEMORY_H
 
-#include "types.h"
+#include "rtypes.h"
 #include "bstr.h"
 #include "lzarena.h"
 #include "lzflist.h"

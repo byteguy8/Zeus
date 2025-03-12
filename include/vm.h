@@ -1,7 +1,7 @@
 #ifndef VM_H
 #define VM_H
 
-#include "value.h"
+#include "rtypes.h"
 #include "dynarr.h"
 #include "lzhtable.h"
 #include <setjmp.h>
@@ -29,12 +29,12 @@ typedef struct global_value{
 typedef struct frame{
     size_t ip;
     size_t last_offset;
-    
+
     Fn *fn;
     Closure *closure;
-    
+
     Value locals[LOCALS_LENGTH];
-    
+
     OutValue *values_head;
     OutValue *values_tail;
 }Frame;
@@ -43,7 +43,7 @@ typedef struct vm{
     char halt;
     jmp_buf err_jmp;
     unsigned char exit_code;
-    
+
     int stack_ptr;
     Value stack[STACK_LENGTH];
 

@@ -2,7 +2,7 @@
 #include "vm_utils.h"
 #include "memory.h"
 #include "opcode.h"
-#include "types.h"
+#include "rtypes.h"
 
 #include "native_str.h"
 #include "native_array.h"
@@ -79,7 +79,7 @@ static Value *peek_at(int offset, VM *vm);
 #define PUSH_NATIVE_FN(fn, vm) {              \
     Obj *obj = vmu_obj(NATIVE_FN_OTYPE, vm);  \
     if(!obj){vmu_error(vm, "Out of memory");} \
-    obj->value.native_fn = fn;                \
+    obj->content.native_fn = fn;              \
     Value fn_value = OBJ_VALUE(obj);          \
     PUSH(fn_value, vm)                        \
 }
@@ -87,14 +87,14 @@ static Value *peek_at(int offset, VM *vm);
 #define PUSH_NATIVE_MODULE(m, vm){               \
 	Obj *obj = vmu_obj(NATIVE_MODULE_OTYPE, vm); \
 	if(!obj){vmu_error(vm, "out of memory");}    \
-	obj->value.native_module = (m);              \
+	obj->content.native_module = (m);            \
 	PUSH(OBJ_VALUE(obj), vm);                    \
 }
 
 #define PUSH_MODULE(m, vm) {                  \
     Obj *obj = vmu_obj(MODULE_OTYPE, vm);     \
 	if(!obj){vmu_error(vm, "Out of memory");} \
-	obj->value.module = m;                    \
+	obj->content.module = m;                  \
 	PUSH(OBJ_VALUE(obj), vm);                 \
 }
 
@@ -110,8 +110,8 @@ static void remove_value_from_frame(OutValue *value, VM *vm);
 #define CURRENT_LOCALS(vm)(CURRENT_FRAME(vm)->locals)
 #define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
 #define CURRENT_CHUNKS(vm)(CURRENT_FN(vm)->chunks)
-#define CURRENT_CONSTANTS(vm)(CURRENT_FN(vm)->constants)
-#define CURRENT_FLOAT_VALUES(vm)(CURRENT_FN(vm)->float_values)
+#define CURRENT_CONSTANTS(vm)(CURRENT_FN(vm)->integers)
+#define CURRENT_FLOAT_VALUES(vm)(CURRENT_FN(vm)->floats)
 #define CURRENT_MODULE(vm)((vm)->modules[(vm)->module_ptr - 1])
 
 #define IS_AT_END(vm)((vm)->frame_ptr == 0 || CURRENT_FRAME(vm)->ip >= CURRENT_CHUNKS(vm)->used)
@@ -189,7 +189,7 @@ Value *peek_at(int offset, VM *vm){
 void push_fn(Fn *fn, VM *vm){
 	Obj *obj = vmu_obj(FN_OTYPE, vm);
 	if(!obj){vmu_error(vm, "Out of memory");}
-	obj->value.fn = fn;
+	obj->content.fn = fn;
 	PUSH(OBJ_VALUE(obj), vm);
 }
 
@@ -221,7 +221,7 @@ void push_closure(MetaClosure *meta, VM *vm){
     closure->values = values;
     closure->meta = meta;
 
-    obj->value.closure = closure;
+    obj->content.closure = closure;
 
     PUSH(OBJ_VALUE(obj), vm);
 }
@@ -250,7 +250,7 @@ void push_module_symbol(int32_t index, Module *module, VM *vm){
         vmu_error(vm, "Failed to push module symbol: index out of bounds");
     }
 
-    ModuleSymbol *module_symbol = &(DYNARR_GET_AS(ModuleSymbol, (size_t)index, symbols));
+    SubModuleSymbol *module_symbol = &(DYNARR_GET_AS(SubModuleSymbol, (size_t)index, symbols));
 
 	if(module_symbol->type == NATIVE_MODULE_MSYMTYPE){
         PUSH_NATIVE_MODULE(module_symbol->value.native_module, vm);
@@ -335,7 +335,7 @@ Frame *frame_up(int32_t index, VM *vm){
         vmu_error(vm, "Failed to push frame: illegal index");
     }
 
-	ModuleSymbol *symbol = &(DYNARR_GET_AS(ModuleSymbol, (size_t)index, symbols));
+	SubModuleSymbol *symbol = &(DYNARR_GET_AS(SubModuleSymbol, (size_t)index, symbols));
 
 	if(symbol->type != FUNCTION_MSYMTYPE){
         vmu_error(vm, "Expect symbol of type 'function', but got something else");
@@ -370,7 +370,7 @@ static int execute(VM *vm){
             // the 'import' function which must be remove from the call stack
             // in order to the normal execution of the previous frame continues
             if(vm->module_ptr > 1){
-                CURRENT_MODULE(vm)->submodule->resolve = 1;
+                CURRENT_MODULE(vm)->submodule->resolved = 1;
                 CURRENT_MODULE(vm) = NULL;
                 vm->module_ptr--;
                 frame_down(vm);
@@ -495,7 +495,7 @@ static int execute(VM *vm){
                 Obj *list_obj = vmu_list_obj(vm);
                 if(!list_obj) vmu_error(vm, "Out of memory");
 
-                DynArr *list = list_obj->value.list;
+                DynArr *list = list_obj->content.list;
 
                 for(int32_t i = 0; i < len; i++){
                     Value *value = pop(vm);
@@ -514,7 +514,7 @@ static int execute(VM *vm){
                 Obj *dict_obj = vmu_dict_obj(vm);
                 if(!dict_obj){vmu_error(vm, "Out of memory");}
 
-                LZHTable *dict = dict_obj->value.dict;
+                LZHTable *dict = dict_obj->content.dict;
 
                 for (int32_t i = 0; i < len; i++){
                     Value *value = pop(vm);
@@ -551,7 +551,7 @@ static int execute(VM *vm){
                     break;
                 }
 
-                Record *record = record_obj->value.record;
+                Record *record = record_obj->content.record;
                 LZHTable *attributes = record->attributes;
 
                 for(size_t i = 0; i < len; i++){
@@ -1176,7 +1176,7 @@ static int execute(VM *vm){
                 GlobalValue *global_value = (GlobalValue *)value_node->value;
                 Value *value = global_value->value;
 
-                if(IS_MODULE(value) && !(TO_MODULE(value)->submodule->resolve)){
+                if(IS_MODULE(value) && !(TO_MODULE(value)->submodule->resolved)){
                     Module *module = TO_MODULE(value);
 
                     if(vm->module_ptr >= MODULES_LENGTH){
@@ -1610,7 +1610,7 @@ static int execute(VM *vm){
                 }
 
                 if(IS_NATIVE_LIBRARY(value)){
-                    NativeLib *library = TO_NATIVE_LIBRARY(value);
+                    ForeignLib *library = TO_NATIVE_LIBRARY(value);
                     void *handler = library->handler;
 
                     void *(*znative_symbol)(char *symbol_name) = dlsym(handler, "znative_symbol");
@@ -1638,7 +1638,7 @@ static int execute(VM *vm){
                     }
 
                     foreign_fn->raw_fn = raw_foreign_fn;
-                    foreign_fn_obj->value.foreign_fn = foreign_fn;
+                    foreign_fn_obj->content.foreign_fn = foreign_fn;
 
                     PUSH(OBJ_VALUE(foreign_fn_obj), vm);
 
@@ -1821,20 +1821,6 @@ static int execute(VM *vm){
 
                 break;
             }case LOAD_OPCODE:{
-                char *path = read_str(vm, NULL);
-                void *handler = dlopen(path, RTLD_LAZY);
-
-                if(!handler){
-                    vmu_error(vm, "Failed to load native library: %s", dlerror());
-                }
-
-                native_lib_init(handler, vm);
-
-                Obj *native_lib_obj = vmu_native_lib_obj(handler, vm);
-                if(!native_lib_obj){vmu_error(vm, "Out of memory");}
-
-                PUSH(OBJ_VALUE(native_lib_obj), vm);
-
                 break;
             }default:{
                 assert("Illegal opcode");
@@ -1858,7 +1844,7 @@ int vm_execute(LZHTable *natives, Module *module, VM *vm){
     if(setjmp(vm->err_jmp) == 1){
         return vm->exit_code;
     }else{
-        module->submodule->resolve = 1;
+        module->submodule->resolved = 1;
 
         vm->halt = 0;
         vm->exit_code = OK_VMRESULT;

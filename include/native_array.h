@@ -1,8 +1,7 @@
 #ifndef NATIVE_ARRAY_H
 #define NATIVE_ARRAY_H
 
-#include "types.h"
-#include "value.h"
+#include "rtypes.h"
 #include "memory.h"
 #include "vm_utils.h"
 #include <bits/stdint-intn.h>
@@ -38,7 +37,7 @@ Value native_fn_array_make_room(uint8_t argsc, Value *values, void *target, VM *
     }
     
     Obj *new_array_obj = vmu_array_obj(array->len + plus, vm);
-    Array *new_array = new_array_obj->value.array;
+    Array *new_array = new_array_obj->content.array;
 
     if(!new_array_obj){
         vmu_error(vm, "Out of memory");
@@ -74,7 +73,7 @@ Value native_fn_array_join(uint8_t argsc, Value *values, void *target, VM *vm){
     }
     
     Obj *arr2_obj = vmu_array_obj(arr2_len, vm);
-    Array *arr2 = arr2_obj->value.array;
+    Array *arr2 = arr2_obj->content.array;
 
     for(int32_t i = 0; i < arr2->len; i++){
         if(i < arr0->len){
@@ -96,7 +95,7 @@ Value native_fn_array_to_list(uint8_t argsc, Value *values, void *target, VM *vm
         vmu_error(vm, "Out of memory");
     }
 
-    DynArr *list = list_obj->value.list;
+    DynArr *list = list_obj->content.list;
 
     for(int32_t i = 0; i < arr0->len; i++){
         Value value = arr0->values[i];

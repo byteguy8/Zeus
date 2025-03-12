@@ -3,8 +3,7 @@
 
 #define _POSIX_C_SOURCE 200809L
 
-#include "types.h"
-#include "value.h"
+#include "rtypes.h"
 #include "vm_utils.h"
 #include <time.h>
 #include <unistd.h>

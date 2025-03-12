@@ -1,8 +1,7 @@
 #ifndef NATIVE_LIST
 #define NATIVE_LIST
 
-#include "types.h"
-#include "value.h"
+#include "rtypes.h"
 #include "memory.h"
 #include "vm_utils.h"
 
@@ -148,7 +147,7 @@ Value native_fn_list_append_new(uint8_t argsc, Value *values, void *target, VM *
 	
 	if(!list_obj){vmu_error(vm, "Out of memory");}
 
-	DynArr *list = list_obj->value.list;
+	DynArr *list = list_obj->content.list;
 
 	for(size_t i = 0; i < to->used; i++){
 		Value value = DYNARR_GET_AS(Value, i, to);

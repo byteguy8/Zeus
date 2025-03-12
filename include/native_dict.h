@@ -1,8 +1,7 @@
 #ifndef NATIVE_DICT
 #define NATIVE_DICT
 
-#include "types.h"
-#include "value.h"
+#include "rtypes.h"
 #include "vm_utils.h"
 
 static LZHTable *dict_symbols = NULL;
@@ -104,7 +103,7 @@ Value native_fn_dict_keys(uint8_t argsc, Value *values, void *target, VM *vm){
     }
 
     LZHTableNode *node = dict->head;
-    Array *array = array_obj->value.array;
+    Array *array = array_obj->content.array;
 
     for (int16_t i = 0; i < array->len; i++){
         LZHTableNode *next = node->next_table_node;
@@ -124,7 +123,7 @@ Value native_fn_dict_values(uint8_t argsc, Value *values, void *target, VM *vm){
     }
 
     LZHTableNode *current = dict->head;
-    Array *array = array_obj->value.array;
+    Array *array = array_obj->content.array;
 
     for (int16_t i = 0; i < array->len; i++){
         LZHTableNode *next = current->next_table_node;

@@ -1,8 +1,7 @@
 #ifndef NATIVE_IO_H
 #define NATIVE_IO_H
 
-#include "types.h"
-#include "value.h"
+#include "rtypes.h"
 #include "vm_utils.h"
 #include <stdio.h>
 

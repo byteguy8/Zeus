@@ -1,7 +1,6 @@
 #ifndef VM_UTILS_H
 #define VM_UTILS_H
 
-#include "value.h"
 #include "vm.h"
 #include "bstr.h"
 #include <stdio.h>
@@ -54,47 +53,6 @@ NativeFn *vmu_native_function(
     RawNativeFn native,
     VM *vm
 );
-
-#define IS_EMPTY(v)((v)->type == EMPTY_VTYPE)
-#define IS_BOOL(v)((v)->type == BOOL_VTYPE)
-#define IS_INT(v)((v)->type == INT_VTYPE)
-#define IS_FLOAT(v)((v)->type == FLOAT_VTYPE)
-#define IS_OBJ(v)((v)->type == OBJ_VTYPE)
-#define IS_STR(v)(IS_OBJ(v) && (v)->literal.obj->type == STR_OTYPE)
-#define IS_ARRAY(v)(IS_OBJ(v) && (v)->literal.obj->type == ARRAY_OTYPE)
-#define IS_LIST(v)(IS_OBJ(v) && (v)->literal.obj->type == LIST_OTYPE)
-#define IS_DICT(v)(IS_OBJ(v) && (v)->literal.obj->type == DICT_OTYPE)
-#define IS_RECORD(v)(IS_OBJ(v) && (v)->literal.obj->type == RECORD_OTYPE)
-#define IS_FN(v)(IS_OBJ(v) && (v)->literal.obj->type == FN_OTYPE)
-#define IS_CLOSURE(v)(IS_OBJ(v) && (v)->literal.obj->type == CLOSURE_OTYPE)
-#define IS_NATIVE_FN(v)(IS_OBJ(v) && (v)->literal.obj->type == NATIVE_FN_OTYPE)
-#define IS_NATIVE_MODULE(v)(IS_OBJ(v) && (v)->literal.obj->type == NATIVE_MODULE_OTYPE)
-#define IS_MODULE(v)(IS_OBJ(v) && (v)->literal.obj->type == MODULE_OTYPE)
-#define IS_NATIVE_LIBRARY(v)(IS_OBJ(v) && (v)->literal.obj->type == NATIVE_LIB_OTYPE)
-#define IS_FOREIGN_FN(v)(IS_OBJ(v) && (v)->literal.obj->type == FOREIGN_FN_OTYPE)
-
-#define TO_BOOL(v)((v)->literal.bool)
-#define TO_INT(v)((v)->literal.i64)
-#define TO_FLOAT(v)((v)->literal.fvalue)
-#define TO_OBJ(v)((v)->literal.obj)
-#define TO_STR(v)((v)->literal.obj->value.str)
-#define TO_ARRAY(v)((v)->literal.obj->value.array)
-#define TO_LIST(v)((v)->literal.obj->value.list)
-#define TO_DICT(v)((v)->literal.obj->value.dict)
-#define TO_RECORD(v)((v)->literal.obj->value.record)
-#define TO_FN(v)((v)->literal.obj->value.fn)
-#define TO_CLOSURE(v)((v)->literal.obj->value.closure)
-#define TO_NATIVE_FN(v)((v)->literal.obj->value.native_fn)
-#define TO_NATIVE_MODULE(v)((v)->literal.obj->value.native_module)
-#define TO_MODULE(v)((v)->literal.obj->value.module)
-#define TO_NATIVE_LIBRARY(v)((v)->literal.obj->value.native_lib)
-#define TO_FOREIGN_FN(v)((v)->literal.obj->value.foreign_fn)
-
-#define EMPTY_VALUE ((Value){.type = EMPTY_VTYPE})
-#define BOOL_VALUE(value)((Value){.type = BOOL_VTYPE, .literal.bool = (value)})
-#define INT_VALUE(value)((Value){.type = INT_VTYPE, .literal.i64 = (value)})
-#define FLOAT_VALUE(value)((Value){.type = FLOAT_VTYPE, .literal.fvalue = (value)})
-#define OBJ_VALUE(value)((Value){.type = OBJ_VTYPE, .literal.obj = (value)})
 
 #define VALIDATE_INDEX(value, index, len){                                                         \
     if(!IS_INT((value))){                                                                          \

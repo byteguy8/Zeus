@@ -1,8 +1,7 @@
 #ifndef NATIVE_MATH_H
 #define NATIVE_MATH_H
 
-#include "types.h"
-#include "value.h"
+#include "rtypes.h"
 #include "vm_utils.h"
 #include <math.h>
 

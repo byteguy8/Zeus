@@ -3,7 +3,7 @@
 
 #include "dynarr.h"
 #include "lzhtable.h"
-#include "types.h"
+#include "rtypes.h"
 
 typedef struct dumpper{
     size_t ip;

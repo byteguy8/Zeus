@@ -1,6 +1,6 @@
 #include "dumpper.h"
 #include "memory.h"
-#include "types.h"
+#include "rtypes.h"
 #include "opcode.h"
 #include <stdio.h>
 #include <assert.h>
@@ -17,8 +17,8 @@ static int32_t compose_i32(uint8_t *bytes){
 #define CURRENT_SUBMODULE(d)(CURRENT_MODULE(d)->submodule)
 #define CURRENT_STRINGS(d)(CURRENT_SUBMODULE(d)->strings)
 #define CURRENT_FN(d)(d->current_fn)
-#define CURRENT_CONSTANTS(d)(CURRENT_FN(d)->constants)
-#define CURRENT_FLOAT_VALUES(d)(CURRENT_FN(d)->float_values)
+#define CURRENT_CONSTANTS(d)(CURRENT_FN(d)->integers)
+#define CURRENT_FLOAT_VALUES(d)(CURRENT_FN(d)->floats)
 #define CURRENT_CHUNKS(d)(CURRENT_FN(d)->chunks)
 
 static int is_at_end(Dumpper *dumpper){
@@ -443,7 +443,7 @@ static void dump_module(Module *module, Dumpper *dumpper){
     DynArr *symbols = submodule->symbols;
     
     for (size_t i = 0; i < DYNARR_LEN(symbols); i++){
-        ModuleSymbol symbol = DYNARR_GET_AS(ModuleSymbol, i, symbols);
+        SubModuleSymbol symbol = DYNARR_GET_AS(SubModuleSymbol, i, symbols);
         
         if(symbol.type == FUNCTION_MSYMTYPE){
             Fn *fn = symbol.value.fn;

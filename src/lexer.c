@@ -2,7 +2,7 @@
 #include "memory.h"
 #include "utils.h"
 #include "token.h"
-#include "types.h"
+#include "rtypes.h"
 #include <stdint.h>
 #include <assert.h>
 #include <stdarg.h>

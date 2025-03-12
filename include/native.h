@@ -19,7 +19,7 @@ Value native_fn_ls(uint8_t argsc, Value *values, void *target, VM *vm){
             vmu_error(vm, "Out of memory");
         }
 
-        Array *array = array_obj->value.array;
+        Array *array = array_obj->content.array;
         int32_t i = 0;
 
         for(LZHTableNode *current = symbols->head; current; current = current->next_table_node){
@@ -30,7 +30,7 @@ Value native_fn_ls(uint8_t argsc, Value *values, void *target, VM *vm){
                 vmu_error(vm, "Out of memory");
             }
 
-            native_fn_obj->value.native_fn = symbol->value.fn;
+            native_fn_obj->content.native_fn = symbol->value.fn;
             array->values[i++] = OBJ_VALUE(native_fn_obj);
         }
     }else if(IS_MODULE(module_value)){
@@ -59,7 +59,7 @@ Value native_fn_ls(uint8_t argsc, Value *values, void *target, VM *vm){
         array_obj = vmu_array_obj((int32_t)DYNARR_LEN(values), vm);
         if(!array_obj){vmu_error(vm, "Out of memory");}
 
-        Array *array = array_obj->value.array;
+        Array *array = array_obj->content.array;
 
         for (int32_t i = 0; i < array->len; i++){
             array->values[i] = DYNARR_GET_AS(Value, (size_t)i, values);

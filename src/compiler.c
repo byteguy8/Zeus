@@ -98,7 +98,7 @@ void add_captured_symbol(Token *identifier, Symbol *symbol, Scope *scope, Compil
 void set_fn(size_t index, Fn *fn, Compiler *compiler){
     Module *module = compiler->current_module;
 	DynArr *symbols = MODULE_SYMBOLS(module);
-	ModuleSymbol symbol = (ModuleSymbol){
+	SubModuleSymbol symbol = (SubModuleSymbol){
         .type = FUNCTION_MSYMTYPE,
         .value.fn = fn
     };
@@ -109,7 +109,7 @@ void set_fn(size_t index, Fn *fn, Compiler *compiler){
 void set_closure(size_t index, MetaClosure *closure, Compiler *compiler){
     Module *module = compiler->current_module;
 	DynArr *symbols = MODULE_SYMBOLS(module);
-	ModuleSymbol symbol = (ModuleSymbol){
+	SubModuleSymbol symbol = (SubModuleSymbol){
         .type = CLOSURE_MSYMTYPE,
         .value.meta_closure = closure
     };
@@ -227,7 +227,7 @@ Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function, size_t *ou
 
     DynArr *symbols = MODULE_SYMBOLS(compiler->current_module);
     
-    ModuleSymbol module_symbol = {0};
+    SubModuleSymbol module_symbol = {0};
     dynarr_insert(&module_symbol, symbols);
 
     if(out_function) *out_function = fn;
@@ -486,13 +486,13 @@ DynArr *current_locations(Compiler *compiler){
 DynArr *current_constants(Compiler *compiler){
     assert(compiler->fn_ptr > 0 && compiler->fn_ptr < FUNCTIONS_LENGTH);
     Fn *fn = compiler->fn_stack[compiler->fn_ptr - 1];
-    return fn->constants;
+    return fn->integers;
 }
 
 DynArr *current_float_values(Compiler *compiler){
     assert(compiler->fn_ptr > 0 && compiler->fn_ptr < FUNCTIONS_LENGTH);
     Fn *fn = compiler->fn_stack[compiler->fn_ptr - 1];
-    return fn->float_values;
+    return fn->floats;
 }
 
 size_t chunks_len(Compiler *compiler){
@@ -1391,7 +1391,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 }
 
 size_t add_native_module_symbol(NativeModule *module, DynArr *symbols){
-    ModuleSymbol module_symbol = (ModuleSymbol ){
+    SubModuleSymbol module_symbol = (SubModuleSymbol ){
         .type = NATIVE_MODULE_MSYMTYPE,
         .value.native_module = module
     };
@@ -1402,7 +1402,7 @@ size_t add_native_module_symbol(NativeModule *module, DynArr *symbols){
 }
 
 size_t add_module_symbol(Module *module, DynArr *symbols){
-	ModuleSymbol module_symbol = (ModuleSymbol ){
+	SubModuleSymbol module_symbol = (SubModuleSymbol ){
         .type = MODULE_MSYMTYPE,
         .value.module = module
     };

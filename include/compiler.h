@@ -3,7 +3,7 @@
 
 #include "dynarr.h"
 #include "token.h"
-#include "types.h"
+#include "rtypes.h"
 #include "lzhtable.h"
 #include <setjmp.h>
 

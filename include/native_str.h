@@ -1,8 +1,7 @@
 #ifndef NATIVE_STR
 #define NATIVE_STR
 
-#include "types.h"
-#include "value.h"
+#include "rtypes.h"
 #include "memory.h"
 #include "vm_utils.h"
 
@@ -77,7 +76,7 @@ Value native_fn_str_split(uint8_t argc, Value *values, void *target, VM *vm){
     Obj *list_obj = vmu_list_obj(vm);
     if(!list_obj) vmu_error(vm, "Out of memory");
 
-    DynArr *list = list_obj->value.list;
+    DynArr *list = list_obj->content.list;
 	char coincidence = 0;
     size_t from = 0;
     size_t to = 0;
@@ -228,7 +227,7 @@ Value native_fn_str_upper(uint8_t argsc, Value *values, void *target, VM *vm){
 	if(!vmu_clone_str_obj(str->buff, &value, vm))
 		vmu_error(vm, "Out of memory");
 
-	Str *out_str = value.literal.obj->value.str;
+	Str *out_str = value.content.obj->content.str;
 
 	for(size_t i = 0; i < out_str->len; i++){
 		char c = out_str->buff[i];
@@ -246,7 +245,7 @@ Value native_fn_str_title(uint8_t argsc, Value *values, void *target, VM *vm){
     if(!vmu_clone_str_obj(str->buff, &value, vm))
 		vmu_error(vm, "Out of memory");
 
-    Str *out_str = value.literal.obj->value.str;
+    Str *out_str = value.content.obj->content.str;
 
     for (size_t i = 0; i < out_str->len; i++){
         char c = out_str->buff[i];

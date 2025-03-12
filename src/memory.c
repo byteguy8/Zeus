@@ -15,7 +15,7 @@ static DynArrAllocator runtime_dynarr_allocator = {0};
 static LZHTableAllocator runtime_lzhtable_allocator = {0};
 
 static LZFList *runtime_allocator = NULL;
-static Allocator runtime_allocator_interface = {0};
+static Allocator allocator = {0};
 
 void *lzarena_link_alloc(size_t size, void *ctx){
 	void *ptr = LZARENA_ALLOC(size, ctx);
@@ -108,10 +108,10 @@ int memory_init(){
 	runtime_lzhtable_allocator.realloc = lzarena_link_realloc;
 	runtime_lzhtable_allocator.dealloc = lzarena_link_dealloc;
 
-    runtime_allocator_interface.ctx = runtime_allocator;
-    runtime_allocator_interface.alloc = lzflist_link_alloc;
-    runtime_allocator_interface.realloc = lzflist_link_realloc;
-    runtime_allocator_interface.dealloc = lzflist_link_dealloc;
+    allocator.ctx = runtime_allocator;
+    allocator.alloc = lzflist_link_alloc;
+    allocator.realloc = lzflist_link_realloc;
+    allocator.dealloc = lzflist_link_dealloc;
 
     return 0;
 }
@@ -269,8 +269,8 @@ Fn *runtime_fn(char *name, Module *module){
     fn->params = params;
     fn->chunks = chunks;
 	fn->locations = locations;
-    fn->constants = constants;
-    fn->float_values = float_values;
+    fn->integers = constants;
+    fn->floats = float_values;
     fn->module = module;
 
     return fn;
@@ -280,13 +280,13 @@ Module *runtime_module(char *name, char *filepath){
     char *module_name = runtime_clone_str(name);
     char *module_pathname = runtime_clone_str(filepath);
     LZHTable *strings = runtime_lzhtable();
-	DynArr *symbols = runtime_dynarr(sizeof(ModuleSymbol));
+	DynArr *symbols = runtime_dynarr(sizeof(SubModuleSymbol));
     LZHTable *tries = runtime_lzhtable();
     LZHTable *globals = runtime_lzhtable();
     SubModule *submodule = A_RUNTIME_ALLOC(sizeof(SubModule));
     Module *module = (Module *)A_RUNTIME_ALLOC(sizeof(Module));
     
-    submodule->resolve = 0;
+    submodule->resolved = 0;
     submodule->strings = strings;
     submodule->symbols = symbols;
     submodule->tries = tries;
@@ -314,7 +314,7 @@ Module *runtime_clone_module(char *new_name, char *filepath, Module *module){
 }
 
 Allocator *memory_allocator(){
-    return &runtime_allocator_interface;
+    return &allocator;
 }
 
 void *memory_alloc(size_t size){
@@ -330,5 +330,5 @@ void memory_dealloc(void *ptr){
 }
 
 DynArr *memory_dynarr(size_t size){
-    return dynarr_create(size, (DynArrAllocator *)&runtime_allocator_interface);
+    return dynarr_create(size, (DynArrAllocator *)&allocator);
 }
