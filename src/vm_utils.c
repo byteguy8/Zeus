@@ -399,7 +399,8 @@ uint32_t vmu_hash_obj(Obj *obj){
             uint32_t hash = lzhtable_hash((uint8_t *)str->buff, str->len);
             return hash;
         }default:{
-            uint32_t hash = lzhtable_hash((uint8_t *)&obj->content, sizeof(obj->content));
+            uintptr_t iaddr = (uintptr_t)obj;
+            uint32_t hash = lzhtable_hash((uint8_t *)&iaddr, sizeof(uintptr_t));
             return hash;
         }
     }
@@ -407,10 +408,14 @@ uint32_t vmu_hash_obj(Obj *obj){
 
 uint32_t vmu_hash_value(Value *value){
     switch (value->type){
-        case EMPTY_VTYPE:
-        case BOOL_VTYPE:
-        case INT_VTYPE:{
+        case BOOL_VTYPE:{
+            uint32_t hash = lzhtable_hash((uint8_t *)&value->content.bool, sizeof(uint8_t));
+            return hash;
+        }case INT_VTYPE:{
             uint32_t hash = lzhtable_hash((uint8_t *)&value->content.i64, sizeof(int64_t));
+            return hash;
+        }case FLOAT_VTYPE:{
+            uint32_t hash = lzhtable_hash((uint8_t *)&value->content.fvalue, sizeof(double));
             return hash;
         }default:{
             Obj *obj = value->content.obj;

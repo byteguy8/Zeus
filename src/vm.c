@@ -456,6 +456,10 @@ static int execute(VM *vm){
                     Value *value = pop(vm);
                     Value *key = pop(vm);
 
+                    if(IS_EMPTY(key)){
+                        vmu_error(vm, "'key' cannot be 'empty'");
+                    }
+
                     Value *key_clone = vmu_clone_value(key, vm);
                     Value *value_clone = vmu_clone_value(value, vm);
 
