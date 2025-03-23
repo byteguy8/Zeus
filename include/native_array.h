@@ -3,9 +3,8 @@
 
 #include "rtypes.h"
 #include "memory.h"
+#include "factory.h"
 #include "vm_utils.h"
-#include <bits/stdint-intn.h>
-#include <bits/stdint-uintn.h>
 #include <stdint.h>
 
 static LZHTable *array_symbols = NULL;
@@ -35,7 +34,7 @@ Value native_fn_array_make_room(uint8_t argsc, Value *values, void *target, VM *
     if(plus < 0 || plus > INT32_MAX){
         vmu_error(vm, "Illegal array length. Must be 0 <= Argument 1(%ld) <= %d", plus, INT32_MAX);
     }
-    
+
     Obj *new_array_obj = vmu_array_obj(array->len + plus, vm);
     Array *new_array = new_array_obj->content.array;
 
@@ -71,7 +70,7 @@ Value native_fn_array_join(uint8_t argsc, Value *values, void *target, VM *vm){
     if(arr2_len < 0 || arr2_len > INT32_MAX){
         vmu_error(vm, "Illegal result array length. Must be 0 <= LENGTH(%ld) <= %d", arr2_len, INT32_MAX);
     }
-    
+
     Obj *arr2_obj = vmu_array_obj(arr2_len, vm);
     Array *arr2 = arr2_obj->content.array;
 
@@ -83,7 +82,7 @@ Value native_fn_array_join(uint8_t argsc, Value *values, void *target, VM *vm){
             arr2->values[arr0->len + i] = arr1->values[i];
         }
     }
-    
+
     return OBJ_VALUE(arr2_obj);
 }
 
@@ -110,18 +109,18 @@ Value native_fn_array_to_list(uint8_t argsc, Value *values, void *target, VM *vm
 
 Obj *native_array_get(char *symbol, void *target, VM *vm){
     if(!array_symbols){
-        array_symbols = runtime_lzhtable();
-        runtime_add_native_fn_info("first", 0, native_fn_array_first, array_symbols);
-        runtime_add_native_fn_info("last", 0, native_fn_array_last, array_symbols);
-        runtime_add_native_fn_info("make_room", 1, native_fn_array_make_room, array_symbols);
-        runtime_add_native_fn_info("length", 0, native_fn_array_length, array_symbols);
-        runtime_add_native_fn_info("join", 1, native_fn_array_join, array_symbols);
-        runtime_add_native_fn_info("to_list", 0, native_fn_array_to_list, array_symbols);
+        array_symbols = FACTORY_LZHTABLE(vm->rtallocator);
+        factory_add_native_fn_info("first", 0, native_fn_array_first, array_symbols, vm->rtallocator);
+        factory_add_native_fn_info("last", 0, native_fn_array_last, array_symbols, vm->rtallocator);
+        factory_add_native_fn_info("make_room", 1, native_fn_array_make_room, array_symbols, vm->rtallocator);
+        factory_add_native_fn_info("length", 0, native_fn_array_length, array_symbols, vm->rtallocator);
+        factory_add_native_fn_info("join", 1, native_fn_array_join, array_symbols, vm->rtallocator);
+        factory_add_native_fn_info("to_list", 0, native_fn_array_to_list, array_symbols, vm->rtallocator);
     }
 
     size_t key_size = strlen(symbol);
     NativeFnInfo *native_fn_info = (NativeFnInfo *)lzhtable_get((uint8_t *)symbol, key_size, array_symbols);
-    
+
     if(native_fn_info){
         Obj *native_fn_obj = vmu_native_fn_obj(
             native_fn_info->arity,

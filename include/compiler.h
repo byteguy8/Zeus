@@ -4,6 +4,7 @@
 #include "dynarr.h"
 #include "token.h"
 #include "rtypes.h"
+#include "types.h"
 #include "lzhtable.h"
 #include <setjmp.h>
 
@@ -47,7 +48,7 @@ typedef struct scope{
     int locals;
     TryBlock *try;
     ScopeType type;
-    
+
     uint8_t symbols_len;
     Symbol symbols[SYMBOLS_LENGTH];
 
@@ -69,10 +70,10 @@ typedef struct compiler{
     char *paths[PATHS_LENGTH];
 
     int symbols;
-    
+
     uint8_t depth;
     Scope scopes[SCOPES_LENGTH];
-    
+
     uint8_t fn_ptr;
     Fn *fn_stack[FUNCTIONS_LENGTH];
 
@@ -82,16 +83,19 @@ typedef struct compiler{
 
     uint8_t continue_ptr;
     LoopMark continues[LOOP_MARK_LENGTH];
-    
+
     LZHTable *keywords;
     LZHTable *natives;
     DynArrPtr *stmts;
     Module *previous_module;
     Module *current_module;
     LZHTable *modules;
+
+    Allocator *ctallocator;
+    Allocator *rtallocator;
 }Compiler;
 
-Compiler *compiler_create();
+Compiler *compiler_create(Allocator *ctallocator, Allocator *rtallocator);
 
 int compiler_compile(
     LZHTable *keywords,

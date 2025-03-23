@@ -7,6 +7,15 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+char *utils_join_raw_strs(
+    size_t buffa_len,
+    char *buffa,
+    size_t buffb_len,
+    char *buffb,
+    Allocator *allocator
+);
+char *utils_multiply_raw_str(size_t by, size_t buff_len, char *buff, Allocator *allocator);
+
 int utils_is_integer(char *buff);
 int utils_is_float(char *buff);
 
@@ -23,7 +32,7 @@ int utils_read_file(
     char *err_str,
     Allocator *allocator
 );
-RawStr *compile_read_source(char *path);
+RawStr *utils_read_source(char *pathname, Allocator *allocator);
 
 //> SYSTEM DEPENDENT
 // test for the existence of a file
@@ -32,7 +41,7 @@ RawStr *compile_read_source(char *path);
 #define UTILS_FILE_CAN_READ(pathname) (access(pathname, R_OK) == 0)
 int utils_file_is_regular(char *filename);
 char *utils_parent_pathname(char *pathname);
-char *compile_cwd();
+char *utils_cwd(Allocator *allocator);
 char *utils_sysname(Allocator *allocator);
 //< SYSTEM DEPENDENT
 

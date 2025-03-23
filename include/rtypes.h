@@ -5,13 +5,6 @@
 #include "lzhtable.h"
 #include <stddef.h>
 
-typedef struct allocator{
-    void *ctx;
-    void *(*alloc)(size_t size, void *ctx);
-    void *(*realloc)(void *ptr, size_t old_size, size_t new_size, void *ctx);
-    void (*dealloc)(void *ptr, size_t size, void *ctx);
-} Allocator;
-
 #define NAME_LEN 256
 #define OUT_VALUES_LENGTH 255
 
@@ -138,8 +131,7 @@ struct native_fn_info{
 struct native_fn{
     char unique;
     int arity;
-    size_t name_len;
-    char name[NAME_LEN];
+    char *name;
     void *target;
     RawNativeFn raw_fn;
 };
@@ -165,7 +157,7 @@ struct meta_out_value{
 };
 
 struct meta_closure{
-    int values_len;
+    uint8_t values_len;
     MetaOutValue values[OUT_VALUES_LENGTH];
     Fn *fn;
 };
@@ -179,7 +171,6 @@ struct out_value{
 };
 
 struct closure{
-    int values_len;
     OutValue *values;
     MetaClosure *meta;
 };

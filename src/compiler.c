@@ -1,17 +1,17 @@
 #include "compiler.h"
-#include "expr.h"
 #include "memory.h"
+#include "factory.h"
 #include "utils.h"
-#include "opcode.h"
 #include "token.h"
+#include "expr.h"
 #include "stmt.h"
+#include "opcode.h"
 #include "lexer.h"
 #include "parser.h"
 #include "native_math.h"
 #include "native_time.h"
 #include "native_io.h"
 #include "native_os.h"
-#include <bits/stdint-intn.h>
 #include <stdint.h>
 #include <assert.h>
 #include <stdarg.h>
@@ -62,8 +62,8 @@ void update_i32(size_t index, int32_t i32, Compiler *compiler);
 size_t write_i64_const(int64_t i64, Compiler *compiler);
 size_t write_double_const(double value, Compiler *compiler);
 void write_str(char *rstr, Compiler *compiler);
-char *names_to_name(DynArr *names, Token **out_name);
-NativeModule *resolve_native_module(char *module_name);
+char *names_to_name(DynArr *names, Token **out_name, Compiler *compiler);
+NativeModule *resolve_native_module(char *module_name, Compiler *compiler);
 char *resolve_module_location(
     Token *import_token,
     char *module_name,
@@ -102,7 +102,7 @@ void set_fn(size_t index, Fn *fn, Compiler *compiler){
         .type = FUNCTION_MSYMTYPE,
         .value.fn = fn
     };
-    
+
     DYNARR_SET(&symbol, index, symbols);
 }
 
@@ -113,7 +113,7 @@ void set_closure(size_t index, MetaClosure *closure, Compiler *compiler){
         .type = CLOSURE_MSYMTYPE,
         .value.meta_closure = closure
     };
-    
+
     DYNARR_SET(&symbol, index, symbols);
 }
 
@@ -153,7 +153,7 @@ void descompose_i32(int32_t value, uint8_t *bytes){
 static void mark_stop(size_t len, size_t index, Compiler *compiler){
 	assert(compiler->stop_ptr < LOOP_MARK_LENGTH);
     LoopMark *loop_mark = &compiler->stops[compiler->stop_ptr++];
-    
+
     loop_mark->id = compiler->while_counter;
 	loop_mark->len = len;
     loop_mark->index = index;
@@ -175,7 +175,7 @@ static void unmark_stop(size_t which, Compiler *compiler){
 static void mark_continue(size_t len, size_t index, Compiler *compiler){
 	assert(compiler->stop_ptr < LOOP_MARK_LENGTH);
     LoopMark *loop_mark = &compiler->continues[compiler->continue_ptr++];
-    
+
     loop_mark->id = compiler->while_counter;
 	loop_mark->len = len;
     loop_mark->index = index;
@@ -196,37 +196,37 @@ static void unmark_continue(size_t which, Compiler *compiler){
 
 Scope *scope_in(ScopeType type, Compiler *compiler){
     Scope *scope = &compiler->scopes[compiler->depth++];
-    
+
     scope->depth = compiler->depth;
     scope->locals = 0;
     scope->try = NULL;
 	scope->type = type;
     scope->symbols_len = 0;
     scope->captured_symbols_len = 0;
-    
+
     return scope;
 }
 
 Scope *scope_in_soft(ScopeType type, Compiler *compiler){
     Scope *enclosing = &compiler->scopes[compiler->depth - 1];
     Scope *scope = &compiler->scopes[compiler->depth++];
-    
+
     scope->depth = compiler->depth;
     scope->locals = enclosing->locals;
 	scope->type = type;
     scope->symbols_len = 0;
-    
+
     return scope;
 }
 
 Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function, size_t *out_symbol_index){
     assert(compiler->fn_ptr < FUNCTIONS_LENGTH);
 
-    Fn *fn = runtime_fn(name, compiler->current_module);
+    Fn *fn = factory_create_fn(name, compiler->current_module, compiler->rtallocator);
     compiler->fn_stack[compiler->fn_ptr++] = fn;
 
     DynArr *symbols = MODULE_SYMBOLS(compiler->current_module);
-    
+
     SubModuleSymbol module_symbol = {0};
     dynarr_insert(&module_symbol, symbols);
 
@@ -298,7 +298,7 @@ int count_fn_scopes(int from, int to, Compiler *compiler){
 
     for(int i = from + 1; i < to; i++){
 		Scope *scope = compiler->scopes + i;
-		
+
         if(scope->type == FUNCTION_SCOPE){
             count++;
         }
@@ -336,11 +336,11 @@ int resolve_symbol(Token *identifier, Symbol *symbol, Compiler *compiler){
 Symbol *exists_scope(char *name, Scope *scope, Compiler *compiler){
     for (int i = scope->symbols_len - 1; i >= 0; i--){
         Symbol *symbol = &scope->symbols[i];
-        
+
         if(strcmp(symbol->name, name) == 0)
             return symbol;
     }
-    
+
     return NULL;
 }
 
@@ -413,7 +413,7 @@ Symbol *declare_native(char *identifier, Compiler *compiler){
     size_t identifier_len = strlen(identifier);
     Scope *scope = current_scope(compiler);
     Symbol *symbol = &scope->symbols[scope->symbols_len++];
-    
+
     symbol->depth = scope->depth;
     symbol->local = -1;
     symbol->type = NATIVE_FN_SYMTYPE;
@@ -427,7 +427,7 @@ Symbol *declare_native(char *identifier, Compiler *compiler){
 
 Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler){
     Scope *scope = current_scope(compiler);
-    
+
     if(scope->symbols_len >= SYMBOLS_LENGTH){
         error(compiler, identifier_token, "Cannot define more than %d symbols per scope", SYMBOLS_LENGTH);
     }
@@ -456,7 +456,7 @@ Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler){
             local = scope->locals++;
         }
     }
-    
+
     symbol->depth = scope->depth;
     symbol->local = local;
     symbol->index = -1;
@@ -510,10 +510,10 @@ void write_location(Token *token, Compiler *compiler){
 	DynArr *chunks = current_chunks(compiler);
 	DynArr *locations = current_locations(compiler);
 	OPCodeLocation location = {0};
-	
+
 	location.offset = chunks->used - 1;
 	location.line = token->line;
-    location.filepath = runtime_clone_str(token->pathname);
+    location.filepath = factory_clone_raw_str(token->pathname, compiler->rtallocator);
 
 	dynarr_insert(&location, locations);
 }
@@ -581,11 +581,11 @@ size_t write_i64_const(int64_t i64, Compiler *compiler){
 size_t write_double_const(double value, Compiler *compiler){
 	DynArr *float_values = current_float_values(compiler);
 	int32_t length = (int32_t) float_values->used;
-	
+
 	assert(length < 32767 && "Too many constants");
-	
+
 	dynarr_insert(&value, float_values);
-	
+
 	return write_i16(length, compiler);
 }
 
@@ -599,14 +599,14 @@ void write_str(char *rstr, Compiler *compiler){
     LZHTable *strings = submodule->strings;
 
     if(!lzhtable_hash_contains(hash, strings, NULL)){
-        char *str = runtime_clone_str(rstr);
+        char *str = factory_clone_raw_str(rstr, compiler->rtallocator);
         lzhtable_hash_put(hash, str, strings);
     }
 
     write_i32((int32_t)hash, compiler);
 }
 
-char *names_to_name(DynArr *names, Token **out_name){
+char *names_to_name(DynArr *names, Token **out_name, Compiler *compiler){
     if(DYNARR_LEN(names) == 1){
         Token *name = (Token *)DYNARR_GET(0, names);
         *out_name = name;
@@ -614,7 +614,7 @@ char *names_to_name(DynArr *names, Token **out_name){
     }
 
     Token *name = NULL;
-    BStr *bstr = compile_bstr();
+    BStr *bstr = FACTORY_BSTR(compiler->ctallocator);
 
     for (size_t i = 0; i < DYNARR_LEN(names); i++){
         name = (Token *)DYNARR_GET(i, names);
@@ -627,18 +627,18 @@ char *names_to_name(DynArr *names, Token **out_name){
     return (char *)bstr_raw_substr(0, bstr->len - 1, bstr);
 }
 
-NativeModule *resolve_native_module(char *module_name){
+NativeModule *resolve_native_module(char *module_name, Compiler *compiler){
 	if(strcmp("math", module_name) == 0){
 		if(!math_module){
-			math_module_init();
+			math_module_init(compiler->rtallocator);
 		}
-		
+
 		return math_module;
 	}
 
     if(strcmp("time", module_name) == 0){
         if(!time_module){
-            time_module_init();
+            time_module_init(compiler->rtallocator);
         }
 
         return time_module;
@@ -646,7 +646,7 @@ NativeModule *resolve_native_module(char *module_name){
 
     if(strcmp("io", module_name) == 0){
         if(!io_module){
-            io_module_init();
+            io_module_init(compiler->rtallocator);
         }
 
         return io_module;
@@ -654,12 +654,12 @@ NativeModule *resolve_native_module(char *module_name){
 
     if(strcmp("os", module_name) == 0){
         if(!os_module){
-            os_module_init();
+            os_module_init(compiler->rtallocator);
         }
 
         return os_module;
     }
-	
+
 	return NULL;
 }
 
@@ -677,7 +677,7 @@ char *resolve_module_location(
     for (int i = 0; i < compiler->paths_len; i++){
         char* base_pathname = compiler->paths[i];
         size_t base_pathname_len = strlen(base_pathname);
-                
+
         size_t module_pathname_len = base_pathname_len + module_name_len + 4;
         char module_pathname[module_pathname_len + 1];
 
@@ -688,32 +688,33 @@ char *resolve_module_location(
         module_pathname[module_pathname_len] = '\0';
 
         // detect self module import
-        if(strcmp(module_pathname, current_module->pathname) == 0)
+        if(strcmp(module_pathname, current_module->pathname) == 0){
             error(compiler, import_token, "Trying to import the current module '%s'", module_name);
+        }
 
         if(previous_module){
             // detect circular dependency
-            if(strcmp(module_pathname, previous_module->pathname) == 0)
+            if(strcmp(module_pathname, previous_module->pathname) == 0){
                 error(compiler, import_token, "Circular dependency between '%s' and '%s'", current_module->pathname, previous_module->pathname);
+            }
         }
 
-        if(!UTILS_FILE_EXISTS(module_pathname)){
-			continue;
-		}
-		
+        if(!UTILS_FILE_EXISTS(module_pathname)){continue;}
+
 		if(!UTILS_FILE_CAN_READ(module_pathname)){
 			error(compiler, import_token, "File at '%s' do not exists or cannot be read", module_pathname);
 		}
 
-        if(!utils_file_is_regular(module_pathname))
+        if(!utils_file_is_regular(module_pathname)){
             error(compiler, import_token, "File at '%s' is not a regular file", module_pathname);
+        }
 
         *out_module_name_len = module_name_len;
         *out_module_pathname_len = module_pathname_len;
 
-        return compile_clone_str(module_pathname);
+        return factory_clone_raw_str(module_pathname, compiler->ctallocator);
     }
-    
+
     error(compiler, import_token, "module %s not found", module_name);
 
     return NULL;
@@ -743,7 +744,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             (value >= 0 && value <= 255)){
                 write_chunk(CINT_OPCODE, compiler);
                 write_location(token, compiler);
-                
+
                 write_chunk((uint8_t)value, compiler);
 
                 break;
@@ -759,12 +760,12 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			FloatExpr *float_expr = (FloatExpr *)expr->sub_expr;
 			Token *float_token = float_expr->token;
 			double value = *(double *)float_token->literal;
-			
+
 			write_chunk(FLOAT_OPCODE, compiler);
 			write_location(float_token, compiler);
-			
+
 			write_double_const(value, compiler);
-			
+
 			break;
 		}case STRING_EXPRTYPE:{
 			StringExpr *string_expr = (StringExpr *)expr->sub_expr;
@@ -780,12 +781,12 @@ void compile_expr(Expr *expr, Compiler *compiler){
             TemplateExpr *template_expr = (TemplateExpr *)expr->sub_expr;
             Token *template_token = template_expr->template_token;
             DynArrPtr *stmts = template_expr->exprs;
-            
+
             for (int16_t i = DYNARR_PTR_LEN(stmts) - 1; i >= 0; i--){
                 Expr *expr = (Expr *)DYNARR_PTR_GET(i, stmts);
                 compile_expr(expr, compiler);
             }
-            
+
             write_chunk(TEMPLATE_OPCODE, compiler);
             write_location(template_token, compiler);
 
@@ -811,7 +812,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
                     Token *param_identifier = (Token *)DYNARR_PTR_GET(i, params);
                     declare(MUT_SYMTYPE, param_identifier, compiler);
 
-                    char *name = runtime_clone_str(param_identifier->lexeme);
+                    char *name = factory_clone_raw_str(param_identifier->lexeme, compiler->rtallocator);
                     dynarr_ptr_insert(name, fn->params);
                 }
             }
@@ -833,7 +834,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             }
 
             if(fn_scope->captured_symbols_len > 0){
-                MetaClosure *closure = (MetaClosure *)A_RUNTIME_ALLOC(sizeof(MetaClosure));
+                MetaClosure *closure = MEMORY_ALLOC(MetaClosure, 1, compiler->rtallocator);
 
                 closure->values_len = fn_scope->captured_symbols_len;
 
@@ -866,7 +867,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
                 write_chunk(NGET_OPCODE, compiler);
                 write_location(identifier, compiler);
                 write_str(identifier->lexeme, compiler);
-                
+
                 break;
             }
 
@@ -876,7 +877,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
                 write_str(identifier->lexeme, compiler);
             }else{
                 uint8_t opcode = is_out ? OGET_OPCODE : LGET_OPCODE;
-                
+
                 write_chunk(opcode, compiler);
                 write_location(identifier, compiler);
                 write_chunk((uint8_t)symbol->local, compiler);
@@ -888,7 +889,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             Expr *expr = group_expr->expr;
 
             compile_expr(expr, compiler);
-            
+
             break;
         }case CALL_EXPRTYPE:{
             CallExpr *call_expr = (CallExpr *)expr->sub_expr;
@@ -906,7 +907,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             write_chunk(CALL_OPCODE, compiler);
 			write_location(call_expr->left_paren, compiler);
-            
+
             uint8_t args_count = args ? (uint8_t)args->used : 0;
             write_chunk(args_count, compiler);
 
@@ -1077,10 +1078,10 @@ void compile_expr(Expr *expr, Compiler *compiler){
 				IdentifierExpr *identifier_expr = (IdentifierExpr *)left->sub_expr;
 				Token *identifier = identifier_expr->identifier_token;
 	            Symbol *symbol = get(identifier, compiler);
-            
+
     	        if(symbol->type == IMUT_SYMTYPE)
         	        error(compiler, identifier, "'%s' declared as constant. Can't change its value.", identifier->lexeme);
-            
+
                 int is_out = resolve_symbol(identifier, symbol, compiler);
 
             	compile_expr(value_expr, compiler);
@@ -1106,10 +1107,10 @@ void compile_expr(Expr *expr, Compiler *compiler){
 				AccessExpr *access_expr = (AccessExpr *)left->sub_expr;
 				Expr *left = access_expr->left;
 				Token *symbol_token = access_expr->symbol_token;
-	
+
 				compile_expr(value_expr, compiler);
 				compile_expr(left, compiler);
-				
+
 				write_chunk(PUT_OPCODE, compiler);
 				write_location(equals_token, compiler);
 
@@ -1146,7 +1147,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
 			if(symbol->type == IMUT_SYMTYPE)
 				error(compiler, identifier_token, "'%s' declared as constant. Can't change its value.", identifier_token->lexeme);
-			
+
 			if(symbol->depth == 1){
                 write_chunk(GGET_OPCODE, compiler);
 			    write_str(identifier_token->lexeme, compiler);
@@ -1155,7 +1156,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			    write_chunk(symbol->local, compiler);
             }
 
-			compile_expr(right, compiler);			
+			compile_expr(right, compiler);
 
 			switch(operator->type){
 				case COMPOUND_ADD_TOKTYPE:{
@@ -1192,7 +1193,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
 			    write_chunk(symbol->local, compiler);
             }
-	
+
 			break;
 		}case ARRAY_EXPRTYPE:{
             ArrayExpr *array_expr = (ArrayExpr *)expr->sub_expr;
@@ -1206,7 +1207,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
                 write_chunk(INT_OPCODE, compiler);
                 write_location(array_token, compiler);
 
-                if(values){                    
+                if(values){
                     write_i64_const((int64_t)values->used, compiler);
                 }else{
                      write_i64_const((int64_t)0, compiler);
@@ -1246,7 +1247,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			}
 
             int16_t len = exprs ? (int16_t)exprs->used : 0;
-			
+
             write_chunk(LIST_OPCODE, compiler);
 			write_location(list_token, compiler);
 
@@ -1269,7 +1270,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             }
 
             int16_t len = (int16_t)(key_values ? key_values->used : 0);
-            
+
             write_chunk(DICT_OPCODE, compiler);
 			write_location(dict_expr->dict_token, compiler);
 
@@ -1366,12 +1367,12 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
              size_t left_before = chunks_len(compiler);
 		     compile_expr(left, compiler);
-            
+
              write_chunk(JMP_OPCODE, compiler);
              write_location(mark_token, compiler);
-             
+
              size_t jmp_index = write_i16(0, compiler);
-		     
+
 		     size_t left_after = chunks_len(compiler);
 		     size_t left_len = left_after - left_before;
 
@@ -1395,7 +1396,7 @@ size_t add_native_module_symbol(NativeModule *module, DynArr *symbols){
         .type = NATIVE_MODULE_MSYMTYPE,
         .value.native_module = module
     };
-	
+
     dynarr_insert(&module_symbol, symbols);
 
     return DYNARR_LEN(symbols) - 1;
@@ -1406,7 +1407,7 @@ size_t add_module_symbol(Module *module, DynArr *symbols){
         .type = MODULE_MSYMTYPE,
         .value.module = module
     };
-	
+
     dynarr_insert(&module_symbol, symbols);
 
     return DYNARR_LEN(symbols) - 1;
@@ -1433,7 +1434,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 error(compiler, identifier_token, "'%s' declared as constant, but is not being initialized.", identifier_token->lexeme);
 
             Symbol *symbol = declare(is_const ? IMUT_SYMTYPE : MUT_SYMTYPE, identifier_token, compiler);
-            
+
             if(initializer_expr == NULL) write_chunk(EMPTY_OPCODE, compiler);
             else compile_expr(initializer_expr, compiler);
 
@@ -1465,7 +1466,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             }
 
             scope_out(compiler);
-            
+
             break;
         }case IF_STMTTYPE:{
 			IfStmt *if_stmt = (IfStmt *)stmt->sub_stmt;
@@ -1474,11 +1475,11 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			DynArrPtr *else_stmts = if_stmt->else_stmts;
 
 			compile_expr(if_condition, compiler);
-			
+
 			write_chunk(JIF_OPCODE, compiler);
             write_location(if_stmt->if_token, compiler);
 			size_t jif_index = write_i16(0, compiler);
-			
+
 			//> if branch body
 			size_t len_bef_if = chunks_len(compiler);
 			scope_in_soft(BLOCK_SCOPE, compiler);
@@ -1489,7 +1490,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			}
 
 			scope_out(compiler);
-            
+
             write_chunk(JMP_OPCODE, compiler);
             write_location(if_stmt->if_token, compiler);
             size_t jmp_index = write_i16(0, compiler);
@@ -1497,7 +1498,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			size_t len_af_if = chunks_len(compiler);
 			size_t if_len = len_af_if - len_bef_if;
 			//< if branch body
-			
+
 			update_i16(jif_index, (int32_t)if_len + 1, compiler);
 
             if(else_stmts){
@@ -1517,7 +1518,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
 				update_i16(jmp_index, (int16_t)else_len + 1, compiler);
             }
-            
+
 			break;
 		}case WHILE_STMTTYPE:{
 			WhileStmt *while_stmt = (WhileStmt *)stmt->sub_stmt;
@@ -1582,7 +1583,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 				update_i16(loop_mark->index, len_af_body - loop_mark->len + 1, compiler);
                 unmark_continue(ptr, compiler);
 			}
-		
+
 			break;
 		}case STOP_STMTTYPE:{
 			StopStmt *stop_stmt = (StopStmt *)stmt->sub_stmt;
@@ -1654,8 +1655,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 for (size_t i = 0; i < params->used; i++){
                     Token *param_token = (Token *)DYNARR_PTR_GET(i, params);
                     declare(MUT_SYMTYPE, param_token, compiler);
-                    
-                    char *name = runtime_clone_str(param_token->lexeme);
+
+                    char *name = factory_clone_raw_str(param_token->lexeme, compiler->rtallocator);
                     dynarr_ptr_insert(name, fn->params);
                 }
             }
@@ -1665,7 +1666,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             for (size_t i = 0; i < stmts->used; i++){
                 Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
                 compile_stmt(stmt, compiler);
-                
+
                 if(i + 1 >= stmts->used && stmt->type == RETURN_STMTTYPE)
                     returned = 1;
             }
@@ -1679,9 +1680,9 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             }
 
             int is_normal = enclosing == NULL;
-            
+
             if(fn_scope->captured_symbols_len > 0){
-                MetaClosure *closure = (MetaClosure *)A_RUNTIME_ALLOC(sizeof(MetaClosure));
+                MetaClosure *closure = MEMORY_ALLOC(MetaClosure, 1, compiler->rtallocator);
 
                 closure->values_len = fn_scope->captured_symbols_len;
 
@@ -1727,21 +1728,21 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             Module *current_module = compiler->current_module;
             Module *previous_module = compiler->previous_module;
             DynArr *current_symbols = MODULE_SYMBOLS(current_module);
-            
+
             Token *name = NULL;
-            
+
             char *module_name = NULL;
 
-            char *module_absolute_name = names_to_name(names, &name);
+            char *module_absolute_name = names_to_name(names, &name, compiler);
             size_t module_absolute_name_len;
 
             module_name = name->lexeme;
-            
+
             char *module_alt_name = alt_name ? alt_name->lexeme : NULL;
             char *module_real_name = module_alt_name ? module_alt_name : module_name;
 
-			NativeModule *native_module = resolve_native_module(module_name);
-			
+			NativeModule *native_module = resolve_native_module(module_name, compiler);
+
 			if(native_module){
 				size_t symbol_index = add_native_module_symbol(native_module, current_symbols);
 				Symbol *symbol = declare(MODULE_SYMTYPE, alt_name ? alt_name : name, compiler);
@@ -1768,34 +1769,35 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             if(lzhtable_contains((uint8_t *)module_pathname, module_pathname_len, modules, &module_node)){
                 Module *imported_module = (Module *)module_node->value;
-                Module *cloned_module = runtime_clone_module(module_name, module_pathname, imported_module);
-                
+                Module *cloned_module = factory_clone_module(module_name, module_pathname, imported_module, compiler->rtallocator);
+
                 size_t symbol_index = add_module_symbol(cloned_module, current_symbols);
                 Symbol *symbol = declare(MODULE_SYMTYPE, alt_name ? alt_name : name, compiler);
 
                 symbol->index = symbol_index;
-                
+
                 from_symbols_to_global(symbol_index, import_token, module_real_name, compiler);
 
                 break;
             }
 
-            RawStr *source = compile_read_source(module_pathname);
-            
+            RawStr *source = utils_read_source(module_pathname, compiler->ctallocator);
+
             LZHTable *keywords = compiler->keywords;
             LZHTable *natives = compiler->natives;
 
-            DynArrPtr *tokens = compile_dynarr_ptr();
-            DynArrPtr *stmts = compile_dynarr_ptr();
-            
-            Module *module = runtime_module(module_name, module_pathname);
+            DynArrPtr *tokens = FACTORY_DYNARR_PTR(compiler->ctallocator);
+            DynArrPtr *stmts = FACTORY_DYNARR_PTR(compiler->ctallocator);
+
+            Module *module = factory_module(module_name, module_pathname, compiler->rtallocator);
             SubModule *submodule = module->submodule;
 
-            Lexer *lexer = lexer_create();
-	        Parser *parser = parser_create();
-            Compiler *import_compiler = compiler_create();
+            Lexer *lexer = lexer_create(compiler->ctallocator);
+	        Parser *parser = parser_create(compiler->ctallocator);
+            Compiler *import_compiler = compiler_create(compiler->ctallocator, compiler->rtallocator);
 
-            import_compiler->paths[import_compiler->paths_len++] = utils_parent_pathname(compile_clone_str(module_pathname));
+            char *cloned_module_pathname = factory_clone_raw_str(module_pathname, compiler->ctallocator);
+            import_compiler->paths[import_compiler->paths_len++] = utils_parent_pathname(cloned_module_pathname);
 
             for (int i = 0; i < compiler->paths_len; i++){
 				import_compiler->paths[import_compiler->paths_len++] = compiler->paths[i];
@@ -1830,10 +1832,10 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 compiler->is_err = 1;
 				break;
             }
-            
+
             uint32_t module_pathname_hash = lzhtable_hash((uint8_t *)module_pathname, module_pathname_len);
             lzhtable_hash_put(module_pathname_hash, module, modules);
-            
+
             size_t symbol_index = add_module_symbol(module, current_symbols);
             declare(MODULE_SYMTYPE, alt_name ? alt_name : name, compiler);
 
@@ -1846,7 +1848,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			Expr *value = throw_stmt->value;
 
             Scope *scope = current_scope(compiler);
-            
+
             if(!inside_function(compiler))
                 error(compiler, throw_token, "Can not use 'throw' statement in global scope.");
             if(scope->type == CATCH_SCOPE)
@@ -1869,7 +1871,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			DynArrPtr *catch_stmts = try_stmt->catch_stmts;
 
             size_t try_jmp_index = 0;
-            TryBlock *try_block = (TryBlock *)A_RUNTIME_ALLOC(sizeof(TryBlock));
+            TryBlock *try_block = MEMORY_ALLOC(TryBlock, 1, compiler->rtallocator);
+
 			memset(try_block, 0, sizeof(TryBlock));
 
             if(try_stmts){
@@ -1880,7 +1883,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 scope->try = try_block;
 
                 Scope *previous = previous_scope(scope, compiler);
-                
+
                 if(previous && previous->try)
                     try_block->outer = previous->try;
 
@@ -1909,7 +1912,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                     Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, catch_stmts);
                     compile_stmt(stmt, compiler);
                 }
-                
+
                 scope_out(compiler);
 
 				size_t end = chunks_len(compiler);
@@ -1929,7 +1932,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			if(lzhtable_contains(key, key_size, fn_tries, &node)){
 				tries = (DynArrPtr *)node->value;
 			}else{
-				tries = (DynArrPtr *)runtime_dynarr_ptr();
+				tries = (DynArrPtr *)FACTORY_DYNARR_PTR(compiler->rtallocator);
 				lzhtable_put(key, key_size, tries, fn_tries, NULL);
 			}
 
@@ -1941,9 +1944,9 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             Token *load_token = load_stmt->load_token;
             Token *path_token = load_stmt->pathname;
             Token *name_token = load_stmt->name;
-            
+
             declare(NATIVE_MODULE_SYMTYPE, name_token, compiler);
-            
+
             write_chunk(LOAD_OPCODE, compiler);
             write_location(load_token, compiler);
             write_i32(*(int32_t*)path_token->literal, compiler);
@@ -1951,7 +1954,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             write_chunk(GSET_OPCODE, compiler);
             write_location(load_token, compiler);
             write_str(name_token->lexeme, compiler);
-            
+
             write_chunk(POP_OPCODE, compiler);
             write_location(load_token, compiler);
 
@@ -1962,7 +1965,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             for (size_t i = 0; i < DYNARR_PTR_LEN(symbols); i++){
                 Token *symbol_identifier = DYNARR_PTR_GET(i, symbols);
-                
+
                 write_chunk(GASET_OPCODE, compiler);
                 write_location(symbol_identifier, compiler);
                 write_str(symbol_identifier->lexeme, compiler);
@@ -1979,21 +1982,28 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 void define_natives(Compiler *compiler){
     assert(compiler->depth > 0);
     LZHTableNode *current = compiler->natives->head;
-    
+
     while (current){
         LZHTableNode *next = current->next_table_node;
-        
+
         NativeFn *native = (NativeFn *)current->value;
         declare_native(native->name, compiler);
-        
+
         current = next;
     }
 }
 //<PRIVATE IMPLEMENTATION
 
-Compiler *compiler_create(){
-    Compiler *compiler = (Compiler *)A_COMPILE_ALLOC(sizeof(Compiler));
+Compiler *compiler_create(Allocator *ctallocator, Allocator *rtallocator){
+    Compiler *compiler = MEMORY_ALLOC(Compiler, 1, ctallocator);
+
+    if(!compiler){return NULL;}
+
     memset(compiler, 0, sizeof(Compiler));
+
+    compiler->ctallocator = ctallocator;
+    compiler->rtallocator = rtallocator;
+
     return compiler;
 }
 
@@ -2004,9 +2014,10 @@ int compiler_compile(
     Module *current_module,
     LZHTable *modules,
     Compiler *compiler
-){  
-    if(setjmp(compiler->err_jmp) == 1) return 1;
-    else{
+){
+    if(setjmp(compiler->err_jmp) == 1){
+        return 1;
+    }else{
         compiler->symbols = 1;
         compiler->keywords = keywords;
         compiler->natives = natives;
@@ -2027,7 +2038,7 @@ int compiler_compile(
 
         set_fn(symbol_index, fn, compiler);
         scope_out_fn(compiler);
-        
+
         return compiler->is_err;
     }
 }
@@ -2040,7 +2051,7 @@ int compiler_import(
     Module *current_module,
     LZHTable *modules,
     Compiler *compiler
-){  
+){
     if(setjmp(compiler->err_jmp) == 1) return 1;
     else{
         compiler->keywords = keywords;
@@ -2063,7 +2074,7 @@ int compiler_import(
 
         set_fn(symbol_index, fn, compiler);
 		scope_out(compiler);
-        
+
         return compiler->is_err;
     }
 }

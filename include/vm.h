@@ -1,6 +1,7 @@
 #ifndef VM_H
 #define VM_H
 
+#include "types.h"
 #include "rtypes.h"
 #include "dynarr.h"
 #include "lzhtable.h"
@@ -37,6 +38,8 @@ typedef struct frame{
 
     OutValue *values_head;
     OutValue *values_tail;
+
+    Allocator *allocator;
 }Frame;
 
 typedef struct vm{
@@ -59,9 +62,11 @@ typedef struct vm{
     Obj *tail;
     size_t objs_size;
 //< GARBAGE COLLECTOR
+
+    Allocator *rtallocator;
 }VM;
 
-VM *vm_create();
+VM *vm_create(Allocator *allocator);
 int vm_execute(LZHTable *natives, Module *module, VM *vm);
 
 #endif

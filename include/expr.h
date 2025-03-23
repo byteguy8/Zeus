@@ -81,7 +81,7 @@ typedef struct identifier_expr{
 typedef struct call_expr{
     Expr *left;
     Token *left_paren;
-    DynArrPtr *args;    
+    DynArrPtr *args;
 }CallExpr;
 
 typedef struct access_expr{

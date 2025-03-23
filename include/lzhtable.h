@@ -42,7 +42,7 @@ typedef struct lzhtable{
 
 // PUBLIC INTERFACE
 struct lzhtable *lzhtable_create(size_t length, LZHTableAllocator *allocator);
-void lzhtable_destroy(void (*destroy_value)(void *key, void *value), LZHTable *table);
+void lzhtable_destroy(void *extra, void (*destroy_value)(void *key, void *value, void *extra), LZHTable *table);
 
 #define LZHTABLE_LENGTH(table)((table)->m)
 #define LZHTABLE_COUNT(table)((table)->n)
@@ -78,7 +78,7 @@ int lzhtable_put(
 
 int lzhtable_hash_remove(uint32_t hash, LZHTable *table, void **out_value);
 int lzhtable_remove(uint8_t *key, size_t key_size, LZHTable *table, void **out_value);
-void lzhtable_clear(void (*clear_fn)(void *key, void *value), LZHTable *table);
-int lzhtable_clear_shrink(void (*clear_fn)(void *key, void *value), LZHTable *table);
+void lzhtable_clear(void *extra, void (*clear_fn)(void *key, void *value, void *extra), LZHTable *table);
+int lzhtable_clear_shrink(void *extra, void (*clear_fn)(void *key, void *value, void *extra), LZHTable *table);
 
 #endif

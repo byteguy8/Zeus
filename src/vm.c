@@ -1,6 +1,7 @@
 #include "vm.h"
 #include "vm_utils.h"
 #include "memory.h"
+#include "utils.h"
 #include "opcode.h"
 #include "rtypes.h"
 
@@ -56,46 +57,23 @@ static Value *peek_at(int offset, VM *vm);
     PUSH(float_value, vm)                   \
 }
 
-#define PUSH_CORE_STR(buff, vm){               \
-    Obj *str_obj = vmu_core_str_obj(buff, vm); \
-    Value obj_value = OBJ_VALUE(str_obj);      \
-    PUSH(obj_value, vm);                       \
+#define PUSH_NATIVE_FN(fn, vm) {                    \
+    Obj *obj = vmu_create_obj(NATIVE_FN_OTYPE, vm); \
+    obj->content.native_fn = fn;                    \
+    Value fn_value = OBJ_VALUE(obj);                \
+    PUSH(fn_value, vm)                              \
 }
 
-#define PUSH_UNCORE_STR(buff, vm){               \
-    Obj *str_obj = vmu_uncore_str_obj(buff, vm); \
-    Value obj_value = OBJ_VALUE(str_obj);        \
-    PUSH(obj_value, vm);                         \
+#define PUSH_NATIVE_MODULE(m, vm){                      \
+	Obj *obj = vmu_create_obj(NATIVE_MODULE_OTYPE, vm); \
+	obj->content.native_module = (m);                   \
+	PUSH(OBJ_VALUE(obj), vm);                           \
 }
 
-#define PUSH_NON_NATIVE_FN(fn, vm) {          \
-    Obj *obj = vmu_obj(FN_OTYPE, vm);         \
-    if(!obj){vmu_error(vm, "Out of memory");} \
-    obj->value.f##n = fn;                     \
-    Value fn_value = OBJ_VALUE(obj);          \
-    PUSH(fn_value, vm)                        \
-}
-
-#define PUSH_NATIVE_FN(fn, vm) {              \
-    Obj *obj = vmu_obj(NATIVE_FN_OTYPE, vm);  \
-    if(!obj){vmu_error(vm, "Out of memory");} \
-    obj->content.native_fn = fn;              \
-    Value fn_value = OBJ_VALUE(obj);          \
-    PUSH(fn_value, vm)                        \
-}
-
-#define PUSH_NATIVE_MODULE(m, vm){               \
-	Obj *obj = vmu_obj(NATIVE_MODULE_OTYPE, vm); \
-	if(!obj){vmu_error(vm, "out of memory");}    \
-	obj->content.native_module = (m);            \
+#define PUSH_MODULE(m, vm) {                     \
+    Obj *obj = vmu_create_obj(MODULE_OTYPE, vm); \
+	obj->content.module = m;                     \
 	PUSH(OBJ_VALUE(obj), vm);                    \
-}
-
-#define PUSH_MODULE(m, vm) {                  \
-    Obj *obj = vmu_obj(MODULE_OTYPE, vm);     \
-	if(!obj){vmu_error(vm, "Out of memory");} \
-	obj->content.module = m;                  \
-	PUSH(OBJ_VALUE(obj), vm);                 \
 }
 
 static void push_fn(Fn *fn, VM *vm);
@@ -106,13 +84,6 @@ static Value *pop(VM *vm);
 // FRAMES FUNCTIONS
 static void add_value_to_frame(OutValue *value, VM *vm);
 static void remove_value_from_frame(OutValue *value, VM *vm);
-#define CURRENT_FRAME(vm)(&(vm)->frame_stack[(vm)->frame_ptr - 1])
-#define CURRENT_LOCALS(vm)(CURRENT_FRAME(vm)->locals)
-#define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
-#define CURRENT_CHUNKS(vm)(CURRENT_FN(vm)->chunks)
-#define CURRENT_CONSTANTS(vm)(CURRENT_FN(vm)->integers)
-#define CURRENT_FLOAT_VALUES(vm)(CURRENT_FN(vm)->floats)
-#define CURRENT_MODULE(vm)((vm)->modules[(vm)->module_ptr - 1])
 
 #define IS_AT_END(vm)((vm)->frame_ptr == 0 || CURRENT_FRAME(vm)->ip >= CURRENT_CHUNKS(vm)->used)
 #define ADVANCE(vm)(DYNARR_GET_AS(uint8_t, CURRENT_FRAME(vm)->ip++, CURRENT_CHUNKS(vm)))
@@ -187,22 +158,15 @@ Value *peek_at(int offset, VM *vm){
 }
 
 void push_fn(Fn *fn, VM *vm){
-	Obj *obj = vmu_obj(FN_OTYPE, vm);
-	if(!obj){vmu_error(vm, "Out of memory");}
+	Obj *obj = vmu_create_obj(FN_OTYPE, vm);
 	obj->content.fn = fn;
 	PUSH(OBJ_VALUE(obj), vm);
 }
 
 void push_closure(MetaClosure *meta, VM *vm){
-    OutValue *values = (OutValue *)vmu_alloc(sizeof(OutValue) * meta->values_len);
-    Closure *closure = (Closure *)vmu_alloc(sizeof(Closure));
-    Obj *obj = vmu_obj(CLOSURE_OTYPE, vm);
-
-    if(!values || !closure || !obj){
-        memory_dealloc(values);
-        memory_dealloc(closure);
-        vmu_error(vm, "Out of memory");
-    }
+    Obj *closure_obj = vmu_closure_obj(meta, vm);
+    Closure *closure = closure_obj->content.closure;
+    OutValue *values = closure->values;
 
     for (int i = 0; i < meta->values_len; i++){
         OutValue *value = &values[i];
@@ -217,13 +181,7 @@ void push_closure(MetaClosure *meta, VM *vm){
         add_value_to_frame(value, vm);
     }
 
-    closure->values_len = meta->values_len;
-    closure->values = values;
-    closure->meta = meta;
-
-    obj->content.closure = closure;
-
-    PUSH(OBJ_VALUE(obj), vm);
+    PUSH(OBJ_VALUE(closure_obj), vm);
 }
 
 void push_native_module_symbol(char *name, NativeModule *module, VM *vm){
@@ -300,10 +258,9 @@ void remove_value_from_frame(OutValue *value, VM *vm){
         value->next->prev = value->prev;
     }
 
-    Value *v = vmu_clone_value(value->value, vm);
-    if(!v){vmu_error(vm, "Out of memory");}
+    Value *cloned_value = vmu_clone_value(value->value, vm);
 
-    value->value = v;
+    value->value = cloned_value;
 }
 
 Frame *frame_up_fn(Fn *fn, VM *vm){
@@ -411,33 +368,23 @@ static int execute(VM *vm){
                 PUSH_FLOAT(value, vm);
                 break;
             }case STRING_OPCODE:{
-                char *buff = read_str(vm, NULL);
-                PUSH_CORE_STR(buff, vm)
+                char *raw_str = read_str(vm, NULL);
+                Obj *obj = vmu_str_obj(&raw_str, vm);
+                PUSH(OBJ_VALUE(obj), vm)
                 break;
             }case TEMPLATE_OPCODE:{
                 int16_t len = read_i16(vm);
-                BStr *bstr = bstr_create_empty(NULL);
-
-                if(!bstr){
-                    vmu_error(vm, "Failed to create template: out of memory");
-                }
+                BStr *bstr = FACTORY_BSTR(vm->rtallocator);
 
                 for (int16_t i = 0; i < len; i++){
                     Value *value = pop(vm);
-
-                    if(vmu_value_to_str(value, bstr)){
-                        bstr_destroy(bstr);
-                        vmu_error(vm, "Failed to create template: out of memory");
-                    }
+                    vmu_value_to_str(value, bstr);
                 }
 
-                Obj *str_obj = vmu_clone_str_obj((char *)bstr->buff, NULL, vm);
+                char *raw_str = factory_clone_raw_str((char *)bstr->buff, vm->rtallocator);
+                Obj *str_obj = vmu_str_obj(&raw_str, vm);
 
                 bstr_destroy(bstr);
-
-                if(!str_obj){
-                    vmu_error(vm, "Failed to create template: out of memory");
-                }
 
                 PUSH(OBJ_VALUE(str_obj), vm);
 
@@ -460,10 +407,6 @@ static int execute(VM *vm){
                     }
 
                     Obj *array_obj = vmu_array_obj((int32_t)length, vm);
-
-                    if(!array_obj){
-                        vmu_error(vm, "Out of memory");
-                    }
 
                     PUSH(OBJ_VALUE(array_obj), vm)
                 }else if(parameter == 2){
@@ -493,16 +436,11 @@ static int execute(VM *vm){
                 int16_t len = read_i16(vm);
 
                 Obj *list_obj = vmu_list_obj(vm);
-                if(!list_obj) vmu_error(vm, "Out of memory");
-
                 DynArr *list = list_obj->content.list;
 
                 for(int32_t i = 0; i < len; i++){
                     Value *value = pop(vm);
-
-                    if(dynarr_insert(value, list)){
-                        vmu_error(vm, "Out of memory");
-                    }
+                    dynarr_insert(value, list);
                 }
 
                 PUSH(OBJ_VALUE(list_obj), vm);
@@ -512,8 +450,6 @@ static int execute(VM *vm){
                 int32_t len = read_i16(vm);
 
                 Obj *dict_obj = vmu_dict_obj(vm);
-                if(!dict_obj){vmu_error(vm, "Out of memory");}
-
                 LZHTable *dict = dict_obj->content.dict;
 
                 for (int32_t i = 0; i < len; i++){
@@ -523,17 +459,9 @@ static int execute(VM *vm){
                     Value *key_clone = vmu_clone_value(key, vm);
                     Value *value_clone = vmu_clone_value(value, vm);
 
-                    if(!key_clone || !value_clone){
-                        vmu_dealloc(key_clone);
-                        vmu_dealloc(value_clone);
-                        vmu_error(vm, "Out of memory");
-                    }
-
                     uint32_t hash = vmu_hash_value(key_clone);
 
-                    if(lzhtable_hash_put_key(key_clone, hash, value_clone, dict)){
-                        vmu_error(vm, "Out of memory");
-                    }
+                    lzhtable_hash_put_key(key_clone, hash, value_clone, dict);
                 }
 
                 PUSH(OBJ_VALUE(dict_obj), vm);
@@ -543,9 +471,6 @@ static int execute(VM *vm){
                 uint8_t len = ADVANCE(vm);
                 Obj *record_obj = vmu_record_obj(len, vm);
 
-                if(!record_obj){
-                    vmu_error(vm, "Out of memory");
-                }
                 if(len == 0){
                     PUSH(OBJ_VALUE(record_obj), vm);
                     break;
@@ -564,20 +489,10 @@ static int execute(VM *vm){
                         vmu_error(vm, "Record already contains attribute '%s'", key);
                     }
 
-                    char *cloned_key = vmu_clone_buff(key, vm);
+                    char *cloned_key = factory_clone_raw_str(key, vm->rtallocator);
                     Value *cloned_value = vmu_clone_value(value, vm);
 
-                    if(!cloned_key || !cloned_value){
-                        vmu_dealloc(cloned_key);
-                        vmu_dealloc(cloned_value);
-                        vmu_error(vm, "Out of memory");
-                    }
-
-                    if(lzhtable_hash_put_key(cloned_key, hash, cloned_value, record->attributes)){
-                        vmu_dealloc(cloned_key);
-                        vmu_dealloc(cloned_value);
-                        vmu_error(vm, "Out of memory");
-                    }
+                    lzhtable_hash_put_key(cloned_key, hash, cloned_value, record->attributes);
                 }
 
                 PUSH(OBJ_VALUE(record_obj), vm);
@@ -630,8 +545,16 @@ static int execute(VM *vm){
                     Str *astr = TO_STR(va) ;
                     Str *bstr = TO_STR(vb);
 
-                    char *buff = vmu_join_buff(astr->buff, astr->len, bstr->buff, bstr->len, vm);
-                    PUSH_UNCORE_STR(buff, vm);
+                    char *raw_str = utils_join_raw_strs(
+                        astr->len,
+                        astr->buff,
+                        bstr->len,
+                        bstr->buff,
+                        vm->rtallocator
+                    );
+                    Obj *str_obj = vmu_str_obj(&raw_str, vm);
+
+                    PUSH(OBJ_VALUE(str_obj), vm)
 
                     break;
                 }
@@ -682,14 +605,7 @@ static int execute(VM *vm){
                 Value *vb = pop(vm);
                 Value *va = pop(vm);
 
-                if(IS_INT(va) || IS_INT(vb)){
-                    if(!IS_INT(va)){
-                        vmu_error(vm, "Expect integer at left side of multiplication");
-                    }
-                    if(!IS_INT(vb)){
-                        vmu_error(vm, "Expect integer at right side of multiplication");
-                    }
-
+                if(IS_INT(va) && IS_INT(vb)){
                     int64_t left = TO_INT(va);
                     int64_t right = TO_INT(vb);
 
@@ -698,14 +614,7 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                    if(!IS_FLOAT(va)){
-                        vmu_error(vm, "Expect float at left side of multiplication");
-                    }
-                    if(!IS_FLOAT(vb)){
-                        vmu_error(vm, "Expect float at right side of multiplication");
-                    }
-
+                if(IS_FLOAT(va) && IS_FLOAT(vb)){
                     double left = TO_FLOAT(va);
                     double right = TO_FLOAT(vb);
 
@@ -724,8 +633,9 @@ static int execute(VM *vm){
                         in_buff = astr->buff;
                         in_buff_len = astr->len;
 
-                        if(!IS_INT(vb))
+                        if(!IS_INT(vb)){
                             vmu_error(vm, "Expect integer at right side of string multiplication");
+                        }
 
                         by = TO_INT(vb);
                     }
@@ -735,14 +645,17 @@ static int execute(VM *vm){
                         in_buff = bstr->buff;
                         in_buff_len = bstr->len;
 
-                        if(!IS_INT(va))
+                        if(!IS_INT(va)){
                             vmu_error(vm, "Expect integer at left side of string multiplication");
+                        }
 
                         by = TO_INT(va);
                     }
 
-                    char *buff = vmu_multiply_buff(in_buff, in_buff_len, (size_t)by, vm);
-                    PUSH_UNCORE_STR(buff, vm);
+                    char *raw_str = utils_multiply_raw_str((size_t)by, in_buff_len, in_buff, vm->rtallocator);
+                    Obj *str_obj = vmu_str_obj(&raw_str, vm);
+
+                    PUSH(OBJ_VALUE(str_obj), vm)
 
                     break;
                 }
@@ -891,7 +804,7 @@ static int execute(VM *vm){
                 if(IS_INT(va) || IS_INT(vb)){
                     if(!IS_INT(va)){
                         vmu_error(vm, "Expect integer at left side of comparison");
-                    }          
+                    }
                     if(!IS_INT(vb)){
                         vmu_error(vm, "Expect integer at right side of comparison");
                     }
@@ -1087,8 +1000,9 @@ static int execute(VM *vm){
                 uint8_t index = ADVANCE(vm);
                 Frame *current = CURRENT_FRAME(vm);
                 Closure *closure = current->closure;
+                MetaClosure *meta = closure->meta;
 
-                for (int i = 0; i < closure->values_len; i++){
+                for (int i = 0; i < meta->values_len; i++){
                     OutValue *closure_value = &closure->values[i];
 
                     if(closure_value->at == index){
@@ -1102,8 +1016,9 @@ static int execute(VM *vm){
                 uint8_t index = ADVANCE(vm);
                 Frame *current = CURRENT_FRAME(vm);
                 Closure *closure = current->closure;
+                MetaClosure *meta = closure->meta;
 
-                for (int i = 0; i < closure->values_len; i++){
+                for (int i = 0; i < meta->values_len; i++){
                     OutValue *value = &closure->values[i];
 
                     if(value->at == index){
@@ -1127,15 +1042,8 @@ static int execute(VM *vm){
                 }
 
                 Value *new_value = vmu_clone_value(value, vm);
-                GlobalValue *global_value = (GlobalValue *)vmu_alloc(sizeof(GlobalValue));
+                GlobalValue *global_value = vmu_global_value(vm);
 
-                if(!new_value || !global_value){
-                    vmu_dealloc(new_value);
-                    vmu_dealloc(global_value);
-                    vmu_error(vm, "Out of memory");
-                }
-
-                global_value->access = PRIVATE_GVATYPE;
                 global_value->value = new_value;
 
                 lzhtable_hash_put(hash, global_value, globals);
@@ -1610,38 +1518,6 @@ static int execute(VM *vm){
                 }
 
                 if(IS_NATIVE_LIBRARY(value)){
-                    ForeignLib *library = TO_NATIVE_LIBRARY(value);
-                    void *handler = library->handler;
-
-                    void *(*znative_symbol)(char *symbol_name) = dlsym(handler, "znative_symbol");
-
-                    if(!znative_symbol){
-                        vmu_error(vm, "Something is wrong with loaded native library. Expect 'znative_symbol' to be present");
-                    }
-
-                    RawForeignFn raw_foreign_fn = znative_symbol(symbol);
-
-                    if(!raw_foreign_fn){
-                        vmu_error(vm, "Failed to get '%s' from native library: do not exists", symbol);
-                    }
-
-                    Obj *foreign_fn_obj = vmu_obj(FOREIGN_FN_OTYPE, vm);
-
-                    if(!foreign_fn_obj){
-                        vmu_error(vm, "Failed to get native library symbol: out of memory");
-                    }
-
-                    ForeignFn *foreign_fn = (ForeignFn *)malloc(sizeof(ForeignFn));
-
-                    if(!foreign_fn){
-                        vmu_error(vm, "Failed to get native library symbol: out of memory");
-                    }
-
-                    foreign_fn->raw_fn = raw_foreign_fn;
-                    foreign_fn_obj->content.foreign_fn = foreign_fn;
-
-                    PUSH(OBJ_VALUE(foreign_fn_obj), vm);
-
                     break;
                 }
 
@@ -1834,9 +1710,11 @@ static int execute(VM *vm){
 }
 //> PRIVATE IMPLEMENTATION
 //> PUBLIC IMPLEMENTATION
-VM *vm_create(){
-    VM *vm = (VM *)A_RUNTIME_ALLOC(sizeof(VM));
+VM *vm_create(Allocator *allocator){
+    VM *vm = MEMORY_ALLOC(VM, 1, allocator);
+    if(!vm){return NULL;}
     memset(vm, 0, sizeof(VM));
+    vm->rtallocator = allocator;
     return vm;
 }
 

@@ -10,12 +10,12 @@ CFLAGS := ${cflags.common} ${cflags.${BUILD}}
 
 COMPILER = gcc
 OBJS = lzarena.o lzflist.o \
-bstr.o \
-dynarr.o lzhtable.o \
-memory.o utils.o \
-lexer.o parser.o \
-compiler.o dumpper.o \
-vm_utils.o vm.o
+bstr.o dynarr.o \
+lzhtable.o memory.o \
+factory.o utils.o lexer.o \
+parser.o compiler.o \
+dumpper.o vm_utils.o \
+vm.o
 
 zeus: $(OBJS)
 	$(COMPILER) -o $(OUT_DIR)/zeus $(CFLAGS) $(OUT_DIR)/*.o $(SRC)/zeus.c -lm
@@ -33,6 +33,8 @@ lexer.o:
 	$(COMPILER) -c -o $(OUT_DIR)/lexer.o $(CFLAGS) $(SRC)/lexer.c
 utils.o:
 	$(COMPILER) -c -o $(OUT_DIR)/utils.o $(CFLAGS) $(SRC)/utils.c
+factory.o:
+	$(COMPILER) -c -o $(OUT_DIR)/factory.o $(CFLAGS) $(SRC)/factory.c
 memory.o:
 	$(COMPILER) -c -o $(OUT_DIR)/memory.o $(CFLAGS) $(SRC)/memory.c
 lzhtable.o:

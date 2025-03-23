@@ -282,7 +282,7 @@ LZHTable *lzhtable_create(size_t length, LZHTableAllocator *allocator){
     return table;
 }
 
-void lzhtable_destroy(void (*destroy_value)(void *key, void *value), LZHTable *table){
+void lzhtable_destroy(void *extra, void (*destroy_value)(void *key, void *value, void *extra), LZHTable *table){
     if (!table) return;
 
     LZHTableAllocator *allocator = table->allocator;
@@ -293,7 +293,7 @@ void lzhtable_destroy(void (*destroy_value)(void *key, void *value), LZHTable *t
         void *value = current->value;
         LZHTableNode *next = current->next_table_node;
 
-        if(destroy_value){destroy_value(key, value);}
+        if(destroy_value){destroy_value(key, value, extra);}
         destroy_node(current, table);
 
         current = next;
@@ -448,7 +448,7 @@ int lzhtable_remove(uint8_t *key, size_t key_size, LZHTable *table, void **value
     return lzhtable_hash_remove(hash, table, value);
 }
 
-void lzhtable_clear(void (*clear_fn)(void *key, void *value), LZHTable *table){
+void lzhtable_clear(void *extra, void (*clear_fn)(void *key, void *value, void *extra), LZHTable *table){
     memset(table->buckets, 0, BUCKET_SIZE * table->m);
 
     LZHTableNode *current = table->head;
@@ -456,7 +456,7 @@ void lzhtable_clear(void (*clear_fn)(void *key, void *value), LZHTable *table){
     while (current){
         LZHTableNode *next = current->next_table_node;
 
-        if (clear_fn){clear_fn(current->key, current->value);}
+        if (clear_fn){clear_fn(current->key, current->value, extra);}
         destroy_node(current, table);
 
         current = next;
@@ -467,8 +467,8 @@ void lzhtable_clear(void (*clear_fn)(void *key, void *value), LZHTable *table){
     table->tail = NULL;
 }
 
-int lzhtable_clear_shrink(void (*clear_fn)(void *key, void *value), LZHTable *table){
+int lzhtable_clear_shrink(void *extra, void (*clear_fn)(void *key, void *value, void *extra), LZHTable *table){
     if(shrink_to(table->default_len, 0, table)){return 1;}
-    lzhtable_clear(clear_fn, table);
+    lzhtable_clear(extra, clear_fn, table);
     return 0;
 }

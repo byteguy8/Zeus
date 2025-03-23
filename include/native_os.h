@@ -8,28 +8,15 @@
 NativeModule *os_module = NULL;
 
 Value native_fn_os_name(uint8_t argsc, Value *values, void *target, VM *vm){
-    Allocator *allocator = memory_allocator();
-    char *name = utils_sysname(allocator);
-    
-    if(!name){
-        vmu_error(vm, "Failed to retrieve system name");
-    }
+    char *name = utils_sysname(vm->rtallocator);
+    Obj *str_name_obj = vmu_str_obj(&name, vm);
 
-    size_t name_len = strlen(name);
-    Obj *str_name_obj = vmu_clone_str_obj(name, NULL, vm);
-    
-    allocator->dealloc(name, name_len, allocator->ctx);
-
-    if(!str_name_obj){    
-        vmu_error(vm, "Out of memory");
-    }
-    
     return OBJ_VALUE(str_name_obj);
 }
 
-void os_module_init(){
-    os_module = runtime_native_module("os");
-    runtime_add_native_fn("name", 0, native_fn_os_name, os_module);
+void os_module_init(Allocator *allocator){
+    os_module = factory_native_module("os", allocator);
+    factory_add_native_fn("name", 0, native_fn_os_name, os_module, allocator);
 }
 
 #endif
