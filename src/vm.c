@@ -506,14 +506,7 @@ static int execute(VM *vm){
                 Value *vb = pop(vm);
                 Value *va = pop(vm);
 
-                if(IS_INT(va) || IS_INT(vb)){
-                    if(!IS_INT(va)){
-                        vmu_error(vm, "Expect integer at left side of sum");
-                    }
-                    if(!IS_INT(vb)){
-                        vmu_error(vm, "Expect integer at right side of sum");
-                    }
-
+                if(IS_INT(va) && IS_INT(vb)){
                     int64_t left = TO_INT(va);
                     int64_t right = TO_INT(vb);
 
@@ -522,14 +515,7 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                    if(!IS_FLOAT(va)){
-                        vmu_error(vm, "Expect float at left side of sum");
-                    }
-                    if(!IS_FLOAT(vb)){
-                        vmu_error(vm, "Expect float at right side of sum");
-                    }
-
+                if(IS_FLOAT(va) && IS_FLOAT(vb)){
                     double left = TO_FLOAT(va);
                     double right = TO_FLOAT(vb);
 
@@ -538,14 +524,7 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(IS_STR(va) || IS_STR(vb)){
-                    if(!IS_STR(va)){
-                        vmu_error(vm, "Expect string at left side of string concatenation");
-                    }
-                    if(!IS_STR(vb)){
-                        vmu_error(vm, "Expect string at right side of string concatenation");
-                    }
-
+                if(IS_STR(va) && IS_STR(vb)){
                     Str *astr = TO_STR(va) ;
                     Str *bstr = TO_STR(vb);
 
@@ -570,14 +549,7 @@ static int execute(VM *vm){
                 Value *vb = pop(vm);
                 Value *va = pop(vm);
 
-                if(IS_INT(va) || IS_INT(vb)){
-                    if(!IS_INT(va)){
-                        vmu_error(vm, "Expect integer at left side subtraction");
-                    }
-                    if(!IS_INT(vb)){
-                        vmu_error(vm, "Expect integer at right side subtraction");
-                    }
-
+                if(IS_INT(va) && IS_INT(vb)){
                     int64_t left = TO_INT(va);
                     int64_t right = TO_INT(vb);
 
@@ -586,14 +558,7 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                    if(!IS_FLOAT(va)){
-                        vmu_error(vm, "Expect float at left side of subtraction");
-                    }
-                    if(!IS_FLOAT(vb)){
-                        vmu_error(vm, "Expect float at right side of subtraction");
-                    }
-
+                if(IS_FLOAT(va) && IS_FLOAT(vb)){
                     double left = TO_FLOAT(va);
                     double right = TO_FLOAT(vb);
 
@@ -627,39 +592,26 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(IS_STR(va) || IS_STR(vb)){
-                    int64_t by = 0;
-                    char *in_buff = NULL;
-                    size_t in_buff_len = 0;
+                if(IS_STR(va) && IS_INT(vb)){
+                    Str *str = TO_STR(va);
+                    int64_t by = TO_INT(vb);
 
-                    if(IS_STR(va)){
-                        Str *astr = TO_STR(va);
-                        in_buff = astr->buff;
-                        in_buff_len = astr->len;
-
-                        if(!IS_INT(vb)){
-                            vmu_error(vm, "Expect integer at right side of string multiplication");
-                        }
-
-                        by = TO_INT(vb);
-                    }
-
-                    if(IS_STR(vb)){
-                        Str *bstr = TO_STR(vb);
-                        in_buff = bstr->buff;
-                        in_buff_len = bstr->len;
-
-                        if(!IS_INT(va)){
-                            vmu_error(vm, "Expect integer at left side of string multiplication");
-                        }
-
-                        by = TO_INT(va);
-                    }
-
-                    char *raw_str = utils_multiply_raw_str((size_t)by, in_buff_len, in_buff, vm->rtallocator);
+                    char *raw_str = utils_multiply_raw_str((size_t)by, str->len, str->buff, vm->rtallocator);
                     Obj *str_obj = vmu_str_obj(&raw_str, vm);
 
-                    PUSH(OBJ_VALUE(str_obj), vm)
+                    PUSH(OBJ_VALUE(str_obj), vm);
+
+                    break;
+                }
+
+                if(IS_INT(va) && IS_STR(vb)){
+                    Str *str = TO_STR(vb);
+                    int64_t by = TO_INT(va);
+
+                    char *raw_str = utils_multiply_raw_str((size_t)by, str->len, str->buff, vm->rtallocator);
+                    Obj *str_obj = vmu_str_obj(&raw_str, vm);
+
+                    PUSH(OBJ_VALUE(str_obj), vm);
 
                     break;
                 }
@@ -671,14 +623,7 @@ static int execute(VM *vm){
                 Value *vb = pop(vm);
                 Value *va = pop(vm);
 
-                if(IS_INT(va) || IS_INT(vb)){
-                    if(!IS_INT(va)){
-                        vmu_error(vm, "Expect integer at left side of division");
-                    }
-                    if(!IS_INT(vb)){
-                        vmu_error(vm, "Expect integer at right side of division");
-                    }
-
+                if(IS_INT(va) && IS_INT(vb)){
                     int64_t left = TO_INT(va);
                     int64_t right = TO_INT(vb);
 
@@ -687,14 +632,7 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                    if(!IS_FLOAT(va)){
-                        vmu_error(vm, "Expect float at left side of division");
-                    }
-                    if(!IS_FLOAT(vb)){
-                        vmu_error(vm, "Expect float at right side of division");
-                    }
-
+                if(IS_FLOAT(va) && IS_FLOAT(vb)){
                     double left = TO_FLOAT(va);
                     double right = TO_FLOAT(vb);
 
@@ -710,31 +648,23 @@ static int execute(VM *vm){
                 Value *vb = pop(vm);
                 Value *va = pop(vm);
 
-                if(!IS_INT(va)){
-                    vmu_error(vm, "Expect integer at left side of module");
-                }
-                if(!IS_INT(vb)){
-                    vmu_error(vm, "Expect integer at right side of module");
+                if(IS_INT(va) && IS_INT(vb)){
+                    int64_t left = TO_INT(va);
+                    int64_t right = TO_INT(vb);
+
+                    PUSH_INT(left % right, vm)
+
+                    break;
                 }
 
-                int64_t left = TO_INT(va);
-                int64_t right = TO_INT(vb);
-
-                PUSH_INT(left % right, vm)
+                vmu_error(vm, "Unsuported types using 'mod' operator");
 
                 break;
             }case LT_OPCODE:{
                 Value *vb = pop(vm);
                 Value *va = pop(vm);
 
-                if(IS_INT(va) || IS_INT(vb)){
-                    if(!IS_INT(va)){
-                        vmu_error(vm, "Expect integer at left side of comparison");
-                    }
-                    if(!IS_INT(vb)){
-                        vmu_error(vm, "Expect integer at right side of comparison");
-                    }
-
+                if(IS_INT(va) && IS_INT(vb)){
                     int64_t left = TO_INT(va);
                     int64_t right = TO_INT(vb);
 
@@ -743,14 +673,7 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                    if(!IS_FLOAT(va)){
-                        vmu_error(vm, "Expect float at left side of comparison");
-                    }
-                    if(!IS_FLOAT(vb)){
-                        vmu_error(vm, "Expect float at right side of comparison");
-                    }
-
+                if(IS_FLOAT(va) && IS_FLOAT(vb)){
                     double left = TO_FLOAT(va);
                     double right = TO_FLOAT(vb);
 
@@ -766,14 +689,7 @@ static int execute(VM *vm){
                 Value *vb = pop(vm);
                 Value *va = pop(vm);
 
-                if(IS_INT(va) || IS_INT(vb)){
-                    if(!IS_INT(va)){
-                        vmu_error(vm, "Expect integer at left side of comparison");
-                    }
-                    if(!IS_INT(vb)){
-                        vmu_error(vm, "Expect integer at right side of comparison");
-                    }
-
+                if(IS_INT(va) && IS_INT(vb)){
                     int64_t left = TO_INT(va);
                     int64_t right = TO_INT(vb);
 
@@ -782,14 +698,7 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                    if(!IS_FLOAT(va)){
-                        vmu_error(vm, "Expect float at left side of comparison");
-                    }
-                    if(!IS_FLOAT(vb)){
-                        vmu_error(vm, "Expect float at right side of comparison");
-                    }
-
+                if(IS_FLOAT(va) && IS_FLOAT(vb)){
                     double left = TO_FLOAT(va);
                     double right = TO_FLOAT(vb);
 
@@ -805,14 +714,7 @@ static int execute(VM *vm){
                 Value *vb = pop(vm);
                 Value *va = pop(vm);
 
-                if(IS_INT(va) || IS_INT(vb)){
-                    if(!IS_INT(va)){
-                        vmu_error(vm, "Expect integer at left side of comparison");
-                    }
-                    if(!IS_INT(vb)){
-                        vmu_error(vm, "Expect integer at right side of comparison");
-                    }
-
+                if(IS_INT(va) && IS_INT(vb)){
                     int64_t left = TO_INT(va);
                     int64_t right = TO_INT(vb);
 
@@ -821,14 +723,7 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                    if(!IS_FLOAT(va)){
-                        vmu_error(vm, "Expect float at left side of comparison");
-                    }
-                    if(!IS_FLOAT(vb)){
-                        vmu_error(vm, "Expect float at right side of comparison");
-                    }
-
+                if(IS_FLOAT(va) && IS_FLOAT(vb)){
                     double left = TO_FLOAT(va);
                     double right = TO_FLOAT(vb);
 
@@ -844,14 +739,7 @@ static int execute(VM *vm){
                 Value *vb = pop(vm);
                 Value *va = pop(vm);
 
-                if(IS_INT(va) || IS_INT(vb)){
-                    if(!IS_INT(va)){
-                        vmu_error(vm, "Expect integer at left side of comparison");
-                    }
-                    if(!IS_INT(vb)){
-                        vmu_error(vm, "Expect integer at right side of comparison");
-                    }
-
+                if(IS_INT(va) && IS_INT(vb)){
                     int64_t left = TO_INT(va);
                     int64_t right = TO_INT(vb);
 
@@ -860,14 +748,7 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                    if(!IS_FLOAT(va)){
-                        vmu_error(vm, "Expect float at left side of comparison");
-                    }
-                    if(!IS_FLOAT(vb)){
-                        vmu_error(vm, "Expect float at right side of comparison");
-                    }
-
+                if(IS_FLOAT(va) && IS_FLOAT(vb)){
                     double left = TO_FLOAT(va);
                     double right = TO_FLOAT(vb);
 
@@ -883,14 +764,7 @@ static int execute(VM *vm){
                 Value *vb = pop(vm);
                 Value *va = pop(vm);
 
-                if(IS_BOOL(va) || IS_BOOL(vb)){
-                    if(!IS_BOOL(va)){
-                        vmu_error(vm, "Expect boolean at left side of equality");
-                    }
-                    if(!IS_BOOL(vb)){
-                        vmu_error(vm, "Expect boolean at right side of equality");
-                    }
-
+                if(IS_BOOL(va) && IS_BOOL(vb)){
                     uint8_t left = TO_BOOL(va);
                     uint8_t right = TO_BOOL(vb);
 
@@ -899,14 +773,7 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(IS_INT(va) || IS_INT(vb)){
-                    if(!IS_INT(va)){
-                        vmu_error(vm, "Expect integer at left side of equality");
-                    }
-                    if(!IS_INT(vb)){
-                        vmu_error(vm, "Expect integer at right side of equality");
-                    }
-
+                if(IS_INT(va) && IS_INT(vb)){
                     int64_t left = TO_INT(va);
                     int64_t right = TO_INT(vb);
 
@@ -915,14 +782,7 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                    if(!IS_FLOAT(va)){
-                        vmu_error(vm, "Expect float at left side of equality");
-                    }
-                    if(!IS_FLOAT(vb)){
-                        vmu_error(vm, "Expect float at right side of equality");
-                    }
-
+                if(IS_FLOAT(va) && IS_FLOAT(vb)){
                     double left = TO_FLOAT(va);
                     double right = TO_FLOAT(vb);
 
@@ -938,14 +798,7 @@ static int execute(VM *vm){
                 Value *vb = pop(vm);
                 Value *va = pop(vm);
 
-                if(IS_BOOL(va) || IS_BOOL(vb)){
-                    if(!IS_BOOL(va)){
-                        vmu_error(vm, "Expect boolean at left side of equality");
-                    }
-                    if(!IS_BOOL(vb)){
-                        vmu_error(vm, "Expect boolean at right side of equality");
-                    }
-
+                if(IS_BOOL(va) && IS_BOOL(vb)){
                     uint8_t left = TO_BOOL(va);
                     uint8_t right = TO_BOOL(vb);
 
@@ -954,14 +807,7 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(IS_INT(va) || IS_INT(vb)){
-                    if(!IS_INT(va)){
-                        vmu_error(vm, "Expect integer at left side of equality");
-                    }
-                    if(!IS_INT(vb)){
-                        vmu_error(vm, "Expect integer at right side of equality");
-                    }
-
+                if(IS_INT(va) && IS_INT(vb)){
                     int64_t left = TO_INT(va);
                     int64_t right = TO_INT(vb);
 
@@ -970,14 +816,7 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(IS_FLOAT(va) || IS_FLOAT(vb)){
-                    if(!IS_FLOAT(va)){
-                        vmu_error(vm, "Expect float at left side of equality");
-                    }
-                    if(!IS_FLOAT(vb)){
-                        vmu_error(vm, "Expect float at right side of equality");
-                    }
-
+                if(IS_FLOAT(va) && IS_FLOAT(vb)){
                     double left = TO_FLOAT(va);
                     double right = TO_FLOAT(vb);
 
