@@ -19,6 +19,7 @@ typedef enum expr_type{
     INDEX_EXPRTYPE,
     UNARY_EXPRTYPE,
 	BINARY_EXPRTYPE,
+    BITWISE_EXPRTYPE,
     COMPARISON_EXPRTYPE,
     LOGICAL_EXPRTYPE,
     ASSIGN_EXPRTYPE,
@@ -28,7 +29,7 @@ typedef enum expr_type{
     DICT_EXPRTYPE,
 	RECORD_EXPRTYPE,
 	IS_EXPRTYPE,
-		TENARY_EXPRTYPE
+	TENARY_EXPRTYPE
 }ExprType;
 
 typedef struct expr{
@@ -107,8 +108,14 @@ typedef struct binary_expr{
 	Expr *right;
 }BinaryExpr;
 
+typedef struct bitwise_expr{
+    Expr *left;
+	Token *operator;
+	Expr *right;
+}BitWiseExpr;
+
 typedef struct comparison_expr{
-	Expr *left;
+    Expr *left;
 	Token *operator;
 	Expr *right;
 }ComparisonExpr;

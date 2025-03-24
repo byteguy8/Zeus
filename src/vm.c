@@ -660,6 +660,97 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsuported types using 'mod' operator");
 
                 break;
+            }case BNOT_OPCODE:{
+                Value *value = pop(vm);
+
+                if(IS_INT(value)){
+                    PUSH(INT_VALUE(~TO_INT(value)), vm)
+                    break;
+                }
+
+                vmu_error(vm, "Unsuported types using '~' operator");
+
+                break;
+            }case LSH_OPCODE:{
+                Value *vb = pop(vm);
+                Value *va = pop(vm);
+
+                if(IS_INT(va) && IS_INT(vb)){
+                    int64_t left = TO_INT(va);
+                    int64_t right = TO_INT(vb);
+
+                    PUSH(INT_VALUE(left << right), vm)
+
+                    break;
+                }
+
+                vmu_error(vm, "Unsuported types using '<<' operator");
+
+                break;
+            }case RSH_OPCODE:{
+                Value *vb = pop(vm);
+                Value *va = pop(vm);
+
+                if(IS_INT(va) && IS_INT(vb)){
+                    int64_t left = TO_INT(va);
+                    int64_t right = TO_INT(vb);
+
+                    PUSH(INT_VALUE(left >> right), vm)
+
+                    break;
+                }
+
+                vmu_error(vm, "Unsuported types using '>>' operator");
+
+                break;
+            }case BAND_OPCODE:{
+                Value *vb = pop(vm);
+                Value *va = pop(vm);
+
+                if(IS_INT(va) && IS_INT(vb)){
+                    int64_t left = TO_INT(va);
+                    int64_t right = TO_INT(vb);
+
+                    PUSH(INT_VALUE(left & right), vm)
+
+                    break;
+                }
+
+                vmu_error(vm, "Unsuported types using '&' operator");
+
+                break;
+            }case BXOR_OPCODE:{
+                Value *vb = pop(vm);
+                Value *va = pop(vm);
+
+                if(IS_INT(va) && IS_INT(vb)){
+                    int64_t left = TO_INT(va);
+                    int64_t right = TO_INT(vb);
+
+                    PUSH(INT_VALUE(left ^ right), vm)
+
+                    break;
+                }
+
+                vmu_error(vm, "Unsuported types using '^' operator");
+
+                break;
+            }case BOR_OPCODE:{
+                Value *vb = pop(vm);
+                Value *va = pop(vm);
+
+                if(IS_INT(va) && IS_INT(vb)){
+                    int64_t left = TO_INT(va);
+                    int64_t right = TO_INT(vb);
+
+                    PUSH(INT_VALUE(left | right), vm)
+
+                    break;
+                }
+
+                vmu_error(vm, "Unsuported types using '|' operator");
+
+                break;
             }case LT_OPCODE:{
                 Value *vb = pop(vm);
                 Value *va = pop(vm);

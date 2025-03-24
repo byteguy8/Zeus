@@ -146,6 +146,30 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             size_t end = dumpper->ip;
             printf("%8.8s %.7ld\n", "MOD", end - start);
             break;
+		}case BNOT_OPCODE:{
+            size_t end = dumpper->ip;
+            printf("%8.8s %.7ld\n", "BNOT", end - start);
+            break;
+		}case LSH_OPCODE:{
+            size_t end = dumpper->ip;
+            printf("%8.8s %.7ld\n", "LSH", end - start);
+            break;
+		}case RSH_OPCODE:{
+            size_t end = dumpper->ip;
+            printf("%8.8s %.7ld\n", "RSH", end - start);
+            break;
+		}case BAND_OPCODE:{
+            size_t end = dumpper->ip;
+            printf("%8.8s %.7ld\n", "BAND", end - start);
+            break;
+		}case BXOR_OPCODE:{
+            size_t end = dumpper->ip;
+            printf("%8.8s %.7ld\n", "BXOR", end - start);
+            break;
+		}case BOR_OPCODE:{
+            size_t end = dumpper->ip;
+            printf("%8.8s %.7ld\n", "BOR", end - start);
+            break;
 		}case LT_OPCODE:{
             size_t end = dumpper->ip;
 			printf("%8.8s %.7ld\n", "LT", end - start);

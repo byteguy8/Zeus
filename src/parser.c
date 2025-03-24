@@ -28,7 +28,12 @@ Expr *parse_is_expr(Parser *parser);
 Expr *parse_tenary_expr(Parser *parser);
 Expr *parse_or(Parser *parser);
 Expr *parse_and(Parser *parser);
-Expr *parse_comparison(Parser *parser);
+Expr *parse_bitwise_or(Parser *parser);
+Expr *parse_bitwise_xor(Parser *parser);
+Expr *parse_bitwise_and(Parser *parser);
+Expr *parse_equality(Parser *parser);
+Expr *parse_relational(Parser *parser);
+Expr *parse_shift(Parser *parser);
 Expr *parse_term(Parser *parser);
 Expr *parse_factor(Parser *parser);
 Expr *parse_unary(Parser *parser);
@@ -295,11 +300,11 @@ Expr *parse_or(Parser *parser){
 }
 
 Expr *parse_and(Parser *parser){
-    Expr *left = parse_comparison(parser);
+    Expr *left = parse_bitwise_or(parser);
 
 	while(match(parser, 1, AND_TOKTYPE)){
 		Token *operator = previous(parser);
-		Expr *right = parse_comparison(parser);
+		Expr *right = parse_bitwise_or(parser);
 
 		LogicalExpr *logical_expr = MEMORY_ALLOC(LogicalExpr, 1, parser->ctallocator);
 
@@ -313,30 +318,126 @@ Expr *parse_and(Parser *parser){
     return left;
 }
 
-Expr *parse_comparison(Parser *parser){
-    Expr *left = parse_term(parser);
+Expr *parse_bitwise_or(Parser *parser){
+    Expr *left = parse_bitwise_xor(parser);
 
-	while(match(parser, 6,
-        LESS_TOKTYPE,
-        GREATER_TOKTYPE,
-        LESS_EQUALS_TOKTYPE,
-        GREATER_EQUALS_TOKTYPE,
+	while(match(parser, 1, OR_BITWISE_TOKTYPE)){
+		Token *operator = previous(parser);
+		Expr *right = parse_bitwise_xor(parser);
+
+		BitWiseExpr *bitwise_expr = MEMORY_ALLOC(BitWiseExpr, 1, parser->ctallocator);
+
+		bitwise_expr->left = left;
+		bitwise_expr->operator = operator;
+		bitwise_expr->right = right;
+
+		left = create_expr(BITWISE_EXPRTYPE, bitwise_expr, parser);
+	}
+
+    return left;
+}
+
+Expr *parse_bitwise_xor(Parser *parser){
+    Expr *left = parse_bitwise_and(parser);
+
+	while(match(parser, 1, XOR_BITWISE_TOKTYPE)){
+		Token *operator = previous(parser);
+		Expr *right = parse_bitwise_and(parser);
+
+		BitWiseExpr *bitwise_expr = MEMORY_ALLOC(BitWiseExpr, 1, parser->ctallocator);
+
+		bitwise_expr->left = left;
+		bitwise_expr->operator = operator;
+		bitwise_expr->right = right;
+
+		left = create_expr(BITWISE_EXPRTYPE, bitwise_expr, parser);
+	}
+
+    return left;
+}
+
+Expr *parse_bitwise_and(Parser *parser){
+    Expr *left = parse_equality(parser);
+
+	while(match(parser, 1, AND_BITWISE_TOKTYPE)){
+		Token *operator = previous(parser);
+		Expr *right = parse_equality(parser);
+
+		BitWiseExpr *bitwise_expr = MEMORY_ALLOC(BitWiseExpr, 1, parser->ctallocator);
+
+		bitwise_expr->left = left;
+		bitwise_expr->operator = operator;
+		bitwise_expr->right = right;
+
+		left = create_expr(BITWISE_EXPRTYPE, bitwise_expr, parser);
+	}
+
+    return left;
+}
+
+Expr *parse_equality(Parser *parser){
+    Expr *left = parse_relational(parser);
+
+	while(match(parser, 2,
         EQUALS_EQUALS_TOKTYPE,
         NOT_EQUALS_TOKTYPE
     )){
 		Token *operator = previous(parser);
-		Expr *right = parse_term(parser);
+		Expr *right = parse_relational(parser);
 
-		ComparisonExpr *comparison_expr = MEMORY_ALLOC(ComparisonExpr, 1, parser->ctallocator);
+		ComparisonExpr *equality_expr = MEMORY_ALLOC(ComparisonExpr, 1, parser->ctallocator);
 
-		comparison_expr->left = left;
-		comparison_expr->operator = operator;
-		comparison_expr->right = right;
+		equality_expr->left = left;
+		equality_expr->operator = operator;
+		equality_expr->right = right;
 
-		left = create_expr(COMPARISON_EXPRTYPE, comparison_expr, parser);
+		left = create_expr(COMPARISON_EXPRTYPE, equality_expr, parser);
 	}
 
     return left;
+}
+
+Expr *parse_relational(Parser *parser){
+    Expr *left = parse_shift(parser);
+
+	while(match(parser, 4,
+        LESS_TOKTYPE,
+        GREATER_TOKTYPE,
+        LESS_EQUALS_TOKTYPE,
+        GREATER_EQUALS_TOKTYPE
+    )){
+		Token *operator = previous(parser);
+		Expr *right = parse_shift(parser);
+
+		ComparisonExpr *relational_expr = MEMORY_ALLOC(ComparisonExpr, 1, parser->ctallocator);
+
+		relational_expr->left = left;
+		relational_expr->operator = operator;
+		relational_expr->right = right;
+
+		left = create_expr(COMPARISON_EXPRTYPE, relational_expr, parser);
+	}
+
+    return left;
+}
+
+Expr *parse_shift(Parser *parser){
+    Expr *left = parse_term(parser);
+
+	while(match(parser, 2, LEFT_SHIFT_TOKTYPE, RIGHT_SHIFT_TOKTYPE)){
+		Token *operator = previous(parser);
+		Expr *right = parse_term(parser);
+
+		BitWiseExpr *bitwise_expr = MEMORY_ALLOC(BitWiseExpr, 1, parser->ctallocator);
+
+		bitwise_expr->left = left;
+		bitwise_expr->operator = operator;
+		bitwise_expr->right = right;
+
+		left = create_expr(BITWISE_EXPRTYPE, bitwise_expr, parser);
+	}
+
+	return left;
 }
 
 Expr *parse_term(Parser *parser){
@@ -378,7 +479,7 @@ Expr *parse_factor(Parser *parser){
 }
 
 Expr *parse_unary(Parser *parser){
-    if(match(parser, 2, MINUS_TOKTYPE, EXCLAMATION_TOKTYPE)){
+    if(match(parser, 3, MINUS_TOKTYPE, EXCLAMATION_TOKTYPE, NOT_BITWISE_TOKTYPE)){
         Token *operator = previous(parser);
         Expr *right = parse_unary(parser);
 

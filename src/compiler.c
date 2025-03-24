@@ -949,12 +949,13 @@ void compile_expr(Expr *expr, Compiler *compiler){
                 case MINUS_TOKTYPE:{
                     write_chunk(NNOT_OPCODE, compiler);
                     break;
-                }
-                case EXCLAMATION_TOKTYPE:{
+                }case EXCLAMATION_TOKTYPE:{
                     write_chunk(NOT_OPCODE, compiler);
                     break;
-                }
-                default:{
+                }case NOT_BITWISE_TOKTYPE:{
+                    write_chunk(BNOT_OPCODE, compiler);
+                    break;
+                }default:{
                     assert("Illegal token type");
                 }
             }
@@ -1000,6 +1001,40 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			write_location(operator, compiler);
 
             break;
+        }case BITWISE_EXPRTYPE:{
+            BitWiseExpr *bitwise_expr = (BitWiseExpr *)expr->sub_expr;
+            Expr *left = bitwise_expr->left;
+            Token *operator = bitwise_expr->operator;
+            Expr *right = bitwise_expr->right;
+
+            compile_expr(left, compiler);
+            compile_expr(right, compiler);
+
+            switch (operator->type)
+            {
+                case LEFT_SHIFT_TOKTYPE:{
+                    write_chunk(LSH_OPCODE, compiler);
+                    break;
+                }case RIGHT_SHIFT_TOKTYPE:{
+                    write_chunk(RSH_OPCODE, compiler);
+                    break;
+                }case AND_BITWISE_TOKTYPE:{
+                    write_chunk(BAND_OPCODE, compiler);
+                    break;
+                }case XOR_BITWISE_TOKTYPE:{
+                    write_chunk(BXOR_OPCODE, compiler);
+                    break;
+                }case OR_BITWISE_TOKTYPE:{
+                    write_chunk(BOR_OPCODE, compiler);
+                    break;
+                }default:{
+                    assert("Illegal token type");
+                }
+            }
+
+            write_location(operator, compiler);
+
+            break;
         }case COMPARISON_EXPRTYPE:{
             ComparisonExpr *comparison_expr = (ComparisonExpr *)expr->sub_expr;
             Expr *left = comparison_expr->left;
@@ -1013,28 +1048,22 @@ void compile_expr(Expr *expr, Compiler *compiler){
                 case LESS_TOKTYPE:{
                     write_chunk(LT_OPCODE, compiler);
                     break;
-                }
-                case GREATER_TOKTYPE:{
+                }case GREATER_TOKTYPE:{
                     write_chunk(GT_OPCODE, compiler);
                     break;
-                }
-                case LESS_EQUALS_TOKTYPE:{
+                }case LESS_EQUALS_TOKTYPE:{
                     write_chunk(LE_OPCODE, compiler);
                     break;
-                }
-                case GREATER_EQUALS_TOKTYPE:{
+                }case GREATER_EQUALS_TOKTYPE:{
                     write_chunk(GE_OPCODE, compiler);
                     break;
-                }
-                case EQUALS_EQUALS_TOKTYPE:{
+                }case EQUALS_EQUALS_TOKTYPE:{
                     write_chunk(EQ_OPCODE, compiler);
                     break;
-                }
-                case NOT_EQUALS_TOKTYPE:{
+                }case NOT_EQUALS_TOKTYPE:{
                     write_chunk(NE_OPCODE, compiler);
                     break;
-                }
-                default:{
+                }default:{
                     assert("Illegal token type");
                 }
             }

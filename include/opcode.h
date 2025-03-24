@@ -11,13 +11,21 @@ typedef enum opcode{
     FLOAT_OPCODE,    // push float
     STRING_OPCODE,   // push string
     TEMPLATE_OPCODE, // construct template and push it
-    
+
     // ARITHMETIC
     ADD_OPCODE, // add two integers or floats and push the result
     SUB_OPCODE, // subtract two integers or floats and push the result
     MUL_OPCODE, // muliply two integers or floats and push the result
     DIV_OPCODE, // divide two integers or floats and push the result
 	MOD_OPCODE, // calculate module from two integers and push the result
+
+    // BITWISE
+    BNOT_OPCODE, // not bitwise
+    LSH_OPCODE,  // left shift
+    RSH_OPCODE,  // right shift
+    BAND_OPCODE, // and bitwise
+    BXOR_OPCODE, // xor bitwise
+    BOR_OPCODE,  // or bitwise
 
     // COMPARISON
     LT_OPCODE, // less

@@ -484,18 +484,30 @@ Token *scan_token(char c, Lexer *lexer){
 			}else{
 				return create_token(SLASH_TOKTYPE, lexer);
 			}
+        }case '~':{
+            return create_token(NOT_BITWISE_TOKTYPE, lexer);
+        }case '&':{
+            return create_token(AND_BITWISE_TOKTYPE, lexer);
+        }case '^':{
+            return create_token(XOR_BITWISE_TOKTYPE, lexer);
+        }case '|':{
+            return create_token(OR_BITWISE_TOKTYPE, lexer);
         }case ',':{
 			return create_token(COMMA_TOKTYPE, lexer);
 		}case '.':{
 			return create_token(DOT_TOKTYPE, lexer);
 		}case '<':{
-            if(match('=', lexer)){
+            if(match('<', lexer)){
+                return create_token(LEFT_SHIFT_TOKTYPE, lexer);
+            }else if(match('=', lexer)){
 				return create_token(LESS_EQUALS_TOKTYPE, lexer);
 			}else{
 				return create_token(LESS_TOKTYPE, lexer);
 			}
         }case '>':{
-            if(match('=', lexer)){
+            if(match('>', lexer)){
+                return create_token(RIGHT_SHIFT_TOKTYPE, lexer);
+            }else if(match('=', lexer)){
 				return create_token(GREATER_EQUALS_TOKTYPE, lexer);
 			}else{
 				return create_token(GREATER_TOKTYPE, lexer);
