@@ -396,8 +396,7 @@ uint32_t vmu_hash_obj(Obj *obj){
     switch (obj->type){
         case STR_OTYPE :{
             Str *str = obj->content.str;
-            uint32_t hash = lzhtable_hash((uint8_t *)str->buff, str->len);
-            return hash;
+            return str->hash;
         }default:{
             uintptr_t iaddr = (uintptr_t)obj;
             uint32_t hash = lzhtable_hash((uint8_t *)&iaddr, sizeof(uintptr_t));
@@ -662,7 +661,7 @@ void vmu_clean_up(VM *vm){
     clean_up_module(vm->modules[0], vm);
 }
 
-int vmu_raw_str_to_table(char **raw_str_ptr, VM *vm, char **out_raw_str){
+uint32_t vmu_raw_str_to_table(char **raw_str_ptr, VM *vm, char **out_raw_str){
     char *raw_str = *raw_str_ptr;
     uint8_t *key = (uint8_t *)raw_str;
     size_t key_size = strlen(raw_str);
@@ -681,17 +680,15 @@ int vmu_raw_str_to_table(char **raw_str_ptr, VM *vm, char **out_raw_str){
         if(out_raw_str){
             *out_raw_str = saved_raw_str;
         }
-
-        return 0;
     }else{
         lzhtable_hash_put(hash, raw_str, MODULE_STRINGS(CURRENT_MODULE(vm)));
 
         if(out_raw_str){
             *out_raw_str = raw_str;
         }
-
-        return 1;
     }
+
+    return hash;
 }
 
 Value *vmu_clone_value(Value *value, VM *vm){
@@ -751,12 +748,12 @@ void vmu_destroy_obj(Obj *obj, VM *vm){
 
 Obj *vmu_str_obj(char **raw_str_ptr, VM *vm){
     char *out_raw_str = NULL;
-
-    vmu_raw_str_to_table(raw_str_ptr, vm, &out_raw_str);
+    uint32_t hash = vmu_raw_str_to_table(raw_str_ptr, vm, &out_raw_str);
 
     Str *str = factory_create_str(out_raw_str, vm->rtallocator);
     Obj *str_obj = vmu_create_obj(STR_OTYPE, vm);
 
+    str->hash = hash;
     str_obj->content.str = str;
 
     return str_obj;

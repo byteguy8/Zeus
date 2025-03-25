@@ -109,7 +109,8 @@ struct value{
 };
 
 struct str{
-	char core;
+	char runtime;
+    uint32_t hash;
 	size_t len;
 	char *buff;
 };

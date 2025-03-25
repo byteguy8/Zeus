@@ -370,7 +370,12 @@ static int execute(VM *vm){
             }case STRING_OPCODE:{
                 char *raw_str = read_str(vm, NULL);
                 Obj *obj = vmu_str_obj(&raw_str, vm);
+                Str *str = obj->content.str;
+
+                str->runtime = 0;
+
                 PUSH(OBJ_VALUE(obj), vm)
+
                 break;
             }case TEMPLATE_OPCODE:{
                 int16_t len = read_i16(vm);

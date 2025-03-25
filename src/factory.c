@@ -29,7 +29,7 @@ void factory_destroy_raw_str(char *raw_str, Allocator *allocator){
 Str *factory_create_str(char *buff, Allocator *allocator){
     Str *str = MEMORY_ALLOC(Str, 1, allocator);
 
-    str->core = 0;
+    str->runtime = 1;
     str->len = strlen(buff);
     str->buff = buff;
 

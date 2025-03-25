@@ -26,7 +26,7 @@ void vmu_print_value(FILE *stream, Value *value);
 
 void vmu_clean_up(VM *vm);
 
-int vmu_raw_str_to_table(char **raw_str, VM *vm, char **out_raw_str);
+uint32_t vmu_raw_str_to_table(char **raw_str, VM *vm, char **out_raw_str);
 
 Value *vmu_clone_value(Value *value, VM *vm);
 void vmu_destroy_value(Value *value, VM *vm);
@@ -46,9 +46,22 @@ Obj *vmu_native_fn_obj(int arity, char *name, void *target, RawNativeFn raw_nati
 Obj *vmu_closure_obj(MetaClosure *meta, VM *vm);
 Obj *vmu_foreign_lib_obj(void *handler, VM *vm);
 
+#define VALIDATE_INDEX_ARG(name, value, index, len){                                                \
+    if(!IS_INT((value))){                                                                           \
+        vmu_error(vm, "Argument '%s' must be of type 'int'", (name));                               \
+    }                                                                                               \
+    (index) = TO_INT((value));                                                                      \
+    if((index) < 0){                                                                                \
+        vmu_error(vm, "Illegal value for argument '%s': indexes must be greater than 0", (name));   \
+    }                                                                                               \
+    if((index) >= (int64_t)(len)){                                                                  \
+        vmu_error(vm, "Illegal value for argument '%s': cannot be greater than %d", (name), (len)); \
+    }                                                                                               \
+}
+
 #define VALIDATE_INDEX(value, index, len){                                                        \
     if(!IS_INT((value))){                                                                         \
-        vmu_error(vm, "Unexpected index value. Expect int, but got something else");              \
+        vmu_error(vm, "Unexpected index type. Expect 'int', but got something else");             \
     }                                                                                             \
     index = TO_INT((value));                                                                      \
     if((index) < 0 || (index) >= (int64_t)(len)){                                                 \
@@ -58,7 +71,7 @@ Obj *vmu_foreign_lib_obj(void *handler, VM *vm);
 
 #define VALIDATE_INDEX_NAME(value, index, len, name){                                                    \
     if(!IS_INT((value))){                                                                                \
-        vmu_error(vm, "Unexpected value for '%s'. Expect int, but got something else", (name));          \
+        vmu_error(vm, "Unexpected type for '%s'. Expect 'int', but got something else", (name));         \
     }                                                                                                    \
     index = TO_INT((value));                                                                             \
     if((index) < 0 || (index) >= (int64_t)(len)){                                                        \

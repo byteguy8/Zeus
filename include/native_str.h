@@ -8,6 +8,83 @@
 
 static LZHTable *str_symbols = NULL;
 
+Value native_fn_str_insert(uint8_t argsc, Value *values, void *target, VM *vm){
+	Str *target_str = (Str *)target;
+    Value *at_value = &values[0];
+    Value *value_str = &values[1];
+
+    if(!IS_INT(at_value)){
+        vmu_error(vm, "Illegal type for argument 'at': must be of type 'int'");
+    }
+
+    int64_t at = TO_INT(at_value);
+
+    if(at < 0){
+        vmu_error(vm, "Illegal value for argument 'at': indexes must be greater than 0");
+    }
+    if(at >= (int64_t)(target_str->len + 1)){
+        vmu_error(vm, "Illegal value for argument 'at': cannot be greater than %d", target_str->len);
+    }
+
+    if(!IS_STR(value_str)){
+        vmu_error(vm, "Argument 1: must be of type 'str'");
+    }
+
+    Str *str = TO_STR(value_str);
+    size_t raw_str_len = target_str->len + str->len;
+    char *raw_str = MEMORY_ALLOC(char, raw_str_len + 1, vm->rtallocator);
+
+    memcpy(raw_str, target_str->buff, at);
+    memcpy(raw_str + at, str->buff, str->len);
+    memcpy(raw_str + at + str->len, target_str->buff + at, target_str->len - (at));
+
+    raw_str[raw_str_len] = '\0';
+
+    Obj *str_obj = vmu_str_obj(&raw_str, vm);
+
+	return OBJ_VALUE(str_obj);
+}
+
+Value native_fn_str_remove(uint8_t argsc, Value *values, void *target, VM *vm){
+	Str *target_str = (Str *)target;
+    Value *from_value = &values[0];
+    Value *to_value = &values[1];
+    int64_t from = -1;
+    int64_t to = -1;
+
+    if(target_str->len == 0){
+        vmu_error(vm, "Cannot remove on empty strings");
+    }
+
+    VALIDATE_INDEX_ARG("from", from_value, from, target_str->len)
+    VALIDATE_INDEX_ARG("to", to_value, to, target_str->len)
+
+    if(from > to){
+        vmu_error(vm, "Illegal value for argument 'from': cannot be greater than argument 'to'");
+    }
+
+    size_t raw_str_len = target_str->len - (to - from + 1);
+    char *raw_str = MEMORY_ALLOC(char, raw_str_len + 1, vm->rtallocator);
+
+    memcpy(raw_str, target_str->buff, from);
+    memcpy(raw_str + from, target_str->buff + to + 1, target_str->len - to  - 1);
+    raw_str[raw_str_len] = '\0';
+
+    Obj *str_obj = vmu_str_obj(&raw_str, vm);
+
+	return OBJ_VALUE(str_obj);
+}
+
+Value native_fn_str_hash(uint8_t argsc, Value *values, void *target, VM *vm){
+	Str *target_str = (Str *)target;
+	return INT_VALUE((int64_t)target_str->hash);
+}
+
+Value native_fn_str_is_runtime(uint8_t argsc, Value *values, void *target, VM *vm){
+	Str *target_str = (Str *)target;
+	return BOOL_VALUE(target_str->runtime == 1);
+}
+
 Value native_fn_str_length(uint8_t argsc, Value *values, void *target, VM *vm){
 	Str *target_str = (Str *)target;
 	return INT_VALUE(target_str->len);
@@ -289,6 +366,10 @@ Value native_fn_str_cmp_ic(uint8_t argsc, Value *values, void *target, VM *vm){
 Obj *native_str_get(char *symbol, void *target, VM *vm){
     if(!str_symbols){
         str_symbols = FACTORY_LZHTABLE(vm->rtallocator);
+        factory_add_native_fn_info("insert", 2, native_fn_str_insert, str_symbols, vm->rtallocator);
+        factory_add_native_fn_info("remove", 2, native_fn_str_remove, str_symbols, vm->rtallocator);
+        factory_add_native_fn_info("hash", 0, native_fn_str_hash, str_symbols, vm->rtallocator);
+        factory_add_native_fn_info("is_runtime", 0, native_fn_str_is_runtime, str_symbols, vm->rtallocator);
         factory_add_native_fn_info("length", 0, native_fn_str_length, str_symbols, vm->rtallocator);
         factory_add_native_fn_info("char_at", 1, native_fn_str_char_at, str_symbols, vm->rtallocator);
         factory_add_native_fn_info("sub_str", 2, native_fn_str_sub_str, str_symbols, vm->rtallocator);
