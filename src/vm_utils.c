@@ -17,6 +17,7 @@
 // GARBAGE COLLECTOR
 void clean_up_module(Module *module, VM *vm);
 void destroy_obj(Obj *obj, VM *vm);
+void mark_globals(LZHTable *globals);
 void mark_value(Value *value);
 void mark_objs(VM *vm);
 void sweep_objs(VM *vm);
@@ -135,26 +136,51 @@ void destroy_obj(Obj *obj, VM *vm){
 	vm->objs_size -= sizeof(Obj);
 }
 
+void mark_globals(LZHTable *globals){
+    LZHTableNode *current = globals->head;
+    LZHTableNode *next = NULL;
+
+    GlobalValue *global_value = NULL;
+    Value *value = NULL;
+
+    while (current){
+        next = current->next_table_node;
+        global_value = (GlobalValue *)current->value;
+        value = global_value->value;
+
+        if(IS_OBJ(value)){
+            mark_value(value);
+        }
+
+        current = next;
+    }
+}
+
 void mark_value(Value *value){
-	if(value-> type != OBJ_VTYPE){return;}
+	if(value-> type != OBJ_VTYPE){
+        return;
+    }
 
 	Obj *obj = value->content.obj;
 
-    if(obj->marked){return;}
+    if(obj->marked){
+        return;
+    }
+
     obj->marked = 1;
 
 	switch(obj->type){
-		case STR_OTYPE:{
-			break;
-		}case ARRAY_OTYPE:{
+		case ARRAY_OTYPE:{
             Array *array = obj->content.array;
             Value *values = array->values;
             Value *value = NULL;
 
             for (int16_t i = 0; i < array->len; i++){
                 value = &values[i];
-                if(value->type != OBJ_VTYPE){continue;}
-                mark_value(value);
+
+                if(IS_OBJ(value)){
+                    mark_value(value);
+                }
             }
 
             break;
@@ -164,8 +190,10 @@ void mark_value(Value *value){
 
 			for(size_t i = 0; i < DYNARR_LEN(list); i++){
 				value = (Value *)DYNARR_GET(i, list);
-				if(value->type != OBJ_VTYPE){continue;}
-				mark_value(value);
+
+                if(IS_OBJ(value)){
+                    mark_value(value);
+                }
 			}
 
 			break;
@@ -179,12 +207,10 @@ void mark_value(Value *value){
 				next = current->next_table_node;
 				value = (Value *)current->value;
 
-				if(value->type != OBJ_VTYPE){
-					current = next;
-					continue;
-				}
+                if(IS_OBJ(value)){
+                    mark_value(value);
+                }
 
-				mark_value(value);
 				current = next;
 			}
 
@@ -193,7 +219,9 @@ void mark_value(Value *value){
 			Record *record = obj->content.record;
 			LZHTable *key_values = record->attributes;
 
-			if(!key_values){break;}
+			if(!key_values){
+                break;
+            }
 
 			LZHTableNode *current = key_values->head;
 			LZHTableNode *next = NULL;
@@ -203,12 +231,10 @@ void mark_value(Value *value){
 				next = current->next_table_node;
 				value = (Value *)current->value;
 
-				if(value->type != OBJ_VTYPE){
-					current = next;
-					continue;
-				}
+				if(IS_OBJ(value)){
+                    mark_value(value);
+                }
 
-				mark_value(value);
 				current = next;
 			}
 
@@ -223,33 +249,8 @@ void mark_value(Value *value){
             }
 
             break;
-        }case NATIVE_FN_OTYPE:{
-            break;
         }case MODULE_OTYPE:{
-			Module *module = obj->content.module;
-            LZHTable *globals = MODULE_GLOBALS(module);
-
-			LZHTableNode *current = globals->head;
-			LZHTableNode *next = NULL;
-
-			GlobalValue *global_value = NULL;
-            Value *value = NULL;
-
-			while (current){
-				next = current->next_table_node;
-				global_value = (GlobalValue *)current->value;
-                value = global_value->value;
-
-				if(value->type != OBJ_VTYPE){
-					current = next;
-					continue;
-				}
-
-				mark_value(value);
-
-				current = next;
-			}
-
+            mark_globals(MODULE_GLOBALS(obj->content.module));
             break;
         }default:{
 			assert("Illegal object type");
@@ -259,25 +260,7 @@ void mark_value(Value *value){
 
 void mark_objs(VM *vm){
     //> MARKING GLOBALS
-    Module *module = vm->modules[0];
-    LZHTable *globals = MODULE_GLOBALS(module);
-
-    LZHTableNode *current = globals->head;
-    LZHTableNode *next = NULL;
-
-    GlobalValue *global_value = NULL;
-    Value *value = NULL;
-
-    while (current){
-        next = current->next_table_node;
-
-        global_value = (GlobalValue *)current->value;
-        value = global_value->value;
-
-        mark_value(value);
-
-        current = next;
-    }
+    mark_globals(MODULE_GLOBALS(vm->modules[0]));
     //< MARKING GLOBALS
     //> MARKING LOCALS
     Frame *frame = NULL;
