@@ -76,7 +76,6 @@ NativeFn *factory_create_native_fn(char *name, uint8_t arity, void *target, RawN
     char *cloned_name = factory_clone_raw_str(name, allocator);
     NativeFn *native_fn = MEMORY_ALLOC(NativeFn, 1, allocator);
 
-    native_fn->unique = 0;
     native_fn->arity = arity;
     native_fn->name = cloned_name;
     native_fn->target = target;

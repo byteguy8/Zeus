@@ -130,7 +130,6 @@ struct native_fn_info{
 };
 
 struct native_fn{
-    char unique;
     int arity;
     char *name;
     void *target;

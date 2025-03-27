@@ -96,12 +96,19 @@ void destroy_obj(Obj *obj, VM *vm){
 			Record *record = obj->content.record;
             factory_destroy_record(vm, clean_up_table, record, vm->rtallocator);
 			break;
-		}case CLOSURE_OTYPE:{
+		}case NATIVE_FN_OTYPE:{
+            // No work to be done
+            break;
+        }case FN_OTYPE:{
+            // No work to be done
+            break;
+        }case CLOSURE_OTYPE:{
             Closure *closure = obj->content.closure;
             MetaClosure *meta = closure->meta;
+            OutValue *closure_value = NULL;
 
             for (int i = 0; i < meta->values_len; i++){
-                OutValue *closure_value = &closure->values[i];
+                closure_value = &closure->values[i];
 
                 if(!closure_value->linked){
                     vmu_destroy_value(closure_value->value, vm);
@@ -112,19 +119,17 @@ void destroy_obj(Obj *obj, VM *vm){
             factory_destroy_closure(closure, vm->rtallocator);
 
             break;
-        }case NATIVE_FN_OTYPE:{
-            NativeFn *native_fn = obj->content.native_fn;
-            if(!native_fn->unique){
-                factory_destroy_native_fn(native_fn, vm->rtallocator);
-            }
-            break;
         }case NATIVE_MODULE_OTYPE:{
+            // No work to be done
             break;
         }case MODULE_OTYPE:{
-            break;
-        }case NATIVE_LIB_OTYPE:{
+            // No work to be done
             break;
         }case FOREIGN_FN_OTYPE:{
+            // No work to be done
+            break;
+        }case NATIVE_LIB_OTYPE:{
+            // No work to be done
             break;
         }default:{
 			assert("Illegal object type");
@@ -201,12 +206,17 @@ void mark_value(Value *value){
             LZHTable *dict = obj->content.dict;
             LZHTableNode *current = dict->head;
 			LZHTableNode *next = NULL;
-			Value *value = NULL;
+			Value *key_value = NULL;
+            Value *value = NULL;
 
 			while (current){
 				next = current->next_table_node;
+                key_value = (Value *)current->key;
 				value = (Value *)current->value;
 
+                if(IS_OBJ(key_value)){
+                    mark_value(value);
+                }
                 if(IS_OBJ(value)){
                     mark_value(value);
                 }
@@ -239,7 +249,13 @@ void mark_value(Value *value){
 			}
 
 			break;
-		}case CLOSURE_OTYPE:{
+		}case NATIVE_FN_OTYPE:{
+            // No work to be done
+            break;
+        }case FN_OTYPE:{
+            // No work to be done
+            break;
+        }case CLOSURE_OTYPE:{
             Closure *closure = obj->content.closure;
             MetaClosure *meta = closure->meta;
 
@@ -249,8 +265,17 @@ void mark_value(Value *value){
             }
 
             break;
+        }case NATIVE_MODULE_OTYPE:{
+            // No work to be done
+            break;
         }case MODULE_OTYPE:{
             mark_globals(MODULE_GLOBALS(obj->content.module));
+            break;
+        }case FOREIGN_FN_OTYPE:{
+            // No work to be done
+            break;
+        }case NATIVE_LIB_OTYPE:{
+            // No work to be done
             break;
         }default:{
 			assert("Illegal object type");
