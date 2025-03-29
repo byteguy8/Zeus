@@ -1,4 +1,4 @@
-#include "vm_utils.h"
+#include "vmu.h"
 #include "memory.h"
 #include "factory.h"
 #include "bstr.h"

@@ -2,7 +2,7 @@
 #define NATIVE_MATH_H
 
 #include "rtypes.h"
-#include "vm_utils.h"
+#include "vmu.h"
 #include <math.h>
 
 NativeModule *math_module = NULL;

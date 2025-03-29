@@ -4,7 +4,7 @@
 #include "rtypes.h"
 #include "memory.h"
 #include "factory.h"
-#include "vm_utils.h"
+#include "vmu.h"
 #include <stdint.h>
 
 static LZHTable *array_symbols = NULL;

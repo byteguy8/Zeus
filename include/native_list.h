@@ -3,7 +3,7 @@
 
 #include "rtypes.h"
 #include "memory.h"
-#include "vm_utils.h"
+#include "vmu.h"
 
 static LZHTable *list_symbols = NULL;
 

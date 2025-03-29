@@ -2,7 +2,7 @@
 #define NATIVE_DICT
 
 #include "rtypes.h"
-#include "vm_utils.h"
+#include "vmu.h"
 
 static LZHTable *dict_symbols = NULL;
 

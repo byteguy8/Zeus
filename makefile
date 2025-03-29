@@ -14,15 +14,15 @@ bstr.o dynarr.o \
 lzhtable.o memory.o \
 factory.o utils.o lexer.o \
 parser.o compiler.o \
-dumpper.o vm_utils.o \
+dumpper.o vmu.o \
 vm.o
 
 zeus: $(OBJS)
 	$(COMPILER) -o $(OUT_DIR)/zeus $(CFLAGS) $(OUT_DIR)/*.o $(SRC)/zeus.c -lm
 vm.o:
 	$(COMPILER) -c -o $(OUT_DIR)/vm.o $(CFLAGS) $(SRC)/vm.c
-vm_utils.o:
-	$(COMPILER) -c -o $(OUT_DIR)/vm_utils.o $(CFLAGS) $(SRC)/vm_utils.c
+vmu.o:
+	$(COMPILER) -c -o $(OUT_DIR)/vmu.o $(CFLAGS) $(SRC)/vmu.c
 dumpper.o:
 	$(COMPILER) -c -o $(OUT_DIR)/dumpper.o $(CFLAGS) $(SRC)/dumpper.c
 compiler.o:

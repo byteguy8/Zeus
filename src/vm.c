@@ -1,5 +1,5 @@
 #include "vm.h"
-#include "vm_utils.h"
+#include "vmu.h"
 #include "memory.h"
 #include "utils.h"
 #include "opcode.h"

@@ -2,7 +2,7 @@
 #define NATIVE_LIB_H
 
 #include "rtypes.h"
-#include "vm_utils.h"
+#include "vmu.h"
 #include <dlfcn.h>
 
 void native_lib_init(void *handler, VM *v){}

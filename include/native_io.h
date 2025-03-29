@@ -2,7 +2,7 @@
 #define NATIVE_IO_H
 
 #include "rtypes.h"
-#include "vm_utils.h"
+#include "vmu.h"
 #include <stdio.h>
 
 NativeModule *io_module = NULL;

@@ -4,7 +4,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include "rtypes.h"
-#include "vm_utils.h"
+#include "vmu.h"
 #include <time.h>
 #include <unistd.h>
 

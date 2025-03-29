@@ -2,7 +2,7 @@
 #define NATIVE_OS_H
 
 #include "rtypes.h"
-#include "vm_utils.h"
+#include "vmu.h"
 #include "utils.h"
 
 NativeModule *os_module = NULL;

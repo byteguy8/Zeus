@@ -2,7 +2,7 @@
 #include "factory.h"
 #include "utils.h"
 
-#include "vm_utils.h"
+#include "vmu.h"
 #include "native.h"
 
 #include "lzhtable.h"
