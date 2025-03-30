@@ -166,12 +166,13 @@ struct out_value{
     uint8_t linked;
     uint8_t at;
     Value *value;
-    struct out_value *prev;
-    struct out_value *next;
+    OutValue *prev;
+    OutValue *next;
+    Obj *closure;
 };
 
 struct closure{
-    OutValue *values;
+    OutValue *out_values;
     MetaClosure *meta;
 };
 
@@ -238,6 +239,8 @@ struct foreign_lib{
     void *handler;
 };
 
+#define IS_MARKED(o)((o)->marked == 1)
+
 #define IS_EMPTY(v)((v)->type == EMPTY_VTYPE)
 #define IS_BOOL(v)((v)->type == BOOL_VTYPE)
 #define IS_INT(v)((v)->type == INT_VTYPE)
@@ -278,5 +281,20 @@ struct foreign_lib{
 #define INT_VALUE(value)((Value){.type = INT_VTYPE, .content.i64 = (value)})
 #define FLOAT_VALUE(value)((Value){.type = FLOAT_VTYPE, .content.fvalue = (value)})
 #define OBJ_VALUE(value)((Value){.type = OBJ_VTYPE, .content.obj = (value)})
+
+#define VALIDATE_ARRAY_INDEX(param, name, value, vm){                                                       \
+    if(TO_INT(value) < 0){                                                                                  \
+        vmu_error((vm), "Illegal argument %d: '%s' cannot be less than 0", (param), (name));                \
+    }                                                                                                       \
+    if(TO_INT(value) > INT32_MAX){                                                                          \
+        vmu_error((vm), "Illegal argument %d: '%s' cannot be greater than %d", (param), (name), INT32_MAX); \
+    }                                                                                                       \
+}
+
+#define VALIDATE_VALUE_INT(value, param, name, vm){                                               \
+    if(!IS_INT((value))){                                                                         \
+        vmu_error(vm, "Illegal type of argument %d: expect '%s' of type 'int'", (param), (name)); \
+    }                                                                                             \
+}
 
 #endif

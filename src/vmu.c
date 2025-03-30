@@ -14,18 +14,51 @@
 #define FRAME_AT(at, vm)(&vm->frame_stack[at])
 
 //> PRIVATE INTERFACE
+void insert_obj(Obj *obj, Obj **raw_head, Obj **raw_tail);
+void remove_obj(Obj *obj, Obj **raw_head, Obj **raw_tail);
 // GARBAGE COLLECTOR
 void clean_up_module(Module *module, VM *vm);
 void destroy_obj(Obj *obj, VM *vm);
 void mark_globals(LZHTable *globals);
-void mark_value(Value *value);
-void mark_objs(VM *vm);
+void mark_obj(Obj *obj);
+void mark_roots(VM *vm);
 void sweep_objs(VM *vm);
 void gc(VM *vm);
 int compare_locations(void *a, void *b);
 BStr *prepare_stacktrace(unsigned int spaces, VM *vm);
 //< PRIVATE INTERFACE
 //> PRIVATE IMPLEMENTATION
+void insert_obj(Obj *obj, Obj **raw_head, Obj **raw_tail){
+    Obj *tail = *raw_tail;
+
+    if(tail){
+        tail->next = obj;
+        obj->prev = tail;
+    }else{
+        *raw_head = obj;
+    }
+
+    *raw_tail = obj;
+}
+
+void remove_obj(Obj *obj, Obj **raw_head, Obj **raw_tail){
+    Obj *head = *raw_head;
+    Obj *tail = *raw_tail;
+
+    if(head == obj){
+        *raw_head = obj->next;
+    }
+    if(tail == obj){
+        *raw_tail = obj->prev;
+    }
+    if(obj->prev){
+        obj->prev->next = obj->next;
+    }
+    if(obj->next){
+        obj->next->prev = obj->prev;
+    }
+}
+
 void clean_up_module(Module *module, VM *vm){
     if(module->shadow){return;}
 
@@ -69,15 +102,6 @@ void clean_up_table(void *value, void *key, void *vm){
 }
 
 void destroy_obj(Obj *obj, VM *vm){
-    Obj *prev = obj->prev;
-    Obj *next = obj->next;
-
-    if(prev) prev->next = next;
-	if(next) next->prev = prev;
-
-	if(vm->head == obj){vm->head = next;}
-	if(vm->tail == obj){vm->tail = prev;}
-
 	switch(obj->type){
 		case STR_OTYPE:{
             factory_destroy_str(obj->content.str, vm->rtallocator);
@@ -89,12 +113,10 @@ void destroy_obj(Obj *obj, VM *vm){
 			dynarr_destroy(obj->content.list);
 			break;
 		}case DICT_OTYPE:{
-            LZHTable *table = obj->content.dict;
-            lzhtable_destroy(vm, clean_up_table, table);
+            lzhtable_destroy(vm, clean_up_table, obj->content.dict);
             break;
         }case RECORD_OTYPE:{
-			Record *record = obj->content.record;
-            factory_destroy_record(vm, clean_up_table, record, vm->rtallocator);
+            factory_destroy_record(vm, clean_up_table, obj->content.record, vm->rtallocator);
 			break;
 		}case NATIVE_FN_OTYPE:{
             // No work to be done
@@ -105,17 +127,17 @@ void destroy_obj(Obj *obj, VM *vm){
         }case CLOSURE_OTYPE:{
             Closure *closure = obj->content.closure;
             MetaClosure *meta = closure->meta;
-            OutValue *closure_value = NULL;
+            OutValue *out_value = NULL;
 
             for (int i = 0; i < meta->values_len; i++){
-                closure_value = &closure->values[i];
+                out_value = &closure->out_values[i];
 
-                if(!closure_value->linked){
-                    vmu_destroy_value(closure_value->value, vm);
+                if(!out_value->linked){
+                    vmu_destroy_value(out_value->value, vm);
                 }
             }
 
-            factory_destroy_out_values(meta->values_len, closure->values, vm->rtallocator);
+            factory_destroy_out_values(meta->values_len, closure->out_values, vm->rtallocator);
             factory_destroy_closure(closure, vm->rtallocator);
 
             break;
@@ -136,6 +158,7 @@ void destroy_obj(Obj *obj, VM *vm){
 		}
 	}
 
+    remove_obj(obj, &vm->head, &vm->tail);
     vmu_destroy_obj(obj, vm);
 
 	vm->objs_size -= sizeof(Obj);
@@ -153,21 +176,15 @@ void mark_globals(LZHTable *globals){
         global_value = (GlobalValue *)current->value;
         value = global_value->value;
 
-        if(IS_OBJ(value)){
-            mark_value(value);
+        if(IS_OBJ(value) && !IS_MARKED(TO_OBJ(value))){
+            mark_obj(TO_OBJ(value));
         }
 
         current = next;
     }
 }
 
-void mark_value(Value *value){
-	if(value-> type != OBJ_VTYPE){
-        return;
-    }
-
-	Obj *obj = value->content.obj;
-
+void mark_obj(Obj *obj){
     if(obj->marked){
         return;
     }
@@ -183,8 +200,8 @@ void mark_value(Value *value){
             for (int16_t i = 0; i < array->len; i++){
                 value = &values[i];
 
-                if(IS_OBJ(value)){
-                    mark_value(value);
+                if(IS_OBJ(value) && !IS_MARKED(TO_OBJ(value))){
+                    mark_obj(TO_OBJ(value));
                 }
             }
 
@@ -196,8 +213,8 @@ void mark_value(Value *value){
 			for(size_t i = 0; i < DYNARR_LEN(list); i++){
 				value = (Value *)DYNARR_GET(i, list);
 
-                if(IS_OBJ(value)){
-                    mark_value(value);
+                if(IS_OBJ(value) && !IS_MARKED(TO_OBJ(value))){
+                    mark_obj(TO_OBJ(value));
                 }
 			}
 
@@ -214,11 +231,11 @@ void mark_value(Value *value){
                 key_value = (Value *)current->key;
 				value = (Value *)current->value;
 
-                if(IS_OBJ(key_value)){
-                    mark_value(value);
+                if(IS_OBJ(key_value) && !IS_MARKED(TO_OBJ(key_value))){
+                    mark_obj(TO_OBJ(value));
                 }
-                if(IS_OBJ(value)){
-                    mark_value(value);
+                if(IS_OBJ(value) && !IS_MARKED(TO_OBJ(value))){
+                    mark_obj(TO_OBJ(value));
                 }
 
 				current = next;
@@ -241,8 +258,8 @@ void mark_value(Value *value){
 				next = current->next_table_node;
 				value = (Value *)current->value;
 
-				if(IS_OBJ(value)){
-                    mark_value(value);
+				if(IS_OBJ(value) && !IS_MARKED(TO_OBJ(value))){
+                    mark_obj(TO_OBJ(value));
                 }
 
 				current = next;
@@ -260,8 +277,11 @@ void mark_value(Value *value){
             MetaClosure *meta = closure->meta;
 
             for (int i = 0; i < meta->values_len; i++){
-                Value *value = closure->values[i].value;
-                mark_value(value);
+                Value *value = closure->out_values[i].value;
+
+                if(IS_OBJ(value) && !IS_MARKED(TO_OBJ(value))){
+                    mark_obj(TO_OBJ(value));
+                }
             }
 
             break;
@@ -283,53 +303,62 @@ void mark_value(Value *value){
 	}
 }
 
-void mark_objs(VM *vm){
-    //> MARKING GLOBALS
-    mark_globals(MODULE_GLOBALS(vm->modules[0]));
-    //< MARKING GLOBALS
-    //> MARKING LOCALS
-    Frame *frame = NULL;
-    Value *frame_value = NULL;
-
-    for (int frame_ptr = 0; frame_ptr < vm->frame_ptr; frame_ptr++){
-        frame = &vm->frame_stack[frame_ptr];
-
-        for (size_t local_ptr = 0; local_ptr < LOCALS_LENGTH; local_ptr++){
-            frame_value = &frame->locals[local_ptr];
-            mark_value(frame_value);
-        }
-    }
-    //< MARKING LOCALS
+void mark_roots(VM *vm){
     //> MARKING STACK
     Value *stack_value = NULL;
 
     for(int i = 0; i < vm->stack_ptr; i++){
 		stack_value = &vm->stack[i];
-		mark_value(stack_value);
+
+        if(IS_OBJ(stack_value) && !IS_MARKED(TO_OBJ(stack_value))){
+            mark_obj(TO_OBJ(stack_value));
+        }
 	}
     //< MARKING STACK
+    //> MARKING LOCALS
+    Frame *frame = NULL;
+    Value *frame_value = NULL;
+    Obj *callable = NULL;
+
+    for (int frame_ptr = 0; frame_ptr < vm->frame_ptr; frame_ptr++){
+        frame = &vm->frame_stack[frame_ptr];
+        callable = frame->callable;
+
+        if(callable && !IS_MARKED(callable)){
+            mark_obj(callable);
+        }
+
+        for (size_t local_ptr = 0; local_ptr < LOCALS_LENGTH; local_ptr++){
+            frame_value = &frame->locals[local_ptr];
+
+            if(IS_OBJ(frame_value) && !IS_MARKED(TO_OBJ(frame_value))){
+                mark_obj(TO_OBJ(frame_value));
+            }
+        }
+
+        for(OutValue *out_value = frame->outs_head; out_value; out_value = out_value->next){
+            if(!IS_MARKED(out_value->closure)){
+                mark_obj(out_value->closure);
+            }
+        }
+    }
+    //< MARKING LOCALS
+    //> MARKING GLOBALS
+    mark_globals(MODULE_GLOBALS(vm->modules[0]));
+    //< MARKING GLOBALS
 }
 
 void sweep_objs(VM *vm){
     Obj *obj = vm->head;
-    Obj *prev = NULL;
+    Obj *next = NULL;
 
     while (obj){
-        Obj *next = obj->next;
+        next = obj->next;
 
         if(obj->marked){
             obj->marked = 0;
-            prev = obj;
             obj = next;
             continue;
-        }
-
-        if(obj == vm->head){
-            vm->head = next;
-        }if(obj == vm->tail){
-            vm->tail = prev;
-        }if(prev){
-            prev->next = next;
         }
 
         destroy_obj(obj, vm);
@@ -339,7 +368,7 @@ void sweep_objs(VM *vm){
 }
 
 void gc(VM *vm){
-    mark_objs(vm);
+    mark_roots(vm);
     sweep_objs(vm);
 }
 
@@ -728,22 +757,14 @@ void vmu_destroy_global_value(GlobalValue *global_value, VM *vm){
 }
 
 Obj *vmu_create_obj(ObjType type, VM *vm){
-    if(vm->objs_size >= 67108864){gc(vm);}
+    //gc(vm);
 
     Obj *obj = MEMORY_ALLOC(Obj, 1, vm->rtallocator);
-    if(!obj){return NULL;}
 
     memset(obj, 0, sizeof(Obj));
     obj->type = type;
 
-    if(vm->tail){
-        obj->prev = vm->tail;
-        vm->tail->next = obj;
-    }else{
-		vm->head = obj;
-	}
-
-    vm->tail = obj;
+    insert_obj(obj, &vm->head, &vm->tail);
     vm->objs_size += sizeof(Obj);
 
     return obj;
@@ -827,11 +848,15 @@ Obj *vmu_native_fn_obj(
 Obj *vmu_closure_obj(MetaClosure *meta, VM *vm){
     OutValue *values = factory_out_values(meta->values_len, vm->rtallocator);
     Closure *closure = factory_closure(values, meta, vm->rtallocator);
-    Obj *obj = vmu_create_obj(CLOSURE_OTYPE, vm);
+    Obj *closure_obj = vmu_create_obj(CLOSURE_OTYPE, vm);
 
-    obj->content.closure = closure;
+    for (int i = 0; i < meta->values_len; i++){
+        closure->out_values[i].closure = closure_obj;
+    }
 
-    return obj;
+    closure_obj->content.closure = closure;
+
+    return closure_obj;
 }
 
 Obj *vmu_foreign_lib_obj(void *handler, VM *vm){

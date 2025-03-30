@@ -143,9 +143,7 @@ void factory_destroy_out_values(uint8_t length, OutValue *values, Allocator *all
 Closure *factory_closure(OutValue *values, MetaClosure *meta, Allocator *allocator){
     Closure *closure = MEMORY_ALLOC(Closure, 1, allocator);
 
-    if(!closure){return NULL;}
-
-    closure->values = values;
+    closure->out_values = values;
     closure->meta = meta;
 
     return closure;

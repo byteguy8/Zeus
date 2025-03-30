@@ -33,13 +33,12 @@ typedef struct frame{
 
     Fn *fn;
     Closure *closure;
+    Obj *callable;
 
     Value locals[LOCALS_LENGTH];
 
-    OutValue *values_head;
-    OutValue *values_tail;
-
-    Allocator *allocator;
+    OutValue *outs_head;
+    OutValue *outs_tail;
 }Frame;
 
 typedef struct vm{

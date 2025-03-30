@@ -26,6 +26,7 @@ static int32_t read_i32(VM *vm);
 static int64_t read_i64_const(VM *vm);
 static double read_float_const(VM *vm);
 static char *read_str(VM *vm, uint32_t *out_hash);
+void *get_symbol(size_t index, SubModuleSymbolType type, Module *module, VM *vm);
 // STACK FUNCTIONS
 static Value *peek(VM *vm);
 static Value *peek_at(int offset, VM *vm);
@@ -88,9 +89,8 @@ static void remove_value_from_frame(OutValue *value, VM *vm);
 #define IS_AT_END(vm)((vm)->frame_ptr == 0 || CURRENT_FRAME(vm)->ip >= CURRENT_CHUNKS(vm)->used)
 #define ADVANCE(vm)(DYNARR_GET_AS(uint8_t, CURRENT_FRAME(vm)->ip++, CURRENT_CHUNKS(vm)))
 
-static Frame *frame_up_fn(Fn *fn, VM *vm);
-static Frame *frame_up(int32_t index, VM *vm);
-static void frame_down(VM *vm);
+static Frame *push_frame(VM *vm);
+static void pop_frame(VM *vm);
 // OTHERS
 static int execute(VM *vm);
 //< PRIVATE INTERFACE
@@ -144,6 +144,36 @@ char *read_str(VM *vm, uint32_t *out_hash){
     return lzhtable_hash_get(hash, strings);
 }
 
+void *get_symbol(size_t index, SubModuleSymbolType type, Module *module, VM *vm){
+    DynArr *symbols = MODULE_SYMBOLS(module);
+
+    if(index >= DYNARR_LEN(symbols)){
+        vmu_error(vm, "Failed to get module symbol: index out of bounds");
+    }
+
+    SubModuleSymbol *symbol = &DYNARR_GET_AS(SubModuleSymbol, index, symbols);
+
+    if(symbol->type != type){
+        vmu_error(vm, "Failed to get module symbol: mismatch types");
+    }
+
+    switch (symbol->type){
+        case FUNCTION_MSYMTYPE:{
+            return symbol->value.fn;
+        }case CLOSURE_MSYMTYPE:{
+            return symbol->value.meta_closure;
+        }case NATIVE_MODULE_MSYMTYPE:{
+            return symbol->value.native_module;
+        }case MODULE_MSYMTYPE:{
+            return symbol->value.module;
+        }default:{
+            vmu_error(vm, "Failed to get module symbol: unexpected symbol type");
+        }
+    }
+
+    return NULL;
+}
+
 Value *peek(VM *vm){
     if(vm->stack_ptr == 0){vmu_error(vm, "Stack is empty");}
     return &vm->stack[vm->stack_ptr - 1];
@@ -166,19 +196,18 @@ void push_fn(Fn *fn, VM *vm){
 void push_closure(MetaClosure *meta, VM *vm){
     Obj *closure_obj = vmu_closure_obj(meta, vm);
     Closure *closure = closure_obj->content.closure;
-    OutValue *values = closure->values;
 
     for (int i = 0; i < meta->values_len; i++){
-        OutValue *value = &values[i];
-        MetaOutValue *out_value = meta->values + i;
+        OutValue *out_value = &closure->out_values[i];
+        MetaOutValue *meta_out_value = meta->values + i;
 
-        value->linked = 1;
-        value->at = out_value->at;
-        value->value = CURRENT_LOCALS(vm) + out_value->at;
-        value->prev = NULL;
-        value->next = NULL;
+        out_value->linked = 1;
+        out_value->at = meta_out_value->at;
+        out_value->value = &CURRENT_LOCALS(vm)[meta_out_value->at];
+        out_value->prev = NULL;
+        out_value->next = NULL;
 
-        add_value_to_frame(value, vm);
+        add_value_to_frame(out_value, vm);
     }
 
     PUSH(OBJ_VALUE(closure_obj), vm);
@@ -210,14 +239,12 @@ void push_module_symbol(int32_t index, Module *module, VM *vm){
 
     SubModuleSymbol *module_symbol = &(DYNARR_GET_AS(SubModuleSymbol, (size_t)index, symbols));
 
-	if(module_symbol->type == NATIVE_MODULE_MSYMTYPE){
-        PUSH_NATIVE_MODULE(module_symbol->value.native_module, vm);
-    }else if(module_symbol->type == FUNCTION_MSYMTYPE){
-        Fn *fn = module_symbol->value.fn;
-        push_fn(fn, vm);
+	if(module_symbol->type == FUNCTION_MSYMTYPE){
+        push_fn(module_symbol->value.fn, vm);
     }else if(module_symbol->type == CLOSURE_MSYMTYPE){
-        MetaClosure *meta_closure = module_symbol->value.meta_closure;
-        push_closure(meta_closure, vm);
+        push_closure(module_symbol->value.meta_closure, vm);
+    }else if(module_symbol->type == NATIVE_MODULE_MSYMTYPE){
+        PUSH_NATIVE_MODULE(module_symbol->value.native_module, vm);
     }else if(module_symbol->type == MODULE_MSYMTYPE){
         PUSH_MODULE(module_symbol->value.module, vm);
     }
@@ -231,24 +258,24 @@ Value *pop(VM *vm){
 void add_value_to_frame(OutValue *value, VM *vm){
     Frame *frame = CURRENT_FRAME(vm);
 
-    if(frame->values_tail){
-        value->prev = frame->values_tail;
-        frame->values_tail->next = value;
+    if(frame->outs_tail){
+        frame->outs_tail->next = value;
+        value->prev = frame->outs_tail;
     }else{
-        frame->values_head = value;
+        frame->outs_head = value;
     }
 
-    frame->values_tail = value;
+    frame->outs_tail = value;
 }
 
 void remove_value_from_frame(OutValue *value, VM *vm){
     Frame *frame = CURRENT_FRAME(vm);
 
-    if(value == frame->values_head){
-        frame->values_head = value->next;
+    if(value == frame->outs_head){
+        frame->outs_head = value->next;
     }
-    if(value == frame->values_tail){
-        frame->values_tail = value->prev;
+    if(value == frame->outs_tail){
+        frame->outs_tail = value->prev;
     }
 
     if(value->prev){
@@ -263,61 +290,46 @@ void remove_value_from_frame(OutValue *value, VM *vm){
     value->value = cloned_value;
 }
 
-Frame *frame_up_fn(Fn *fn, VM *vm){
+Frame *push_frame(VM *vm){
     if(vm->frame_ptr >= FRAME_LENGTH){
-        vmu_error(vm, "Frame stack over flow");
+        vmu_error(vm, "Call stack overflow");
     }
 
     Frame *frame = &vm->frame_stack[vm->frame_ptr++];
 
     frame->ip = 0;
     frame->last_offset = 0;
-    frame->fn = fn;
+    frame->fn = NULL;
     frame->closure = NULL;
-    frame->values_head = NULL;
-    frame->values_tail = NULL;
+    frame->callable = NULL;
+    frame->outs_head = NULL;
+    frame->outs_tail = NULL;
+
+    memset(frame->locals, 0, sizeof(Value) * LOCALS_LENGTH);
 
     return frame;
 }
 
-Frame *frame_up(int32_t index, VM *vm){
-    if(vm->frame_ptr >= FRAME_LENGTH){
-        vmu_error(vm, "Frame stack over flow");
+void pop_frame(VM *vm){
+    if(vm->frame_ptr == 0){
+        vmu_error(vm, "Call stack under flow");
     }
-
-    Module *module = CURRENT_MODULE(vm);
-	DynArr *symbols = MODULE_SYMBOLS(module);
-
-    if((size_t)index >= DYNARR_LEN(symbols)){
-        vmu_error(vm, "Failed to push frame: illegal index");
-    }
-
-	SubModuleSymbol *symbol = &(DYNARR_GET_AS(SubModuleSymbol, (size_t)index, symbols));
-
-	if(symbol->type != FUNCTION_MSYMTYPE){
-        vmu_error(vm, "Expect symbol of type 'function', but got something else");
-    }
-
-    Fn *fn = symbol->value.fn;
-
-    return frame_up_fn(fn, vm);
-}
-
-void frame_down(VM *vm){
-    if(vm->frame_ptr == 0){vmu_error(vm, "Frame under flow");}
 
     Frame *current = CURRENT_FRAME(vm);
 
-    for (OutValue *closure_value = current->values_head; closure_value; closure_value = closure_value->next){
-        closure_value->linked = 0;
-        remove_value_from_frame(closure_value, vm);
+    for (OutValue *out_value = current->outs_head; out_value; out_value = out_value->next){
+        out_value->linked = 0;
+        remove_value_from_frame(out_value, vm);
     }
 
     vm->frame_ptr--;
 }
 
 static int execute(VM *vm){
-    frame_up(0, vm);
+    Fn *fn = (Fn *)get_symbol(0, FUNCTION_MSYMTYPE, vm->modules[0], vm);
+    Frame *frame = push_frame(vm);
+
+    frame->fn = fn;
 
     for (;;){
         if(vm->halt){break;}
@@ -330,7 +342,7 @@ static int execute(VM *vm){
                 CURRENT_MODULE(vm)->submodule->resolved = 1;
                 CURRENT_MODULE(vm) = NULL;
                 vm->module_ptr--;
-                frame_down(vm);
+                pop_frame(vm);
             }else{
                 // The only frame that is allowed to not contains a return
                 // instruction at the end is the one which contains the main function
@@ -937,12 +949,11 @@ static int execute(VM *vm){
             }case OSET_OPCODE:{
                 Value *value = peek(vm);
                 uint8_t index = ADVANCE(vm);
-                Frame *current = CURRENT_FRAME(vm);
-                Closure *closure = current->closure;
+                Closure *closure = CURRENT_FRAME(vm)->closure;
                 MetaClosure *meta = closure->meta;
 
                 for (int i = 0; i < meta->values_len; i++){
-                    OutValue *closure_value = &closure->values[i];
+                    OutValue *closure_value = &closure->out_values[i];
 
                     if(closure_value->at == index){
                         *closure_value->value = *value;
@@ -958,7 +969,7 @@ static int execute(VM *vm){
                 MetaClosure *meta = closure->meta;
 
                 for (int i = 0; i < meta->values_len; i++){
-                    OutValue *value = &closure->values[i];
+                    OutValue *value = &closure->out_values[i];
 
                     if(value->at == index){
                         PUSH(*value->value, vm);
@@ -1024,15 +1035,18 @@ static int execute(VM *vm){
                 Value *value = global_value->value;
 
                 if(IS_MODULE(value) && !(TO_MODULE(value)->submodule->resolved)){
-                    Module *module = TO_MODULE(value);
-
                     if(vm->module_ptr >= MODULES_LENGTH){
                         vmu_error(vm, "Cannot resolve module '%s'. No space available", module->name);
                     }
 
                     CURRENT_FRAME(vm)->ip = CURRENT_FRAME(vm)->last_offset;
+
+                    Frame *frame = push_frame(vm);
+                    Module *module = TO_MODULE(value);
+                    Fn *import_fn = (Fn *)get_symbol(0, FUNCTION_MSYMTYPE, module, vm);
+
+                    frame->fn = import_fn;
                     vm->modules[vm->module_ptr++] = module;
-                    frame_up(0, vm);
 
                     break;
                 }
@@ -1261,17 +1275,20 @@ static int execute(VM *vm){
                 break;
             }case CALL_OPCODE:{
                 uint8_t args_count = ADVANCE(vm);
-                Value *fn_value = peek_at(args_count, vm);
+                Value *callable_value = peek_at(args_count, vm);
 
-                if(IS_FN(fn_value)){
-                    Fn *fn = TO_FN(fn_value);
+                if(IS_FN(callable_value)){
+                    Fn *fn = TO_FN(callable_value);
                     uint8_t params_count = fn->params ? fn->params->used : 0;
 
                     if(params_count != args_count){
                         vmu_error(vm, "Failed to call function '%s'. Declared with %d parameter(s), but got %d argument(s)", fn->name, params_count, args_count);
                     }
 
-                    frame_up_fn(fn, vm);
+                    Frame *frame = push_frame(vm);
+
+                    frame->fn = fn;
+                    frame->callable = callable_value->content.obj;
 
                     if(args_count > 0){
                         int from = (int)(args_count == 0 ? 0 : args_count - 1);
@@ -1282,8 +1299,8 @@ static int execute(VM *vm){
                     }
 
                     pop(vm);
-                }else if(IS_CLOSURE(fn_value)){
-                    Closure *closure = TO_CLOSURE(fn_value);
+                }else if(IS_CLOSURE(callable_value)){
+                    Closure *closure = TO_CLOSURE(callable_value);
                     Fn *fn = closure->meta->fn;
                     uint8_t params_count = fn->params ? fn->params->used : 0;
 
@@ -1291,8 +1308,11 @@ static int execute(VM *vm){
                         vmu_error(vm, "Failed to call function '%s'. Declared with %d parameter(s), but got %d argument(s)", fn->name, params_count, args_count);
                     }
 
-                    Frame *frame = frame_up_fn(fn, vm);
+                    Frame *frame = push_frame(vm);
+
+                    frame->fn = fn;
                     frame->closure = closure;
+                    frame->callable = callable_value->content.obj;
 
                     if(args_count > 0){
                         int from = (int)(args_count == 0 ? 0 : args_count - 1);
@@ -1303,8 +1323,8 @@ static int execute(VM *vm){
                     }
 
                     pop(vm);
-                }else if(IS_NATIVE_FN(fn_value)){
-                    NativeFn *native_fn = TO_NATIVE_FN(fn_value);
+                }else if(IS_NATIVE_FN(callable_value)){
+                    NativeFn *native_fn = TO_NATIVE_FN(callable_value);
                     void *target = native_fn->target;
                     RawNativeFn raw_fn = native_fn->raw_fn;
 
@@ -1330,8 +1350,8 @@ static int execute(VM *vm){
                     Value out_value = raw_fn(args_count, args, target, vm);
 
                     PUSH(out_value, vm);
-                }else if(IS_FOREIGN_FN(fn_value)){
-                    ForeignFn *foreign_fn = TO_FOREIGN_FN(fn_value);
+                }else if(IS_FOREIGN_FN(callable_value)){
+                    ForeignFn *foreign_fn = TO_FOREIGN_FN(callable_value);
                     RawForeignFn raw_fn = foreign_fn->raw_fn;
                     Value values[args_count];
 
@@ -1494,7 +1514,7 @@ static int execute(VM *vm){
 
                 break;
             }case RET_OPCODE:{
-                frame_down(vm);
+                pop_frame(vm);
                 break;
             }case IS_OPCODE:{
                 Value *value = pop(vm);
@@ -1643,7 +1663,7 @@ static int execute(VM *vm){
         }
     }
 
-    frame_down(vm);
+    pop_frame(vm);
 
     return vm->exit_code;
 }

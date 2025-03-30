@@ -9,6 +9,7 @@
 #include "lexer.h"
 #include "parser.h"
 #include "native_math.h"
+#include "native_random.h"
 #include "native_time.h"
 #include "native_io.h"
 #include "native_os.h"
@@ -636,6 +637,14 @@ NativeModule *resolve_native_module(char *module_name, Compiler *compiler){
 		return math_module;
 	}
 
+    if(strcmp("random", module_name) == 0){
+        if(!random_module){
+            random_module_init(compiler->rtallocator);
+        }
+
+        return random_module;
+    }
+
     if(strcmp("time", module_name) == 0){
         if(!time_module){
             time_module_init(compiler->rtallocator);
@@ -834,6 +843,8 @@ void compile_expr(Expr *expr, Compiler *compiler){
             }
 
             if(fn_scope->captured_symbols_len > 0){
+                fn_symbol->type = CLOSURE_SYMTYPE;
+
                 MetaClosure *closure = MEMORY_ALLOC(MetaClosure, 1, compiler->rtallocator);
 
                 closure->values_len = fn_scope->captured_symbols_len;
