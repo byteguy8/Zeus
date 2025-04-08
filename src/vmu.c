@@ -19,10 +19,10 @@ void remove_obj(Obj *obj, Obj **raw_head, Obj **raw_tail);
 // GARBAGE COLLECTOR
 void clean_up_module(Module *module, VM *vm);
 void destroy_obj(Obj *obj, VM *vm);
-void mark_globals(LZHTable *globals);
-void mark_obj(Obj *obj);
-void mark_roots(VM *vm);
 void sweep_objs(VM *vm);
+void mark_globals(LZHTable *globals, VM *vm);
+void mark_obj(Obj *obj, VM *vm);
+void mark_roots(VM *vm);
 void gc(VM *vm);
 int compare_locations(void *a, void *b);
 BStr *prepare_stacktrace(unsigned int spaces, VM *vm);
@@ -57,6 +57,14 @@ void remove_obj(Obj *obj, Obj **raw_head, Obj **raw_tail){
     if(obj->next){
         obj->next->prev = obj->prev;
     }
+
+    obj->prev = NULL;
+    obj->next = NULL;
+}
+
+void clean_up_table(void *value, void *key, void *vm){
+    vmu_destroy_value(value, vm);
+    vmu_destroy_value(key, vm);
 }
 
 void clean_up_module(Module *module, VM *vm){
@@ -96,12 +104,9 @@ void clean_up_module(Module *module, VM *vm){
     }
 }
 
-void clean_up_table(void *value, void *key, void *vm){
-    vmu_destroy_value(value, vm);
-    vmu_destroy_value(key, vm);
-}
-
 void destroy_obj(Obj *obj, VM *vm){
+    assert(!obj->marked && "Must not destroy market objects");
+
 	switch(obj->type){
 		case STR_OTYPE:{
             factory_destroy_str(obj->content.str, vm->rtallocator);
@@ -119,7 +124,12 @@ void destroy_obj(Obj *obj, VM *vm){
             factory_destroy_record(vm, clean_up_table, obj->content.record, vm->rtallocator);
 			break;
 		}case NATIVE_FN_OTYPE:{
-            // No work to be done
+            NativeFn *native_fn = obj->content.native_fn;
+
+            if(!native_fn->core){
+                factory_destroy_native_fn(obj->content.native_fn, vm->rtallocator);
+            }
+
             break;
         }case FN_OTYPE:{
             // No work to be done
@@ -158,13 +168,23 @@ void destroy_obj(Obj *obj, VM *vm){
 		}
 	}
 
-    remove_obj(obj, &vm->head, &vm->tail);
     vmu_destroy_obj(obj, vm);
-
 	vm->objs_size -= sizeof(Obj);
 }
 
-void mark_globals(LZHTable *globals){
+void sweep_objs(VM *vm){
+    Obj *current = vm->red_head;
+    Obj *next = NULL;
+
+    while (current){
+        next = current->next;
+        remove_obj(current, (Obj **)&vm->red_head, (Obj **)&vm->red_tail);
+        destroy_obj(current, vm);
+        current = next;
+    }
+}
+
+void mark_globals(LZHTable *globals, VM *vm){
     LZHTableNode *current = globals->head;
     LZHTableNode *next = NULL;
 
@@ -177,14 +197,14 @@ void mark_globals(LZHTable *globals){
         value = global_value->value;
 
         if(IS_OBJ(value) && !IS_MARKED(TO_OBJ(value))){
-            mark_obj(TO_OBJ(value));
+            mark_obj(TO_OBJ(value), vm);
         }
 
         current = next;
     }
 }
 
-void mark_obj(Obj *obj){
+void mark_obj(Obj *obj, VM *vm){
     if(obj->marked){
         return;
     }
@@ -201,7 +221,7 @@ void mark_obj(Obj *obj){
                 value = &values[i];
 
                 if(IS_OBJ(value) && !IS_MARKED(TO_OBJ(value))){
-                    mark_obj(TO_OBJ(value));
+                    mark_obj(TO_OBJ(value), vm);
                 }
             }
 
@@ -214,7 +234,7 @@ void mark_obj(Obj *obj){
 				value = (Value *)DYNARR_GET(i, list);
 
                 if(IS_OBJ(value) && !IS_MARKED(TO_OBJ(value))){
-                    mark_obj(TO_OBJ(value));
+                    mark_obj(TO_OBJ(value), vm);
                 }
 			}
 
@@ -232,10 +252,10 @@ void mark_obj(Obj *obj){
 				value = (Value *)current->value;
 
                 if(IS_OBJ(key_value) && !IS_MARKED(TO_OBJ(key_value))){
-                    mark_obj(TO_OBJ(value));
+                    mark_obj(TO_OBJ(key_value), vm);
                 }
                 if(IS_OBJ(value) && !IS_MARKED(TO_OBJ(value))){
-                    mark_obj(TO_OBJ(value));
+                    mark_obj(TO_OBJ(value), vm);
                 }
 
 				current = next;
@@ -259,7 +279,7 @@ void mark_obj(Obj *obj){
 				value = (Value *)current->value;
 
 				if(IS_OBJ(value) && !IS_MARKED(TO_OBJ(value))){
-                    mark_obj(TO_OBJ(value));
+                    mark_obj(TO_OBJ(value), vm);
                 }
 
 				current = next;
@@ -267,7 +287,12 @@ void mark_obj(Obj *obj){
 
 			break;
 		}case NATIVE_FN_OTYPE:{
-            // No work to be done
+            NativeFn *native_fn = obj->content.native_fn;
+
+            if(IS_OBJ(&native_fn->target) && !IS_MARKED(TO_OBJ(&native_fn->target))){
+                mark_obj(TO_OBJ(&native_fn->target), vm);
+            }
+
             break;
         }case FN_OTYPE:{
             // No work to be done
@@ -280,7 +305,7 @@ void mark_obj(Obj *obj){
                 Value *value = closure->out_values[i].value;
 
                 if(IS_OBJ(value) && !IS_MARKED(TO_OBJ(value))){
-                    mark_obj(TO_OBJ(value));
+                    mark_obj(TO_OBJ(value), vm);
                 }
             }
 
@@ -289,7 +314,7 @@ void mark_obj(Obj *obj){
             // No work to be done
             break;
         }case MODULE_OTYPE:{
-            mark_globals(MODULE_GLOBALS(obj->content.module));
+            mark_globals(MODULE_GLOBALS(obj->content.module), vm);
             break;
         }case FOREIGN_FN_OTYPE:{
             // No work to be done
@@ -301,75 +326,50 @@ void mark_obj(Obj *obj){
 			assert("Illegal object type");
 		}
 	}
+
+    remove_obj(obj, (Obj **)&vm->red_head, (Obj **)&vm->red_tail);
+    insert_obj(obj, (Obj **)&vm->blue_head, (Obj **)&vm->blue_tail);
 }
 
 void mark_roots(VM *vm){
     //> MARKING STACK
-    Value *stack_value = NULL;
-
-    for(int i = 0; i < vm->stack_ptr; i++){
-		stack_value = &vm->stack[i];
-
-        if(IS_OBJ(stack_value) && !IS_MARKED(TO_OBJ(stack_value))){
-            mark_obj(TO_OBJ(stack_value));
+    for(Value *current = vm->stack; current < vm->stack_top; current++){
+        if(IS_OBJ(current) && !IS_MARKED(TO_OBJ(current))){
+            mark_obj(TO_OBJ(current), vm);
         }
-	}
+    }
     //< MARKING STACK
-    //> MARKING LOCALS
+    //> MARKING OUTS
     Frame *frame = NULL;
-    Value *frame_value = NULL;
-    Obj *callable = NULL;
 
     for (int frame_ptr = 0; frame_ptr < vm->frame_ptr; frame_ptr++){
         frame = &vm->frame_stack[frame_ptr];
-        callable = frame->callable;
-
-        if(callable && !IS_MARKED(callable)){
-            mark_obj(callable);
-        }
-
-        for (size_t local_ptr = 0; local_ptr < LOCALS_LENGTH; local_ptr++){
-            frame_value = &frame->locals[local_ptr];
-
-            if(IS_OBJ(frame_value) && !IS_MARKED(TO_OBJ(frame_value))){
-                mark_obj(TO_OBJ(frame_value));
-            }
-        }
 
         for(OutValue *out_value = frame->outs_head; out_value; out_value = out_value->next){
             if(!IS_MARKED(out_value->closure)){
-                mark_obj(out_value->closure);
+                mark_obj(out_value->closure, vm);
             }
         }
     }
-    //< MARKING LOCALS
+    //< MARKING OUTS
     //> MARKING GLOBALS
-    mark_globals(MODULE_GLOBALS(vm->modules[0]));
+    mark_globals(MODULE_GLOBALS(vm->modules[0]), vm);
     //< MARKING GLOBALS
-}
-
-void sweep_objs(VM *vm){
-    Obj *obj = vm->head;
-    Obj *next = NULL;
-
-    while (obj){
-        next = obj->next;
-
-        if(obj->marked){
-            obj->marked = 0;
-            obj = next;
-            continue;
-        }
-
-        destroy_obj(obj, vm);
-
-        obj = next;
-    }
 }
 
 void gc(VM *vm){
     mark_roots(vm);
     sweep_objs(vm);
+
+    for(Obj *current = vm->blue_head; current; current = current->next){
+        current->marked = 0;
+    }
+
+    vm->red_head = vm->blue_head;
+    vm->red_tail = vm->blue_tail;
+
+    vm->blue_head = NULL;
+    vm->blue_tail = NULL;
 }
 
 int compare_locations(void *a, void *b){
@@ -418,7 +418,10 @@ void vmu_error(VM *vm, char *msg, ...){
     fprintf(stderr, "Runtime error: ");
 	vfprintf(stderr, msg, args);
     fprintf(stderr, "\n");
-	if(st){fprintf(stderr, "%s", (char *)st->buff);}
+
+    if(st && st->buff){
+        fprintf(stderr, "%s", (char *)st->buff);
+    }
 
 	va_end(args);
 	bstr_destroy(st);
@@ -687,7 +690,7 @@ void vmu_print_value(FILE *stream, Value *value){
 }
 
 void vmu_clean_up(VM *vm){
-	Obj *obj = vm->head;
+	Obj *obj = vm->red_head;
 
 	while(obj){
 		Obj *next = obj->next;
@@ -703,15 +706,14 @@ uint32_t vmu_raw_str_to_table(char **raw_str_ptr, VM *vm, char **out_raw_str){
     uint8_t *key = (uint8_t *)raw_str;
     size_t key_size = strlen(raw_str);
     uint32_t hash = lzhtable_hash(key, key_size);
-
+    LZHTable *strings = MODULE_STRINGS(CURRENT_FN(vm)->module);
     LZHTableNode *raw_str_node = NULL;
 
-    if(lzhtable_hash_contains(hash, MODULE_STRINGS(CURRENT_MODULE(vm)), &raw_str_node)){
+    if(lzhtable_hash_contains(hash, strings, &raw_str_node)){
         char *saved_raw_str = (char *)raw_str_node->value;
 
         if(raw_str != saved_raw_str){
-            factory_destroy_raw_str(raw_str, vm->rtallocator);
-            *raw_str_ptr = NULL;
+            //factory_destroy_raw_str(raw_str, vm->rtallocator);
         }
 
         if(out_raw_str){
@@ -724,6 +726,8 @@ uint32_t vmu_raw_str_to_table(char **raw_str_ptr, VM *vm, char **out_raw_str){
             *out_raw_str = raw_str;
         }
     }
+
+    *raw_str_ptr = NULL;
 
     return hash;
 }
@@ -757,21 +761,23 @@ void vmu_destroy_global_value(GlobalValue *global_value, VM *vm){
 }
 
 Obj *vmu_create_obj(ObjType type, VM *vm){
-    //gc(vm);
+    gc(vm);
 
     Obj *obj = MEMORY_ALLOC(Obj, 1, vm->rtallocator);
 
     memset(obj, 0, sizeof(Obj));
     obj->type = type;
 
-    insert_obj(obj, &vm->head, &vm->tail);
+    insert_obj(obj, (Obj **)&vm->red_head, (Obj **)&vm->red_tail);
     vm->objs_size += sizeof(Obj);
 
     return obj;
 }
 
 void vmu_destroy_obj(Obj *obj, VM *vm){
-    if(!obj){return;}
+    if(!obj){
+        return;
+    }
     MEMORY_DEALLOC(Obj, 1, obj, vm->rtallocator);
 }
 
@@ -780,6 +786,19 @@ Obj *vmu_str_obj(char **raw_str_ptr, VM *vm){
     uint32_t hash = vmu_raw_str_to_table(raw_str_ptr, vm, &out_raw_str);
 
     Str *str = factory_create_str(out_raw_str, vm->rtallocator);
+    Obj *str_obj = vmu_create_obj(STR_OTYPE, vm);
+
+    str->hash = hash;
+    str_obj->content.str = str;
+
+    return str_obj;
+}
+
+Obj *vmu_unchecked_str_obj(char *raw_str, VM *vm){
+    uint8_t *key = (uint8_t *)raw_str;
+    size_t key_size = strlen(raw_str);
+    uint32_t hash = lzhtable_hash(key, key_size);
+    Str *str = factory_create_str(raw_str, vm->rtallocator);
     Obj *str_obj = vmu_create_obj(STR_OTYPE, vm);
 
     str->hash = hash;
@@ -827,7 +846,7 @@ Obj *vmu_record_obj(uint8_t length, VM *vm){
 Obj *vmu_native_fn_obj(
     int arity,
     char *name,
-    void *target,
+    Value *target,
     RawNativeFn raw_native,
     VM *vm
 ){
@@ -837,7 +856,7 @@ Obj *vmu_native_fn_obj(
         vmu_error(vm, "Native function name exceed the max length allowed");
     }
 
-    NativeFn *native_fn = factory_create_native_fn(name, arity, target, raw_native, vm->rtallocator);
+    NativeFn *native_fn = factory_create_native_fn(0, name, arity, target, raw_native, vm->rtallocator);
     Obj *native_fn_obj = vmu_create_obj(NATIVE_FN_OTYPE, vm);
 
     native_fn_obj->content.native_fn = native_fn;

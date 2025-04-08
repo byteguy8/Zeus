@@ -72,13 +72,14 @@ void factory_destroy_record(void *extra, void (*clean_up)(void *, void *, void *
     MEMORY_DEALLOC(Record, 1, record, allocator);
 }
 
-NativeFn *factory_create_native_fn(char *name, uint8_t arity, void *target, RawNativeFn raw_native, Allocator *allocator){
+NativeFn *factory_create_native_fn(uint8_t core, char *name, uint8_t arity, Value *target, RawNativeFn raw_native, Allocator *allocator){
     char *cloned_name = factory_clone_raw_str(name, allocator);
     NativeFn *native_fn = MEMORY_ALLOC(NativeFn, 1, allocator);
 
+    native_fn->core = core;
     native_fn->arity = arity;
     native_fn->name = cloned_name;
-    native_fn->target = target;
+    native_fn->target = target ? *target : (Value){0};
     native_fn->raw_fn = raw_native;
 
     return native_fn;
@@ -92,7 +93,7 @@ void factory_destroy_native_fn(NativeFn *native_fn, Allocator *allocator){
 }
 
 void factory_add_native_fn(char *name, uint8_t arity, RawNativeFn raw_native, NativeModule *module, Allocator *allocator){
-	NativeFn *native = factory_create_native_fn(name, arity, NULL, raw_native, allocator);
+	NativeFn *native = factory_create_native_fn(1, name, arity, NULL, raw_native, allocator);
 	NativeModuleSymbol *symbol = MEMORY_ALLOC(NativeModuleSymbol, 1, allocator);
 
 	symbol->type = NATIVE_FUNCTION_NMSYMTYPE;

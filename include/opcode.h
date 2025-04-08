@@ -11,6 +11,7 @@ typedef enum opcode{
     FLOAT_OPCODE,    // push float
     STRING_OPCODE,   // push string
     TEMPLATE_OPCODE, // construct template and push it
+    UNLINK_OPCODE,
 
     // ARITHMETIC
     ADD_OPCODE, // add two integers or floats and push the result

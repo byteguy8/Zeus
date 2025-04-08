@@ -31,11 +31,13 @@ void *get_symbol(size_t index, SubModuleSymbolType type, Module *module, VM *vm)
 static Value *peek(VM *vm);
 static Value *peek_at(int offset, VM *vm);
 
-#define PUSH(value, vm) {                 \
-    if(vm->stack_ptr >= STACK_LENGTH){    \
-        vmu_error(vm, "Stack over flow"); \
-    }                                     \
-    vm->stack[vm->stack_ptr++] = value;   \
+#define PUSH(value, vm) {                                    \
+    uintptr_t top = (uintptr_t)(vm)->stack_top;              \
+    uintptr_t end = (uintptr_t)((vm)->stack + STACK_LENGTH); \
+    if(top + VALUE_SIZE > end){                              \
+        vmu_error((vm), "Stack over flow");                  \
+    }                                                        \
+    *((vm)->stack_top++) = (value);                          \
 }
 
 #define PUSH_EMPTY(vm) {             \
@@ -77,9 +79,8 @@ static Value *peek_at(int offset, VM *vm);
 	PUSH(OBJ_VALUE(obj), vm);                    \
 }
 
-static void push_fn(Fn *fn, VM *vm);
+static Obj *push_fn(Fn *fn, VM *vm);
 static void push_closure(MetaClosure *meta, VM *vm);
-static void push_native_module_symbol(char *name, NativeModule *module, VM *vm);
 static void push_module_symbol(int32_t index, Module *module, VM *vm);
 static Value *pop(VM *vm);
 // FRAMES FUNCTIONS
@@ -89,8 +90,9 @@ static void remove_value_from_frame(OutValue *value, VM *vm);
 #define IS_AT_END(vm)((vm)->frame_ptr == 0 || CURRENT_FRAME(vm)->ip >= CURRENT_CHUNKS(vm)->used)
 #define ADVANCE(vm)(DYNARR_GET_AS(uint8_t, CURRENT_FRAME(vm)->ip++, CURRENT_CHUNKS(vm)))
 
-static Frame *push_frame(VM *vm);
+static Frame *push_frame(int argsc, VM *vm);
 static void pop_frame(VM *vm);
+#define FRAME_LOCAL(idx, vm) (CURRENT_FRAME(vm)->locals + 1)[(idx)]
 // OTHERS
 static int execute(VM *vm);
 //< PRIVATE INTERFACE
@@ -136,9 +138,7 @@ double read_float_const(VM *vm){
 }
 
 char *read_str(VM *vm, uint32_t *out_hash){
-    Module *module = CURRENT_FRAME(vm)->fn->module;
-    SubModule *submodule = module->submodule;
-    LZHTable *strings = submodule->strings;
+    LZHTable *strings = MODULE_STRINGS(CURRENT_FN(vm)->module);
     uint32_t hash = (uint32_t)read_i32(vm);
     if(out_hash){*out_hash = hash;}
     return lzhtable_hash_get(hash, strings);
@@ -175,22 +175,29 @@ void *get_symbol(size_t index, SubModuleSymbolType type, Module *module, VM *vm)
 }
 
 Value *peek(VM *vm){
-    if(vm->stack_ptr == 0){vmu_error(vm, "Stack is empty");}
-    return &vm->stack[vm->stack_ptr - 1];
+    if(vm->stack_top == vm->stack){
+        vmu_error(vm, "Stack is empty");
+    }
+    return vm->stack_top - 1;
 }
 
 Value *peek_at(int offset, VM *vm){
-    if(1 + offset > vm->stack_ptr){
-        vmu_error(vm, "Illegal offset: %d, stack: %d", offset, vm->stack_ptr);
+    uintptr_t start = (uintptr_t)vm->stack;
+    uintptr_t top = (uintptr_t)vm->stack_top;
+    uintptr_t at = top - (VALUE_SIZE * (offset + 1));
+
+    if(at < start){
+        vmu_error(vm, "Illegal offset value to peek at stack");
     }
-    size_t at = vm->stack_ptr - 1 - offset;
-    return &vm->stack[at];
+
+    return (Value *)at;
 }
 
-void push_fn(Fn *fn, VM *vm){
-	Obj *obj = vmu_create_obj(FN_OTYPE, vm);
-	obj->content.fn = fn;
-	PUSH(OBJ_VALUE(obj), vm);
+Obj *push_fn(Fn *fn, VM *vm){
+	Obj *fn_obj = vmu_create_obj(FN_OTYPE, vm);
+	fn_obj->content.fn = fn;
+	PUSH(OBJ_VALUE(fn_obj), vm);
+    return fn_obj;
 }
 
 void push_closure(MetaClosure *meta, VM *vm){
@@ -203,7 +210,7 @@ void push_closure(MetaClosure *meta, VM *vm){
 
         out_value->linked = 1;
         out_value->at = meta_out_value->at;
-        out_value->value = &CURRENT_LOCALS(vm)[meta_out_value->at];
+        out_value->value = &(FRAME_LOCAL(meta_out_value->at, vm));
         out_value->prev = NULL;
         out_value->next = NULL;
 
@@ -211,23 +218,6 @@ void push_closure(MetaClosure *meta, VM *vm){
     }
 
     PUSH(OBJ_VALUE(closure_obj), vm);
-}
-
-void push_native_module_symbol(char *name, NativeModule *module, VM *vm){
-    size_t key_size = strlen(name);
-
-    LZHTable *symbols = module->symbols;
-    LZHTableNode *symbol_node = NULL;
-
-    if(!lzhtable_contains((uint8_t *)name, key_size, symbols, &symbol_node)){
-        vmu_error(vm, "Module '%s' do not contains a symbol '%s'", module->name, name);
-    }
-
-    NativeModuleSymbol *symbol = (NativeModuleSymbol *)symbol_node->value;
-
-    if(symbol->type == NATIVE_FUNCTION_NMSYMTYPE){
-        PUSH_NATIVE_FN(symbol->value.fn, vm);
-    }
 }
 
 void push_module_symbol(int32_t index, Module *module, VM *vm){
@@ -251,8 +241,13 @@ void push_module_symbol(int32_t index, Module *module, VM *vm){
 }
 
 Value *pop(VM *vm){
-    if(vm->stack_ptr == 0){vmu_error(vm, "Stack under flow");}
-    return &vm->stack[--vm->stack_ptr];
+    if(vm->stack_top == vm->stack){
+        vmu_error(vm, "Stack under flow");
+    }
+
+    Value *value = --vm->stack_top;
+
+    return value;
 }
 
 void add_value_to_frame(OutValue *value, VM *vm){
@@ -290,7 +285,7 @@ void remove_value_from_frame(OutValue *value, VM *vm){
     value->value = cloned_value;
 }
 
-Frame *push_frame(VM *vm){
+Frame *push_frame(int argsc, VM *vm){
     if(vm->frame_ptr >= FRAME_LENGTH){
         vmu_error(vm, "Call stack overflow");
     }
@@ -301,11 +296,9 @@ Frame *push_frame(VM *vm){
     frame->last_offset = 0;
     frame->fn = NULL;
     frame->closure = NULL;
-    frame->callable = NULL;
+    frame->locals = vm->stack_top - argsc - 1;
     frame->outs_head = NULL;
     frame->outs_tail = NULL;
-
-    memset(frame->locals, 0, sizeof(Value) * LOCALS_LENGTH);
 
     return frame;
 }
@@ -315,21 +308,15 @@ void pop_frame(VM *vm){
         vmu_error(vm, "Call stack under flow");
     }
 
-    Frame *current = CURRENT_FRAME(vm);
-
-    for (OutValue *out_value = current->outs_head; out_value; out_value = out_value->next){
-        out_value->linked = 0;
-        remove_value_from_frame(out_value, vm);
-    }
-
     vm->frame_ptr--;
 }
 
 static int execute(VM *vm){
-    Fn *fn = (Fn *)get_symbol(0, FUNCTION_MSYMTYPE, vm->modules[0], vm);
-    Frame *frame = push_frame(vm);
+    Fn *main_fn = (Fn *)get_symbol(0, FUNCTION_MSYMTYPE, vm->modules[0], vm);
+    push_fn(main_fn, vm);
 
-    frame->fn = fn;
+    Frame *frame = push_frame(0, vm);
+    frame->fn = main_fn;
 
     for (;;){
         if(vm->halt){break;}
@@ -344,12 +331,7 @@ static int execute(VM *vm){
                 vm->module_ptr--;
                 pop_frame(vm);
             }else{
-                // The only frame that is allowed to not contains a return
-                // instruction at the end is the one which contains the main function
-                if(vm->frame_ptr > 1){
-                    vmu_error(vm, "Unexpected frame at end of execution");
-                }
-
+                vmu_error(vm, "Unexpected frame at end of execution");
                 break;
             }
         }
@@ -381,7 +363,7 @@ static int execute(VM *vm){
                 break;
             }case STRING_OPCODE:{
                 char *raw_str = read_str(vm, NULL);
-                Obj *obj = vmu_str_obj(&raw_str, vm);
+                Obj *obj = vmu_unchecked_str_obj(raw_str, vm);
                 Str *str = obj->content.str;
 
                 str->runtime = 0;
@@ -394,7 +376,7 @@ static int execute(VM *vm){
                 BStr *bstr = FACTORY_BSTR(vm->rtallocator);
 
                 for (int16_t i = 0; i < len; i++){
-                    Value *value = pop(vm);
+                    Value *value = peek_at(i, vm);
                     vmu_value_to_str(value, bstr);
                 }
 
@@ -403,6 +385,7 @@ static int execute(VM *vm){
 
                 bstr_destroy(bstr);
 
+                vm->stack_top = peek_at(len - 1, vm);
                 PUSH(OBJ_VALUE(str_obj), vm);
 
                 break;
@@ -433,12 +416,12 @@ static int execute(VM *vm){
                     if(!IS_ARRAY(array_value)){
                         vmu_error(vm, "Expect an array, but got something else");
                     }
-                    if(index < 0){
-                        vmu_error(vm, "Illegal 'index' value. Must be: 0 <= INDEX(%d)", index);
-                    }
 
                     Array *array = TO_ARRAY(array_value);
 
+                    if(index < 0){
+                        vmu_error(vm, "Illegal 'index' value. Must be: 0 <= INDEX(%d)", index);
+                    }
                     if(index >= array->len){
                         vmu_error(vm, "Index out of bounds. Must be: 0 <= INDEX(%d) < %d", index, array->len);
                     }
@@ -456,22 +439,22 @@ static int execute(VM *vm){
                 DynArr *list = list_obj->content.list;
 
                 for(int32_t i = 0; i < len; i++){
-                    Value *value = pop(vm);
+                    Value *value = peek_at(i, vm);
                     dynarr_insert(value, list);
                 }
 
+                vm->stack_top = peek_at(len - 1, vm);
                 PUSH(OBJ_VALUE(list_obj), vm);
 
                 break;
             }case DICT_OPCODE:{
                 int32_t len = read_i16(vm);
-
                 Obj *dict_obj = vmu_dict_obj(vm);
                 LZHTable *dict = dict_obj->content.dict;
 
                 for (int32_t i = 0; i < len; i++){
-                    Value *value = pop(vm);
-                    Value *key = pop(vm);
+                    Value *value = peek_at(0, vm);
+                    Value *key = peek_at(1, vm);
 
                     if(IS_EMPTY(key)){
                         vmu_error(vm, "'key' cannot be 'empty'");
@@ -479,10 +462,12 @@ static int execute(VM *vm){
 
                     Value *key_clone = vmu_clone_value(key, vm);
                     Value *value_clone = vmu_clone_value(value, vm);
-
                     uint32_t hash = vmu_hash_value(key_clone);
 
                     lzhtable_hash_put_key(key_clone, hash, value_clone, dict);
+
+                    pop(vm);
+                    pop(vm);
                 }
 
                 PUSH(OBJ_VALUE(dict_obj), vm);
@@ -502,7 +487,7 @@ static int execute(VM *vm){
 
                 for(size_t i = 0; i < len; i++){
                     char *key = read_str(vm, NULL);
-                    Value *value = pop(vm);
+                    Value *value = peek(vm);
                     size_t key_size = strlen(key);
                     uint32_t hash = lzhtable_hash((uint8_t *)key, key_size);
 
@@ -514,19 +499,23 @@ static int execute(VM *vm){
                     Value *cloned_value = vmu_clone_value(value, vm);
 
                     lzhtable_hash_put_key(cloned_key, hash, cloned_value, record->attributes);
+
+                    pop(vm);
                 }
 
                 PUSH(OBJ_VALUE(record_obj), vm);
 
                 break;
             }case ADD_OPCODE:{
-                Value *vb = pop(vm);
-                Value *va = pop(vm);
+                Value *vb = peek_at(0, vm);
+                Value *va = peek_at(1, vm);
 
                 if(IS_INT(va) && IS_INT(vb)){
                     int64_t left = TO_INT(va);
                     int64_t right = TO_INT(vb);
 
+                    pop(vm);
+                    pop(vm);
                     PUSH_INT(left + right, vm)
 
                     break;
@@ -536,6 +525,8 @@ static int execute(VM *vm){
                     double left = TO_FLOAT(va);
                     double right = TO_FLOAT(vb);
 
+                    pop(vm);
+                    pop(vm);
                     PUSH_FLOAT(left + right, vm);
 
                     break;
@@ -554,6 +545,8 @@ static int execute(VM *vm){
                     );
                     Obj *str_obj = vmu_str_obj(&raw_str, vm);
 
+                    pop(vm);
+                    pop(vm);
                     PUSH(OBJ_VALUE(str_obj), vm)
 
                     break;
@@ -588,13 +581,15 @@ static int execute(VM *vm){
 
                 break;
             }case MUL_OPCODE:{
-                Value *vb = pop(vm);
-                Value *va = pop(vm);
+                Value *vb = peek_at(0, vm);
+                Value *va = peek_at(1, vm);
 
                 if(IS_INT(va) && IS_INT(vb)){
                     int64_t left = TO_INT(va);
                     int64_t right = TO_INT(vb);
 
+                    pop(vm);
+                    pop(vm);
                     PUSH_INT(left * right, vm);
 
                     break;
@@ -604,6 +599,8 @@ static int execute(VM *vm){
                     double left = TO_FLOAT(va);
                     double right = TO_FLOAT(vb);
 
+                    pop(vm);
+                    pop(vm);
                     PUSH_FLOAT(left * right, vm);
 
                     break;
@@ -616,6 +613,8 @@ static int execute(VM *vm){
                     char *raw_str = utils_multiply_raw_str((size_t)by, str->len, str->buff, vm->rtallocator);
                     Obj *str_obj = vmu_str_obj(&raw_str, vm);
 
+                    pop(vm);
+                    pop(vm);
                     PUSH(OBJ_VALUE(str_obj), vm);
 
                     break;
@@ -628,6 +627,8 @@ static int execute(VM *vm){
                     char *raw_str = utils_multiply_raw_str((size_t)by, str->len, str->buff, vm->rtallocator);
                     Obj *str_obj = vmu_str_obj(&raw_str, vm);
 
+                    pop(vm);
+                    pop(vm);
                     PUSH(OBJ_VALUE(str_obj), vm);
 
                     break;
@@ -937,13 +938,13 @@ static int execute(VM *vm){
 
                 break;
             }case LSET_OPCODE:{
-                Value *value = peek(vm);
+                Value value = *peek(vm);
                 uint8_t index = ADVANCE(vm);
-                CURRENT_FRAME(vm)->locals[index] = *value;
+                FRAME_LOCAL(index, vm) = value;
                 break;
             }case LGET_OPCODE:{
                 uint8_t index = ADVANCE(vm);
-                Value value = CURRENT_FRAME(vm)->locals[index];
+                Value value = FRAME_LOCAL(index, vm);
                 PUSH(value, vm);
                 break;
             }case OSET_OPCODE:{
@@ -1041,9 +1042,10 @@ static int execute(VM *vm){
 
                     CURRENT_FRAME(vm)->ip = CURRENT_FRAME(vm)->last_offset;
 
-                    Frame *frame = push_frame(vm);
                     Module *module = TO_MODULE(value);
                     Fn *import_fn = (Fn *)get_symbol(0, FUNCTION_MSYMTYPE, module, vm);
+                    push_fn(import_fn, vm);
+                    Frame *frame = push_frame(0, vm);
 
                     frame->fn = import_fn;
                     vm->modules[vm->module_ptr++] = module;
@@ -1285,21 +1287,14 @@ static int execute(VM *vm){
                         vmu_error(vm, "Failed to call function '%s'. Declared with %d parameter(s), but got %d argument(s)", fn->name, params_count, args_count);
                     }
 
-                    Frame *frame = push_frame(vm);
+                    Frame *frame = push_frame(args_count, vm);
 
                     frame->fn = fn;
-                    frame->callable = callable_value->content.obj;
 
-                    if(args_count > 0){
-                        int from = (int)(args_count == 0 ? 0 : args_count - 1);
+                    break;
+                }
 
-                        for (int i = from; i >= 0; i--){
-                            CURRENT_FRAME(vm)->locals[i] = *pop(vm);
-                        }
-                    }
-
-                    pop(vm);
-                }else if(IS_CLOSURE(callable_value)){
+                if(IS_CLOSURE(callable_value)){
                     Closure *closure = TO_CLOSURE(callable_value);
                     Fn *fn = closure->meta->fn;
                     uint8_t params_count = fn->params ? fn->params->used : 0;
@@ -1308,24 +1303,17 @@ static int execute(VM *vm){
                         vmu_error(vm, "Failed to call function '%s'. Declared with %d parameter(s), but got %d argument(s)", fn->name, params_count, args_count);
                     }
 
-                    Frame *frame = push_frame(vm);
+                    Frame *frame = push_frame(args_count, vm);
 
                     frame->fn = fn;
                     frame->closure = closure;
-                    frame->callable = callable_value->content.obj;
 
-                    if(args_count > 0){
-                        int from = (int)(args_count == 0 ? 0 : args_count - 1);
+                    break;
+                }
 
-                        for (int i = from; i >= 0; i--){
-                            CURRENT_FRAME(vm)->locals[i] = *pop(vm);
-                        }
-                    }
-
-                    pop(vm);
-                }else if(IS_NATIVE_FN(callable_value)){
+                if(IS_NATIVE_FN(callable_value)){
                     NativeFn *native_fn = TO_NATIVE_FN(callable_value);
-                    void *target = native_fn->target;
+                    Value *target = &native_fn->target;
                     RawNativeFn raw_fn = native_fn->raw_fn;
 
                     if(native_fn->arity != args_count){
@@ -1342,15 +1330,19 @@ static int execute(VM *vm){
                     Value args[args_count == 0 ? 1 : args_count];
 
                     for (int i = args_count; i > 0; i--){
-                        args[i - 1] = *pop(vm);
+                        args[i - 1] = *peek_at(args_count - i, vm);
                     }
-
-                    pop(vm);
 
                     Value out_value = raw_fn(args_count, args, target, vm);
 
+                    vm->stack_top = callable_value;
+
                     PUSH(out_value, vm);
-                }else if(IS_FOREIGN_FN(callable_value)){
+
+                    break;
+                }
+
+                if(IS_FOREIGN_FN(callable_value)){
                     ForeignFn *foreign_fn = TO_FOREIGN_FN(callable_value);
                     RawForeignFn raw_fn = foreign_fn->raw_fn;
                     Value values[args_count];
@@ -1364,64 +1356,74 @@ static int execute(VM *vm){
                     Value out_value = *raw_fn(values);
 
                     PUSH(out_value, vm);
-                }else{
-                    vmu_error(vm, "Expect function after %d parameters count", args_count);
+
+                    break;
                 }
+
+                vmu_error(vm, "Expect function after %d parameters count", args_count);
 
                 break;
             }case ACCESS_OPCODE:{
                 uint32_t hash = 0;
                 char *symbol = read_str(vm, &hash);
-                Value *value = pop(vm);
+                Value *value = peek(vm);
 
                 if(IS_STR(value)){
-                    Str *str = TO_STR(value);
-                    Obj *native_fn_obj = native_str_get(symbol, str, vm);
+                    NativeFnInfo *info = native_str_get(symbol, vm);
 
-                    if(!native_fn_obj){
+                    if(!info){
                         vmu_error(vm, "String does not have symbol '%s'", symbol);
                     }
 
-                    PUSH(OBJ_VALUE(native_fn_obj), vm)
+                    Obj *native_fn_obj = vmu_native_fn_obj(info->arity, symbol, value, info->raw_native, vm);
+
+                    pop(vm);
+                    PUSH(OBJ_VALUE(native_fn_obj), vm);
 
                     break;
                 }
 
                 if(IS_ARRAY(value)){
-                    Array *array = TO_ARRAY(value);
-                    Obj *native_fn_obj = native_array_get(symbol, array, vm);
+                    NativeFnInfo *info = native_array_get(symbol, vm);
 
-                    if(!native_fn_obj){
+                    if(!info){
                         vmu_error(vm, "Array does not have symbol '%s'", symbol);
                     }
 
-                    PUSH(OBJ_VALUE(native_fn_obj), vm)
+                    Obj *native_fn_obj = vmu_native_fn_obj(info->arity, symbol, value, info->raw_native, vm);
+
+                    pop(vm);
+                    PUSH(OBJ_VALUE(native_fn_obj), vm);
 
                     break;
                 }
 
                 if(IS_LIST(value)){
-                    DynArr *list = TO_LIST(value);
-                    Obj *native_fn_obj = native_list_get(symbol, list, vm);
+                    NativeFnInfo *info = native_list_get(symbol, vm);
 
-                    if(!native_fn_obj){
+                    if(!info){
                         vmu_error(vm, "List does not have symbol '%s'", symbol);
                     }
 
-                    PUSH(OBJ_VALUE(native_fn_obj), vm)
+                    Obj *native_fn_obj = vmu_native_fn_obj(info->arity, symbol, value, info->raw_native, vm);
+
+                    pop(vm);
+                    PUSH(OBJ_VALUE(native_fn_obj), vm);
 
                     break;
                 }
 
                 if(IS_DICT(value)){
-                    LZHTable *dict = TO_DICT(value);
-                    Obj *native_fn_obj = native_dict_get(symbol, dict, vm);
+                    NativeFnInfo *info = native_dict_get(symbol, vm);
 
-                    if(!native_fn_obj){
+                    if(!info){
                         vmu_error(vm, "List does not have symbol '%s'", symbol);
                     }
 
-                    PUSH(OBJ_VALUE(native_fn_obj), vm)
+                    Obj *native_fn_obj = vmu_native_fn_obj(info->arity, symbol, value, info->raw_native, vm);
+
+                    pop(vm);
+                    PUSH(OBJ_VALUE(native_fn_obj), vm);
 
                     break;
                 }
@@ -1438,25 +1440,40 @@ static int execute(VM *vm){
                     size_t key_size = strlen(symbol);
                     Value *value = (Value *)lzhtable_get(key, key_size, key_values);
 
-                    if(value){
-                        PUSH(*value, vm);
-                        break;
+                    if(!value){
+                        vmu_error(vm, "Record do not constains key '%s'", symbol);
                     }
 
-                    vmu_error(vm, "Record do not constains key '%s'", symbol);
+                    pop(vm);
+                    PUSH(*value, vm);
 
                     break;
                 }
 
                 if(IS_NATIVE_MODULE(value)){
                     NativeModule *module = TO_NATIVE_MODULE(value);
-                    push_native_module_symbol(symbol, module, vm);
-                    break;
-                }
+                    uint8_t *key = (uint8_t *)symbol;
+                    size_t key_size = strlen(symbol);
+                    LZHTable *symbols = module->symbols;
+                    LZHTableNode *symbol_node = NULL;
 
-                if(IS_MODULE(value)){
+                    if(!lzhtable_contains(key, key_size, symbols, &symbol_node)){
+                        vmu_error(vm, "Module '%s' do not contains a symbol '%s'", module->name, symbol);
+                    }
+
+                    NativeModuleSymbol *symbol = (NativeModuleSymbol *)symbol_node->value;
+
+                    if(symbol->type == NATIVE_FUNCTION_NMSYMTYPE){
+                        NativeFn native_fn = *symbol->value.fn;
+                        Obj *native_fn_obj = vmu_native_fn_obj(native_fn.arity, native_fn.name, NULL, native_fn.raw_fn, vm);
+
+                        pop(vm);
+                        PUSH(OBJ_VALUE(native_fn_obj), vm);
+
+                        break;
+                    }
+                }else if(IS_MODULE(value)){
                     Module *module = TO_MODULE(value);
-
                     LZHTable *globals = MODULE_GLOBALS(module);
                     LZHTableNode *value_node = NULL;
 
@@ -1468,12 +1485,13 @@ static int execute(VM *vm){
                             vmu_error(vm, "Symbol '%s' has private access in module '%s'", symbol, module->name);
                         }
 
+                        pop(vm);
                         PUSH(*value, vm);
+
+                        break;
                     }else{
                         vmu_error(vm, "Module '%s' does not contains symbol '%s'", module->name, symbol);
                     }
-
-                    break;
                 }
 
                 if(IS_NATIVE_LIBRARY(value)){
@@ -1514,7 +1532,34 @@ static int execute(VM *vm){
 
                 break;
             }case RET_OPCODE:{
+                Value *result_value = pop(vm);
+                Frame *current = CURRENT_FRAME(vm);
+
+                for (OutValue *out_value = current->outs_head; out_value; out_value = out_value->next){
+                    out_value->linked = 0;
+                    remove_value_from_frame(out_value, vm);
+                }
+
+                vm->stack_top = current->locals;
+
+                if(vm->module_ptr > 1){
+                    CURRENT_MODULE(vm)->submodule->resolved = 1;
+                    CURRENT_MODULE(vm) = NULL;
+                    vm->module_ptr--;
+
+                    pop_frame(vm);
+
+                    break;
+                }
+
                 pop_frame(vm);
+
+                if(vm->frame_ptr == 0){
+                    return vm->exit_code;
+                }
+
+                PUSH(*result_value, vm)
+
                 break;
             }case IS_OPCODE:{
                 Value *value = pop(vm);
@@ -1663,8 +1708,6 @@ static int execute(VM *vm){
         }
     }
 
-    pop_frame(vm);
-
     return vm->exit_code;
 }
 //> PRIVATE IMPLEMENTATION
@@ -1685,7 +1728,7 @@ int vm_execute(LZHTable *natives, Module *module, VM *vm){
 
         vm->halt = 0;
         vm->exit_code = OK_VMRESULT;
-        vm->stack_ptr = 0;
+        vm->stack_top = vm->stack;
         vm->frame_ptr = 0;
         vm->module_ptr = 0;
         vm->natives = natives;

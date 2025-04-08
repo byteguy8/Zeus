@@ -7,9 +7,9 @@
 #include "lzhtable.h"
 #include <setjmp.h>
 
-#define STACK_LENGTH 255
 #define LOCALS_LENGTH 255
 #define FRAME_LENGTH 255
+#define STACK_LENGTH (LOCALS_LENGTH * FRAME_LENGTH)
 #define MODULES_LENGTH 255
 
 typedef enum vm_result{
@@ -33,9 +33,8 @@ typedef struct frame{
 
     Fn *fn;
     Closure *closure;
-    Obj *callable;
 
-    Value locals[LOCALS_LENGTH];
+    Value *locals;
 
     OutValue *outs_head;
     OutValue *outs_tail;
@@ -46,7 +45,7 @@ typedef struct vm{
     jmp_buf err_jmp;
     unsigned char exit_code;
 
-    int stack_ptr;
+    Value *stack_top;
     Value stack[STACK_LENGTH];
 
     int frame_ptr;
@@ -57,11 +56,13 @@ typedef struct vm{
     int module_ptr;
     Module *modules[MODULES_LENGTH];
 //> GARBAGE COLLECTOR
-    Obj *head;
-    Obj *tail;
     size_t objs_size;
-//< GARBAGE COLLECTOR
+    Obj *red_head;
+    Obj *red_tail;
 
+    Obj *blue_head;
+    Obj *blue_tail;
+//< GARBAGE COLLECTOR
     Allocator *rtallocator;
 }VM;
 

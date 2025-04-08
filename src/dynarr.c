@@ -197,7 +197,7 @@ int dynarr_find(void *b, int (*comparator)(void *a, void *b), DynArr *dynarr){
     int left = 0;
     int right = DYNARR_LEN(dynarr) == 0 ? 0 : DYNARR_LEN(dynarr) - 1;
 
-    while (right >= 0 && left < (int)DYNARR_LEN(dynarr)){
+    while (left <= right){
         int middle_index = (left + right) / 2;
         void *middle = DYNARR_GET((size_t)middle_index, dynarr);
         int comparition = comparator(middle, b);

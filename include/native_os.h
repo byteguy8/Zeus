@@ -7,7 +7,7 @@
 
 NativeModule *os_module = NULL;
 
-Value native_fn_os_name(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_os_name(uint8_t argsc, Value *values, Value *target, VM *vm){
     char *name = utils_sysname(vm->rtallocator);
     Obj *str_name_obj = vmu_str_obj(&name, vm);
 

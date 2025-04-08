@@ -46,6 +46,7 @@ typedef enum scope_type{
 typedef struct scope{
     int depth;
     int locals;
+    int scope_locals;
     TryBlock *try;
     ScopeType type;
 

@@ -10,13 +10,13 @@
 
 NativeModule *time_module = NULL;
 
-Value native_fn_time(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_time(uint8_t argsc, Value *values, Value *target, VM *vm){
     time_t t;
     t = time(NULL);
     return INT_VALUE((int64_t)t);
 }
 
-Value native_fn_time_millis(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_time_millis(uint8_t argsc, Value *values, Value *target, VM *vm){
     struct timespec spec = {0};
     clock_gettime(CLOCK_REALTIME, &spec);
 
@@ -25,7 +25,7 @@ Value native_fn_time_millis(uint8_t argsc, Value *values, void *target, VM *vm){
     return INT_VALUE(millis);
 }
 
-Value native_fn_time_sleep(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_time_sleep(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *raw_value = &values[0];
     int64_t value = -1;
 

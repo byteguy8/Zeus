@@ -38,11 +38,12 @@ Obj *vmu_create_obj(ObjType type, VM *vm);
 void vmu_destroy_obj(Obj *obj, VM *vm);
 
 Obj *vmu_str_obj(char **raw_str_ptr, VM *vm);
+Obj *vmu_unchecked_str_obj(char *raw_str, VM *vm);
 Obj *vmu_array_obj(int32_t len, VM *vm);
 Obj *vmu_list_obj(VM *vm);
 Obj *vmu_dict_obj(VM *vm);
 Obj *vmu_record_obj(uint8_t length, VM *vm);
-Obj *vmu_native_fn_obj(int arity, char *name, void *target, RawNativeFn raw_native, VM *vm);
+Obj *vmu_native_fn_obj(int arity, char *name, Value *target, RawNativeFn raw_native, VM *vm);
 Obj *vmu_closure_obj(MetaClosure *meta, VM *vm);
 Obj *vmu_foreign_lib_obj(void *handler, VM *vm);
 

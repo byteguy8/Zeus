@@ -7,7 +7,7 @@
 
 NativeModule *io_module = NULL;
 
-Value native_fn_io_read_file(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_io_read_file(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *path_value = &values[0];
 
     if(!IS_STR(path_value)){
@@ -35,7 +35,7 @@ Value native_fn_io_read_file(uint8_t argsc, Value *values, void *target, VM *vm)
     return OBJ_VALUE(content_obj);
 }
 
-Value native_fn_io_readln(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_io_readln(uint8_t argsc, Value *values, Value *target, VM *vm){
 	size_t buff_len = 1024;
 	char buff[buff_len];
 	char *out_buff = fgets(buff, buff_len, stdin);

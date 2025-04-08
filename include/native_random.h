@@ -20,7 +20,7 @@ NativeModule *random_module = NULL;
     }                      \
 }
 
-Value native_fn_random_init(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_random_init(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *seed_value = &values[0];
 
     VALIDATE_VALUE_INT(seed_value, 1, "seed", vm)
@@ -36,12 +36,12 @@ Value native_fn_random_init(uint8_t argsc, Value *values, void *target, VM *vm){
     return EMPTY_VALUE;
 }
 
-Value native_fn_random_next_int(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_random_next_int(uint8_t argsc, Value *values, Value *target, VM *vm){
     INIT_RANDOM()
     return INT_VALUE((int64_t)rand());
 }
 
-Value native_fn_random_next_int_range(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_random_next_int_range(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *min_value = &values[0];
     Value *max_value = &values[1];
 
@@ -57,7 +57,7 @@ Value native_fn_random_next_int_range(uint8_t argsc, Value *values, void *target
     return INT_VALUE((int64_t)random);
 }
 
-Value native_fn_random_next_ints(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_random_next_ints(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *length_value = &values[0];
 
     VALIDATE_VALUE_INT(length_value, 1, "length", vm)
@@ -76,7 +76,7 @@ Value native_fn_random_next_ints(uint8_t argsc, Value *values, void *target, VM 
     return OBJ_VALUE(values_array_obj);
 }
 
-Value native_fn_random_next_ints_range(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_random_next_ints_range(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *min_value = &values[0];
     Value *max_value = &values[1];
     Value *length_value = &values[2];

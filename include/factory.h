@@ -24,7 +24,7 @@ void factory_destroy_array(Array *array, Allocator *allocator);
 Record *factory_create_record(uint32_t length, Allocator *allocator);
 void factory_destroy_record(void *extra, void(*clean_up)(void *, void *, void *), Record *record, Allocator *allocator);
 
-NativeFn *factory_create_native_fn(char *name, uint8_t arity, void *target, RawNativeFn raw_native, Allocator *allocator);
+NativeFn *factory_create_native_fn(uint8_t core, char *name, uint8_t arity, Value *target, RawNativeFn raw_native, Allocator *allocator);
 void factory_destroy_native_fn(NativeFn *native_fn, Allocator *allocator);
 
 void factory_add_native_fn(char *name, uint8_t arity, RawNativeFn raw_native, NativeModule *module, Allocator *allocator);

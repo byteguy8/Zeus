@@ -45,7 +45,6 @@ Symbol *exists_local(char *name, Compiler *compiler);
 Symbol *get(Token *identifier_token, Compiler *compiler);
 void to_local(Symbol *symbol, Compiler *compiler);
 void from_symbols_to_global(size_t symbol_index, Token *location_token, char *name, Compiler *compiler);
-Symbol *declare_raw(SymbolType type, Compiler *compiler);
 Symbol *declare_native(char *identifier, Compiler *compiler);
 Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler);
 DynArr *current_chunks(Compiler *compiler);
@@ -200,6 +199,7 @@ Scope *scope_in(ScopeType type, Compiler *compiler){
 
     scope->depth = compiler->depth;
     scope->locals = 0;
+    scope->scope_locals = 0;
     scope->try = NULL;
 	scope->type = type;
     scope->symbols_len = 0;
@@ -214,6 +214,7 @@ Scope *scope_in_soft(ScopeType type, Compiler *compiler){
 
     scope->depth = compiler->depth;
     scope->locals = enclosing->locals;
+    scope->scope_locals = 0;
 	scope->type = type;
     scope->symbols_len = 0;
 
@@ -238,13 +239,21 @@ Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function, size_t *ou
 }
 
 void scope_out(Compiler *compiler){
+    Scope *current = current_scope(compiler);
+
+    if(current->depth > 1){
+        for (uint8_t i = 0; i < current->scope_locals; i++){
+            write_chunk(POP_OPCODE, compiler);
+        }
+    }
+
     compiler->depth--;
 }
 
 void scope_out_fn(Compiler *compiler){
     assert(compiler->fn_ptr > 0);
-	compiler->fn_ptr--;
-    scope_out(compiler);
+    compiler->fn_ptr--;
+    compiler->depth--;
 }
 
 Scope *inside_while(Compiler *compiler){
@@ -325,7 +334,7 @@ int resolve_symbol(Token *identifier, Symbol *symbol, Compiler *compiler){
         // depth 1 means we are in the global scope or the main function
         Scope *fn_scope = inside_function(compiler);
 
-        if(symbol->depth < fn_scope->depth){
+        if(fn_scope && symbol->depth < fn_scope->depth){
             is_out = 1;
             add_captured_symbol(identifier, symbol, fn_scope, compiler);
         }
@@ -395,21 +404,6 @@ void from_symbols_to_global(
     write_str(name, compiler);
 }
 
-Symbol *declare_raw(SymbolType type, Compiler *compiler){
-    Scope *scope = current_scope(compiler);
-    Symbol *symbol = &scope->symbols[scope->symbols_len++];
-
-    symbol->depth = scope->depth;
-    symbol->local = -1;
-    symbol->index = -1;
-    symbol->type = type;
-    symbol->name_len = 0;
-    symbol->name[0] = '\0';
-    symbol->identifier_token = NULL;
-
-    return symbol;
-}
-
 Symbol *declare_native(char *identifier, Compiler *compiler){
     size_t identifier_len = strlen(identifier);
     Scope *scope = current_scope(compiler);
@@ -466,6 +460,8 @@ Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler){
     memcpy(symbol->name, identifier, identifier_len);
     symbol->name[identifier_len] = '\0';
     symbol->identifier_token = identifier_token;
+
+    scope->scope_locals++;
 
     return symbol;
 }
@@ -810,11 +806,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             Fn *fn = NULL;
             size_t symbol_index = 0;
-
-            Symbol *fn_symbol = declare_raw(FN_SYMTYPE, compiler);
             Scope *fn_scope = scope_in_fn("anonymous", compiler, &fn, &symbol_index);
-
-            fn_symbol->index = ((int)symbol_index);
 
             if(params){
                 for (size_t i = 0; i < DYNARR_PTR_LEN(params); i++){
@@ -831,7 +823,10 @@ void compile_expr(Expr *expr, Compiler *compiler){
             for (size_t i = 0; i < stmts->used; i++){
                 Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
                 compile_stmt(stmt, compiler);
-                if(i + 1 >= stmts->used && stmt->type == RETURN_STMTTYPE){returned = 1;}
+
+                if(i + 1 >= DYNARR_PTR_LEN(stmts) && stmt->type == RETURN_STMTTYPE){
+                    returned = 1;
+                }
             }
 
             if(!returned){
@@ -842,9 +837,9 @@ void compile_expr(Expr *expr, Compiler *compiler){
                 write_location(anon_token, compiler);
             }
 
-            if(fn_scope->captured_symbols_len > 0){
-                fn_symbol->type = CLOSURE_SYMTYPE;
+            scope_out_fn(compiler);
 
+            if(fn_scope->captured_symbols_len > 0){
                 MetaClosure *closure = MEMORY_ALLOC(MetaClosure, 1, compiler->rtallocator);
 
                 closure->values_len = fn_scope->captured_symbols_len;
@@ -859,8 +854,6 @@ void compile_expr(Expr *expr, Compiler *compiler){
             }else{
                 set_fn(symbol_index, fn, compiler);
             }
-
-            scope_out_fn(compiler);
 
             write_chunk(SGET_OPCODE, compiler);
             write_location(anon_token, compiler);
@@ -1470,26 +1463,22 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             Token *identifier_token = var_decl_stmt->identifier_token;
             Expr *initializer_expr = var_decl_stmt->initializer_expr;
 
-            if(is_const && !is_initialized)
+            if(is_const && !is_initialized){
                 error(compiler, identifier_token, "'%s' declared as constant, but is not being initialized.", identifier_token->lexeme);
+            }
 
             Symbol *symbol = declare(is_const ? IMUT_SYMTYPE : MUT_SYMTYPE, identifier_token, compiler);
 
-            if(initializer_expr == NULL) write_chunk(EMPTY_OPCODE, compiler);
-            else compile_expr(initializer_expr, compiler);
+            if(initializer_expr == NULL){
+                write_chunk(EMPTY_OPCODE, compiler);
+            }else{
+                compile_expr(initializer_expr, compiler);
+            }
 
             if(symbol->depth == 1){
                 write_chunk(GDEF_OPCODE, compiler);
 				write_location(identifier_token, compiler);
-
                 write_str(identifier_token->lexeme, compiler);
-            }else{
-                write_chunk(LSET_OPCODE, compiler);
-				write_location(identifier_token, compiler);
-                write_chunk((uint8_t)symbol->local, compiler);
-
-                write_chunk(POP_OPCODE, compiler);
-			    write_location(identifier_token, compiler);
             }
 
             break;
@@ -1499,8 +1488,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             scope_in_soft(BLOCK_SCOPE, compiler);
 
-            for (size_t i = 0; i < stmts->used; i++)
-            {
+            for (size_t i = 0; i < stmts->used; i++){
                 Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
                 compile_stmt(stmt, compiler);
             }
@@ -1510,6 +1498,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             break;
         }case IF_STMTTYPE:{
 			IfStmt *if_stmt = (IfStmt *)stmt->sub_stmt;
+            Token *if_token = if_stmt->if_token;
 			Expr *if_condition = if_stmt->if_condition;
 			DynArrPtr *if_stmts = if_stmt->if_stmts;
 			DynArrPtr *else_stmts = if_stmt->else_stmts;
@@ -1525,14 +1514,13 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			scope_in_soft(BLOCK_SCOPE, compiler);
 
 			for(size_t i = 0; i < if_stmts->used; i++){
-				Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, if_stmts);
-				compile_stmt(stmt, compiler);
+				compile_stmt((Stmt *)DYNARR_PTR_GET(i, if_stmts), compiler);
 			}
 
 			scope_out(compiler);
 
             write_chunk(JMP_OPCODE, compiler);
-            write_location(if_stmt->if_token, compiler);
+            write_location(if_token, compiler);
             size_t jmp_index = write_i16(0, compiler);
 
 			size_t len_af_if = chunks_len(compiler);
@@ -1562,6 +1550,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			break;
 		}case WHILE_STMTTYPE:{
 			WhileStmt *while_stmt = (WhileStmt *)stmt->sub_stmt;
+            Token *while_token = while_stmt->while_token;
 			Expr *condition = while_stmt->condition;
 			DynArrPtr *stmts = while_stmt->stmts;
 
@@ -1592,7 +1581,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			size_t while_len = len_af_while - len_bef_body;
 
 			write_chunk(JIT_OPCODE, compiler);
-            write_location(while_stmt->while_token, compiler);
+            write_location(while_token, compiler);
 			write_i16(-((int16_t)while_len), compiler);
 
 			size_t af_header = chunks_len(compiler);
@@ -1707,8 +1696,9 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
                 compile_stmt(stmt, compiler);
 
-                if(i + 1 >= stmts->used && stmt->type == RETURN_STMTTYPE)
+                if(i + 1 >= DYNARR_PTR_LEN(stmts) && stmt->type == RETURN_STMTTYPE){
                     returned = 1;
+                }
             }
 
             if(!returned){
@@ -1718,6 +1708,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 write_chunk(RET_OPCODE, compiler);
                 write_location(identifier_token, compiler);
             }
+
+            scope_out_fn(compiler);
 
             int is_normal = enclosing == NULL;
 
@@ -1739,8 +1731,6 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             if(!is_normal){to_local(fn_symbol, compiler);}
 
-            scope_out_fn(compiler);
-
             write_chunk(SGET_OPCODE, compiler);
             write_location(identifier_token, compiler);
             write_i32(symbol_index, compiler);
@@ -1749,10 +1739,6 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 write_chunk(GDEF_OPCODE, compiler);
                 write_location(identifier_token, compiler);
                 write_str(identifier_token->lexeme, compiler);
-            }else{
-                write_chunk(LSET_OPCODE, compiler);
-                write_location(identifier_token, compiler);
-                write_chunk(fn_symbol->local, compiler);
             }
 
             break;
@@ -2076,6 +2062,9 @@ int compiler_compile(
             compile_stmt(stmt, compiler);
         }
 
+        write_chunk(EMPTY_OPCODE, compiler);
+        write_chunk(RET_OPCODE, compiler);
+
         set_fn(symbol_index, fn, compiler);
         scope_out_fn(compiler);
 
@@ -2111,6 +2100,9 @@ int compiler_import(
             Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
             compile_stmt(stmt, compiler);
         }
+
+        write_chunk(EMPTY_OPCODE, compiler);
+        write_chunk(RET_OPCODE, compiler);
 
         set_fn(symbol_index, fn, compiler);
 		scope_out(compiler);

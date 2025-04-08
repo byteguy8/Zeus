@@ -25,7 +25,7 @@ typedef struct str Str;
 typedef struct array Array;
 typedef struct record Record;
 
-typedef Value (*RawNativeFn)(uint8_t argc, Value *values, void *target, VM *vm);
+typedef Value (*RawNativeFn)(uint8_t argc, Value *values, Value *target, VM *vm);
 typedef struct native_fn_info NativeFnInfo;
 typedef struct native_fn NativeFn;
 typedef struct opcode_location OPCodeLocation;
@@ -130,9 +130,10 @@ struct native_fn_info{
 };
 
 struct native_fn{
-    int arity;
+    uint8_t core;
+    uint8_t arity;
+    Value target;
     char *name;
-    void *target;
     RawNativeFn raw_fn;
 };
 
@@ -239,6 +240,7 @@ struct foreign_lib{
     void *handler;
 };
 
+#define VALUE_SIZE sizeof(Value)
 #define IS_MARKED(o)((o)->marked == 1)
 
 #define IS_EMPTY(v)((v)->type == EMPTY_VTYPE)

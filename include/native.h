@@ -1,7 +1,15 @@
 #ifndef NATIVE_H
 #define NATIVE_H
 
-Value native_fn_ls(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_print_stack(uint8_t argsc, Value *values, Value *target, VM *vm){
+    for (Value *current = vm->stack; current < vm->stack_top; current++){
+        vmu_print_value(stdout, current);
+        fprintf(stdout, "\n");
+    }
+    return EMPTY_VALUE;
+}
+
+Value native_fn_ls(uint8_t argsc, Value *values, Value *target, VM *vm){
 	Value *module_value = &values[0];
     Obj *array_obj = NULL;
 
@@ -73,7 +81,7 @@ Value native_fn_ls(uint8_t argsc, Value *values, void *target, VM *vm){
 	return OBJ_VALUE(array_obj);
 }
 
-Value native_fn_exit(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_exit(uint8_t argsc, Value *values, Value *target, VM *vm){
 	Value *exit_code_value = &values[0];
 
     if(!IS_INT(exit_code_value)){
@@ -86,7 +94,7 @@ Value native_fn_exit(uint8_t argsc, Value *values, void *target, VM *vm){
 	return EMPTY_VALUE;
 }
 
-Value native_fn_assert(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_assert(uint8_t argsc, Value *values, Value *target, VM *vm){
 	Value *raw_value = &values[0];
 
     if(!IS_BOOL(raw_value)){
@@ -102,7 +110,7 @@ Value native_fn_assert(uint8_t argsc, Value *values, void *target, VM *vm){
 	return EMPTY_VALUE;
 }
 
-Value native_fn_assertm(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_assertm(uint8_t argsc, Value *values, Value *target, VM *vm){
 	Value *raw_value = &values[0];
     Value *msg_value = &values[1];
 
@@ -125,7 +133,7 @@ Value native_fn_assertm(uint8_t argsc, Value *values, void *target, VM *vm){
 	return EMPTY_VALUE;
 }
 
-Value native_fn_is_str_int(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_is_str_int(uint8_t argsc, Value *values, Value *target, VM *vm){
 	Value *raw_value = &values[0];
 	Str *str = NULL;
 
@@ -138,7 +146,7 @@ Value native_fn_is_str_int(uint8_t argsc, Value *values, void *target, VM *vm){
 	return BOOL_VALUE((uint8_t)utils_is_integer(str->buff));
 }
 
-Value native_fn_is_str_float(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_is_str_float(uint8_t argsc, Value *values, Value *target, VM *vm){
 	Value *raw_value = &values[0];
 	Str *str = NULL;
 
@@ -151,7 +159,7 @@ Value native_fn_is_str_float(uint8_t argsc, Value *values, void *target, VM *vm)
 	return BOOL_VALUE((uint8_t)utils_is_float(str->buff));
 }
 
-Value native_fn_str_to_int(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_str_to_int(uint8_t argsc, Value *values, Value *target, VM *vm){
 	Value *raw_value = &values[0];
 	Str *str = NULL;
     int64_t value;
@@ -169,7 +177,7 @@ Value native_fn_str_to_int(uint8_t argsc, Value *values, void *target, VM *vm){
 	return INT_VALUE(value);
 }
 
-Value native_fn_int_to_str(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_int_to_str(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *number_value = &values[0];
     char buff[20];
 
@@ -185,7 +193,7 @@ Value native_fn_int_to_str(uint8_t argsc, Value *values, void *target, VM *vm){
     return OBJ_VALUE(number_str_obj);
 }
 
-Value native_fn_str_to_float(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_str_to_float(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *raw_value = &values[0];
     Str *str = NULL;
     double value;
@@ -203,7 +211,7 @@ Value native_fn_str_to_float(uint8_t argsc, Value *values, void *target, VM *vm)
 	return FLOAT_VALUE(value);
 }
 
-Value native_fn_float_to_str(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_float_to_str(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *number_value = &values[0];
     size_t buff_len = 1024;
     char buff[buff_len];
@@ -220,7 +228,7 @@ Value native_fn_float_to_str(uint8_t argsc, Value *values, void *target, VM *vm)
     return OBJ_VALUE(number_str_obj);
 }
 
-Value native_fn_int_to_float(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_int_to_float(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *raw_value = &values[0];
 
     if(!IS_INT(raw_value)){
@@ -230,7 +238,7 @@ Value native_fn_int_to_float(uint8_t argsc, Value *values, void *target, VM *vm)
     return FLOAT_VALUE((double)TO_INT(raw_value));
 }
 
-Value native_fn_float_to_int(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_float_to_int(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *raw_value = &values[0];
 
     if(!IS_FLOAT(raw_value)){
@@ -240,26 +248,26 @@ Value native_fn_float_to_int(uint8_t argsc, Value *values, void *target, VM *vm)
     return INT_VALUE((uint64_t)TO_FLOAT(raw_value));
 }
 
-Value native_fn_print(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_print(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *raw_value = &values[0];
     vmu_print_value(stdout, raw_value);
     return EMPTY_VALUE;
 }
 
-Value native_fn_println(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_println(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *raw_value = &values[0];
     vmu_print_value(stdout, raw_value);
     printf("\n");
     return EMPTY_VALUE;
 }
 
-Value native_fn_eprint(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_eprint(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *raw_value = &values[0];
     vmu_print_value(stderr, raw_value);
     return EMPTY_VALUE;
 }
 
-Value native_fn_eprintln(uint8_t argsc, Value *values, void *target, VM *vm){
+Value native_fn_eprintln(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *raw_value = &values[0];
     vmu_print_value(stderr, raw_value);
     fprintf(stderr, "\n");

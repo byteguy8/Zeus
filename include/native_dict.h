@@ -11,13 +11,13 @@ static void clear_dict(void *key, void *value, void *vm){
     vmu_destroy_value(value, vm);
 }
 
-Value native_fn_dict_size(uint8_t argsc, Value *values, void *target, VM *vm){
-    LZHTable *dict = (LZHTable *)target;
+Value native_fn_dict_size(uint8_t argsc, Value *values, Value *target, VM *vm){
+    LZHTable *dict = TO_DICT(target);
     return INT_VALUE(LZHTABLE_COUNT(dict));
 }
 
-Value native_fn_dict_contains(uint8_t argsc, Value *values, void *target, VM *vm){
-    LZHTable *dict = (LZHTable *)target;
+Value native_fn_dict_contains(uint8_t argsc, Value *values, Value *target, VM *vm){
+    LZHTable *dict = TO_DICT(target);
     Value *value = &values[0];
 
     uint32_t hash = vmu_hash_value(value);
@@ -26,8 +26,8 @@ Value native_fn_dict_contains(uint8_t argsc, Value *values, void *target, VM *vm
     return BOOL_VALUE(contains);
 }
 
-Value native_fn_dict_get(uint8_t argsc, Value *values, void *target, VM *vm){
-    LZHTable *dict = (LZHTable *)target;
+Value native_fn_dict_get(uint8_t argsc, Value *values, Value *target, VM *vm){
+    LZHTable *dict = TO_DICT(target);
     Value *key = &values[0];
 
     uint32_t hash = vmu_hash_value(key);
@@ -39,8 +39,8 @@ Value native_fn_dict_get(uint8_t argsc, Value *values, void *target, VM *vm){
     else return EMPTY_VALUE;
 }
 
-Value native_fn_dict_put(uint8_t argsc, Value *values, void *target, VM *vm){
-    LZHTable *dict = (LZHTable *)target;
+Value native_fn_dict_put(uint8_t argsc, Value *values, Value *target, VM *vm){
+    LZHTable *dict = TO_DICT(target);
     Value *key = &values[0];
     Value *value = &values[1];
 
@@ -64,8 +64,8 @@ Value native_fn_dict_put(uint8_t argsc, Value *values, void *target, VM *vm){
     return EMPTY_VALUE;
 }
 
-Value native_fn_dict_remove(uint8_t argsc, Value *values, void *target, VM *vm){
-    LZHTable *dict = (LZHTable *)target;
+Value native_fn_dict_remove(uint8_t argsc, Value *values, Value *target, VM *vm){
+    LZHTable *dict = TO_DICT(target);
     Value *key = &values[0];
     uint32_t key_hash = vmu_hash_value(key);
     LZHTableNode *node = NULL;
@@ -84,8 +84,8 @@ Value native_fn_dict_remove(uint8_t argsc, Value *values, void *target, VM *vm){
     return EMPTY_VALUE;
 }
 
-Value native_fn_dict_clear(uint8_t argsc, Value *values, void *target, VM *vm){
-    LZHTable *dict = (LZHTable *)target;
+Value native_fn_dict_clear(uint8_t argsc, Value *values, Value *target, VM *vm){
+    LZHTable *dict = TO_DICT(target);
 
     if(lzhtable_clear_shrink(vm, clear_dict, dict)){
         vmu_error(vm, "Fatal error when cleaning dictionary");
@@ -94,8 +94,8 @@ Value native_fn_dict_clear(uint8_t argsc, Value *values, void *target, VM *vm){
     return EMPTY_VALUE;
 }
 
-Value native_fn_dict_keys(uint8_t argsc, Value *values, void *target, VM *vm){
-    LZHTable *dict = (LZHTable *)target;
+Value native_fn_dict_keys(uint8_t argsc, Value *values, Value *target, VM *vm){
+    LZHTable *dict = TO_DICT(target);
     Obj *array_obj = vmu_array_obj(dict->n, vm);
 
     if(!array_obj){
@@ -114,8 +114,8 @@ Value native_fn_dict_keys(uint8_t argsc, Value *values, void *target, VM *vm){
     return OBJ_VALUE(array_obj);
 }
 
-Value native_fn_dict_values(uint8_t argsc, Value *values, void *target, VM *vm){
-    LZHTable *dict = (LZHTable *)target;
+Value native_fn_dict_values(uint8_t argsc, Value *values, Value *target, VM *vm){
+    LZHTable *dict = TO_DICT(target);
     Obj *array_obj = vmu_array_obj(dict->n, vm);
 
     if(!array_obj){
@@ -134,7 +134,7 @@ Value native_fn_dict_values(uint8_t argsc, Value *values, void *target, VM *vm){
     return OBJ_VALUE(array_obj);
 }
 
-Obj *native_dict_get(char *symbol, void *target, VM *vm){
+NativeFnInfo *native_dict_get(char *symbol, VM *vm){
     if(!dict_symbols){
         dict_symbols = FACTORY_LZHTABLE(vm->rtallocator);
         factory_add_native_fn_info("size", 0, native_fn_dict_size, dict_symbols, vm->rtallocator);
@@ -147,26 +147,7 @@ Obj *native_dict_get(char *symbol, void *target, VM *vm){
         factory_add_native_fn_info("values", 0, native_fn_dict_values, dict_symbols, vm->rtallocator);
     }
 
-    size_t key_size = strlen(symbol);
-    NativeFnInfo *native_fn_info = (NativeFnInfo *)lzhtable_get((uint8_t *)symbol, key_size, dict_symbols);
-
-    if(native_fn_info){
-        Obj *native_fn_obj = vmu_native_fn_obj(
-            native_fn_info->arity,
-            symbol,
-            target,
-            native_fn_info->raw_native,
-            vm
-        );
-
-        if(!native_fn_obj){
-            vmu_error(vm, "Out of memory");
-        }
-
-        return native_fn_obj;
-    }
-
-    return NULL;
+    return (NativeFnInfo *)lzhtable_get((uint8_t *)symbol, strlen(symbol), dict_symbols);
 }
 
 #endif

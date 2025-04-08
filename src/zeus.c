@@ -36,7 +36,7 @@ static void get_args(int argc, char const *argv[], Args *args){
 }
 
 void add_native(char *name, int arity, RawNativeFn raw_native, LZHTable *natives, Allocator *allocator){
-    NativeFn *native = factory_create_native_fn(name, arity, NULL, raw_native, allocator);
+    NativeFn *native = factory_create_native_fn(1, name, arity, NULL, raw_native, allocator);
     lzhtable_put((uint8_t *)name, strlen(name), native, natives, NULL);
 }
 
@@ -117,6 +117,7 @@ int main(int argc, char const *argv[]){
 
     LZHTable *natives = FACTORY_LZHTABLE(rtallocator);
 
+    add_native("print_stack", 0, native_fn_print_stack, natives, rtallocator);
     add_native("ls", 1, native_fn_ls, natives, rtallocator);
     add_native("exit", 1, native_fn_exit, natives, rtallocator);
 	add_native("assert", 1, native_fn_assert, natives, rtallocator);

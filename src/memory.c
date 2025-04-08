@@ -37,34 +37,31 @@ void lzarena_link_dealloc(void *ptr, size_t size, void *ctx){
 }
 
 void *lzflist_link_alloc(size_t size, void *ctx){
-    LZFList *allocator = (LZFList *)ctx;
-    void *ptr = lzflist_alloc(size, allocator);
+    void *ptr = lzflist_calloc(size, ctx);
 
     if(!ptr){
-        fprintf(stderr, "out of memory\n");
-		memory_deinit();
-		exit(EXIT_FAILURE);
-	}
+        fprintf(stderr, "Out of memory");
+        memory_deinit();
+        exit(EXIT_FAILURE);
+    }
 
-	return ptr;
+    return ptr;
 }
 
 void *lzflist_link_realloc(void *ptr, size_t old_size, size_t new_size, void *ctx){
-    LZFList *allocator = (LZFList *)ctx;
-    void *new_ptr = lzflist_realloc(ptr, new_size, allocator);
+    void *new_ptr = lzflist_realloc(ptr, new_size, ctx);
 
     if(!new_ptr){
-        fprintf(stderr, "out of memory\n");
-		memory_deinit();
-		exit(EXIT_FAILURE);
-	}
+        fprintf(stderr, "Out of memory");
+        memory_deinit();
+        exit(EXIT_FAILURE);
+    }
 
     return new_ptr;
 }
 
 void lzflist_link_dealloc(void *ptr, size_t size, void *ctx){
-	LZFList *allocator = (LZFList *)ctx;
-    lzflist_dealloc(ptr, allocator);
+	lzflist_dealloc(ptr, ctx);
 }
 
 int memory_init(){
