@@ -49,7 +49,7 @@ Value native_fn_array_make_room(uint8_t argsc, Value *values, Value *target, VM 
     return OBJ_VALUE(new_array_obj);
 }
 
-Value native_fn_array_length(uint8_t argsc, Value *values, Value *target, VM *vm){
+Value native_fn_array_size(uint8_t argsc, Value *values, Value *target, VM *vm){
     Array *array = TO_ARRAY(target);
     return INT_VALUE((int64_t)array->len);
 }
@@ -105,7 +105,7 @@ NativeFnInfo *native_array_get(char *symbol, VM *vm){
         factory_add_native_fn_info("first", 0, native_fn_array_first, array_symbols, vm->rtallocator);
         factory_add_native_fn_info("last", 0, native_fn_array_last, array_symbols, vm->rtallocator);
         factory_add_native_fn_info("make_room", 1, native_fn_array_make_room, array_symbols, vm->rtallocator);
-        factory_add_native_fn_info("length", 0, native_fn_array_length, array_symbols, vm->rtallocator);
+        factory_add_native_fn_info("size", 0, native_fn_array_size, array_symbols, vm->rtallocator);
         factory_add_native_fn_info("join", 1, native_fn_array_join, array_symbols, vm->rtallocator);
         factory_add_native_fn_info("to_list", 0, native_fn_array_to_list, array_symbols, vm->rtallocator);
     }

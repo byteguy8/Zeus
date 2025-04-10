@@ -284,19 +284,4 @@ struct foreign_lib{
 #define FLOAT_VALUE(value)((Value){.type = FLOAT_VTYPE, .content.fvalue = (value)})
 #define OBJ_VALUE(value)((Value){.type = OBJ_VTYPE, .content.obj = (value)})
 
-#define VALIDATE_ARRAY_INDEX(param, name, value, vm){                                                       \
-    if(TO_INT(value) < 0){                                                                                  \
-        vmu_error((vm), "Illegal argument %d: '%s' cannot be less than 0", (param), (name));                \
-    }                                                                                                       \
-    if(TO_INT(value) > INT32_MAX){                                                                          \
-        vmu_error((vm), "Illegal argument %d: '%s' cannot be greater than %d", (param), (name), INT32_MAX); \
-    }                                                                                                       \
-}
-
-#define VALIDATE_VALUE_INT(value, param, name, vm){                                               \
-    if(!IS_INT((value))){                                                                         \
-        vmu_error(vm, "Illegal type of argument %d: expect '%s' of type 'int'", (param), (name)); \
-    }                                                                                             \
-}
-
 #endif

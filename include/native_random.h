@@ -23,7 +23,7 @@ NativeModule *random_module = NULL;
 Value native_fn_random_init(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *seed_value = &values[0];
 
-    VALIDATE_VALUE_INT(seed_value, 1, "seed", vm)
+    VALIDATE_VALUE_INT_ARG(seed_value, 1, "seed", vm)
 
     int64_t seed = TO_INT(seed_value);
 
@@ -45,8 +45,8 @@ Value native_fn_random_next_int_range(uint8_t argsc, Value *values, Value *targe
     Value *min_value = &values[0];
     Value *max_value = &values[1];
 
-    VALIDATE_VALUE_INT(min_value, 1, "min", vm)
-    VALIDATE_VALUE_INT(max_value, 1, "max", vm)
+    VALIDATE_VALUE_INT_ARG(min_value, 1, "min", vm)
+    VALIDATE_VALUE_INT_ARG(max_value, 1, "max", vm)
 
     INIT_RANDOM()
 
@@ -60,8 +60,8 @@ Value native_fn_random_next_int_range(uint8_t argsc, Value *values, Value *targe
 Value native_fn_random_next_ints(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *length_value = &values[0];
 
-    VALIDATE_VALUE_INT(length_value, 1, "length", vm)
-    VALIDATE_ARRAY_INDEX(1, "length", length_value, vm)
+    VALIDATE_VALUE_INT_ARG(length_value, 1, "length", vm)
+    VALIDATE_ARRAY_INDEX_ARG(1, "length", length_value, vm)
 
     int64_t length = TO_INT(length_value);
     Obj *values_array_obj = vmu_array_obj(length, vm);
@@ -81,10 +81,10 @@ Value native_fn_random_next_ints_range(uint8_t argsc, Value *values, Value *targ
     Value *max_value = &values[1];
     Value *length_value = &values[2];
 
-    VALIDATE_VALUE_INT(min_value, 1, "min", vm)
-    VALIDATE_VALUE_INT(max_value, 2, "max", vm)
-    VALIDATE_VALUE_INT(length_value, 3, "length", vm)
-    VALIDATE_ARRAY_INDEX(3, "length", length_value, vm)
+    VALIDATE_VALUE_INT_ARG(min_value, 1, "min", vm)
+    VALIDATE_VALUE_INT_ARG(max_value, 2, "max", vm)
+    VALIDATE_VALUE_INT_ARG(length_value, 3, "length", vm)
+    VALIDATE_ARRAY_INDEX_ARG(3, "length", length_value, vm)
 
     int64_t min = TO_INT(min_value);
     int64_t max = TO_INT(max_value);

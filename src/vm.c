@@ -396,35 +396,21 @@ static int execute(VM *vm){
                 if(parameter == 1){
                     Value *length_value = pop(vm);
 
-                    if(!IS_INT(length_value)){
-                        vmu_error(vm, "Expect 'length' to be of type integer, but got something else");
-                    }
+                    VALIDATE_VALUE_INT(length_value, vm)
+                    VALIDATE_ARRAY_SIZE(TO_ARRAY_LENGTH(length_value))
 
-                    int64_t length = TO_INT(length_value);
-
-                    if(length < 0 || length > INT32_MAX){
-                        vmu_error(vm, "Illegal 'length' value. Must be 0 <= LENGTH(%ld) <= %d", length, INT32_MAX);
-                    }
-
-                    Obj *array_obj = vmu_array_obj((int32_t)length, vm);
+                    Obj *array_obj = vmu_array_obj(TO_ARRAY_LENGTH(length_value), vm);
 
                     PUSH(OBJ_VALUE(array_obj), vm)
                 }else if(parameter == 2){
                     Value *value = pop(vm);
                     Value *array_value = peek(vm);
 
-                    if(!IS_ARRAY(array_value)){
-                        vmu_error(vm, "Expect an array, but got something else");
-                    }
+                    VALIDATE_VALUE_ARRAY(array_value, vm)
 
                     Array *array = TO_ARRAY(array_value);
 
-                    if(index < 0){
-                        vmu_error(vm, "Illegal 'index' value. Must be: 0 <= INDEX(%d)", index);
-                    }
-                    if(index >= array->len){
-                        vmu_error(vm, "Index out of bounds. Must be: 0 <= INDEX(%d) < %d", index, array->len);
-                    }
+                    VALIDATE_ARRAY_INDEX(array->len, &INT_VALUE(index), vm)
 
                     array->values[index] = *value;
                 }else{
@@ -1110,26 +1096,13 @@ static int execute(VM *vm){
                 Value *index_value =  pop(vm);
                 Value *value =  peek(vm);
 
-                if(!IS_ARRAY(target_value)){
-                    vmu_error(vm, "Expect array, but got something else");
-                }
+                VALIDATE_VALUE_ARRAY(target_value, vm)
 
                 Array *array = TO_ARRAY(target_value);
 
-                if(!IS_INT(index_value)){
-                    vmu_error(vm, "Expect integer as index");
-                }
+                VALIDATE_ARRAY_INDEX(array->len, index_value, vm)
 
-                int64_t index = TO_INT(index_value);
-
-                if(index < 0 || index > INT16_MAX){
-                    vmu_error(vm, "Illegal index range. Must be > 0 and < %s", INT16_MAX);
-                }
-                if((int16_t)index >= array->len){
-                    vmu_error(vm, "Index out of bounds. Array length: %d, index: %d", array->len, INT16_MAX);
-                }
-
-                array->values[index] = *value;
+                array->values[TO_ARRAY_INDEX(index_value)] = *value;
 
                 break;
             }case PUT_OPCODE:{
@@ -1508,22 +1481,39 @@ static int execute(VM *vm){
                 if(IS_ARRAY(target_value)){
                     Array *array = TO_ARRAY(target_value);
 
-                    if(!IS_INT(index_value)){
-                        vmu_error(vm, "Expect integer as index, but got something else");
-                    }
+                    VALIDATE_ARRAY_INDEX(array->len, index_value, vm)
 
-                    int64_t index = TO_INT(index_value);
-
-                    if(index < 0 || index > INT32_MAX){
-                        vmu_error(vm, "Illegal index value. Must be: 0 <= INDEX(%ld) <= %s", index, INT32_MAX);
-                    }
-                    if((int16_t)index >= array->len){
-                        vmu_error(vm, "Index out of bounds. Must be: 0 <= INDEX(%ld) < %d", index, array->len);
-                    }
-
-                    Value value = array->values[(int32_t)index];
+                    Value value = array->values[TO_ARRAY_INDEX(index_value)];
 
                     PUSH(value, vm);
+
+                    break;
+                }
+
+                if(IS_LIST(target_value)){
+                    DynArr *list = TO_LIST(target_value);
+
+                    VALIDATE_LIST_INDEX(DYNARR_LEN(list), target_value, vm);
+
+                    Value value = DYNARR_GET_AS(Value, TO_LIST_INDEX(index_value), list);
+
+                    PUSH(value, vm);
+
+                    break;
+                }
+
+                if(IS_DICT(target_value)){
+                    LZHTable *dict = TO_DICT(target_value);
+                    LZHTableNode *value_node = NULL;
+                    uint32_t hash = vmu_hash_value(index_value);
+
+                    if(lzhtable_hash_contains(hash, dict, &value_node)){
+                        Value *value = (Value *)value_node->value;
+                        PUSH(*value, vm);
+                        break;
+                    }
+
+                    vmu_error(vm, "Unknown key");
 
                     break;
                 }

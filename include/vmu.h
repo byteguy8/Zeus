@@ -5,6 +5,79 @@
 #include "bstr.h"
 #include <stdio.h>
 
+#define ARRAY_LENGTH_TYPE int32_t
+#define LIST_LENGTH_TYPE int32_t
+
+#define VALIDATE_ARRAY_INDEX_ARG(param, name, value, vm){                                                   \
+    if(TO_INT(value) < 0){                                                                                  \
+        vmu_error((vm), "Illegal argument %d: '%s' cannot be less than 0", (param), (name));                \
+    }                                                                                                       \
+    if(TO_INT(value) > INT32_MAX){                                                                          \
+        vmu_error((vm), "Illegal argument %d: '%s' cannot be greater than %d", (param), (name), INT32_MAX); \
+    }                                                                                                       \
+}
+
+#define VALIDATE_VALUE_INT_ARG(value, param, name, vm){                                           \
+    if(!IS_INT((value))){                                                                         \
+        vmu_error(vm, "Illegal type of argument %d: expect '%s' of type 'int'", (param), (name)); \
+    }                                                                                             \
+}
+
+#define VALIDATE_VALUE_INT(_value, _vm){                          \
+    if(!IS_INT((_value))){                                        \
+        vmu_error(vm, "Expect an 'int', but got something else"); \
+    }                                                             \
+}
+
+#define VALIDATE_VALUE_ARRAY(_value, _vm){                          \
+    if(!IS_ARRAY(_value)){                                          \
+        vmu_error(vm, "Expect an 'array', but got something else"); \
+    }                                                               \
+}
+
+#define VALIDATE_ARRAY_SIZE(_size){\
+    if((_size) < 0){\
+        vmu_error(vm, "Illegal size value for array: cannont be less than 0");                \
+    }                                                                                         \
+    if((_size) > INT32_MAX){                                                                   \
+        vmu_error(vm, "Illegal size value for array: cannont be greater than %d", INT32_MAX); \
+    }                                                                                         \
+}
+
+#define VALIDATE_ARRAY_INDEX(_size, _value, _vm){                                                                           \
+    if(!IS_INT((_value))){                                                                                                  \
+        vmu_error((_vm), "Illegal type for array index. Expect 'int', but got something else");                             \
+    }                                                                                                                       \
+    if(TO_INT(_value) < 0){                                                                                                 \
+        vmu_error((_vm), "Illegal array index value: cannot be less than 0");                                               \
+    }                                                                                                                       \
+    if(TO_INT(_value) > INT32_MAX){                                                                                         \
+        vmu_error((_vm), "Illegal array index value: cannot be greater than %d", INT32_MAX);                                \
+    }                                                                                                                       \
+    if((ARRAY_LENGTH_TYPE)TO_INT(_value) > (ARRAY_LENGTH_TYPE)(_size)){                                                     \
+        vmu_error((_vm), "Index %d out of bounds for %d", (ARRAY_LENGTH_TYPE)(TO_INT(_value)), (ARRAY_LENGTH_TYPE)(_size)); \
+    }                                                                                                                       \
+}
+
+#define VALIDATE_LIST_INDEX(_size, _value, _vm){                                                                          \
+    if(!IS_INT((_value))){                                                                                                \
+        vmu_error((_vm), "Illegal type for list index. Expect 'int', but got something else");                            \
+    }                                                                                                                     \
+    if(TO_INT((_value)) < 0){                                                                                             \
+        vmu_error((_vm), "Illegal list index value: cannot be less than 0");                                              \
+    }                                                                                                                     \
+    if(TO_INT((_value)) > INT32_MAX){                                                                                     \
+        vmu_error((_vm), "Illegal list index value: cannot be greater than %d", INT32_MAX);                               \
+    }                                                                                                                     \
+    if((LIST_LENGTH_TYPE)TO_INT((_value)) > (LIST_LENGTH_TYPE)(_size)){                                                   \
+        vmu_error((_vm), "Index %d out of bounds for %d", (LIST_LENGTH_TYPE)TO_INT((_value)), (LIST_LENGTH_TYPE)(_size)); \
+    }                                                                                                                     \
+}
+
+#define TO_ARRAY_LENGTH(_value) ((ARRAY_LENGTH_TYPE)((_value)->content.i64))
+#define TO_ARRAY_INDEX(_value) ((ARRAY_LENGTH_TYPE)((_value)->content.i64))
+#define TO_LIST_INDEX(_value) ((LIST_LENGTH_TYPE)((_value)->content.i64))
+
 #define CURRENT_FRAME(vm)(&(vm)->frame_stack[(vm)->frame_ptr - 1])
 #define CURRENT_LOCALS(vm)(CURRENT_FRAME(vm)->locals)
 #define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
