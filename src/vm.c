@@ -1133,34 +1133,24 @@ static int execute(VM *vm){
                 Value *vb = pop(vm);
                 Value *va = pop(vm);
 
-                if(!IS_BOOL(va)){
-                    vmu_error(vm, "Expect boolean at left side");
-                }
-                if(!IS_BOOL(vb)){
-                    vmu_error(vm, "Expect boolean at right side");
+                if(IS_BOOL(va) && IS_BOOL(vb)){
+                    PUSH_BOOL(TO_BOOL(va) || TO_BOOL(vb), vm);
+                    break;
                 }
 
-                uint8_t left = TO_BOOL(va);
-                uint8_t right = TO_BOOL(vb);
-
-                PUSH_BOOL(left || right, vm)
+                vmu_error(vm, "Unsupported types using 'or' operator");
 
                 break;
             }case AND_OPCODE:{
                 Value *vb = pop(vm);
                 Value *va = pop(vm);
 
-                if(!IS_BOOL(va)){
-                    vmu_error(vm, "Expect boolean at left side");
-                }
-                if(!IS_BOOL(vb)){
-                    vmu_error(vm, "Expect boolean at right side");
+                if(IS_BOOL(va) && IS_BOOL(vb)){
+                    PUSH_BOOL(TO_BOOL(va) && TO_BOOL(vb), vm);
+                    break;
                 }
 
-                uint8_t left = TO_BOOL(va);
-                uint8_t right = TO_BOOL(vb);
-
-                PUSH_BOOL(left && right, vm)
+                vmu_error(vm, "Unsupported types using 'and' operator");
 
                 break;
             }case NNOT_OPCODE:{
