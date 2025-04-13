@@ -1082,15 +1082,74 @@ void compile_expr(Expr *expr, Compiler *compiler){
             Expr *right = logical_expr->right;
 
             compile_expr(left, compiler);
-            compile_expr(right, compiler);
 
             switch (operator->type){
                 case OR_TOKTYPE:{
+                    write_chunk(JIT_OPCODE, compiler);
+                    write_location(operator, compiler);
+                    size_t jit_index = write_i16(0, compiler);
+
+                    size_t len_before = chunks_len(compiler);
+
+                    write_chunk(FALSE_OPCODE, compiler);
+                    write_location(operator, compiler);
+
+                    compile_expr(right, compiler);
                     write_chunk(OR_OPCODE, compiler);
+
+                    write_chunk(JMP_OPCODE, compiler);
+                    write_location(operator, compiler);
+                    size_t jmp_index = write_i16(0, compiler);
+
+                    size_t len_after = chunks_len(compiler);
+                    size_t len = len_after - len_before;
+
+                    update_i16(jit_index, len + 1, compiler);
+
+                    len_before = chunks_len(compiler);
+
+                    write_chunk(TRUE_OPCODE, compiler);
+                    write_location(operator, compiler);
+
+                    len_after = chunks_len(compiler);
+                    len = len_after - len_before;
+
+                    update_i16(jmp_index, len + 1, compiler);
+
                     break;
                 }
                 case AND_TOKTYPE:{
+                    write_chunk(JIF_OPCODE, compiler);
+                    write_location(operator, compiler);
+                    size_t jif_index = write_i16(0, compiler);
+
+                    size_t len_before = chunks_len(compiler);
+
+                    write_chunk(TRUE_OPCODE, compiler);
+                    write_location(operator, compiler);
+
+                    compile_expr(right, compiler);
                     write_chunk(AND_OPCODE, compiler);
+
+                    write_chunk(JMP_OPCODE, compiler);
+                    write_location(operator, compiler);
+                    size_t jmp_index = write_i16(0, compiler);
+
+                    size_t len_after = chunks_len(compiler);
+                    size_t len = len_after - len_before;
+
+                    update_i16(jif_index, len + 1, compiler);
+
+                    len_before = chunks_len(compiler);
+
+                    write_chunk(FALSE_OPCODE, compiler);
+                    write_location(operator, compiler);
+
+                    len_after = chunks_len(compiler);
+                    len = len_after - len_before;
+
+                    update_i16(jmp_index, len + 1, compiler);
+
                     break;
                 }
                 default:{
