@@ -144,8 +144,8 @@ int main(int argc, char const *argv[]){
     SubModule *submodule = module->submodule;
     LZHTable *strings = submodule->strings;
 
-	DynArrPtr *tokens = FACTORY_DYNARR_PTR(ctallocator);
-	DynArrPtr *stmts = FACTORY_DYNARR_PTR(ctallocator);
+	DynArr *tokens = FACTORY_DYNARR_PTR(ctallocator);
+	DynArr *stmts = FACTORY_DYNARR_PTR(ctallocator);
 
 	LZHTable *keywords = create_keywords_table(rtallocator);
 

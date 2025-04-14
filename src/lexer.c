@@ -45,7 +45,7 @@ static Token *create_token_literal(
 	Lexer *lexer
 );
 static Token *create_token(TokenType type, Lexer *lexer);
-#define ADD_TOKEN_RAW(token)(dynarr_ptr_insert((token), lexer->tokens))
+#define ADD_TOKEN_RAW(token)(dynarr_insert_ptr((token), lexer->tokens))
 static void comment(Lexer *lexer);
 static Token *number(Lexer *lexer);
 static Token *identifier(Lexer *lexer);
@@ -308,7 +308,7 @@ uint32_t *str_to_table(size_t len, char *str, Lexer *lexer){
 Token *string(Lexer *lexer){
     int from = 0;
 	int lines = 0;
-    DynArrPtr *tokens = NULL;
+    DynArr *tokens = NULL;
     TokenType type = STR_TYPE_TOKTYPE;
     BStr *bstr = FACTORY_BSTR(lexer->rtallocator);
 
@@ -370,7 +370,7 @@ Token *string(Lexer *lexer){
                         lexer
                     );
 
-                    dynarr_ptr_insert(str_token, tokens);
+                    dynarr_insert_ptr(str_token, tokens);
                 }
 
                 size_t prev_start = lexer->start;
@@ -382,7 +382,7 @@ Token *string(Lexer *lexer){
 					Token *token = scan_token(c, lexer);
 
                     if(token){
-                        dynarr_ptr_insert(token, tokens);
+                        dynarr_insert_ptr(token, tokens);
 					}
 
                     lexer->start = lexer->current;
@@ -422,12 +422,12 @@ Token *string(Lexer *lexer){
                 lexer
             );
 
-            dynarr_ptr_insert(str_token, tokens);
+            dynarr_insert_ptr(str_token, tokens);
         }
 
         Token *eof = create_token(EOF_TOKTYPE, lexer);
 
-        dynarr_ptr_insert(eof, tokens);
+        dynarr_insert_ptr(eof, tokens);
     }
 
 	if(peek(lexer) != '"'){
@@ -577,7 +577,7 @@ Lexer *lexer_create(Allocator *allocator){
 
 int lexer_scan(
 	RawStr *source,
-	DynArrPtr *tokens,
+	DynArr *tokens,
 	LZHTable *strings,
 	LZHTable *keywords,
     char *pathname,

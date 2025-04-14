@@ -61,13 +61,13 @@ typedef struct string_expr{
 
 typedef struct template_expr{
     Token *template_token;
-    DynArrPtr *exprs; //expressions statements
+    DynArr *exprs; //expressions statements
 }TemplateExpr;
 
 typedef struct anon_expr{
     Token *anon_token;
-    DynArrPtr *params;
-    DynArrPtr *stmts;
+    DynArr *params;
+    DynArr *stmts;
 }AnonExpr;
 
 typedef struct group_expr{
@@ -82,7 +82,7 @@ typedef struct identifier_expr{
 typedef struct call_expr{
     Expr *left;
     Token *left_paren;
-    DynArrPtr *args;
+    DynArr *args;
 }CallExpr;
 
 typedef struct access_expr{
@@ -141,12 +141,12 @@ typedef struct compound_expr{
 typedef struct array_expr{
     Token *array_token;
     Expr *len_expr;
-    DynArrPtr *values;
+    DynArr *values;
 }ArrayExpr;
 
 typedef struct list_expr{
 	Token *list_token;
-	DynArrPtr *exprs;
+	DynArr *exprs;
 }ListExpr;
 
 typedef struct dict_key_value{
@@ -156,7 +156,7 @@ typedef struct dict_key_value{
 
 typedef struct dict_expr{
     Token *dict_token;
-    DynArrPtr *key_values;
+    DynArr *key_values;
 }DictExpr;
 
 typedef struct record_expr_value{
@@ -166,7 +166,7 @@ typedef struct record_expr_value{
 
 typedef struct record_expr{
 	Token *record_token;
-	DynArrPtr *key_values;
+	DynArr *key_values;
 }RecordExpr;
 
 typedef struct is_expr{

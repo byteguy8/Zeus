@@ -20,7 +20,7 @@ static int is_at_end(Parser *parser);
 static int match(Parser *parser, int count, ...);
 static int check(Parser *parser, TokenType type);
 Token *consume(Parser *parser, TokenType type, char *err_msg, ...);
-DynArrPtr *record_key_values(Token *record_token, Parser *parser);
+DynArr *record_key_values(Token *record_token, Parser *parser);
 // EXPRESSIONS
 Expr *parse_expr(Parser *paser);
 Expr *parse_assign(Parser *parser);
@@ -46,7 +46,7 @@ Expr *parse_literal(Parser *parser);
 // STATEMENTS
 Stmt *parse_stmt(Parser *parser);
 Stmt *parse_expr_stmt(Parser *parser);
-DynArrPtr *parse_block_stmt(Parser *parser);
+DynArr *parse_block_stmt(Parser *parser);
 Stmt *parse_if_stmt(Parser *parser);
 Stmt *parse_while_stmt(Parser *parser);
 Stmt *parse_throw_stmt(Parser *parser);
@@ -89,13 +89,13 @@ Stmt *create_stmt(StmtType type, void *sub_stmt, Parser *parser){
 }
 
 Token *peek(Parser *parser){
-	DynArrPtr *tokens = parser->tokens;
-	return (Token *)DYNARR_PTR_GET(parser->current, tokens);
+	DynArr *tokens = parser->tokens;
+	return (Token *)dynarr_get_ptr(parser->current, tokens);
 }
 
 Token *previous(Parser *parser){
-	DynArrPtr *tokens = parser->tokens;
-	return (Token *)DYNARR_PTR_GET(parser->current - 1, tokens);
+	DynArr *tokens = parser->tokens;
+	return (Token *)dynarr_get_ptr(parser->current - 1, tokens);
 }
 
 int is_at_end(Parser *parser){
@@ -148,11 +148,11 @@ Token *consume(Parser *parser, TokenType type, char *err_msg, ...){
     longjmp(parser->err_jmp, 1);
 }
 
-DynArrPtr *record_key_values(Token *record_token, Parser *parser){
-	DynArrPtr *key_values = FACTORY_DYNARR_PTR(parser->ctallocator);
+DynArr *record_key_values(Token *record_token, Parser *parser){
+	DynArr *key_values = FACTORY_DYNARR_PTR(parser->ctallocator);
 
 	do{
-		if(key_values->used >= 255){
+		if(DYNARR_LEN(key_values) >= 255){
             error(parser, record_token, "Record expressions only accept up to %d values", 255);
         }
 
@@ -165,7 +165,7 @@ DynArrPtr *record_key_values(Token *record_token, Parser *parser){
 		key_value->key = key;
 		key_value->value = value;
 
-		dynarr_ptr_insert(key_value, key_values);
+        dynarr_insert_ptr(key_value, key_values);
 	}while(match(parser, 1, COMMA_TOKTYPE));
 
 	return key_values;
@@ -522,14 +522,14 @@ Expr *parse_call(Parser *parser){
 
                     break;
                 }case LEFT_PAREN_TOKTYPE:{
-                    DynArrPtr *args = NULL;
+                    DynArr *args = NULL;
 
                     if(!check(parser, RIGHT_PAREN_TOKTYPE)){
                         args = FACTORY_DYNARR_PTR(parser->ctallocator);
 
                         do{
                             Expr *expr = parse_expr(parser);
-                            dynarr_ptr_insert(expr, args);
+                            dynarr_insert_ptr(expr, args);
                         } while (match(parser, 1, COMMA_TOKTYPE));
                     }
 
@@ -571,7 +571,7 @@ Expr *parse_call(Parser *parser){
 Expr *parse_record(Parser *parser){
     if(match(parser, 1, RECORD_TOKTYPE)){
         Token *record_token = NULL;
-        DynArrPtr *key_values = NULL;
+        DynArr *key_values = NULL;
 
         record_token = previous(parser);
         consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' after 'record' keyword at start of record body.");
@@ -596,7 +596,7 @@ Expr *parse_record(Parser *parser){
 Expr *parse_dict(Parser *parser){
     if(match(parser, 1, DICT_TOKTYPE)){
         Token *dict_token = NULL;
-        DynArrPtr *key_values = NULL;
+        DynArr *key_values = NULL;
 
         dict_token = previous(parser);
         consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'dict' keyword.");
@@ -605,7 +605,7 @@ Expr *parse_dict(Parser *parser){
             key_values = FACTORY_DYNARR_PTR(parser->ctallocator);
 
             do{
-                if(DYNARR_PTR_LEN(key_values) >= INT16_MAX){
+                if(DYNARR_LEN(key_values) >= INT16_MAX){
                     error(parser, dict_token, "Dict expressions only accept up to %d values", INT16_MAX);
                 }
 
@@ -618,7 +618,7 @@ Expr *parse_dict(Parser *parser){
                 key_value->key = key;
                 key_value->value = value;
 
-                dynarr_ptr_insert(key_value, key_values);
+                dynarr_insert_ptr(key_value, key_values);
             }while(match(parser, 1, COMMA_TOKTYPE));
         }
 
@@ -638,7 +638,7 @@ Expr *parse_dict(Parser *parser){
 Expr *parse_list(Parser *parser){
 	if(match(parser, 1, LIST_TOKTYPE)){
         Token *list_token = NULL;
-        DynArrPtr *exprs = NULL;
+        DynArr *exprs = NULL;
 
         list_token = previous(parser);
         consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'list' keyword.");
@@ -647,12 +647,12 @@ Expr *parse_list(Parser *parser){
             exprs = FACTORY_DYNARR_PTR(parser->ctallocator);
 
             do{
-                if(DYNARR_PTR_LEN(exprs) >= INT16_MAX){
+                if(DYNARR_LEN(exprs) >= INT16_MAX){
                     error(parser, list_token, "List expressions only accept up to %d values", INT16_MAX);
                 }
 
                 Expr *expr = parse_expr(parser);
-                dynarr_ptr_insert(expr, exprs);
+                dynarr_insert_ptr(expr, exprs);
             }while(match(parser, 1, COMMA_TOKTYPE));
         }
 
@@ -673,7 +673,7 @@ Expr *parse_array(Parser *parser){
     if(match(parser, 1, ARRAY_TOKTYPE)){
         Token *array_token = NULL;
         Expr *len_expr = NULL;
-        DynArrPtr *values = NULL;
+        DynArr *values = NULL;
 
         array_token = previous(parser);
 
@@ -687,12 +687,12 @@ Expr *parse_array(Parser *parser){
                 values = FACTORY_DYNARR_PTR(parser->ctallocator);
 
                 do{
-                    if(DYNARR_PTR_LEN(values) >= INT32_MAX){
+                    if(DYNARR_LEN(values) >= INT32_MAX){
                         error(parser, array_token, "Array expressions only accept up to %d values", INT16_MAX);
                     }
 
                     Expr *expr = parse_expr(parser);
-                    dynarr_ptr_insert(expr, values);
+                    dynarr_insert_ptr(expr, values);
                 } while (match(parser, 1, COMMA_TOKTYPE));
             }
 
@@ -778,8 +778,8 @@ Expr *parse_literal(Parser *parser){
 
     if(match(parser, 1, TEMPLATE_TYPE_TOKTYPE)){
         Token *template_token = previous(parser);
-        DynArrPtr *tokens = (DynArrPtr *)template_token->extra;
-        DynArrPtr *exprs = FACTORY_DYNARR_PTR(parser->ctallocator);
+        DynArr *tokens = (DynArr *)template_token->extra;
+        DynArr *exprs = FACTORY_DYNARR_PTR(parser->ctallocator);
         Parser *template_parser = parser_create(parser->ctallocator);
 
         if(parser_parse_template(tokens, exprs, template_parser)){
@@ -796,8 +796,8 @@ Expr *parse_literal(Parser *parser){
 
     if(match(parser, 1, ANON_TOKTYPE)){
         Token *anon_token = NULL;
-        DynArrPtr *params = NULL;
-        DynArrPtr *stmts = NULL;
+        DynArr *params = NULL;
+        DynArr *stmts = NULL;
 
         anon_token = previous(parser);
         consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'anon' keyword");
@@ -807,7 +807,7 @@ Expr *parse_literal(Parser *parser){
 
             do{
                 Token *param_identifier = consume(parser, IDENTIFIER_TOKTYPE, "Expect parameter identifier");
-                dynarr_ptr_insert(param_identifier, params);
+                dynarr_insert_ptr(param_identifier, params);
             } while (match(parser, 1, COMMA_TOKTYPE));
         }
 
@@ -865,8 +865,7 @@ Stmt *parse_stmt(Parser *parser){
         return parse_var_decl_stmt(parser);
 
     if(match(parser, 1, LEFT_BRACKET_TOKTYPE)){
-        DynArrPtr *stmts = parse_block_stmt(parser);
-
+        DynArr *stmts = parse_block_stmt(parser);
         BlockStmt *block_stmt = MEMORY_ALLOC(BlockStmt, 1, parser->ctallocator);
 
         block_stmt->stmts = stmts;
@@ -942,12 +941,12 @@ Stmt *parse_expr_stmt(Parser *parser){
     return stmt;
 }
 
-DynArrPtr *parse_block_stmt(Parser *parser){
-    DynArrPtr *stmts = FACTORY_DYNARR_PTR(parser->ctallocator);
+DynArr *parse_block_stmt(Parser *parser){
+    DynArr *stmts = FACTORY_DYNARR_PTR(parser->ctallocator);
 
     while (!check(parser, RIGHT_BRACKET_TOKTYPE)){
         Stmt *stmt = parse_stmt(parser);
-        dynarr_ptr_insert(stmt, stmts);
+        dynarr_insert_ptr(stmt, stmts);
     }
 
     consume(parser, RIGHT_BRACKET_TOKTYPE, "Expect '}' at end of block statement.");
@@ -958,8 +957,8 @@ DynArrPtr *parse_block_stmt(Parser *parser){
 Stmt *parse_if_stmt(Parser *parser){
     Token *if_token = NULL;
 	Expr *if_condition = NULL;
-	DynArrPtr *if_stmts = NULL;
-	DynArrPtr *else_stmts = NULL;
+	DynArr *if_stmts = NULL;
+	DynArr *else_stmts = NULL;
 
     if_token = previous(parser);
 
@@ -970,7 +969,7 @@ Stmt *parse_if_stmt(Parser *parser){
 	if(match(parser, 1, COLON_TOKTYPE)){
 		if_stmts = FACTORY_DYNARR_PTR(parser->ctallocator);
 		Stmt *stmt = parse_stmt(parser);
-		dynarr_ptr_insert(stmt, if_stmts);
+        dynarr_insert_ptr(stmt, if_stmts);
 	}else{
 		consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of if body.");
 		if_stmts = parse_block_stmt(parser);
@@ -980,7 +979,7 @@ Stmt *parse_if_stmt(Parser *parser){
 		if(match(parser, 1, COLON_TOKTYPE)){
 			else_stmts = FACTORY_DYNARR_PTR(parser->ctallocator);
 			Stmt *stmt = parse_stmt(parser);
-			dynarr_ptr_insert(stmt, else_stmts);
+            dynarr_insert_ptr(stmt, else_stmts);
 		}else{
 			consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of else body.");
 			else_stmts = parse_block_stmt(parser);
@@ -1000,7 +999,7 @@ Stmt *parse_if_stmt(Parser *parser){
 Stmt *parse_while_stmt(Parser *parser){
 	Token *while_token = NULL;
     Expr *condition = NULL;
-	DynArrPtr *stmts = NULL;
+	DynArr *stmts = NULL;
 
 	while_token = previous(parser);
 	consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'while' keyword.");
@@ -1040,10 +1039,10 @@ Stmt *parse_throw_stmt(Parser *parser){
 
 Stmt *parse_try_stmt(Parser *parser){
     Token *try_token = NULL;
-    DynArrPtr *try_stmts = NULL;
+    DynArr *try_stmts = NULL;
 	Token *catch_token = NULL;
 	Token *err_identifier = NULL;
-	DynArrPtr *catch_stmts = NULL;
+	DynArr *catch_stmts = NULL;
 
     try_token = previous(parser);
     consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' after 'try' keyword.");
@@ -1121,8 +1120,8 @@ Stmt *parse_var_decl_stmt(Parser *parser){
 
 Stmt *parse_function_stmt(Parser *parser){
     Token *name_token = NULL;
-    DynArrPtr *params = NULL;
-    DynArrPtr *stmts = NULL;
+    DynArr *params = NULL;
+    DynArr *stmts = NULL;
 
     name_token = consume(parser, IDENTIFIER_TOKTYPE, "Expect function name after 'proc' keyword.");
     consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after function name.");
@@ -1132,7 +1131,7 @@ Stmt *parse_function_stmt(Parser *parser){
 
         do{
             Token *param_token = consume(parser, IDENTIFIER_TOKTYPE, "Expect function parameter name.");
-            dynarr_ptr_insert(param_token, params);
+            dynarr_insert_ptr(param_token, params);
         } while (match(parser, 1, COMMA_TOKTYPE));
     }
 
@@ -1141,7 +1140,7 @@ Stmt *parse_function_stmt(Parser *parser){
     if(match(parser, 1, COLON_TOKTYPE)){
 		stmts = FACTORY_DYNARR_PTR(parser->ctallocator);
 		Stmt *stmt = parse_return_stmt(parser);
-		dynarr_ptr_insert(stmt, stmts);
+        dynarr_insert_ptr(stmt, stmts);
 	}else{
 		consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of function body.");
 		stmts = parse_block_stmt(parser);
@@ -1208,7 +1207,7 @@ Stmt *parse_load_stmt(Parser *parser){
 
 Stmt *parse_export_stmt(Parser *parser){
     Token *export_token = NULL;
-    DynArrPtr *symbols = NULL;
+    DynArr *symbols = NULL;
 
     export_token = previous(parser);
     symbols = FACTORY_DYNARR_PTR(parser->ctallocator);
@@ -1217,7 +1216,7 @@ Stmt *parse_export_stmt(Parser *parser){
 
     do{
         Token *identifier = consume(parser, IDENTIFIER_TOKTYPE, "Expect symbol name");
-        dynarr_ptr_insert(identifier, symbols);
+        dynarr_insert_ptr(identifier, symbols);
     } while (match(parser, 1, COMMA_TOKTYPE));
 
     consume(parser, RIGHT_BRACKET_TOKTYPE, "Expect '}' at end of export symbols");
@@ -1238,32 +1237,30 @@ Parser *parser_create(Allocator *allocator){
 	return parser;
 }
 
-int parser_parse(DynArrPtr *tokens, DynArrPtr *stmts, Parser *parser){
+int parser_parse(DynArr *tokens, DynArr *stmts, Parser *parser){
 	if(setjmp(parser->err_jmp) == 1) return 1;
     else {
         parser->current = 0;
         parser->tokens = tokens;
-        parser->stmt = stmts;
 
         while(!is_at_end(parser)){
             Stmt *stmt = parse_stmt(parser);
-            dynarr_ptr_insert(stmt, stmts);
+            dynarr_insert_ptr(stmt, stmts);
         }
 
         return 0;
     }
 }
 
-int parser_parse_template(DynArrPtr *tokens, DynArrPtr *exprs, Parser *parser){
+int parser_parse_template(DynArr *tokens, DynArr *exprs, Parser *parser){
     if(setjmp(parser->err_jmp) == 1) return 1;
     else {
         parser->current = 0;
         parser->tokens = tokens;
-        parser->stmt = exprs;
 
         while(!is_at_end(parser)){
             Expr *expr = parse_is_expr(parser);
-            dynarr_ptr_insert(expr, exprs);
+            dynarr_insert_ptr(expr, exprs);
         }
 
         return 0;

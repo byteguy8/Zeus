@@ -87,7 +87,7 @@ typedef struct compiler{
 
     LZHTable *keywords;
     LZHTable *natives;
-    DynArrPtr *stmts;
+    DynArr *stmts;
     Module *previous_module;
     Module *current_module;
     LZHTable *modules;
@@ -101,7 +101,7 @@ Compiler *compiler_create(Allocator *ctallocator, Allocator *rtallocator);
 int compiler_compile(
     LZHTable *keywords,
     LZHTable *natives,
-    DynArrPtr *stmts,
+    DynArr *stmts,
     Module *module,
     LZHTable *modules,
     Compiler *compiler
@@ -110,7 +110,7 @@ int compiler_compile(
 int compiler_import(
     LZHTable *keywords,
     LZHTable *natives,
-    DynArrPtr *stmts,
+    DynArr *stmts,
     Module *previous_module,
     Module *module,
     LZHTable *modules,

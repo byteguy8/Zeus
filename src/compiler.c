@@ -785,46 +785,46 @@ void compile_expr(Expr *expr, Compiler *compiler){
 		}case TEMPLATE_EXPRTYPE:{
             TemplateExpr *template_expr = (TemplateExpr *)expr->sub_expr;
             Token *template_token = template_expr->template_token;
-            DynArrPtr *stmts = template_expr->exprs;
+            DynArr *exprs = template_expr->exprs;
 
-            for (int16_t i = DYNARR_PTR_LEN(stmts) - 1; i >= 0; i--){
-                Expr *expr = (Expr *)DYNARR_PTR_GET(i, stmts);
+            for (int16_t i = DYNARR_LEN(exprs) - 1; i >= 0; i--){
+                Expr *expr = (Expr *)dynarr_get_ptr(i, exprs);
                 compile_expr(expr, compiler);
             }
 
             write_chunk(TEMPLATE_OPCODE, compiler);
             write_location(template_token, compiler);
 
-            write_i16((int16_t)DYNARR_PTR_LEN(stmts), compiler);
+            write_i16((int16_t)DYNARR_LEN(exprs), compiler);
 
             break;
         }case ANON_EXPRTYPE:{
             AnonExpr *anon_expr = (AnonExpr *)expr->sub_expr;
             Token *anon_token = anon_expr->anon_token;
-            DynArrPtr *params = anon_expr->params;
-            DynArrPtr *stmts = anon_expr->stmts;
+            DynArr *params = anon_expr->params;
+            DynArr *stmts = anon_expr->stmts;
 
             Fn *fn = NULL;
             size_t symbol_index = 0;
             Scope *fn_scope = scope_in_fn("anonymous", compiler, &fn, &symbol_index);
 
             if(params){
-                for (size_t i = 0; i < DYNARR_PTR_LEN(params); i++){
-                    Token *param_identifier = (Token *)DYNARR_PTR_GET(i, params);
+                for (size_t i = 0; i < DYNARR_LEN(params); i++){
+                    Token *param_identifier = (Token *)dynarr_get_ptr(i, params);
                     declare(MUT_SYMTYPE, param_identifier, compiler);
 
                     char *name = factory_clone_raw_str(param_identifier->lexeme, compiler->rtallocator);
-                    dynarr_ptr_insert(name, fn->params);
+                    dynarr_insert_ptr(name, fn->params);
                 }
             }
 
             char returned = 0;
 
-            for (size_t i = 0; i < stmts->used; i++){
-                Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
+            for (size_t i = 0; i < DYNARR_LEN(stmts); i++){
+                Stmt *stmt = (Stmt *)dynarr_get_ptr(i, stmts);
                 compile_stmt(stmt, compiler);
 
-                if(i + 1 >= DYNARR_PTR_LEN(stmts) && stmt->type == RETURN_STMTTYPE){
+                if(i + 1 >= DYNARR_LEN(stmts) && stmt->type == RETURN_STMTTYPE){
                     returned = 1;
                 }
             }
@@ -898,21 +898,20 @@ void compile_expr(Expr *expr, Compiler *compiler){
         }case CALL_EXPRTYPE:{
             CallExpr *call_expr = (CallExpr *)expr->sub_expr;
             Expr *left = call_expr->left;
-            DynArrPtr *args = call_expr->args;
+            DynArr *args = call_expr->args;
 
             compile_expr(left, compiler);
 
             if(args){
-                for (size_t i = 0; i < args->used; i++){
-                    Expr *expr = (Expr *)DYNARR_PTR_GET(i, args);
-                    compile_expr(expr, compiler);
+                for (size_t i = 0; i < DYNARR_LEN(args); i++){
+                    compile_expr((Expr *)dynarr_get_ptr(i, args), compiler);
                 }
             }
 
             write_chunk(CALL_OPCODE, compiler);
 			write_location(call_expr->left_paren, compiler);
 
-            uint8_t args_count = args ? (uint8_t)args->used : 0;
+            uint8_t args_count = args ? (uint8_t)DYNARR_LEN(args) : 0;
             write_chunk(args_count, compiler);
 
             break;
@@ -1291,7 +1290,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             ArrayExpr *array_expr = (ArrayExpr *)expr->sub_expr;
             Token *array_token = array_expr->array_token;
             Expr *len_expr = array_expr->len_expr;
-            DynArrPtr *values = array_expr->values;
+            DynArr *values = array_expr->values;
 
             if(len_expr){
                 compile_expr(len_expr, compiler);
@@ -1300,9 +1299,9 @@ void compile_expr(Expr *expr, Compiler *compiler){
                 write_location(array_token, compiler);
 
                 if(values){
-                    write_i64_const((int64_t)values->used, compiler);
+                    write_i64_const((int64_t)DYNARR_LEN(values), compiler);
                 }else{
-                     write_i64_const((int64_t)0, compiler);
+                    write_i64_const((int64_t)0, compiler);
                 }
             }
 
@@ -1313,9 +1312,8 @@ void compile_expr(Expr *expr, Compiler *compiler){
             write_i32(0, compiler);
 
             if(values){
-                for (int32_t i = (int32_t)DYNARR_PTR_LEN(values) - 1; i >= 0; i--){
-                    Expr *expr = (Expr *)DYNARR_PTR_GET(i, values);
-                    compile_expr(expr, compiler);
+                for (int32_t i = (int32_t)DYNARR_LEN(values) - 1; i >= 0; i--){
+                    compile_expr((Expr *)dynarr_get_ptr(i, values), compiler);
 
                     write_chunk(ARRAY_OPCODE, compiler);
                     write_location(array_token, compiler);
@@ -1329,16 +1327,15 @@ void compile_expr(Expr *expr, Compiler *compiler){
         }case LIST_EXPRTYPE:{
 			ListExpr *list_expr = (ListExpr *)expr->sub_expr;
 			Token *list_token = list_expr->list_token;
-			DynArrPtr *exprs = list_expr->exprs;
+			DynArr *exprs = list_expr->exprs;
 
             if(exprs){
-				for(int i = exprs->used - 1; i >= 0; i--){
-					Expr *expr = (Expr *)DYNARR_PTR_GET((size_t)i, exprs);
-					compile_expr(expr, compiler);
+				for(int i = DYNARR_LEN(exprs) - 1; i >= 0; i--){
+					compile_expr((Expr *)dynarr_get_ptr(i, exprs), compiler);
 				}
 			}
 
-            int16_t len = exprs ? (int16_t)exprs->used : 0;
+            int16_t len = exprs ? (int16_t)DYNARR_LEN(exprs) : 0;
 
             write_chunk(LIST_OPCODE, compiler);
 			write_location(list_token, compiler);
@@ -1348,11 +1345,11 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			break;
 		}case DICT_EXPRTYPE:{
             DictExpr *dict_expr = (DictExpr *)expr->sub_expr;
-            DynArrPtr *key_values = dict_expr->key_values;
+            DynArr *key_values = dict_expr->key_values;
 
             if(key_values){
-                for (int i = key_values->used - 1; i >= 0; i--){
-                    DictKeyValue *key_value = (DictKeyValue *)DYNARR_PTR_GET(i, key_values);
+                for (int i = DYNARR_LEN(key_values) - 1; i >= 0; i--){
+                    DictKeyValue *key_value = (DictKeyValue *)dynarr_get_ptr(i, key_values);
                     Expr *key = key_value->key;
                     Expr *value = key_value->value;
 
@@ -1371,11 +1368,11 @@ void compile_expr(Expr *expr, Compiler *compiler){
             break;
         }case RECORD_EXPRTYPE:{
 			RecordExpr *record_expr = (RecordExpr *)expr->sub_expr;
-			DynArrPtr *key_values = record_expr->key_values;
+			DynArr *key_values = record_expr->key_values;
 
 			if(key_values){
-				for(int i = (int)(key_values->used - 1); i >= 0; i--){
-					RecordExprValue *key_value = (RecordExprValue *)DYNARR_PTR_GET(i, key_values);
+				for(int i = (int)(DYNARR_LEN(key_values) - 1); i >= 0; i--){
+					RecordExprValue *key_value = (RecordExprValue *)dynarr_get_ptr(i, key_values);
 					compile_expr(key_value->value, compiler);
 				}
 			}
@@ -1383,11 +1380,11 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			write_chunk(RECORD_OPCODE, compiler);
 			write_location(record_expr->record_token, compiler);
 
-			write_chunk((uint8_t)(key_values ? key_values->used : 0), compiler);
+			write_chunk((uint8_t)(key_values ? DYNARR_LEN(key_values) : 0), compiler);
 
 			if(key_values){
-				for(size_t i = 0; i < key_values->used; i++){
-					RecordExprValue *key_value = (RecordExprValue *)DYNARR_PTR_GET(i, key_values);
+				for(size_t i = 0; i < DYNARR_LEN(key_values); i++){
+					RecordExprValue *key_value = (RecordExprValue *)dynarr_get_ptr(i, key_values);
 					write_str(key_value->key->lexeme, compiler);
 				}
 			}
@@ -1543,13 +1540,12 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             break;
         }case BLOCK_STMTTYPE:{
             BlockStmt *block_stmt = (BlockStmt *)stmt->sub_stmt;
-            DynArrPtr *stmts = block_stmt->stmts;
+            DynArr *stmts = block_stmt->stmts;
 
             scope_in_soft(BLOCK_SCOPE, compiler);
 
-            for (size_t i = 0; i < stmts->used; i++){
-                Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
-                compile_stmt(stmt, compiler);
+            for (size_t i = 0; i < DYNARR_LEN(stmts); i++){
+                compile_stmt((Stmt *)dynarr_get_ptr(i, stmts), compiler);
             }
 
             scope_out(compiler);
@@ -1559,8 +1555,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			IfStmt *if_stmt = (IfStmt *)stmt->sub_stmt;
             Token *if_token = if_stmt->if_token;
 			Expr *if_condition = if_stmt->if_condition;
-			DynArrPtr *if_stmts = if_stmt->if_stmts;
-			DynArrPtr *else_stmts = if_stmt->else_stmts;
+			DynArr *if_stmts = if_stmt->if_stmts;
+			DynArr *else_stmts = if_stmt->else_stmts;
 
 			compile_expr(if_condition, compiler);
 
@@ -1572,8 +1568,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			size_t len_bef_if = chunks_len(compiler);
 			scope_in_soft(BLOCK_SCOPE, compiler);
 
-			for(size_t i = 0; i < if_stmts->used; i++){
-				compile_stmt((Stmt *)DYNARR_PTR_GET(i, if_stmts), compiler);
+			for(size_t i = 0; i < DYNARR_LEN(if_stmts); i++){
+				compile_stmt((Stmt *)dynarr_get_ptr(i, if_stmts), compiler);
 			}
 
 			scope_out(compiler);
@@ -1593,9 +1589,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 size_t len_bef_else = chunks_len(compiler);
                 scope_in_soft(BLOCK_SCOPE, compiler);
 
-                for(size_t i = 0; i < else_stmts->used; i++){
-                    Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, else_stmts);
-                    compile_stmt(stmt, compiler);
+                for(size_t i = 0; i < DYNARR_LEN(else_stmts); i++){
+                    compile_stmt((Stmt *)dynarr_get_ptr(i, else_stmts), compiler);
                 }
 
 			    scope_out(compiler);
@@ -1611,7 +1606,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			WhileStmt *while_stmt = (WhileStmt *)stmt->sub_stmt;
             Token *while_token = while_stmt->while_token;
 			Expr *condition = while_stmt->condition;
-			DynArrPtr *stmts = while_stmt->stmts;
+			DynArr *stmts = while_stmt->stmts;
 
 			write_chunk(JMP_OPCODE, compiler);
             write_location(while_stmt->while_token, compiler);
@@ -1622,9 +1617,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			scope_in_soft(WHILE_SCOPE, compiler);
 			char while_id = WHILE_IN(compiler);
 
-			for(size_t i = 0; i < stmts->used; i++){
-				Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
-				compile_stmt(stmt, compiler);
+			for(size_t i = 0; i < DYNARR_LEN(stmts); i++){
+				compile_stmt((Stmt *)dynarr_get_ptr(i, stmts), compiler);
 			}
 
 			WHILE_OUT(compiler);
@@ -1726,8 +1720,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
         }case FUNCTION_STMTTYPE:{
             FunctionStmt *function_stmt = (FunctionStmt *)stmt->sub_stmt;
             Token *identifier_token = function_stmt->identifier_token;
-            DynArrPtr *params = function_stmt->params;
-            DynArrPtr *stmts = function_stmt->stmts;
+            DynArr *params = function_stmt->params;
+            DynArr *stmts = function_stmt->stmts;
 
             Scope *enclosing = inside_function(compiler);
 
@@ -1740,22 +1734,21 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             fn_symbol->index = ((int)symbol_index);
 
             if(params){
-                for (size_t i = 0; i < params->used; i++){
-                    Token *param_token = (Token *)DYNARR_PTR_GET(i, params);
+                for (size_t i = 0; i < DYNARR_LEN(params); i++){
+                    Token *param_token = (Token *)dynarr_get_ptr(i, params);
                     declare(MUT_SYMTYPE, param_token, compiler);
 
                     char *name = factory_clone_raw_str(param_token->lexeme, compiler->rtallocator);
-                    dynarr_ptr_insert(name, fn->params);
+                    dynarr_insert_ptr(name, fn->params);
                 }
             }
 
             char returned = 0;
 
-            for (size_t i = 0; i < stmts->used; i++){
-                Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
-                compile_stmt(stmt, compiler);
+            for (size_t i = 0; i < DYNARR_LEN(stmts); i++){
+                compile_stmt((Stmt *)dynarr_get_ptr(i, stmts), compiler);
 
-                if(i + 1 >= DYNARR_PTR_LEN(stmts) && stmt->type == RETURN_STMTTYPE){
+                if(i + 1 >= DYNARR_LEN(stmts) && stmt->type == RETURN_STMTTYPE){
                     returned = 1;
                 }
             }
@@ -1871,8 +1864,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             LZHTable *keywords = compiler->keywords;
             LZHTable *natives = compiler->natives;
 
-            DynArrPtr *tokens = FACTORY_DYNARR_PTR(compiler->ctallocator);
-            DynArrPtr *stmts = FACTORY_DYNARR_PTR(compiler->ctallocator);
+            DynArr *tokens = FACTORY_DYNARR_PTR(compiler->ctallocator);
+            DynArr *stmts = FACTORY_DYNARR_PTR(compiler->ctallocator);
 
             Module *module = factory_module(module_name, module_pathname, compiler->rtallocator);
             SubModule *submodule = module->submodule;
@@ -1951,9 +1944,9 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             break;
         }case TRY_STMTTYPE:{
             TryStmt *try_stmt = (TryStmt *)stmt->sub_stmt;
-            DynArrPtr *try_stmts = try_stmt->try_stmts;
+            DynArr *try_stmts = try_stmt->try_stmts;
 			Token *err_identifier = try_stmt->err_identifier;
-			DynArrPtr *catch_stmts = try_stmt->catch_stmts;
+			DynArr *catch_stmts = try_stmt->catch_stmts;
 
             size_t try_jmp_index = 0;
             TryBlock *try_block = MEMORY_ALLOC(TryBlock, 1, compiler->rtallocator);
@@ -1972,9 +1965,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 if(previous && previous->try)
                     try_block->outer = previous->try;
 
-                for (size_t i = 0; i < try_stmts->used; i++){
-                    Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, try_stmts);
-                    compile_stmt(stmt, compiler);
+                for (size_t i = 0; i < DYNARR_LEN(try_stmts); i++){
+                    compile_stmt((Stmt *)dynarr_get_ptr(i, try_stmts), compiler);
                 }
 
                 scope_out(compiler);
@@ -1993,9 +1985,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
 				try_block->local = symbol->local;
 
-				for (size_t i = 0; i < catch_stmts->used; i++){
-                    Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, catch_stmts);
-                    compile_stmt(stmt, compiler);
+				for (size_t i = 0; i < DYNARR_LEN(catch_stmts); i++){
+                    compile_stmt((Stmt *)dynarr_get_ptr(i, catch_stmts), compiler);
                 }
 
                 scope_out(compiler);
@@ -2012,16 +2003,16 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			uint8_t *key = (uint8_t *)fn;
 			size_t key_size = sizeof(Fn);
 			LZHTableNode *node = NULL;
-			DynArrPtr *tries = NULL;
+			DynArr *tries = NULL;
 
 			if(lzhtable_contains(key, key_size, fn_tries, &node)){
-				tries = (DynArrPtr *)node->value;
+				tries = (DynArr *)node->value;
 			}else{
-				tries = (DynArrPtr *)FACTORY_DYNARR_PTR(compiler->rtallocator);
+				tries = (DynArr *)FACTORY_DYNARR_PTR(compiler->rtallocator);
 				lzhtable_put(key, key_size, tries, fn_tries, NULL);
 			}
 
-			dynarr_ptr_insert(try_block, tries);
+            dynarr_insert_ptr(try_block, tries);
 
             break;
         }case LOAD_STMTTYPE:{
@@ -2046,10 +2037,10 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             break;
         }case EXPORT_STMTTYPE:{
             ExportStmt *export_stmt = (ExportStmt *)stmt->sub_stmt;
-            DynArrPtr *symbols = export_stmt->symbols;
+            DynArr *symbols = export_stmt->symbols;
 
-            for (size_t i = 0; i < DYNARR_PTR_LEN(symbols); i++){
-                Token *symbol_identifier = DYNARR_PTR_GET(i, symbols);
+            for (size_t i = 0; i < DYNARR_LEN(symbols); i++){
+                Token *symbol_identifier = dynarr_get_ptr(i, symbols);
 
                 write_chunk(GASET_OPCODE, compiler);
                 write_location(symbol_identifier, compiler);
@@ -2095,7 +2086,7 @@ Compiler *compiler_create(Allocator *ctallocator, Allocator *rtallocator){
 int compiler_compile(
     LZHTable *keywords,
     LZHTable *natives,
-    DynArrPtr *stmts,
+    DynArr *stmts,
     Module *current_module,
     LZHTable *modules,
     Compiler *compiler
@@ -2117,7 +2108,7 @@ int compiler_compile(
         define_natives(compiler);
 
         for (size_t i = 0; i < stmts->used; i++){
-            Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
+            Stmt *stmt = (Stmt *)dynarr_get_ptr(i, stmts);
             compile_stmt(stmt, compiler);
         }
 
@@ -2134,7 +2125,7 @@ int compiler_compile(
 int compiler_import(
     LZHTable *keywords,
     LZHTable *natives,
-    DynArrPtr *stmts,
+    DynArr *stmts,
     Module *previous_module,
     Module *current_module,
     LZHTable *modules,
@@ -2156,7 +2147,7 @@ int compiler_import(
         define_natives(compiler);
 
         for (size_t i = 0; i < stmts->used; i++){
-            Stmt *stmt = (Stmt *)DYNARR_PTR_GET(i, stmts);
+            Stmt *stmt = (Stmt *)dynarr_get_ptr(i, stmts);
             compile_stmt(stmt, compiler);
         }
 

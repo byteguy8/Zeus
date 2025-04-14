@@ -114,7 +114,7 @@ void factory_add_native_fn_info(char *name, uint8_t arity, RawNativeFn raw_nativ
 
 Fn *factory_create_fn(char *name, Module *module, Allocator *allocator){
     char *fn_name = factory_clone_raw_str(name, allocator);
-    DynArrPtr *params = FACTORY_DYNARR_PTR(allocator);
+    DynArr *params = FACTORY_DYNARR_PTR(allocator);
     DynArr *chunks = FACTORY_DYNARR(sizeof(uint8_t), allocator);
 	DynArr *locations = FACTORY_DYNARR(sizeof(OPCodeLocation), allocator);
     DynArr *constants = FACTORY_DYNARR(sizeof(int64_t), allocator);

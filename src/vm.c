@@ -1244,7 +1244,7 @@ static int execute(VM *vm){
 
                 if(IS_FN(callable_value)){
                     Fn *fn = TO_FN(callable_value);
-                    uint8_t params_count = fn->params ? fn->params->used : 0;
+                    uint8_t params_count = fn->params ? DYNARR_LEN(fn->params) : 0;
 
                     if(params_count != args_count){
                         vmu_error(vm, "Failed to call function '%s'. Declared with %d parameter(s), but got %d argument(s)", fn->name, params_count, args_count);
@@ -1260,7 +1260,7 @@ static int execute(VM *vm){
                 if(IS_CLOSURE(callable_value)){
                     Closure *closure = TO_CLOSURE(callable_value);
                     Fn *fn = closure->meta->fn;
-                    uint8_t params_count = fn->params ? fn->params->used : 0;
+                    uint8_t params_count = fn->params ? DYNARR_LEN(fn->params) : 0;
 
                     if(params_count != args_count){
                         vmu_error(vm, "Failed to call function '%s'. Declared with %d parameter(s), but got %d argument(s)", fn->name, params_count, args_count);
@@ -1645,10 +1645,10 @@ static int execute(VM *vm){
 
                     if(lzhtable_contains(key, key_size, fn_tries, &node)){
                         TryBlock *try = NULL;
-                        DynArrPtr *tries = (DynArrPtr *)node->value;
+                        DynArr *tries = (DynArr *)node->value;
 
                         for(size_t i = 0; i < tries->used; i++){
-                            TryBlock *try_block = (TryBlock *)DYNARR_PTR_GET(i, tries);
+                            TryBlock *try_block = (TryBlock *)dynarr_get_ptr(i, tries);
                             size_t start = try_block->try;
                             size_t end = try_block->catch;
                             size_t ip = frame->ip;

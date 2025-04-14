@@ -519,7 +519,7 @@ int vmu_obj_to_str(Obj *object, BStr *bstr){
 
             Fn *fn = (Fn *)object->content.fn;
 
-            snprintf(buff, buff_len, "<function '%s' - %d at %p>", fn->name, (uint8_t)(fn->params ? fn->params->used : 0), fn);
+            snprintf(buff, buff_len, "<function '%s' - %d at %p>", fn->name, (uint8_t)(fn->params ? DYNARR_LEN(fn->params) : 0), fn);
 
             return bstr_append(buff, bstr);
         }case CLOSURE_OTYPE:{
@@ -529,7 +529,7 @@ int vmu_obj_to_str(Obj *object, BStr *bstr){
             Closure *closure = object->content.closure;
             Fn *fn = closure->meta->fn;
 
-            snprintf(buff, buff_len, "<closure '%s' - %d at %p>", fn->name, (uint8_t)(fn->params ? fn->params->used : 0), fn);
+            snprintf(buff, buff_len, "<closure '%s' - %d at %p>", fn->name, (uint8_t)(fn->params ? DYNARR_LEN(fn->params) : 0), fn);
 
             return bstr_append(buff, bstr);
         }case NATIVE_MODULE_OTYPE:{
@@ -636,12 +636,12 @@ void vmu_print_obj(FILE *stream, Obj *object){
             break;
         }case FN_OTYPE:{
             Fn *fn = (Fn *)object->content.fn;
-            fprintf(stream, "<function '%s' - %d at %p>", fn->name, (uint8_t)(fn->params ? fn->params->used : 0), fn);
+            fprintf(stream, "<function '%s' - %d at %p>", fn->name, (uint8_t)(fn->params ? DYNARR_LEN(fn->params) : 0), fn);
             break;
         }case CLOSURE_OTYPE:{
             Closure *closure = object->content.closure;
             Fn *fn = closure->meta->fn;
-            fprintf(stream, "<closure '%s' - %d at %p>", fn->name, (uint8_t)(fn->params ? fn->params->used : 0), fn);   
+            fprintf(stream, "<closure '%s' - %d at %p>", fn->name, (uint8_t)(fn->params ? DYNARR_LEN(fn->params) : 0), fn);
             break;
         }case NATIVE_MODULE_OTYPE:{
             NativeModule *module = object->content.native_module;

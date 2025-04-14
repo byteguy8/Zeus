@@ -146,7 +146,7 @@ struct opcode_location{
 struct fn{
     char *name;
     DynArr *chunks;
-    DynArrPtr *params;
+    DynArr *params;
 	DynArr *locations;
     DynArr *integers;
     DynArr *floats;

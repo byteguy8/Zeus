@@ -33,14 +33,14 @@ typedef struct expr_stmt{
 }ExprStmt;
 
 typedef struct block_stmt{
-    DynArrPtr *stmts;
+    DynArr *stmts;
 }BlockStmt;
 
 typedef struct if_stmt{
     Token *if_token;
 	Expr *if_condition;
-	DynArrPtr *if_stmts;
-	DynArrPtr *else_stmts;
+	DynArr *if_stmts;
+	DynArr *else_stmts;
 }IfStmt;
 
 typedef struct stop_stmt{
@@ -54,7 +54,7 @@ typedef struct continue_stmt{
 typedef struct while_stmt{
     Token *while_token;
 	Expr *condition;
-	DynArrPtr *stmts;
+	DynArr *stmts;
 }WhileStmt;
 
 typedef struct throw_stmt{
@@ -64,10 +64,10 @@ typedef struct throw_stmt{
 
 typedef struct try_stmt{
     Token *try_token;
-    DynArrPtr *try_stmts;
+    DynArr *try_stmts;
 	Token *catch_token;
 	Token *err_identifier;
-	DynArrPtr *catch_stmts;
+	DynArr *catch_stmts;
 }TryStmt;
 
 typedef struct return_stmt{
@@ -84,8 +84,8 @@ typedef struct var_decl_stmt{
 
 typedef struct function_stmt{
     Token *identifier_token;
-    DynArrPtr *params;
-    DynArrPtr *stmts;
+    DynArr *params;
+    DynArr *stmts;
 }FunctionStmt;
 
 typedef struct import_stmt{
@@ -102,7 +102,7 @@ typedef struct load_stmt{
 
 typedef struct export_stmt{
     Token *export_token;
-    DynArrPtr *symbols;
+    DynArr *symbols;
 }ExportStmt;
 
 #endif
