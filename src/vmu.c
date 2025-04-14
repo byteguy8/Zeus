@@ -217,7 +217,7 @@ void mark_obj(Obj *obj, VM *vm){
             Value *values = array->values;
             Value *value = NULL;
 
-            for (int16_t i = 0; i < array->len; i++){
+            for (aidx_t i = 0; i < array->len; i++){
                 value = &values[i];
 
                 if(IS_OBJ(value) && !IS_MARKED(TO_OBJ(value))){
@@ -230,7 +230,7 @@ void mark_obj(Obj *obj, VM *vm){
 			DynArr *list = obj->content.list;
 			Value *value = NULL;
 
-			for(size_t i = 0; i < DYNARR_LEN(list); i++){
+			for(lidx_t i = 0; i < (lidx_t)DYNARR_LEN(list); i++){
 				value = (Value *)DYNARR_GET(i, list);
 
                 if(IS_OBJ(value) && !IS_MARKED(TO_OBJ(value))){

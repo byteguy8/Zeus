@@ -7,6 +7,92 @@
 
 NativeModule *math_module = NULL;
 
+static void populate(const aidx_t len, int64_t *numbers){
+    for(aidx_t i = 0, num = 2; i < len; i++, num++){
+        numbers[i] = num;
+    }
+}
+
+static size_t sieve_mark_multiples(aidx_t at, aidx_t len, int64_t *numbers, aidx_t *out_mark_count){
+    aidx_t next_at = 0;
+    aidx_t mark_count = 0;
+    int64_t number;
+    int64_t at_number = numbers[at];
+
+    for(aidx_t i = at + 1; i < len; i++){
+        number = numbers[i];
+
+        if(number == -1){
+            continue;
+        }
+
+        if(number % at_number == 0){
+            numbers[i] = -1;
+            mark_count++;
+        }else{
+            if(next_at == 0){
+                next_at = i;
+            }
+        }
+    }
+
+    *out_mark_count = mark_count;
+
+    return next_at;
+}
+
+static Obj *sieve_eratosthenes(const int64_t until, VM *vm){
+    aidx_t len = until - 1;
+    int64_t numbers[len];
+
+    populate(len, numbers);
+
+    aidx_t next = 0;
+    aidx_t mark_count = 0;
+    aidx_t mark_count_total = 0;
+
+    while(1){
+        next = sieve_mark_multiples(next, len, numbers, &mark_count);
+
+        if(next == 0){
+            break;
+        }
+
+        mark_count_total += mark_count;
+    }
+
+    int64_t number;
+    aidx_t primes_len = len - mark_count_total;
+    Obj *array_obj = vmu_array_obj(primes_len, vm);
+    Array *array = array_obj->content.array;
+
+    for(aidx_t i = 0, o = 0; i < len; i++){
+        number = numbers[i];
+
+        if(number == -1){
+            continue;
+        }
+
+        array->values[o++] = INT_VALUE(number);
+    }
+
+    return array_obj;
+}
+
+Value native_fn_primes(uint8_t argsc, Value *values, Value *target, VM *vm){
+    Value *until_value = &values[0];
+
+    VALIDATE_VALUE_INT_ARG(until_value, 1, "until", vm)
+
+    int64_t until = TO_INT(until_value);
+
+    VALIDATE_VALUE_INT_RANGE_ARG(0, "until", until_value, 2, ARRAY_LENGTH_MAX, vm)
+
+    Obj *array_obj = sieve_eratosthenes(until, vm);
+
+    return OBJ_VALUE(array_obj);
+}
+
 Value native_fn_sqrt(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *raw_value = &values[0];
 
@@ -150,6 +236,7 @@ Value native_fn_deg2rad(uint8_t argsc, Value *values, Value *target, VM *vm){
 void math_module_init(Allocator *allocator){
 	math_module = factory_native_module("math", allocator);
 
+    factory_add_native_fn("primes", 1, native_fn_primes, math_module, allocator);
 	factory_add_native_fn("sqrt", 1, native_fn_sqrt, math_module, allocator);
     factory_add_native_fn("pow", 2, native_fn_pow, math_module, allocator);
     factory_add_native_fn("cos", 1, native_fn_cos, math_module, allocator);

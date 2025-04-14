@@ -25,24 +25,18 @@ Value native_fn_array_make_room(uint8_t argsc, Value *values, Value *target, VM 
     Array *array = TO_ARRAY(target);
     Value *plus_value = &values[0];
 
-    if(!IS_INT(plus_value)){
-        vmu_error(vm, "Expect integer at argument 1, but got something else");
-    }
+    VALIDATE_VALUE_INT_ARG(plus_value, 1, "plus", vm);
 
     int64_t plus = TO_INT(plus_value);
+    VALIDATE_ARRAY_SIZE(plus)
 
-    if(plus < 0 || plus > INT32_MAX){
-        vmu_error(vm, "Illegal array length. Must be 0 <= Argument 1(%ld) <= %d", plus, INT32_MAX);
-    }
+    int new_size = array->len + plus;
+    VALIDATE_ARRAY_SIZE(new_size)
 
     Obj *new_array_obj = vmu_array_obj(array->len + plus, vm);
     Array *new_array = new_array_obj->content.array;
 
-    if(!new_array_obj){
-        vmu_error(vm, "Out of memory");
-    }
-
-    for(int32_t i = 0; i < array->len; i++){
+    for(aidx_t i = 0; i < array->len; i++){
         new_array->values[i] = array->values[i];
     }
 
@@ -55,35 +49,31 @@ Value native_fn_array_size(uint8_t argsc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_array_join(uint8_t argsc, Value *values, Value *target, VM *vm){
-    Array *array = TO_ARRAY(target);
-    Value *arr1_value = &values[0];
+    Array *arr_a = TO_ARRAY(target);
+    Value *arr_b_value = &values[0];
 
-    if(!IS_ARRAY(arr1_value)){
-        vmu_error(vm, "Expect array at argument 1, but got something else");
-    }
+    VALIDATE_VALUE_ARRAY_ARG(arr_b_value, 1, "array b", vm)
 
-    Array *arr1 = TO_ARRAY(arr1_value);
-    int64_t arr0_len = (int64_t)array->len;
-    int64_t arr1_len = (int64_t)arr1->len;
-    int64_t arr2_len = arr0_len + arr1_len;
+    Array *arr_b = TO_ARRAY(arr_b_value);
+    int64_t arr_a_size = (int64_t)arr_a->len;
+    int64_t arr_b_size = (int64_t)arr_b->len;
+    int64_t arr_c_size = arr_a_size + arr_b_size;
 
-    if(arr2_len < 0 || arr2_len > INT32_MAX){
-        vmu_error(vm, "Illegal result array length. Must be 0 <= LENGTH(%ld) <= %d", arr2_len, INT32_MAX);
-    }
+    VALIDATE_ARRAY_SIZE(arr_c_size)
 
-    Obj *arr2_obj = vmu_array_obj(arr2_len, vm);
-    Array *arr2 = arr2_obj->content.array;
+    Obj *arr_c_obj = vmu_array_obj(arr_c_size, vm);
+    Array *arr_c = arr_c_obj->content.array;
 
-    for(int32_t i = 0; i < arr2->len; i++){
-        if(i < array->len){
-            arr2->values[i] = array->values[i];
+    for(aidx_t i = 0; i < arr_c->len; i++){
+        if(i < arr_a->len){
+            arr_c->values[i] = arr_a->values[i];
         }
-        if(i < arr1->len){
-            arr2->values[array->len + i] = arr1->values[i];
+        if(i < arr_b->len){
+            arr_c->values[arr_a->len + i] = arr_b->values[i];
         }
     }
 
-    return OBJ_VALUE(arr2_obj);
+    return OBJ_VALUE(arr_c_obj);
 }
 
 Value native_fn_array_to_list(uint8_t argsc, Value *values, Value *target, VM *vm){
@@ -91,7 +81,7 @@ Value native_fn_array_to_list(uint8_t argsc, Value *values, Value *target, VM *v
     Obj *list_obj = vmu_list_obj(vm);
     DynArr *list = list_obj->content.list;
 
-    for(int32_t i = 0; i < array->len; i++){
+    for(lidx_t i = 0; i < array->len; i++){
         Value value = array->values[i];
         dynarr_insert(&value, list);
     }

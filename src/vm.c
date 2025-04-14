@@ -1481,14 +1481,8 @@ static int execute(VM *vm){
                 }
 
                 if(IS_LIST(target_value)){
-                    DynArr *list = TO_LIST(target_value);
-
-                    VALIDATE_LIST_INDEX(DYNARR_LEN(list), target_value, vm);
-
-                    Value value = DYNARR_GET_AS(Value, TO_LIST_INDEX(index_value), list);
-
+                    Value value = native_fn_list_get(1, index_value, target_value, vm);
                     PUSH(value, vm);
-
                     break;
                 }
 
@@ -1505,6 +1499,12 @@ static int execute(VM *vm){
 
                     vmu_error(vm, "Unknown key");
 
+                    break;
+                }
+
+                if(IS_STR(target_value)){
+                    Value value = native_fn_str_char_at(1, index_value, target_value, vm);
+                    PUSH(value, vm)
                     break;
                 }
 

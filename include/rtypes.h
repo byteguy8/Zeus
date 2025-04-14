@@ -13,6 +13,18 @@
 #define MODULE_STRINGS(m)(m->submodule->strings)
 #define MODULE_GLOBALS(m)(m->submodule->globals)
 
+typedef int32_t sidx_t;
+#define STR_LENGTH_MAX INT32_MAX
+#define STR_LENGTH_TYPE sidx_t
+
+typedef int32_t aidx_t;
+#define ARRAY_LENGTH_MAX INT32_MAX
+#define ARRAY_LENGTH_TYPE aidx_t
+
+typedef int32_t lidx_t;
+#define LIST_LENGTH_MAX INT32_MAX
+#define LIST_LENGTH_TYPE lidx_t
+
 typedef struct vm VM;
 
 //> MODULE RELATED
@@ -116,7 +128,7 @@ struct str{
 };
 
 struct array{
-    int32_t len;
+    aidx_t len;
     Value *values;
 };
 

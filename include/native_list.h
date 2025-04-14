@@ -49,10 +49,12 @@ Value native_fn_list_reverse(uint8_t argsc, Value *values, Value *target, VM *vm
 }
 
 Value native_fn_list_get(uint8_t argsc, Value *values, Value *target, VM *vm){
-    int64_t index = -1;
+    Value *index_value = &values[0];
     DynArr *list = TO_LIST(target);
 
-    VALIDATE_INDEX(&values[0], index, list->used)
+    VALIDATE_LIST_INDEX(DYNARR_LEN(list), index_value, vm);
+
+    int64_t index = TO_INT(index_value);
 
     return DYNARR_GET_AS(Value, (size_t)index, list);
 }
@@ -61,38 +63,34 @@ Value native_fn_list_insert(uint8_t argsc, Value *values, Value *target, VM *vm)
     Value *value = &values[0];
     DynArr *list = TO_LIST(target);
 
-    if(dynarr_insert(value, list)){
-        vmu_error(vm, "Failed to insert value in list: out of memory");
-    }
+    dynarr_insert(value, list);
 
     return EMPTY_VALUE;
 }
 
 Value native_fn_list_insert_at(uint8_t argsc, Value *values, Value *target, VM *vm){
-    DynArr *list = TO_LIST(target);
     Value *index_value = &values[0];
-    Value *value = &values[1];
-    int64_t index = -1;
+    Value *element_value = &values[1];
+    DynArr *list = TO_LIST(target);
 
-    VALIDATE_INDEX(index_value, index, list->used)
+    VALIDATE_LIST_INDEX(DYNARR_LEN(list), index_value, vm)
 
-    Value out_value = DYNARR_GET_AS(Value, (size_t)index, list);
+    int64_t index = TO_INT(index_value);
+    Value old_value = DYNARR_GET_AS(Value, (size_t)index, list);
 
-    if(dynarr_insert_at((size_t) index, value, list)){
-        vmu_error(vm, "Failed to insert value in list: out of memory");
-    }
+    dynarr_insert_at((size_t) index, element_value, list);
 
-    return out_value;
+    return old_value;
 }
 
 Value native_fn_list_set(uint8_t argsc, Value *values, Value *target, VM *vm){
-    DynArr *list = TO_LIST(target);
     Value *index_value = &values[0];
     Value *value = &values[1];
-    int64_t index = -1;
+    DynArr *list = TO_LIST(target);
 
-    VALIDATE_INDEX(index_value, index, list->used)
+    VALIDATE_LIST_INDEX(DYNARR_LEN(list), index_value, vm)
 
+    int64_t index = TO_INT(index_value);
     Value out_value = DYNARR_GET_AS(Value, (size_t)index, list);
 
     DYNARR_SET(value, (size_t)index, list);
@@ -101,31 +99,26 @@ Value native_fn_list_set(uint8_t argsc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_list_append(uint8_t argsc, Value *values, Value *target, VM *vm){
-    DynArr *to = TO_LIST(target);
-    Value *vfrom = &values[0];
-    DynArr *from = NULL;
+    Value *from_value = &values[0];
+    DynArr *to_list = TO_LIST(target);
 
-    if(!IS_LIST(vfrom)){
-        vmu_error(vm, "Failed to append list: expect another list, but got something else");
-    }
+    VALIDATE_VALUE_LIST_ARG(from_value, 1, "from list", vm)
 
-	from = TO_LIST(vfrom);
-    int64_t from_len = (int64_t)from->used;
+	DynArr *from_list = TO_LIST(from_value);
+    int64_t from_len = (int64_t)from_list->used;
 
-    if(dynarr_append(from, to)){
-        vmu_error(vm, "Failed to append to list: out of memory");
-    }
+    dynarr_append(from_list, to_list);
 
     return INT_VALUE(from_len);
 }
 
 Value native_fn_list_remove(uint8_t argsc, Value *values, Value *target, VM *vm){
-    DynArr *list = TO_LIST(target);
     Value *index_value = &values[0];
-    int64_t index = -1;
+    DynArr *list = TO_LIST(target);
 
-    VALIDATE_INDEX(index_value, index, list->used)
+    VALIDATE_LIST_INDEX(DYNARR_LEN(list), index_value, vm)
 
+    int64_t index = TO_INT(index_value);
     Value out_value = DYNARR_GET_AS(Value, (size_t)index, list);
 
     dynarr_remove_index((size_t)index, list);
@@ -134,41 +127,33 @@ Value native_fn_list_remove(uint8_t argsc, Value *values, Value *target, VM *vm)
 }
 
 Value native_fn_list_append_new(uint8_t argsc, Value *values, Value *target, VM *vm){
+    Value *from_value = &values[0];
     DynArr *to = TO_LIST(target);
-    Value *vfrom = &values[0];
-    DynArr *from = NULL;
 
-    if(!IS_LIST(vfrom)){
-        vmu_error(vm, "Failed to append list: expect another list, but got something else");
-    }
+    VALIDATE_VALUE_LIST_ARG(from_value, 1, "from list", vm)
 
-	from = TO_LIST(vfrom);
-	Obj *list_obj = vmu_list_obj(vm);
+	DynArr *from = TO_LIST(from_value);
+	Obj *new_list_obj = vmu_list_obj(vm);
+	DynArr *new_list = new_list_obj->content.list;
 
-	if(!list_obj){vmu_error(vm, "Out of memory");}
-
-	DynArr *list = list_obj->content.list;
-
-	for(size_t i = 0; i < to->used; i++){
+	for(lidx_t i = 0; i < (lidx_t)DYNARR_LEN(to); i++){
 		Value value = DYNARR_GET_AS(Value, i, to);
-		if(dynarr_insert(&value, list)){vmu_error(vm, "Out of memory");}
+		dynarr_insert(&value, new_list);
 	}
 
-	for(size_t i = 0; i < from->used; i++){
+	for(lidx_t i = 0; i < (lidx_t)DYNARR_LEN(from); i++){
 		Value value = DYNARR_GET_AS(Value, i, from);
-		if(dynarr_insert(&value, list)){vmu_error(vm, "Out of memory");}
+		dynarr_insert(&value, new_list);
 	}
 
-    return OBJ_VALUE(list_obj);
+    return OBJ_VALUE(new_list_obj);
 }
 
 Value native_fn_list_clear(uint8_t argsc, Value *values, Value *target, VM *vm){
     DynArr *list = TO_LIST(target);
     int64_t list_len = (int64_t)list->used;
 
-    if(!dynarr_remove_all(list)){
-        vmu_error(vm, "Failed to clear list. Memory error");
-    }
+    dynarr_remove_all(list);
 
     return INT_VALUE(list_len);
 }

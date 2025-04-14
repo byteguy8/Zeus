@@ -91,12 +91,12 @@ Value native_fn_str_length(uint8_t argsc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_str_char_at(uint8_t argc, Value *values, Value *target, VM *vm){
-    Str *target_str = TO_STR(target);
     Value *index_value = &values[0];
-    int64_t index = -1;
+    Str *target_str = TO_STR(target);
 
-    VALIDATE_INDEX(index_value, index, target_str->len)
+    VALIDATE_STR_INDEX(target_str->len, index_value, vm)
 
+    int64_t index = TO_INT(index_value);
     char *raw_str = factory_clone_raw_str_range((size_t)index, 1, target_str->buff, vm->rtallocator);
     Obj *str_obj = vmu_str_obj(&raw_str, vm);
 
