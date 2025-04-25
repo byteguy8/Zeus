@@ -137,6 +137,7 @@ void vmu_print_obj(FILE *stream, Obj *obj);
 void vmu_print_value(FILE *stream, Value *value);
 
 void vmu_clean_up(VM *vm);
+void vmu_gc(VM *vm);
 
 uint32_t vmu_raw_str_to_table(char **raw_str, VM *vm, char **out_raw_str);
 
@@ -158,6 +159,9 @@ Obj *vmu_record_obj(uint8_t length, VM *vm);
 Obj *vmu_native_fn_obj(int arity, char *name, Value *target, RawNativeFn raw_native, VM *vm);
 Obj *vmu_closure_obj(MetaClosure *meta, VM *vm);
 Obj *vmu_foreign_lib_obj(void *handler, VM *vm);
+
+void vmu_insert_obj(Obj *obj, Obj **raw_head, Obj **raw_tail);
+void vmu_remove_obj(Obj *obj, Obj **raw_head, Obj **raw_tail);
 
 #define VALIDATE_INDEX_ARG(name, value, index, len){                                                \
     if(!IS_INT((value))){                                                                           \
@@ -191,5 +195,7 @@ Obj *vmu_foreign_lib_obj(void *handler, VM *vm);
         vmu_error(vm, "'%s' out of bounds. Must be 0 >= index(%ld) < len(%ld)", (name), (index), (len)); \
     }                                                                                                    \
 }
+
+#define ACKNOWLEDGE_OBJ(_obj, _vm)(vmu_insert_obj((_obj), (Obj **)&(_vm)->red_head, (Obj **)&(_vm)->red_tail))
 
 #endif

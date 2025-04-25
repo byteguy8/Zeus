@@ -45,7 +45,7 @@ Value native_fn_ls(uint8_t argsc, Value *values, Value *target, VM *vm){
         Module *module = TO_MODULE(module_value);
         LZHTable *global_values = MODULE_GLOBALS(module);
 
-        DynArr *values = FACTORY_DYNARR(sizeof(Value), vm->rtallocator);
+        DynArr *values = FACTORY_DYNARR(sizeof(Value), vm->fake_allocator);
         if(!values){vmu_error(vm, "Out of memory");}
 
         for(LZHTableNode *current = global_values->head; current; current = current->next_table_node){
@@ -187,7 +187,7 @@ Value native_fn_int_to_str(uint8_t argsc, Value *values, Value *target, VM *vm){
 
 	int64_t number = TO_INT(number_value);
     int len = utils_i64_to_str(number, buff);
-    char *raw_number_str = factory_clone_raw_str_range(0, len, buff, vm->rtallocator);
+    char *raw_number_str = factory_clone_raw_str_range(0, len, buff, vm->fake_allocator);
     Obj *number_str_obj = vmu_str_obj(&raw_number_str, vm);
 
     return OBJ_VALUE(number_str_obj);
@@ -222,7 +222,7 @@ Value native_fn_float_to_str(uint8_t argsc, Value *values, Value *target, VM *vm
 
 	double number = TO_FLOAT(number_value);
     int len = utils_double_to_str(buff_len, number, buff);
-    char *raw_number_str = factory_clone_raw_str_range(0, len, buff, vm->rtallocator);
+    char *raw_number_str = factory_clone_raw_str_range(0, len, buff, vm->fake_allocator);
     Obj *number_str_obj = vmu_str_obj(&raw_number_str, vm);
 
     return OBJ_VALUE(number_str_obj);

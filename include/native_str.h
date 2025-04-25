@@ -32,7 +32,7 @@ Value native_fn_str_insert(uint8_t argsc, Value *values, Value *target, VM *vm){
 
     Str *str = TO_STR(value_str);
     size_t raw_str_len = target_str->len + str->len;
-    char *raw_str = MEMORY_ALLOC(char, raw_str_len + 1, vm->rtallocator);
+    char *raw_str = MEMORY_ALLOC(char, raw_str_len + 1, vm->fake_allocator);
 
     memcpy(raw_str, target_str->buff, at);
     memcpy(raw_str + at, str->buff, str->len);
@@ -64,7 +64,7 @@ Value native_fn_str_remove(uint8_t argsc, Value *values, Value *target, VM *vm){
     }
 
     size_t raw_str_len = target_str->len - (to - from + 1);
-    char *raw_str = MEMORY_ALLOC(char, raw_str_len + 1, vm->rtallocator);
+    char *raw_str = MEMORY_ALLOC(char, raw_str_len + 1, vm->fake_allocator);
 
     memcpy(raw_str, target_str->buff, from);
     memcpy(raw_str + from, target_str->buff + to + 1, target_str->len - to  - 1);
@@ -97,7 +97,7 @@ Value native_fn_str_char_at(uint8_t argc, Value *values, Value *target, VM *vm){
     VALIDATE_STR_INDEX(target_str->len, index_value, vm)
 
     int64_t index = TO_INT(index_value);
-    char *raw_str = factory_clone_raw_str_range((size_t)index, 1, target_str->buff, vm->rtallocator);
+    char *raw_str = factory_clone_raw_str_range((size_t)index, 1, target_str->buff, vm->fake_allocator);
     Obj *str_obj = vmu_str_obj(&raw_str, vm);
 
     return OBJ_VALUE(str_obj);
@@ -117,7 +117,7 @@ Value native_fn_str_sub_str(uint8_t argc, Value *values, Value *target, VM *vm){
         vmu_error(vm, "Illegal index 'from'(%ld). Must be less or equals to 'to'(%ld)", from, to);
     }
 
-    char *raw_sub_str = factory_clone_raw_str_range(from, to - from + 1, target_str->buff, vm->rtallocator);
+    char *raw_sub_str = factory_clone_raw_str_range(from, to - from + 1, target_str->buff, vm->fake_allocator);
     Obj *sub_str_obj = vmu_str_obj(&raw_sub_str, vm);
 
     return OBJ_VALUE(sub_str_obj);
@@ -168,7 +168,7 @@ Value native_fn_str_split(uint8_t argc, Value *values, Value *target, VM *vm){
                 coincidence = 1;
             }
 
-            char *raw_str = factory_clone_raw_str_range(from, len, target_str->buff, vm->rtallocator);
+            char *raw_str = factory_clone_raw_str_range(from, len, target_str->buff, vm->fake_allocator);
             Obj *str_obj = vmu_str_obj(&raw_str, vm);
 
             dynarr_insert(&OBJ_VALUE(str_obj), list);
@@ -178,7 +178,7 @@ Value native_fn_str_split(uint8_t argc, Value *values, Value *target, VM *vm){
     }
 
 	if(coincidence){
-        char *raw_str = factory_clone_raw_str_range(from, i - 1, target_str->buff, vm->rtallocator);
+        char *raw_str = factory_clone_raw_str_range(from, i - 1, target_str->buff, vm->fake_allocator);
 		Obj *str_obj = vmu_str_obj(&raw_str, vm);
 
         dynarr_insert(&OBJ_VALUE(str_obj), list);
@@ -205,7 +205,7 @@ Value native_fn_str_lstrip(uint8_t argsc, Value *values, Value *target, VM *vm){
 		if(from >= len){break;}
 	}
 
-    char *strip_raw_str = factory_clone_raw_str_range(from - 1, len - from + 1, target_str->buff, vm->rtallocator);
+    char *strip_raw_str = factory_clone_raw_str_range(from - 1, len - from + 1, target_str->buff, vm->fake_allocator);
     Obj *strip_str_obj = vmu_str_obj(&strip_raw_str, vm);
 
 	return OBJ_VALUE(strip_str_obj);
@@ -228,7 +228,7 @@ Value native_fn_str_rstrip(uint8_t argsc, Value *values, Value *target, VM *vm){
 		if(cs != ' ' && cs != '\t'){break;}
 	}
 
-	char *strip_raw_str = factory_clone_raw_str_range(0, to + 1, raw_str, vm->rtallocator);
+	char *strip_raw_str = factory_clone_raw_str_range(0, to + 1, raw_str, vm->fake_allocator);
     Obj *strip_str_obj = vmu_str_obj(&strip_raw_str, vm);
 
     return OBJ_VALUE(strip_str_obj);
@@ -264,7 +264,7 @@ Value native_fn_str_strip(uint8_t argsc, Value *values, Value *target, VM *vm){
 		if(from == to) break;
 	}
 
-    char *strip_raw_str = factory_clone_raw_str_range(from, to - from + 1, target_str->buff, vm->rtallocator);
+    char *strip_raw_str = factory_clone_raw_str_range(from, to - from + 1, target_str->buff, vm->fake_allocator);
     Obj *strip_str_obj = vmu_str_obj(&strip_raw_str, vm);
 
     return OBJ_VALUE(strip_str_obj);
@@ -272,7 +272,7 @@ Value native_fn_str_strip(uint8_t argsc, Value *values, Value *target, VM *vm){
 
 Value native_fn_str_lower(uint8_t argsc, Value *values, Value *target, VM *vm){
 	Str *target_str = TO_STR(target);
-    char *lower_raw_str = factory_clone_raw_str(target_str->buff, vm->rtallocator);
+    char *lower_raw_str = factory_clone_raw_str(target_str->buff, vm->fake_allocator);
     Obj *lower_str_obj = vmu_str_obj(&lower_raw_str, vm);
     Str *lower_str = lower_str_obj->content.str;
 
@@ -287,7 +287,7 @@ Value native_fn_str_lower(uint8_t argsc, Value *values, Value *target, VM *vm){
 
 Value native_fn_str_upper(uint8_t argsc, Value *values, Value *target, VM *vm){
 	Str *target_str = TO_STR(target);
-	char *upper_raw_str = factory_clone_raw_str(target_str->buff, vm->rtallocator);
+	char *upper_raw_str = factory_clone_raw_str(target_str->buff, vm->fake_allocator);
     Obj *upper_str_obj = vmu_str_obj(&upper_raw_str, vm);
     Str *upper_str = upper_str_obj->content.str;
 
@@ -302,7 +302,7 @@ Value native_fn_str_upper(uint8_t argsc, Value *values, Value *target, VM *vm){
 
 Value native_fn_str_title(uint8_t argsc, Value *values, Value *target, VM *vm){
     Str *target_str = TO_STR(target);
-    char *title_raw_str = factory_clone_raw_str(target_str->buff, vm->rtallocator);
+    char *title_raw_str = factory_clone_raw_str(target_str->buff, vm->fake_allocator);
     Obj *title_str_obj = vmu_str_obj(&title_raw_str, vm);
     Str *title_str = title_str_obj->content.str;
 
@@ -365,24 +365,24 @@ Value native_fn_str_cmp_ic(uint8_t argsc, Value *values, Value *target, VM *vm){
 
 NativeFnInfo *native_str_get(char *symbol, VM *vm){
     if(!str_symbols){
-        str_symbols = FACTORY_LZHTABLE(vm->rtallocator);
-        factory_add_native_fn_info("insert", 2, native_fn_str_insert, str_symbols, vm->rtallocator);
-        factory_add_native_fn_info("remove", 2, native_fn_str_remove, str_symbols, vm->rtallocator);
-        factory_add_native_fn_info("hash", 0, native_fn_str_hash, str_symbols, vm->rtallocator);
-        factory_add_native_fn_info("is_runtime", 0, native_fn_str_is_runtime, str_symbols, vm->rtallocator);
-        factory_add_native_fn_info("length", 0, native_fn_str_length, str_symbols, vm->rtallocator);
-        factory_add_native_fn_info("char_at", 1, native_fn_str_char_at, str_symbols, vm->rtallocator);
-        factory_add_native_fn_info("sub_str", 2, native_fn_str_sub_str, str_symbols, vm->rtallocator);
-        factory_add_native_fn_info("char_code", 1, native_fn_str_char_code, str_symbols, vm->rtallocator);
-        factory_add_native_fn_info("split", 1, native_fn_str_split, str_symbols, vm->rtallocator);
-        factory_add_native_fn_info("lstrip", 0, native_fn_str_lstrip, str_symbols, vm->rtallocator);
-        factory_add_native_fn_info("rstrip", 0, native_fn_str_rstrip, str_symbols, vm->rtallocator);
-        factory_add_native_fn_info("strip", 0, native_fn_str_strip, str_symbols, vm->rtallocator);
-        factory_add_native_fn_info("lower", 0, native_fn_str_lower, str_symbols, vm->rtallocator);
-        factory_add_native_fn_info("upper", 0, native_fn_str_upper, str_symbols, vm->rtallocator);
-        factory_add_native_fn_info("title", 0, native_fn_str_title, str_symbols, vm->rtallocator);
-        factory_add_native_fn_info("cmp", 1, native_fn_str_cmp, str_symbols, vm->rtallocator);
-        factory_add_native_fn_info("cmp_ic", 1, native_fn_str_cmp_ic, str_symbols, vm->rtallocator);
+        str_symbols = FACTORY_LZHTABLE(vm->fake_allocator);
+        factory_add_native_fn_info("insert", 2, native_fn_str_insert, str_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("remove", 2, native_fn_str_remove, str_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("hash", 0, native_fn_str_hash, str_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("is_runtime", 0, native_fn_str_is_runtime, str_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("length", 0, native_fn_str_length, str_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("char_at", 1, native_fn_str_char_at, str_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("sub_str", 2, native_fn_str_sub_str, str_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("char_code", 1, native_fn_str_char_code, str_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("split", 1, native_fn_str_split, str_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("lstrip", 0, native_fn_str_lstrip, str_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("rstrip", 0, native_fn_str_rstrip, str_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("strip", 0, native_fn_str_strip, str_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("lower", 0, native_fn_str_lower, str_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("upper", 0, native_fn_str_upper, str_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("title", 0, native_fn_str_title, str_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("cmp", 1, native_fn_str_cmp, str_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("cmp_ic", 1, native_fn_str_cmp_ic, str_symbols, vm->fake_allocator);
     }
 
     return (NativeFnInfo *)lzhtable_get((uint8_t *)symbol, strlen(symbol), str_symbols);

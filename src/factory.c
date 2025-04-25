@@ -37,7 +37,10 @@ Str *factory_create_str(char *buff, Allocator *allocator){
 }
 
 void factory_destroy_str(Str *str, Allocator *allocator){
-    if(!str){return;}
+    if(!str){
+        return;
+    }
+
     MEMORY_DEALLOC(Str, 1, str, allocator);
 }
 
@@ -52,13 +55,16 @@ Array *factory_create_array(int32_t length, Allocator *allocator){
 }
 
 void factory_destroy_array(Array* array, Allocator *allocator){
-    if(!array){return;}
+    if(!array){
+        return;
+    }
+
     MEMORY_DEALLOC(Value, array->len, array->values, allocator);
     MEMORY_DEALLOC(Array, 1, array, allocator);
 }
 
 Record *factory_create_record(uint32_t length, Allocator *allocator){
-    LZHTable *attributes = length == 0 ? NULL : FACTORY_LZHTABLE(allocator);
+    LZHTable *attributes = length == 0 ? NULL : FACTORY_LZHTABLE_LEN(length, allocator);
     Record *record = MEMORY_ALLOC(Record, 1, allocator);
 
     record->attributes = attributes;
@@ -67,7 +73,10 @@ Record *factory_create_record(uint32_t length, Allocator *allocator){
 }
 
 void factory_destroy_record(void *extra, void (*clean_up)(void *, void *, void *), Record *record, Allocator *allocator){
-    if(!record){return;}
+    if(!record){
+        return;
+    }
+
     lzhtable_destroy(extra, clean_up, record->attributes);
     MEMORY_DEALLOC(Record, 1, record, allocator);
 }

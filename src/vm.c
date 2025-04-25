@@ -1,4 +1,5 @@
 #include "vm.h"
+#include "types.h"
 #include "vmu.h"
 #include "memory.h"
 #include "utils.h"
@@ -16,6 +17,58 @@
 #include <assert.h>
 #include <setjmp.h>
 #include <dlfcn.h>
+
+void *vm_alloc(size_t size, void * ctx){
+    VM *vm = (VM *)ctx;
+    Allocator *allocator = vm->allocator;
+    void *real_ctx = allocator->ctx;
+
+    if(vm->allocated_size + size >= vm->allocated_limit){
+        size_t before = vm->allocated_size;
+        vmu_gc(vm);
+        size_t after = vm->allocated_size;
+        size_t freeded = before - after;
+
+        if(freeded == 0){
+            vm->allocated_limit *= GROW_ALLOCATE_LIMIT_FACTOR;
+        }
+    }
+
+    vm->allocated_size += size;
+
+    return allocator->alloc(size, real_ctx);
+}
+
+void *vm_realloc(void *ptr, size_t old_size, size_t new_size, void *ctx){
+    VM *vm = (VM *)ctx;
+    Allocator *allocator = vm->allocator;
+    void *real_ctx = allocator->ctx;
+
+    size_t new_allocated_size = vm->allocated_size - old_size + new_size;
+
+    if(new_allocated_size < vm->allocated_limit / GROW_ALLOCATE_LIMIT_FACTOR){
+        vm->allocated_limit /= GROW_ALLOCATE_LIMIT_FACTOR;
+    }
+
+    vm->allocated_size -= old_size;
+    vm->allocated_size += new_size;
+
+    return allocator->realloc(ptr, old_size, new_size, real_ctx);
+}
+
+void vm_dealloc(void *ptr, size_t size, void *ctx){
+    VM *vm = (VM *)ctx;
+    Allocator *allocator = vm->allocator;
+    void *real_ctx = allocator->ctx;
+
+    if(vm->allocated_size - size < vm->allocated_size / GROW_ALLOCATE_LIMIT_FACTOR){
+        vm->allocated_limit /= GROW_ALLOCATE_LIMIT_FACTOR;
+    }
+    
+    vm->allocated_size -= size;
+
+    allocator->dealloc(ptr, size, real_ctx);
+}
 
 //> PRIVATE INTERFACE
 // UTILS FUNCTIONS
@@ -363,30 +416,33 @@ static int execute(VM *vm){
                 break;
             }case STRING_OPCODE:{
                 char *raw_str = read_str(vm, NULL);
-                Obj *obj = vmu_unchecked_str_obj(raw_str, vm);
-                Str *str = obj->content.str;
+                Obj *str_obj = vmu_unchecked_str_obj(raw_str, vm);
+                Str *str = str_obj->content.str;
 
                 str->runtime = 0;
 
-                PUSH(OBJ_VALUE(obj), vm)
+                ACKNOWLEDGE_OBJ(str_obj, vm);
+                PUSH(OBJ_VALUE(str_obj), vm)
 
                 break;
             }case TEMPLATE_OPCODE:{
                 int16_t len = read_i16(vm);
-                BStr *bstr = FACTORY_BSTR(vm->rtallocator);
+                BStr *bstr = FACTORY_BSTR(vm->fake_allocator);
 
                 for (int16_t i = 0; i < len; i++){
                     Value *value = peek_at(i, vm);
                     vmu_value_to_str(value, bstr);
                 }
 
-                char *raw_str = factory_clone_raw_str((char *)bstr->buff, vm->rtallocator);
+                char *raw_str = factory_clone_raw_str((char *)bstr->buff, vm->fake_allocator);
                 Obj *str_obj = vmu_str_obj(&raw_str, vm);
 
                 bstr_destroy(bstr);
 
                 vm->stack_top = peek_at(len - 1, vm);
-                PUSH(OBJ_VALUE(str_obj), vm);
+
+                ACKNOWLEDGE_OBJ(str_obj, vm);
+                PUSH(OBJ_VALUE(str_obj), vm)
 
                 break;
             }case ARRAY_OPCODE:{
@@ -401,6 +457,7 @@ static int execute(VM *vm){
 
                     Obj *array_obj = vmu_array_obj(TO_ARRAY_LENGTH(length_value), vm);
 
+                    ACKNOWLEDGE_OBJ(array_obj, vm);
                     PUSH(OBJ_VALUE(array_obj), vm)
                 }else if(parameter == 2){
                     Value *value = pop(vm);
@@ -420,7 +477,6 @@ static int execute(VM *vm){
                 break;
             }case LIST_OPCODE:{
                 int16_t len = read_i16(vm);
-
                 Obj *list_obj = vmu_list_obj(vm);
                 DynArr *list = list_obj->content.list;
 
@@ -430,17 +486,19 @@ static int execute(VM *vm){
                 }
 
                 vm->stack_top = peek_at(len - 1, vm);
-                PUSH(OBJ_VALUE(list_obj), vm);
+
+                ACKNOWLEDGE_OBJ(list_obj, vm);
+                PUSH(OBJ_VALUE(list_obj), vm)
 
                 break;
             }case DICT_OPCODE:{
-                int32_t len = read_i16(vm);
+                int16_t len = read_i16(vm);
                 Obj *dict_obj = vmu_dict_obj(vm);
                 LZHTable *dict = dict_obj->content.dict;
 
-                for (int32_t i = 0; i < len; i++){
-                    Value *value = peek_at(0, vm);
-                    Value *key = peek_at(1, vm);
+                for (int16_t i = 0; i < len; i++){
+                    Value *value = peek_at(i * 2, vm);
+                    Value *key = peek_at(i * 2 + 1, vm);
 
                     if(IS_EMPTY(key)){
                         vmu_error(vm, "'key' cannot be 'empty'");
@@ -451,12 +509,12 @@ static int execute(VM *vm){
                     uint32_t hash = vmu_hash_value(key_clone);
 
                     lzhtable_hash_put_key(key_clone, hash, value_clone, dict);
-
-                    pop(vm);
-                    pop(vm);
                 }
 
-                PUSH(OBJ_VALUE(dict_obj), vm);
+                vm->stack_top = peek_at(len * 2 - 1, vm);
+
+                ACKNOWLEDGE_OBJ(dict_obj, vm);
+                PUSH(OBJ_VALUE(dict_obj), vm)
 
                 break;
             }case RECORD_OPCODE:{
@@ -473,7 +531,7 @@ static int execute(VM *vm){
 
                 for(size_t i = 0; i < len; i++){
                     char *key = read_str(vm, NULL);
-                    Value *value = peek(vm);
+                    Value *value = peek_at(i, vm);
                     size_t key_size = strlen(key);
                     uint32_t hash = lzhtable_hash((uint8_t *)key, key_size);
 
@@ -481,15 +539,16 @@ static int execute(VM *vm){
                         vmu_error(vm, "Record already contains attribute '%s'", key);
                     }
 
-                    char *cloned_key = factory_clone_raw_str(key, vm->rtallocator);
+                    char *cloned_key = factory_clone_raw_str(key, vm->fake_allocator);
                     Value *cloned_value = vmu_clone_value(value, vm);
 
                     lzhtable_hash_put_key(cloned_key, hash, cloned_value, record->attributes);
-
-                    pop(vm);
                 }
 
-                PUSH(OBJ_VALUE(record_obj), vm);
+                vm->stack_top = peek_at(len - 1, vm);
+
+                ACKNOWLEDGE_OBJ(record_obj, vm);
+                PUSH(OBJ_VALUE(record_obj), vm)
 
                 break;
             }case ADD_OPCODE:{
@@ -527,7 +586,7 @@ static int execute(VM *vm){
                         astr->buff,
                         bstr->len,
                         bstr->buff,
-                        vm->rtallocator
+                        vm->fake_allocator
                     );
                     Obj *str_obj = vmu_str_obj(&raw_str, vm);
 
@@ -596,7 +655,7 @@ static int execute(VM *vm){
                     Str *str = TO_STR(va);
                     int64_t by = TO_INT(vb);
 
-                    char *raw_str = utils_multiply_raw_str((size_t)by, str->len, str->buff, vm->rtallocator);
+                    char *raw_str = utils_multiply_raw_str((size_t)by, str->len, str->buff, vm->fake_allocator);
                     Obj *str_obj = vmu_str_obj(&raw_str, vm);
 
                     pop(vm);
@@ -610,7 +669,7 @@ static int execute(VM *vm){
                     Str *str = TO_STR(vb);
                     int64_t by = TO_INT(va);
 
-                    char *raw_str = utils_multiply_raw_str((size_t)by, str->len, str->buff, vm->rtallocator);
+                    char *raw_str = utils_multiply_raw_str((size_t)by, str->len, str->buff, vm->fake_allocator);
                     Obj *str_obj = vmu_str_obj(&raw_str, vm);
 
                     pop(vm);
@@ -1371,6 +1430,8 @@ static int execute(VM *vm){
                     Obj *native_fn_obj = vmu_native_fn_obj(info->arity, symbol, value, info->raw_native, vm);
 
                     pop(vm);
+
+                    ACKNOWLEDGE_OBJ(native_fn_obj, vm);
                     PUSH(OBJ_VALUE(native_fn_obj), vm);
 
                     break;
@@ -1693,10 +1754,24 @@ static int execute(VM *vm){
 //> PRIVATE IMPLEMENTATION
 //> PUBLIC IMPLEMENTATION
 VM *vm_create(Allocator *allocator){
+    Allocator *fake_allocator = MEMORY_ALLOC(Allocator, 1, allocator);
     VM *vm = MEMORY_ALLOC(VM, 1, allocator);
-    if(!vm){return NULL;}
+
+    if(!fake_allocator || !vm){
+        MEMORY_DEALLOC(Allocator, 1, fake_allocator, allocator);
+        MEMORY_DEALLOC(VM, 1, vm, allocator);
+
+        return NULL;
+    }
+
+    MEMORY_INIT_ALLOCATOR(vm, vm_alloc, vm_realloc, vm_dealloc, fake_allocator);
+
     memset(vm, 0, sizeof(VM));
-    vm->rtallocator = allocator;
+
+    vm->allocated_limit = ALLOCATE_START_LIMIT;
+    vm->allocator = allocator;
+    vm->fake_allocator = fake_allocator;
+
     return vm;
 }
 

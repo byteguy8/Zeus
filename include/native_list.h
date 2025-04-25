@@ -160,20 +160,20 @@ Value native_fn_list_clear(uint8_t argsc, Value *values, Value *target, VM *vm){
 
 NativeFnInfo *native_list_get(char *symbol, VM *vm){
     if(!list_symbols){
-        list_symbols = FACTORY_LZHTABLE(vm->rtallocator);
-        factory_add_native_fn_info("size", 0, native_fn_list_size, list_symbols, vm->rtallocator);
-        factory_add_native_fn_info("capacity", 0, native_fn_list_capacity, list_symbols, vm->rtallocator);
-        factory_add_native_fn_info("available", 0, native_fn_list_available, list_symbols, vm->rtallocator);
-        factory_add_native_fn_info("first", 0, native_fn_list_first, list_symbols, vm->rtallocator);
-        factory_add_native_fn_info("last", 0, native_fn_list_last, list_symbols, vm->rtallocator);
-        factory_add_native_fn_info("reverse", 0, native_fn_list_reverse, list_symbols, vm->rtallocator);
-        factory_add_native_fn_info("get", 1, native_fn_list_get, list_symbols, vm->rtallocator);
-        factory_add_native_fn_info("insert", 1, native_fn_list_insert, list_symbols, vm->rtallocator);
-        factory_add_native_fn_info("insert_at", 2, native_fn_list_insert_at, list_symbols, vm->rtallocator);
-        factory_add_native_fn_info("set", 2, native_fn_list_set, list_symbols, vm->rtallocator);
-        factory_add_native_fn_info("append", 1, native_fn_list_append, list_symbols, vm->rtallocator);
-        factory_add_native_fn_info("remove", 1, native_fn_list_remove, list_symbols, vm->rtallocator);
-        factory_add_native_fn_info("clear", 0, native_fn_list_clear, list_symbols, vm->rtallocator);
+        list_symbols = FACTORY_LZHTABLE(vm->fake_allocator);
+        factory_add_native_fn_info("size", 0, native_fn_list_size, list_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("capacity", 0, native_fn_list_capacity, list_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("available", 0, native_fn_list_available, list_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("first", 0, native_fn_list_first, list_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("last", 0, native_fn_list_last, list_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("reverse", 0, native_fn_list_reverse, list_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("get", 1, native_fn_list_get, list_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("insert", 1, native_fn_list_insert, list_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("insert_at", 2, native_fn_list_insert_at, list_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("set", 2, native_fn_list_set, list_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("append", 1, native_fn_list_append, list_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("remove", 1, native_fn_list_remove, list_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("clear", 0, native_fn_list_clear, list_symbols, vm->fake_allocator);
     }
 
     return (NativeFnInfo *)lzhtable_get((uint8_t *)symbol, strlen(symbol), list_symbols);

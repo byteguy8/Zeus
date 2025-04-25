@@ -22,7 +22,7 @@ Value native_fn_io_read_file(uint8_t argsc, Value *values, Value *target, VM *vm
     size_t err_len = 1024;
     char err_str[err_len];
 
-    if(utils_read_file(raw_path, &content_len, &content, err_len, err_str, vm->rtallocator)){
+    if(utils_read_file(raw_path, &content_len, &content, err_len, err_str, vm->fake_allocator)){
         vmu_error(vm, err_str);
     }
 
@@ -46,7 +46,7 @@ Value native_fn_io_readln(uint8_t argsc, Value *values, Value *target, VM *vm){
 
     size_t out_buff_len = strlen(out_buff);
 
-    char *raw_str = factory_clone_raw_str_range(0, out_buff_len - 1, buff, vm->rtallocator);
+    char *raw_str = factory_clone_raw_str_range(0, out_buff_len - 1, buff, vm->fake_allocator);
     Obj *str_obj = vmu_str_obj(&raw_str, vm);
 
 	return OBJ_VALUE(str_obj);

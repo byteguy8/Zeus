@@ -136,15 +136,15 @@ Value native_fn_dict_values(uint8_t argsc, Value *values, Value *target, VM *vm)
 
 NativeFnInfo *native_dict_get(char *symbol, VM *vm){
     if(!dict_symbols){
-        dict_symbols = FACTORY_LZHTABLE(vm->rtallocator);
-        factory_add_native_fn_info("size", 0, native_fn_dict_size, dict_symbols, vm->rtallocator);
-        factory_add_native_fn_info("contains", 1, native_fn_dict_contains, dict_symbols, vm->rtallocator);
-        factory_add_native_fn_info("get", 1, native_fn_dict_get, dict_symbols, vm->rtallocator);
-        factory_add_native_fn_info("put", 2, native_fn_dict_put, dict_symbols, vm->rtallocator);
-        factory_add_native_fn_info("remove", 1, native_fn_dict_remove, dict_symbols, vm->rtallocator);
-        factory_add_native_fn_info("clear", 0, native_fn_dict_clear, dict_symbols, vm->rtallocator);
-        factory_add_native_fn_info("keys", 0, native_fn_dict_keys, dict_symbols, vm->rtallocator);
-        factory_add_native_fn_info("values", 0, native_fn_dict_values, dict_symbols, vm->rtallocator);
+        dict_symbols = FACTORY_LZHTABLE(vm->fake_allocator);
+        factory_add_native_fn_info("size", 0, native_fn_dict_size, dict_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("contains", 1, native_fn_dict_contains, dict_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("get", 1, native_fn_dict_get, dict_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("put", 2, native_fn_dict_put, dict_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("remove", 1, native_fn_dict_remove, dict_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("clear", 0, native_fn_dict_clear, dict_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("keys", 0, native_fn_dict_keys, dict_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("values", 0, native_fn_dict_values, dict_symbols, vm->fake_allocator);
     }
 
     return (NativeFnInfo *)lzhtable_get((uint8_t *)symbol, strlen(symbol), dict_symbols);

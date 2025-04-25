@@ -13,9 +13,6 @@
 #define FIND_LOCATION(index, arr)(dynarr_find(&((OPCodeLocation){.offset = index, .line = -1}), compare_locations, arr))
 #define FRAME_AT(at, vm)(&vm->frame_stack[at])
 
-//> PRIVATE INTERFACE
-void insert_obj(Obj *obj, Obj **raw_head, Obj **raw_tail);
-void remove_obj(Obj *obj, Obj **raw_head, Obj **raw_tail);
 // GARBAGE COLLECTOR
 void clean_up_module(Module *module, VM *vm);
 void destroy_obj(Obj *obj, VM *vm);
@@ -23,48 +20,19 @@ void sweep_objs(VM *vm);
 void mark_globals(LZHTable *globals, VM *vm);
 void mark_obj(Obj *obj, VM *vm);
 void mark_roots(VM *vm);
-void gc(VM *vm);
 int compare_locations(void *a, void *b);
 BStr *prepare_stacktrace(unsigned int spaces, VM *vm);
 //< PRIVATE INTERFACE
 //> PRIVATE IMPLEMENTATION
-void insert_obj(Obj *obj, Obj **raw_head, Obj **raw_tail){
-    Obj *tail = *raw_tail;
-
-    if(tail){
-        tail->next = obj;
-        obj->prev = tail;
-    }else{
-        *raw_head = obj;
-    }
-
-    *raw_tail = obj;
-}
-
-void remove_obj(Obj *obj, Obj **raw_head, Obj **raw_tail){
-    Obj *head = *raw_head;
-    Obj *tail = *raw_tail;
-
-    if(head == obj){
-        *raw_head = obj->next;
-    }
-    if(tail == obj){
-        *raw_tail = obj->prev;
-    }
-    if(obj->prev){
-        obj->prev->next = obj->next;
-    }
-    if(obj->next){
-        obj->next->prev = obj->prev;
-    }
-
-    obj->prev = NULL;
-    obj->next = NULL;
+void clean_up_record(void *key, void *value, void *extra){
+    VM *vm = (VM *)extra;
+    factory_destroy_raw_str(key, vm->fake_allocator);
+    vmu_destroy_value(value, vm);
 }
 
 void clean_up_table(void *value, void *key, void *vm){
-    vmu_destroy_value(value, vm);
     vmu_destroy_value(key, vm);
+    vmu_destroy_value(value, vm);
 }
 
 void clean_up_module(Module *module, VM *vm){
@@ -109,10 +77,10 @@ void destroy_obj(Obj *obj, VM *vm){
 
 	switch(obj->type){
 		case STR_OTYPE:{
-            factory_destroy_str(obj->content.str, vm->rtallocator);
+            factory_destroy_str(obj->content.str, vm->fake_allocator);
 			break;
 		}case ARRAY_OTYPE:{
-            factory_destroy_array(obj->content.array, vm->rtallocator);
+            factory_destroy_array(obj->content.array, vm->fake_allocator);
             break;
         }case LIST_OTYPE:{
 			dynarr_destroy(obj->content.list);
@@ -121,13 +89,13 @@ void destroy_obj(Obj *obj, VM *vm){
             lzhtable_destroy(vm, clean_up_table, obj->content.dict);
             break;
         }case RECORD_OTYPE:{
-            factory_destroy_record(vm, clean_up_table, obj->content.record, vm->rtallocator);
+            factory_destroy_record(vm, clean_up_record, obj->content.record, vm->fake_allocator);
 			break;
 		}case NATIVE_FN_OTYPE:{
             NativeFn *native_fn = obj->content.native_fn;
 
             if(!native_fn->core){
-                factory_destroy_native_fn(obj->content.native_fn, vm->rtallocator);
+                factory_destroy_native_fn(obj->content.native_fn, vm->fake_allocator);
             }
 
             break;
@@ -147,8 +115,8 @@ void destroy_obj(Obj *obj, VM *vm){
                 }
             }
 
-            factory_destroy_out_values(meta->values_len, closure->out_values, vm->rtallocator);
-            factory_destroy_closure(closure, vm->rtallocator);
+            factory_destroy_out_values(meta->values_len, closure->out_values, vm->fake_allocator);
+            factory_destroy_closure(closure, vm->fake_allocator);
 
             break;
         }case NATIVE_MODULE_OTYPE:{
@@ -169,7 +137,6 @@ void destroy_obj(Obj *obj, VM *vm){
 	}
 
     vmu_destroy_obj(obj, vm);
-	vm->objs_size -= sizeof(Obj);
 }
 
 void sweep_objs(VM *vm){
@@ -178,7 +145,7 @@ void sweep_objs(VM *vm){
 
     while (current){
         next = current->next;
-        remove_obj(current, (Obj **)&vm->red_head, (Obj **)&vm->red_tail);
+        vmu_remove_obj(current, (Obj **)&vm->red_head, (Obj **)&vm->red_tail);
         destroy_obj(current, vm);
         current = next;
     }
@@ -327,8 +294,8 @@ void mark_obj(Obj *obj, VM *vm){
 		}
 	}
 
-    remove_obj(obj, (Obj **)&vm->red_head, (Obj **)&vm->red_tail);
-    insert_obj(obj, (Obj **)&vm->blue_head, (Obj **)&vm->blue_tail);
+    vmu_remove_obj(obj, (Obj **)&vm->red_head, (Obj **)&vm->red_tail);
+    vmu_insert_obj(obj, (Obj **)&vm->blue_head, (Obj **)&vm->blue_tail);
 }
 
 void mark_roots(VM *vm){
@@ -357,7 +324,7 @@ void mark_roots(VM *vm){
     //< MARKING GLOBALS
 }
 
-void gc(VM *vm){
+void vmu_gc(VM *vm){
     mark_roots(vm);
     sweep_objs(vm);
 
@@ -382,7 +349,7 @@ int compare_locations(void *a, void *b){
 }
 
 BStr *prepare_stacktrace(unsigned int spaces, VM *vm){
-	BStr *st = FACTORY_BSTR(vm->rtallocator);
+	BStr *st = FACTORY_BSTR(vm->fake_allocator);
 
 	for(int i = vm->frame_ptr - 1; i >= 0; i--){
 		Frame *frame = FRAME_AT(i, vm);
@@ -733,7 +700,7 @@ uint32_t vmu_raw_str_to_table(char **raw_str_ptr, VM *vm, char **out_raw_str){
 }
 
 Value *vmu_clone_value(Value *value, VM *vm){
-    Value *cloned_value = MEMORY_ALLOC(Value, 1, vm->rtallocator);
+    Value *cloned_value = MEMORY_ALLOC(Value, 1, vm->fake_allocator);
     if(!cloned_value){return NULL;}
     *cloned_value = *value;
     return cloned_value;
@@ -741,11 +708,11 @@ Value *vmu_clone_value(Value *value, VM *vm){
 
 void vmu_destroy_value(Value *value, VM *vm){
     if(!value){return;}
-    MEMORY_DEALLOC(Value, 1, value, vm->rtallocator);
+    MEMORY_DEALLOC(Value, 1, value, vm->fake_allocator);
 }
 
 GlobalValue *vmu_global_value(VM *vm){
-    GlobalValue *global_value = MEMORY_ALLOC(GlobalValue, 1, vm->rtallocator);
+    GlobalValue *global_value = MEMORY_ALLOC(GlobalValue, 1, vm->fake_allocator);
 
     if(!global_value){return NULL;}
 
@@ -757,19 +724,14 @@ GlobalValue *vmu_global_value(VM *vm){
 
 void vmu_destroy_global_value(GlobalValue *global_value, VM *vm){
     if(!global_value){return;}
-    MEMORY_DEALLOC(GlobalValue, 1, global_value, vm->rtallocator);
+    MEMORY_DEALLOC(GlobalValue, 1, global_value, vm->fake_allocator);
 }
 
 Obj *vmu_create_obj(ObjType type, VM *vm){
-    gc(vm);
-
-    Obj *obj = MEMORY_ALLOC(Obj, 1, vm->rtallocator);
+    Obj *obj = MEMORY_ALLOC(Obj, 1, vm->fake_allocator);
 
     memset(obj, 0, sizeof(Obj));
     obj->type = type;
-
-    insert_obj(obj, (Obj **)&vm->red_head, (Obj **)&vm->red_tail);
-    vm->objs_size += sizeof(Obj);
 
     return obj;
 }
@@ -778,14 +740,15 @@ void vmu_destroy_obj(Obj *obj, VM *vm){
     if(!obj){
         return;
     }
-    MEMORY_DEALLOC(Obj, 1, obj, vm->rtallocator);
+
+    MEMORY_DEALLOC(Obj, 1, obj, vm->fake_allocator);
 }
 
 Obj *vmu_str_obj(char **raw_str_ptr, VM *vm){
     char *out_raw_str = NULL;
     uint32_t hash = vmu_raw_str_to_table(raw_str_ptr, vm, &out_raw_str);
 
-    Str *str = factory_create_str(out_raw_str, vm->rtallocator);
+    Str *str = factory_create_str(out_raw_str, vm->fake_allocator);
     Obj *str_obj = vmu_create_obj(STR_OTYPE, vm);
 
     str->hash = hash;
@@ -798,7 +761,7 @@ Obj *vmu_unchecked_str_obj(char *raw_str, VM *vm){
     uint8_t *key = (uint8_t *)raw_str;
     size_t key_size = strlen(raw_str);
     uint32_t hash = lzhtable_hash(key, key_size);
-    Str *str = factory_create_str(raw_str, vm->rtallocator);
+    Str *str = factory_create_str(raw_str, vm->fake_allocator);
     Obj *str_obj = vmu_create_obj(STR_OTYPE, vm);
 
     str->hash = hash;
@@ -808,7 +771,7 @@ Obj *vmu_unchecked_str_obj(char *raw_str, VM *vm){
 }
 
 Obj *vmu_array_obj(int32_t len, VM *vm){
-    Array *array = factory_create_array(len, vm->rtallocator);
+    Array *array = factory_create_array(len, vm->fake_allocator);
     Obj *array_obj = vmu_create_obj(ARRAY_OTYPE, vm);
 
     array_obj->content.array = array;
@@ -817,7 +780,7 @@ Obj *vmu_array_obj(int32_t len, VM *vm){
 }
 
 Obj *vmu_list_obj(VM *vm){
-    DynArr *list = FACTORY_DYNARR(sizeof(Value), vm->rtallocator);
+    DynArr *list = FACTORY_DYNARR(sizeof(Value), vm->fake_allocator);
     Obj *list_obj = vmu_create_obj(LIST_OTYPE, vm);
 
     list_obj->content.list = list;
@@ -826,7 +789,7 @@ Obj *vmu_list_obj(VM *vm){
 }
 
 Obj *vmu_dict_obj(VM *vm){
-    LZHTable *dict = FACTORY_LZHTABLE(vm->rtallocator);
+    LZHTable *dict = FACTORY_LZHTABLE(vm->fake_allocator);
     Obj *dict_obj = vmu_create_obj(DICT_OTYPE, vm);
 
     dict_obj->content.dict = dict;
@@ -835,7 +798,7 @@ Obj *vmu_dict_obj(VM *vm){
 }
 
 Obj *vmu_record_obj(uint8_t length, VM *vm){
-	Record *record = factory_create_record(length, vm->rtallocator);
+	Record *record = factory_create_record(length, vm->fake_allocator);
 	Obj *record_obj = vmu_create_obj(RECORD_OTYPE, vm);
 
 	record_obj->content.record = record;
@@ -856,7 +819,7 @@ Obj *vmu_native_fn_obj(
         vmu_error(vm, "Native function name exceed the max length allowed");
     }
 
-    NativeFn *native_fn = factory_create_native_fn(0, name, arity, target, raw_native, vm->rtallocator);
+    NativeFn *native_fn = factory_create_native_fn(0, name, arity, target, raw_native, vm->fake_allocator);
     Obj *native_fn_obj = vmu_create_obj(NATIVE_FN_OTYPE, vm);
 
     native_fn_obj->content.native_fn = native_fn;
@@ -865,8 +828,8 @@ Obj *vmu_native_fn_obj(
 }
 
 Obj *vmu_closure_obj(MetaClosure *meta, VM *vm){
-    OutValue *values = factory_out_values(meta->values_len, vm->rtallocator);
-    Closure *closure = factory_closure(values, meta, vm->rtallocator);
+    OutValue *values = factory_out_values(meta->values_len, vm->fake_allocator);
+    Closure *closure = factory_closure(values, meta, vm->fake_allocator);
     Obj *closure_obj = vmu_create_obj(CLOSURE_OTYPE, vm);
 
     for (int i = 0; i < meta->values_len; i++){
@@ -879,12 +842,46 @@ Obj *vmu_closure_obj(MetaClosure *meta, VM *vm){
 }
 
 Obj *vmu_foreign_lib_obj(void *handler, VM *vm){
-    ForeignLib *foreign_lib = factory_create_foreign_lib(handler, vm->rtallocator);
+    ForeignLib *foreign_lib = factory_create_foreign_lib(handler, vm->fake_allocator);
     Obj *foreign_lib_obj = vmu_create_obj(NATIVE_LIB_OTYPE, vm);
 
     foreign_lib->handler = handler;
     foreign_lib_obj->content.native_lib = foreign_lib;
 
     return foreign_lib_obj;
+}
+
+void vmu_insert_obj(Obj *obj, Obj **raw_head, Obj **raw_tail){
+    Obj *tail = *raw_tail;
+
+    if(tail){
+        tail->next = obj;
+        obj->prev = tail;
+    }else{
+        *raw_head = obj;
+    }
+
+    *raw_tail = obj;
+}
+
+void vmu_remove_obj(Obj *obj, Obj **raw_head, Obj **raw_tail){
+    Obj *head = *raw_head;
+    Obj *tail = *raw_tail;
+
+    if(head == obj){
+        *raw_head = obj->next;
+    }
+    if(tail == obj){
+        *raw_tail = obj->prev;
+    }
+    if(obj->prev){
+        obj->prev->next = obj->next;
+    }
+    if(obj->next){
+        obj->next->prev = obj->prev;
+    }
+
+    obj->prev = NULL;
+    obj->next = NULL;
 }
 //< PUBLIC IMPLEMENTATION

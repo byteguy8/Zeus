@@ -91,13 +91,13 @@ Value native_fn_array_to_list(uint8_t argsc, Value *values, Value *target, VM *v
 
 NativeFnInfo *native_array_get(char *symbol, VM *vm){
     if(!array_symbols){
-        array_symbols = FACTORY_LZHTABLE(vm->rtallocator);
-        factory_add_native_fn_info("first", 0, native_fn_array_first, array_symbols, vm->rtallocator);
-        factory_add_native_fn_info("last", 0, native_fn_array_last, array_symbols, vm->rtallocator);
-        factory_add_native_fn_info("make_room", 1, native_fn_array_make_room, array_symbols, vm->rtallocator);
-        factory_add_native_fn_info("size", 0, native_fn_array_size, array_symbols, vm->rtallocator);
-        factory_add_native_fn_info("join", 1, native_fn_array_join, array_symbols, vm->rtallocator);
-        factory_add_native_fn_info("to_list", 0, native_fn_array_to_list, array_symbols, vm->rtallocator);
+        array_symbols = FACTORY_LZHTABLE(vm->fake_allocator);
+        factory_add_native_fn_info("first", 0, native_fn_array_first, array_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("last", 0, native_fn_array_last, array_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("make_room", 1, native_fn_array_make_room, array_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("size", 0, native_fn_array_size, array_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("join", 1, native_fn_array_join, array_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("to_list", 0, native_fn_array_to_list, array_symbols, vm->fake_allocator);
     }
 
     return (NativeFnInfo *)lzhtable_get((uint8_t *)symbol, strlen(symbol), array_symbols);

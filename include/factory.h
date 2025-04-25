@@ -13,7 +13,7 @@ void factory_destroy_raw_str(char *raw_str, Allocator *allocator);
 #define FACTORY_DYNARR(sz, ator)(dynarr_create((sz), (DynArrAllocator *)(ator)))
 #define FACTORY_DYNARR_PTR(_allocator)(dynarr_create(sizeof(uintptr_t), (DynArrAllocator *)(_allocator)))
 #define FACTORY_LZHTABLE(ator)(lzhtable_create(16, (LZHTableAllocator *)(ator)))
-#define FACTORY_LZHTABLE_LEN(len, ator)(lzhtable_create((len), (LZHTableAllocator *)(ator)))
+#define FACTORY_LZHTABLE_LEN(_len, _allocator)(lzhtable_create((_len), (LZHTableAllocator *)(_allocator)))
 
 Str *factory_create_str(char *raw_str, Allocator *allocator);
 void factory_destroy_str(Str *str, Allocator *allocator);

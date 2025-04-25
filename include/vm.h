@@ -1,6 +1,7 @@
 #ifndef VM_H
 #define VM_H
 
+#include "memory.h"
 #include "types.h"
 #include "rtypes.h"
 #include "dynarr.h"
@@ -11,6 +12,8 @@
 #define FRAME_LENGTH 255
 #define STACK_LENGTH (LOCALS_LENGTH * FRAME_LENGTH)
 #define MODULES_LENGTH 255
+#define ALLOCATE_START_LIMIT MEMORY_MIBIBYTES(1)
+#define GROW_ALLOCATE_LIMIT_FACTOR 2
 
 typedef enum vm_result{
     OK_VMRESULT,
@@ -56,14 +59,16 @@ typedef struct vm{
     int module_ptr;
     Module *modules[MODULES_LENGTH];
 //> GARBAGE COLLECTOR
-    size_t objs_size;
+    size_t allocated_size;
+    size_t allocated_limit;
     Obj *red_head;
     Obj *red_tail;
 
     Obj *blue_head;
     Obj *blue_tail;
 //< GARBAGE COLLECTOR
-    Allocator *rtallocator;
+    Allocator *allocator;
+    Allocator *fake_allocator;
 }VM;
 
 VM *vm_create(Allocator *allocator);
