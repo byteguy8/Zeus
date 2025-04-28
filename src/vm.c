@@ -690,6 +690,10 @@ static int execute(VM *vm){
                     int64_t left = TO_INT(va);
                     int64_t right = TO_INT(vb);
 
+                    if(right == 0){
+                        vmu_error(vm, "Division by zero");
+                    }
+
                     PUSH_INT(left / right, vm)
 
                     break;
@@ -698,6 +702,10 @@ static int execute(VM *vm){
                 if(IS_FLOAT(va) && IS_FLOAT(vb)){
                     double left = TO_FLOAT(va);
                     double right = TO_FLOAT(vb);
+
+                    if(right == 0.0){
+                        vmu_error(vm, "Division by zero");
+                    }
 
                     PUSH_FLOAT(left / right, vm)
 
