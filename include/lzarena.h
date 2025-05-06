@@ -10,12 +10,14 @@
 #define LZARENA_BACKEND_MMAP 1
 #define LZARENA_BACKEND_VIRTUALALLOC 2
 
-#ifdef _WIN32
-    #define LZARENA_BACKEND LZARENA_BACKEND_VIRTUALALLOC
-#elif __linux__
-    #define LZARENA_BACKEND LZARENA_BACKEND_MMAP
-#else
-    #define LZARENA_BACKEND LZARENA_BACKEND_MALLOC
+#ifndef LZARENA_BACKEND
+    #ifdef _WIN32
+        #define LZARENA_BACKEND LZARENA_BACKEND_VIRTUALALLOC
+    #elif __linux__
+        #define LZARENA_BACKEND LZARENA_BACKEND_MMAP
+    #else
+        #define LZARENA_BACKEND LZARENA_BACKEND_MALLOC
+    #endif
 #endif
 
 typedef struct lzarena_allocator LZArenaAllocator;
@@ -47,7 +49,9 @@ LZRegion *lzregion_init(size_t buff_size, void *buff);
 LZRegion *lzregion_create(size_t size);
 void lzregion_destroy(LZRegion *region);
 
-#define LZREGION_FREE(region)((region)->offset = (region)->chunk)
+#define LZREGION_FREE(region){       \
+    region->offset = region->chunk;  \
+}
 
 size_t lzregion_available(LZRegion *region);
 size_t lzregion_available_alignment(size_t alignment, LZRegion *region);

@@ -8,6 +8,20 @@
 #define LZFLIST_MIN_SPLIT_PERCENTAGE 50
 #define LZFLIST_DETAULT_ALIGNMENT 16
 
+#define LZFLIST_BACKEND_MALLOC 0
+#define LZFLIST_BACKEND_MMAP 1
+#define LZFLIST_BACKEND_VIRTUALALLOC 2
+
+#ifndef LZFLIST_BACKEND
+    #ifdef _WIN32
+        #define LZFLIST_BACKEND LZFLIST_BACKEND_VIRTUALALLOC
+    #elif __linux__
+        #define LZFLIST_BACKEND LZFLIST_BACKEND_MMAP
+    #else
+        #define LZFLIST_BACKEND LZFLIST_BACKEND_MALLOC
+    #endif
+#endif
+
 typedef struct lzflheader LZFLHeader;
 typedef struct lzflregion LZFLRegion;
 typedef struct lzflist LZFList;
@@ -46,7 +60,6 @@ struct lzflist{
 LZFList *lzflist_create();
 void lzflist_destroy(LZFList *list);
 
-size_t lzflist_free_regions(LZFList *list);
 size_t lzflist_ptr_size(void *ptr);
 
 void *lzflist_alloc(size_t size, LZFList *list);
