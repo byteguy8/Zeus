@@ -1,7 +1,6 @@
 #ifndef NATIVE_DICT
 #define NATIVE_DICT
 
-#include "rtypes.h"
 #include "vmu.h"
 
 static LZHTable *dict_symbols = NULL;
@@ -12,12 +11,12 @@ static void clear_dict(void *key, void *value, void *vm){
 }
 
 Value native_fn_dict_size(uint8_t argsc, Value *values, Value *target, VM *vm){
-    LZHTable *dict = TO_DICT(target);
+    LZHTable *dict = VALUE_TO_DICT(target);
     return INT_VALUE(LZHTABLE_COUNT(dict));
 }
 
 Value native_fn_dict_contains(uint8_t argsc, Value *values, Value *target, VM *vm){
-    LZHTable *dict = TO_DICT(target);
+    LZHTable *dict = VALUE_TO_DICT(target);
     Value *value = &values[0];
 
     uint32_t hash = vmu_hash_value(value);
@@ -27,7 +26,7 @@ Value native_fn_dict_contains(uint8_t argsc, Value *values, Value *target, VM *v
 }
 
 Value native_fn_dict_get(uint8_t argsc, Value *values, Value *target, VM *vm){
-    LZHTable *dict = TO_DICT(target);
+    LZHTable *dict = VALUE_TO_DICT(target);
     Value *key = &values[0];
 
     uint32_t hash = vmu_hash_value(key);
@@ -40,7 +39,7 @@ Value native_fn_dict_get(uint8_t argsc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_dict_put(uint8_t argsc, Value *values, Value *target, VM *vm){
-    LZHTable *dict = TO_DICT(target);
+    LZHTable *dict = VALUE_TO_DICT(target);
     Value *key = &values[0];
     Value *value = &values[1];
 
@@ -65,7 +64,7 @@ Value native_fn_dict_put(uint8_t argsc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_dict_remove(uint8_t argsc, Value *values, Value *target, VM *vm){
-    LZHTable *dict = TO_DICT(target);
+    LZHTable *dict = VALUE_TO_DICT(target);
     Value *key = &values[0];
     uint32_t key_hash = vmu_hash_value(key);
     LZHTableNode *node = NULL;
@@ -85,7 +84,7 @@ Value native_fn_dict_remove(uint8_t argsc, Value *values, Value *target, VM *vm)
 }
 
 Value native_fn_dict_clear(uint8_t argsc, Value *values, Value *target, VM *vm){
-    LZHTable *dict = TO_DICT(target);
+    LZHTable *dict = VALUE_TO_DICT(target);
 
     if(lzhtable_clear_shrink(vm, clear_dict, dict)){
         vmu_error(vm, "Fatal error when cleaning dictionary");
@@ -95,7 +94,7 @@ Value native_fn_dict_clear(uint8_t argsc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_dict_keys(uint8_t argsc, Value *values, Value *target, VM *vm){
-    LZHTable *dict = TO_DICT(target);
+    LZHTable *dict = VALUE_TO_DICT(target);
     Obj *array_obj = vmu_array_obj(dict->n, vm);
 
     if(!array_obj){
@@ -103,7 +102,7 @@ Value native_fn_dict_keys(uint8_t argsc, Value *values, Value *target, VM *vm){
     }
 
     LZHTableNode *node = dict->head;
-    Array *array = array_obj->content.array;
+    Array *array = OBJ_TO_ARRAY(array_obj);
 
     for (int16_t i = 0; i < array->len; i++){
         LZHTableNode *next = node->next_table_node;
@@ -115,7 +114,7 @@ Value native_fn_dict_keys(uint8_t argsc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_dict_values(uint8_t argsc, Value *values, Value *target, VM *vm){
-    LZHTable *dict = TO_DICT(target);
+    LZHTable *dict = VALUE_TO_DICT(target);
     Obj *array_obj = vmu_array_obj(dict->n, vm);
 
     if(!array_obj){
@@ -123,7 +122,7 @@ Value native_fn_dict_values(uint8_t argsc, Value *values, Value *target, VM *vm)
     }
 
     LZHTableNode *current = dict->head;
-    Array *array = array_obj->content.array;
+    Array *array = OBJ_TO_ARRAY(array_obj);
 
     for (int16_t i = 0; i < array->len; i++){
         LZHTableNode *next = current->next_table_node;

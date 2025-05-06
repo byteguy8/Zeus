@@ -2,7 +2,12 @@
 #define FACTORY_H
 
 #include "types.h"
-#include "rtypes.h"
+#include "str.h"
+#include "array.h"
+#include "record.h"
+#include "native_fn.h"
+#include "native_module.h"
+#include "module.h"
 #include <stddef.h>
 
 char *factory_clone_raw_str(char *raw_str, Allocator *allocator);
@@ -40,8 +45,5 @@ void factory_destroy_closure(Closure *closure, Allocator *allocator);
 NativeModule *factory_native_module(char *name, Allocator *allocator);
 Module *factory_module(char *name, char *filepath, Allocator *allocator);
 Module *factory_clone_module(char *new_name, char *filepath, Module *module, Allocator *allocator);
-
-ForeignLib *factory_create_foreign_lib(void *handler, Allocator *allocator);
-void factory_destroy_foreign_lib(ForeignLib *lib, Allocator *allocator);
 
 #endif

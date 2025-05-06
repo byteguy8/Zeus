@@ -1,7 +1,6 @@
 #ifndef NATIVE_IO_H
 #define NATIVE_IO_H
 
-#include "rtypes.h"
 #include "vmu.h"
 #include <stdio.h>
 
@@ -10,11 +9,11 @@ NativeModule *io_module = NULL;
 Value native_fn_io_read_file(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *path_value = &values[0];
 
-    if(!IS_STR(path_value)){
+    if(!IS_VALUE_STR(path_value)){
         vmu_error(vm, "Expect string at argument 1, but got something else");
     }
 
-    Str *path = TO_STR(path_value);
+    Str *path = VALUE_TO_STR(path_value);
     char *raw_path = path->buff;
 
     size_t content_len = 0;

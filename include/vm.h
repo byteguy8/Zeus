@@ -2,8 +2,10 @@
 #define VM_H
 
 #include "memory.h"
+#include "value.h"
 #include "types.h"
-#include "rtypes.h"
+#include "fn.h"
+#include "closure.h"
 #include "dynarr.h"
 #include "lzhtable.h"
 #include <setjmp.h>

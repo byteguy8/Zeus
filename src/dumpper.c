@@ -1,7 +1,7 @@
 #include "dumpper.h"
 #include "memory.h"
-#include "rtypes.h"
 #include "opcode.h"
+#include "closure.h"
 #include <stdio.h>
 #include <assert.h>
 
@@ -470,12 +470,12 @@ static void dump_module(Module *module, Dumpper *dumpper){
         SubModuleSymbol symbol = DYNARR_GET_AS(SubModuleSymbol, i, symbols);
 
         if(symbol.type == FUNCTION_MSYMTYPE){
-            Fn *fn = symbol.value.fn;
+            Fn *fn = symbol.value;
             dump_function(fn, dumpper);
         }
 
         if(symbol.type == CLOSURE_MSYMTYPE){
-            MetaClosure *meta_closure = symbol.value.meta_closure;
+            MetaClosure *meta_closure = symbol.value;
             Fn *fn = meta_closure->fn;
             dump_function(fn, dumpper);
         }

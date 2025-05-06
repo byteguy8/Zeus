@@ -11,6 +11,10 @@ typedef enum opcode{
     FLOAT_OPCODE,    // push float
     STRING_OPCODE,   // push string
     TEMPLATE_OPCODE, // construct template and push it
+    ARRAY_OPCODE,
+	LIST_OPCODE,
+    DICT_OPCODE,
+	RECORD_OPCODE,
 
     // ARITHMETIC
     ADD_OPCODE, // add two integers or floats and push the result
@@ -60,10 +64,6 @@ typedef enum opcode{
 	JIF_OPCODE,
 	JIT_OPCODE,
 
-    ARRAY_OPCODE,
-	LIST_OPCODE,
-    DICT_OPCODE,
-	RECORD_OPCODE,
     CALL_OPCODE,
     ACCESS_OPCODE,
     INDEX_OPCODE,

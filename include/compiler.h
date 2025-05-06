@@ -2,8 +2,9 @@
 #define COMPILER_H
 
 #include "dynarr.h"
+#include "fn.h"
+#include "module.h"
 #include "token.h"
-#include "rtypes.h"
 #include "types.h"
 #include "lzhtable.h"
 #include <setjmp.h>

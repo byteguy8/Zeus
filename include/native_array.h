@@ -1,40 +1,40 @@
 #ifndef NATIVE_ARRAY_H
 #define NATIVE_ARRAY_H
 
-#include "rtypes.h"
 #include "memory.h"
 #include "factory.h"
 #include "vmu.h"
+#include "tutils.h"
 #include <stdint.h>
 
 static LZHTable *array_symbols = NULL;
 
 Value native_fn_array_first(uint8_t argsc, Value *values, Value *target, VM *vm){
-    Array *array = TO_ARRAY(target);
+    Array *array = VALUE_TO_ARRAY(target);
     if(array->len == 0){return EMPTY_VALUE;}
     return array->values[0];
 }
 
 Value native_fn_array_last(uint8_t argsc, Value *values, Value *target, VM *vm){
-    Array *array = TO_ARRAY(target);
+    Array *array = VALUE_TO_ARRAY(target);
     if(array->len == 0){return EMPTY_VALUE;}
     return array->values[array->len - 1];
 }
 
 Value native_fn_array_make_room(uint8_t argsc, Value *values, Value *target, VM *vm){
-    Array *array = TO_ARRAY(target);
+    Array *array = VALUE_TO_ARRAY(target);
     Value *plus_value = &values[0];
 
     VALIDATE_VALUE_INT_ARG(plus_value, 1, "plus", vm);
 
-    int64_t plus = TO_INT(plus_value);
+    int64_t plus = VALUE_TO_INT(plus_value);
     VALIDATE_ARRAY_SIZE(plus)
 
     int new_size = array->len + plus;
     VALIDATE_ARRAY_SIZE(new_size)
 
     Obj *new_array_obj = vmu_array_obj(array->len + plus, vm);
-    Array *new_array = new_array_obj->content.array;
+    Array *new_array = OBJ_TO_ARRAY(new_array_obj);
 
     for(aidx_t i = 0; i < array->len; i++){
         new_array->values[i] = array->values[i];
@@ -44,17 +44,17 @@ Value native_fn_array_make_room(uint8_t argsc, Value *values, Value *target, VM 
 }
 
 Value native_fn_array_size(uint8_t argsc, Value *values, Value *target, VM *vm){
-    Array *array = TO_ARRAY(target);
+    Array *array = VALUE_TO_ARRAY(target);
     return INT_VALUE((int64_t)array->len);
 }
 
 Value native_fn_array_join(uint8_t argsc, Value *values, Value *target, VM *vm){
-    Array *arr_a = TO_ARRAY(target);
+    Array *arr_a = VALUE_TO_ARRAY(target);
     Value *arr_b_value = &values[0];
 
     VALIDATE_VALUE_ARRAY_ARG(arr_b_value, 1, "array b", vm)
 
-    Array *arr_b = TO_ARRAY(arr_b_value);
+    Array *arr_b = VALUE_TO_ARRAY(arr_b_value);
     int64_t arr_a_size = (int64_t)arr_a->len;
     int64_t arr_b_size = (int64_t)arr_b->len;
     int64_t arr_c_size = arr_a_size + arr_b_size;
@@ -62,7 +62,7 @@ Value native_fn_array_join(uint8_t argsc, Value *values, Value *target, VM *vm){
     VALIDATE_ARRAY_SIZE(arr_c_size)
 
     Obj *arr_c_obj = vmu_array_obj(arr_c_size, vm);
-    Array *arr_c = arr_c_obj->content.array;
+    Array *arr_c = OBJ_TO_ARRAY(arr_c_obj);
 
     for(aidx_t i = 0; i < arr_c->len; i++){
         if(i < arr_a->len){
@@ -77,11 +77,11 @@ Value native_fn_array_join(uint8_t argsc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_array_to_list(uint8_t argsc, Value *values, Value *target, VM *vm){
-    Array *array = TO_ARRAY(target);
+    Array *array = VALUE_TO_ARRAY(target);
     Obj *list_obj = vmu_list_obj(vm);
-    DynArr *list = list_obj->content.list;
+    DynArr *list = OBJ_TO_LIST(list_obj);
 
-    for(lidx_t i = 0; i < array->len; i++){
+    for(aidx_t i = 0; i < array->len; i++){
         Value value = array->values[i];
         dynarr_insert(&value, list);
     }

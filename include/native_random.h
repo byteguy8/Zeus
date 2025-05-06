@@ -2,10 +2,10 @@
 #define NATIVE_RANDOM_H
 
 #include "types.h"
-#include "rtypes.h"
 #include "lzhtable.h"
 #include "factory.h"
 #include "vmu.h"
+#include "tutils.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <time.h>
@@ -25,7 +25,7 @@ Value native_fn_random_init(uint8_t argsc, Value *values, Value *target, VM *vm)
 
     VALIDATE_VALUE_INT_ARG(seed_value, 1, "seed", vm)
 
-    int64_t seed = TO_INT(seed_value);
+    int64_t seed = VALUE_TO_INT(seed_value);
 
     srand((unsigned int)seed);
 
@@ -50,8 +50,8 @@ Value native_fn_random_next_int_range(uint8_t argsc, Value *values, Value *targe
 
     INIT_RANDOM()
 
-    int min = (int)TO_INT(min_value);
-    int max = (int)TO_INT(max_value);
+    int min = (int)VALUE_TO_INT(min_value);
+    int max = (int)VALUE_TO_INT(max_value);
     int random = rand() % (max - min + 1) + min;
 
     return INT_VALUE((int64_t)random);
@@ -63,9 +63,9 @@ Value native_fn_random_next_ints(uint8_t argsc, Value *values, Value *target, VM
     VALIDATE_VALUE_INT_ARG(length_value, 1, "length", vm)
     VALIDATE_ARRAY_INDEX_ARG(1, "length", length_value, vm)
 
-    int64_t length = TO_INT(length_value);
+    int64_t length = VALUE_TO_INT(length_value);
     Obj *values_array_obj = vmu_array_obj(length, vm);
-    Array *values_array = values_array_obj->content.array;
+    Array *values_array = OBJ_TO_ARRAY(values_array_obj);
 
     INIT_RANDOM()
 
@@ -86,12 +86,12 @@ Value native_fn_random_next_ints_range(uint8_t argsc, Value *values, Value *targ
     VALIDATE_VALUE_INT_ARG(length_value, 3, "length", vm)
     VALIDATE_ARRAY_INDEX_ARG(3, "length", length_value, vm)
 
-    int64_t min = TO_INT(min_value);
-    int64_t max = TO_INT(max_value);
-    int64_t length = TO_INT(length_value);
+    int64_t min = VALUE_TO_INT(min_value);
+    int64_t max = VALUE_TO_INT(max_value);
+    int64_t length = VALUE_TO_INT(length_value);
 
     Obj *values_array_obj = vmu_array_obj(length, vm);
-    Array *values_array = values_array_obj->content.array;
+    Array *values_array = OBJ_TO_ARRAY(values_array_obj);
 
     INIT_RANDOM()
 

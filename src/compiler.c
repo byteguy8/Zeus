@@ -100,7 +100,7 @@ void set_fn(size_t index, Fn *fn, Compiler *compiler){
 	DynArr *symbols = MODULE_SYMBOLS(module);
 	SubModuleSymbol symbol = (SubModuleSymbol){
         .type = FUNCTION_MSYMTYPE,
-        .value.fn = fn
+        .value = fn
     };
 
     DYNARR_SET(&symbol, index, symbols);
@@ -111,7 +111,7 @@ void set_closure(size_t index, MetaClosure *closure, Compiler *compiler){
 	DynArr *symbols = MODULE_SYMBOLS(module);
 	SubModuleSymbol symbol = (SubModuleSymbol){
         .type = CLOSURE_MSYMTYPE,
-        .value.meta_closure = closure
+        .value = closure
     };
 
     DYNARR_SET(&symbol, index, symbols);
@@ -1483,7 +1483,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 size_t add_native_module_symbol(NativeModule *module, DynArr *symbols){
     SubModuleSymbol module_symbol = (SubModuleSymbol ){
         .type = NATIVE_MODULE_MSYMTYPE,
-        .value.native_module = module
+        .value = module
     };
 
     dynarr_insert(&module_symbol, symbols);
@@ -1494,7 +1494,7 @@ size_t add_native_module_symbol(NativeModule *module, DynArr *symbols){
 size_t add_module_symbol(Module *module, DynArr *symbols){
 	SubModuleSymbol module_symbol = (SubModuleSymbol ){
         .type = MODULE_MSYMTYPE,
-        .value.module = module
+        .value = module
     };
 
     dynarr_insert(&module_symbol, symbols);

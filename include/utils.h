@@ -1,8 +1,8 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-#include "rtypes.h"
 #include "types.h"
+#include <stdint.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/stat.h>

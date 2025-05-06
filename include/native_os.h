@@ -1,7 +1,6 @@
 #ifndef NATIVE_OS_H
 #define NATIVE_OS_H
 
-#include "rtypes.h"
 #include "vmu.h"
 #include "utils.h"
 

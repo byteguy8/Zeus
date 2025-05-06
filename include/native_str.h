@@ -1,23 +1,23 @@
 #ifndef NATIVE_STR
 #define NATIVE_STR
 
-#include "rtypes.h"
 #include "memory.h"
 #include "factory.h"
 #include "vmu.h"
+#include "tutils.h"
 
 static LZHTable *str_symbols = NULL;
 
 Value native_fn_str_insert(uint8_t argsc, Value *values, Value *target, VM *vm){
-	Str *target_str = TO_STR(target);
+	Str *target_str = VALUE_TO_STR(target);
     Value *at_value = &values[0];
     Value *value_str = &values[1];
 
-    if(!IS_INT(at_value)){
+    if(!IS_VALUE_INT(at_value)){
         vmu_error(vm, "Illegal type for argument 'at': must be of type 'int'");
     }
 
-    int64_t at = TO_INT(at_value);
+    int64_t at = VALUE_TO_INT(at_value);
 
     if(at < 0){
         vmu_error(vm, "Illegal value for argument 'at': indexes must be greater than 0");
@@ -26,11 +26,11 @@ Value native_fn_str_insert(uint8_t argsc, Value *values, Value *target, VM *vm){
         vmu_error(vm, "Illegal value for argument 'at': cannot be greater than %d", target_str->len);
     }
 
-    if(!IS_STR(value_str)){
+    if(!IS_VALUE_STR(value_str)){
         vmu_error(vm, "Argument 1: must be of type 'str'");
     }
 
-    Str *str = TO_STR(value_str);
+    Str *str = VALUE_TO_STR(value_str);
     size_t raw_str_len = target_str->len + str->len;
     char *raw_str = MEMORY_ALLOC(char, raw_str_len + 1, vm->fake_allocator);
 
@@ -46,7 +46,7 @@ Value native_fn_str_insert(uint8_t argsc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_str_remove(uint8_t argsc, Value *values, Value *target, VM *vm){
-	Str *target_str = TO_STR(target);
+	Str *target_str = VALUE_TO_STR(target);
     Value *from_value = &values[0];
     Value *to_value = &values[1];
     int64_t from = -1;
@@ -76,27 +76,27 @@ Value native_fn_str_remove(uint8_t argsc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_str_hash(uint8_t argsc, Value *values, Value *target, VM *vm){
-	Str *target_str = TO_STR(target);
+	Str *target_str = VALUE_TO_STR(target);
 	return INT_VALUE((int64_t)target_str->hash);
 }
 
 Value native_fn_str_is_runtime(uint8_t argsc, Value *values, Value *target, VM *vm){
-	Str *target_str = TO_STR(target);
+	Str *target_str = VALUE_TO_STR(target);
 	return BOOL_VALUE(target_str->runtime == 1);
 }
 
 Value native_fn_str_length(uint8_t argsc, Value *values, Value *target, VM *vm){
-	Str *target_str = TO_STR(target);
+	Str *target_str = VALUE_TO_STR(target);
 	return INT_VALUE(target_str->len);
 }
 
 Value native_fn_str_char_at(uint8_t argc, Value *values, Value *target, VM *vm){
     Value *index_value = &values[0];
-    Str *target_str = TO_STR(target);
+    Str *target_str = VALUE_TO_STR(target);
 
     VALIDATE_STR_INDEX(target_str->len, index_value, vm)
 
-    int64_t index = TO_INT(index_value);
+    int64_t index = VALUE_TO_INT(index_value);
     char *raw_str = factory_clone_raw_str_range((size_t)index, 1, target_str->buff, vm->fake_allocator);
     Obj *str_obj = vmu_str_obj(&raw_str, vm);
 
@@ -104,7 +104,7 @@ Value native_fn_str_char_at(uint8_t argc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_str_sub_str(uint8_t argc, Value *values, Value *target, VM *vm){
-    Str *target_str = TO_STR(target);
+    Str *target_str = VALUE_TO_STR(target);
     Value *from_value = &values[0];
     Value *to_value = &values[1];
     int64_t from = -1;
@@ -124,7 +124,7 @@ Value native_fn_str_sub_str(uint8_t argc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_str_char_code(uint8_t argc, Value *values, Value *target, VM *vm){
-    Str *target_str = TO_STR(target);
+    Str *target_str = VALUE_TO_STR(target);
     Value *index_value = &values[0];
     int64_t index = -1;
 
@@ -136,26 +136,26 @@ Value native_fn_str_char_code(uint8_t argc, Value *values, Value *target, VM *vm
 }
 
 Value native_fn_str_split(uint8_t argc, Value *values, Value *target, VM *vm){
-    Str *target_str = TO_STR(target);
+    Str *target_str = VALUE_TO_STR(target);
     Value *by_value = &values[0];
     Str *by_str = NULL;
 
-    if(!IS_STR(by_value)){
+    if(!IS_VALUE_STR(by_value)){
         vmu_error(vm, "Expect string as 'by' to split");
     }
 
-    by_str = TO_STR(by_value);
+    by_str = VALUE_TO_STR(by_value);
 
     if(by_str->len != 1){
         vmu_error(vm, "Expect string of length 1 as 'by' to split");
     }
 
     Obj *list_obj = vmu_list_obj(vm);
-    DynArr *list = list_obj->content.list;
+    DynArr *list = OBJ_TO_LIST(list_obj);
 	char coincidence = 0;
     size_t from = 0;
     size_t to = 0;
-    size_t i = 0;
+    sidx_t i = 0;
 
     while (i < target_str->len){
         char c = target_str->buff[i++];
@@ -188,7 +188,7 @@ Value native_fn_str_split(uint8_t argc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_str_lstrip(uint8_t argsc, Value *values, Value *target, VM *vm){
-	Str *target_str = TO_STR(target);
+	Str *target_str = VALUE_TO_STR(target);
 
 	if(target_str->len == 0){
         vmu_error(vm, "Expect a not empty string");
@@ -212,7 +212,7 @@ Value native_fn_str_lstrip(uint8_t argsc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_str_rstrip(uint8_t argsc, Value *values, Value *target, VM *vm){
-	Str *target_str = TO_STR(target);
+	Str *target_str = VALUE_TO_STR(target);
 
 	if(target_str->len == 0){
         vmu_error(vm, "Expect a not empty string");
@@ -235,7 +235,7 @@ Value native_fn_str_rstrip(uint8_t argsc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_str_strip(uint8_t argsc, Value *values, Value *target, VM *vm){
-	Str *target_str = TO_STR(target);
+	Str *target_str = VALUE_TO_STR(target);
 
 	if(target_str->len == 0){
         vmu_error(vm, "Expect a not empty string");
@@ -246,7 +246,7 @@ Value native_fn_str_strip(uint8_t argsc, Value *values, Value *target, VM *vm){
 	char to_set = 0;
 	size_t to = target_str->len - 1;
 
-	for(size_t i = 0, o = target_str->len - 1; i < target_str->len; i++, o--){
+	for(sidx_t i = 0, o = target_str->len - 1; i < target_str->len; i++, o--){
 		char cs = target_str->buff[i];
 		char ce = target_str->buff[o];
 
@@ -271,12 +271,12 @@ Value native_fn_str_strip(uint8_t argsc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_str_lower(uint8_t argsc, Value *values, Value *target, VM *vm){
-	Str *target_str = TO_STR(target);
+	Str *target_str = VALUE_TO_STR(target);
     char *lower_raw_str = factory_clone_raw_str(target_str->buff, vm->fake_allocator);
     Obj *lower_str_obj = vmu_str_obj(&lower_raw_str, vm);
-    Str *lower_str = lower_str_obj->content.str;
+    Str *lower_str = OBJ_TO_STR(lower_str_obj);
 
-	for(size_t i = 0; i < lower_str->len; i++){
+	for(sidx_t i = 0; i < lower_str->len; i++){
 		char c = lower_str->buff[i];
 		if(c < 'A' || c > 'Z') continue;
 		lower_str->buff[i] = c - 65 + 97;
@@ -286,12 +286,12 @@ Value native_fn_str_lower(uint8_t argsc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_str_upper(uint8_t argsc, Value *values, Value *target, VM *vm){
-	Str *target_str = TO_STR(target);
+	Str *target_str = VALUE_TO_STR(target);
 	char *upper_raw_str = factory_clone_raw_str(target_str->buff, vm->fake_allocator);
     Obj *upper_str_obj = vmu_str_obj(&upper_raw_str, vm);
-    Str *upper_str = upper_str_obj->content.str;
+    Str *upper_str = OBJ_TO_STR(upper_str_obj);
 
-	for(size_t i = 0; i < upper_str->len; i++){
+	for(sidx_t i = 0; i < upper_str->len; i++){
 		char c = upper_str->buff[i];
 		if(c < 'a' || c > 'z') continue;
 		upper_str->buff[i] = c - 97 + 65;
@@ -301,12 +301,12 @@ Value native_fn_str_upper(uint8_t argsc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_str_title(uint8_t argsc, Value *values, Value *target, VM *vm){
-    Str *target_str = TO_STR(target);
+    Str *target_str = VALUE_TO_STR(target);
     char *title_raw_str = factory_clone_raw_str(target_str->buff, vm->fake_allocator);
     Obj *title_str_obj = vmu_str_obj(&title_raw_str, vm);
-    Str *title_str = title_str_obj->content.str;
+    Str *title_str = OBJ_TO_STR(title_str_obj);
 
-    for (size_t i = 0; i < title_str->len; i++){
+    for (sidx_t i = 0; i < title_str->len; i++){
         char c = title_str->buff[i];
         char before = i == 0 ? '\0' : title_str->buff[i - 1];
 
@@ -321,33 +321,33 @@ Value native_fn_str_title(uint8_t argsc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_str_cmp(uint8_t argsc, Value *values, Value *target, VM *vm){
-	Str *target_str = TO_STR(target);
+	Str *target_str = VALUE_TO_STR(target);
 	Value *cmp_value = &values[0];
 
-	if(!IS_STR(cmp_value)){
+	if(!IS_VALUE_STR(cmp_value)){
         vmu_error(vm, "Expect a string, but got something else");
     }
 
-	Str *cmp_str = TO_STR(cmp_value);
+	Str *cmp_str = VALUE_TO_STR(cmp_value);
 
 	return INT_VALUE((int64_t)strcmp(target_str->buff, cmp_str->buff));
 }
 
 Value native_fn_str_cmp_ic(uint8_t argsc, Value *values, Value *target, VM *vm){
-	Str *target_str = TO_STR(target);
+	Str *target_str = VALUE_TO_STR(target);
 	Value *cmp_value = &values[0];
 	Str *cmp_str = NULL;
 
-	if(!IS_STR(cmp_value)){
+	if(!IS_VALUE_STR(cmp_value)){
         vmu_error(vm, "Expect a string, but got something else");
     }
 
-	cmp_str = TO_STR(cmp_value);
+	cmp_str = VALUE_TO_STR(cmp_value);
 
 	if(target_str->len < cmp_str->len){return INT_VALUE(-1);}
 	else if(target_str->len > cmp_str->len){return INT_VALUE(1);}
 
-	for(size_t i = 0; i < target_str->len; i++){
+	for(sidx_t i = 0; i < target_str->len; i++){
 		char ca = target_str->buff[i];
 		char cb = cmp_str->buff[i];
 

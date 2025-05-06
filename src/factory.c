@@ -211,15 +211,3 @@ Module *factory_clone_module(char *new_name, char *filepath, Module *module, All
 
     return new_module;
 }
-
-ForeignLib *factory_create_foreign_lib(void *handler, Allocator *allocator){
-    ForeignLib *foreign_lib = MEMORY_ALLOC(ForeignLib, 1, allocator);
-    if(!foreign_lib){return NULL;}
-    foreign_lib->handler = handler;
-    return foreign_lib;
-}
-
-void factory_destroy_foreign_lib(ForeignLib *lib, Allocator *allocator){
-    if(!lib){return;}
-    MEMORY_DEALLOC(ForeignLib, 1, lib, allocator);
-}

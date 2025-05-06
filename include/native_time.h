@@ -3,7 +3,6 @@
 
 #define _POSIX_C_SOURCE 200809L
 
-#include "rtypes.h"
 #include "vmu.h"
 #include <time.h>
 #include <unistd.h>
@@ -29,11 +28,11 @@ Value native_fn_time_sleep(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *raw_value = &values[0];
     int64_t value = -1;
 
-    if(!IS_INT(raw_value)){
+    if(!IS_VALUE_INT(raw_value)){
         vmu_error(vm, "Parameter 0 (value) must be integer");
     }
 
-    value = TO_INT(raw_value);
+    value = VALUE_TO_INT(raw_value);
 
     if(value < 0){
         vmu_error(vm, "Parameter 0 (value: %ld) must be greater than 0", value);

@@ -3,7 +3,6 @@
 #include "factory.h"
 #include "utils.h"
 #include "token.h"
-#include "rtypes.h"
 #include <stdint.h>
 #include <assert.h>
 #include <stdarg.h>
