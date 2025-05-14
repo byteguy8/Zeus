@@ -85,7 +85,7 @@ Value native_fn_str_is_runtime(uint8_t argsc, Value *values, Value *target, VM *
 	return BOOL_VALUE(target_str->runtime == 1);
 }
 
-Value native_fn_str_length(uint8_t argsc, Value *values, Value *target, VM *vm){
+Value native_fn_str_size(uint8_t argsc, Value *values, Value *target, VM *vm){
 	Str *target_str = VALUE_TO_STR(target);
 	return INT_VALUE(target_str->len);
 }
@@ -201,8 +201,12 @@ Value native_fn_str_lstrip(uint8_t argsc, Value *values, Value *target, VM *vm){
 	while(1){
 		char c = raw_str[from++];
 
-		if(c != ' ' && c != '\t'){break;}
-		if(from >= len){break;}
+		if(c != ' ' && c != '\t'){
+            break;
+        }
+		if(from >= len){
+            break;
+        }
 	}
 
     char *strip_raw_str = factory_clone_raw_str_range(from - 1, len - from + 1, target_str->buff, vm->fake_allocator);
@@ -224,8 +228,12 @@ Value native_fn_str_rstrip(uint8_t argsc, Value *values, Value *target, VM *vm){
 	while(1){
 		char cs = raw_str[--to];
 
-		if(to == 0){break;}
-		if(cs != ' ' && cs != '\t'){break;}
+		if(to == 0){
+            break;
+        }
+		if(cs != ' ' && cs != '\t'){
+            break;
+        }
 	}
 
 	char *strip_raw_str = factory_clone_raw_str_range(0, to + 1, raw_str, vm->fake_allocator);
@@ -254,14 +262,17 @@ Value native_fn_str_strip(uint8_t argsc, Value *values, Value *target, VM *vm){
 			from = i;
 			from_set = 1;
 		}
-
 		if((ce != ' ' && ce != '\t') && !to_set){
 			to = o;
 			to_set = 1;
 		}
 
-		if(from_set && to_set) break;
-		if(from == to) break;
+		if(from_set && to_set){
+            break;
+        }
+		if(from == to){
+            break;
+        }
 	}
 
     char *strip_raw_str = factory_clone_raw_str_range(from, to - from + 1, target_str->buff, vm->fake_allocator);
@@ -278,7 +289,11 @@ Value native_fn_str_lower(uint8_t argsc, Value *values, Value *target, VM *vm){
 
 	for(sidx_t i = 0; i < lower_str->len; i++){
 		char c = lower_str->buff[i];
-		if(c < 'A' || c > 'Z') continue;
+
+		if(c < 'A' || c > 'Z'){
+            continue;
+        }
+
 		lower_str->buff[i] = c - 65 + 97;
 	}
 
@@ -293,7 +308,11 @@ Value native_fn_str_upper(uint8_t argsc, Value *values, Value *target, VM *vm){
 
 	for(sidx_t i = 0; i < upper_str->len; i++){
 		char c = upper_str->buff[i];
-		if(c < 'a' || c > 'z') continue;
+
+		if(c < 'a' || c > 'z'){
+            continue;
+        }
+
 		upper_str->buff[i] = c - 97 + 65;
 	}
 
@@ -308,12 +327,16 @@ Value native_fn_str_title(uint8_t argsc, Value *values, Value *target, VM *vm){
 
     for (sidx_t i = 0; i < title_str->len; i++){
         char c = title_str->buff[i];
+
         char before = i == 0 ? '\0' : title_str->buff[i - 1];
+        int is_word = before == ' ' || before == '\t' || i == 0;
 
-        if(c < 'a' || c > 'z'){continue;}
-
-        if(before == ' ' || before == '\t' || i == 0){
+        if(is_word && (c >= 'a' && c <= 'z')){
             title_str->buff[i] = c - 97 + 65;
+            continue;
+        }
+        if(!is_word && (c >= 'A' && c <= 'Z')){
+            title_str->buff[i] = c - 65 + 97;
         }
     }
 
@@ -344,20 +367,32 @@ Value native_fn_str_cmp_ic(uint8_t argsc, Value *values, Value *target, VM *vm){
 
 	cmp_str = VALUE_TO_STR(cmp_value);
 
-	if(target_str->len < cmp_str->len){return INT_VALUE(-1);}
-	else if(target_str->len > cmp_str->len){return INT_VALUE(1);}
+	if(target_str->len < cmp_str->len){
+        return INT_VALUE(-1);
+    }else if(target_str->len > cmp_str->len){
+        return INT_VALUE(1);
+    }
 
 	for(sidx_t i = 0; i < target_str->len; i++){
 		char ca = target_str->buff[i];
 		char cb = cmp_str->buff[i];
 
-		if(ca >= 'A' && ca <= 'Z'){ca = ca - 65 + 97;}
-		if(cb >= 'A' && cb <= 'Z'){cb = cb - 65 + 97;}
+		if(ca >= 'A' && ca <= 'Z'){
+            ca = ca - 65 + 97;
+        }
+		if(cb >= 'A' && cb <= 'Z'){
+            cb = cb - 65 + 97;
+        }
 
-		if(ca == cb){continue;}
+		if(ca == cb){
+            continue;
+        }
 
-		if(ca > cb){return INT_VALUE(1);}
-		else if(ca < cb){return INT_VALUE(-1);}
+		if(ca > cb){
+            return INT_VALUE(1);
+        }else if(ca < cb){
+            return INT_VALUE(-1);
+        }
 	}
 
 	return INT_VALUE(0);
@@ -370,7 +405,7 @@ NativeFnInfo *native_str_get(char *symbol, VM *vm){
         factory_add_native_fn_info("remove", 2, native_fn_str_remove, str_symbols, vm->fake_allocator);
         factory_add_native_fn_info("hash", 0, native_fn_str_hash, str_symbols, vm->fake_allocator);
         factory_add_native_fn_info("is_runtime", 0, native_fn_str_is_runtime, str_symbols, vm->fake_allocator);
-        factory_add_native_fn_info("length", 0, native_fn_str_length, str_symbols, vm->fake_allocator);
+        factory_add_native_fn_info("size", 0, native_fn_str_size, str_symbols, vm->fake_allocator);
         factory_add_native_fn_info("char_at", 1, native_fn_str_char_at, str_symbols, vm->fake_allocator);
         factory_add_native_fn_info("sub_str", 2, native_fn_str_sub_str, str_symbols, vm->fake_allocator);
         factory_add_native_fn_info("char_code", 1, native_fn_str_char_code, str_symbols, vm->fake_allocator);
