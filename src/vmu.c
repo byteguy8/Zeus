@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
-#include <dlfcn.h>
 
 #define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
 #define CURRENT_LOCATIONS(vm)(CURRENT_FN(vm)->locations)
@@ -440,7 +439,7 @@ int vmu_obj_to_str(Obj *object, BStr *bstr){
 
             DynArr *list = OBJ_TO_LIST(object);
 
-            snprintf(buff, buff_len, "<list %ld at %p>", list->used, list);
+            snprintf(buff, buff_len, "<list %zu at %p>", list->used, list);
 
             return bstr_append(buff, bstr);
 		}case DICT_OTYPE:{
@@ -449,7 +448,7 @@ int vmu_obj_to_str(Obj *object, BStr *bstr){
 
             LZHTable *table = OBJ_TO_DICT(object);
 
-            snprintf(buff, buff_len, "<dict %ld at %p>", table->n, table);
+            snprintf(buff, buff_len, "<dict %zu at %p>", table->n, table);
 
             return bstr_append(buff, bstr);
         }case RECORD_OTYPE:{
@@ -458,7 +457,7 @@ int vmu_obj_to_str(Obj *object, BStr *bstr){
 
             Record *record = OBJ_TO_RECORD(object);
 
-            snprintf(buff, buff_len, "<record %ld at %p>", record->attributes ? record->attributes->n : 0, record);
+            snprintf(buff, buff_len, "<record %zu at %p>", record->attributes ? record->attributes->n : 0, record);
 
             return bstr_append(buff, bstr);
 		}case NATIVE_FN_OTYPE:{
@@ -531,7 +530,7 @@ int vmu_value_to_str(Value *value, BStr *bstr){
             size_t buff_len = 1024;
             char buff[buff_len];
 
-            snprintf(buff, buff_len, "%ld", VALUE_TO_INT(value));
+            snprintf(buff, buff_len, "%zu", VALUE_TO_INT(value));
 
             return bstr_append(buff, bstr);
         }case FLOAT_VTYPE:{
@@ -563,15 +562,15 @@ void vmu_print_obj(FILE *stream, Obj *object){
 			break;
 		}case LIST_OTYPE:{
 			DynArr *list = OBJ_TO_LIST(object);
-            fprintf(stream, "<list %ld at %p>", list->used, list);
+            fprintf(stream, "<list %zu at %p>", list->used, list);
 			break;
 		}case DICT_OTYPE:{
             LZHTable *table = OBJ_TO_DICT(object);
-            fprintf(stream, "<dict %ld at %p>", table->n, table);
+            fprintf(stream, "<dict %zu at %p>", table->n, table);
             break;
         }case RECORD_OTYPE:{
 			Record *record = OBJ_TO_RECORD(object);
-            fprintf(stream, "<record %ld at %p>", record->attributes ? record->attributes->n : 0, record);
+            fprintf(stream, "<record %zu at %p>", record->attributes ? record->attributes->n : 0, record);
 			break;
 		}case NATIVE_FN_OTYPE:{
             NativeFn *native_fn = OBJ_TO_NATIVE_FN(object);
@@ -610,7 +609,12 @@ void vmu_print_value(FILE *stream, Value *value){
             fprintf(stream, "%s", bool == 0 ? "false" : "true");
             break;
         }case INT_VTYPE:{
-            fprintf(stream, "%ld", VALUE_TO_INT(value));
+            #ifdef _WIN32
+                fprintf(stream, "%zu", VALUE_TO_INT(value));
+            #else
+                fprintf(stream, "%zu", VALUE_TO_INT(value));
+            #endif
+
             break;
         }case FLOAT_VTYPE:{
 			fprintf(stream, "%.8f", VALUE_TO_FLOAT(value));

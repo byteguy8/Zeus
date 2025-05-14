@@ -1,16 +1,22 @@
-COMPILER := gcc
+PLATFORM := LINUX
+BUILD := DEBUG
+
+COMPILER.LINUX := gcc
+COMPILER.WINDOWS := mingw64
+COMPILER := $(COMPILER.$(PLATFORM))
 
 SRC_DIR := ./src
 OUT_DIR := ./build
 
-BUILD := DEBUG
-
-FLAGS.COMMON := -Wall -Wextra --std=gnu99 -I./include -Wno-unused-parameter -Wno-unused-function
-FLAGS.DEBUG := -g2 -O0 -fsanitize=address,undefined,alignment
+FLAGS.COMMON := -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -I./include
+FLAGS.DEBUG := -g2 -O0
+FLAGS.DEBUG.LINUX := -fsanitize=address,undefined,alignment
 FLAGS.RELEASE := -O3
-FLAGS := ${FLAGS.COMMON} ${FLAGS.${BUILD}}
+FLAGS.LINUX := --std=gnu99
+FLAGS.WINDOWS := --std=c99
+FLAGS := $(FLAGS.COMMON) $(FLAGS.$(BUILD)) $(FLAGS.$(BUILD).$(PLATFORM)) $(FLAGS.$(PLATFORM))
 
-OBJS = lzarena.o lzflist.o \
+OBJS := lzarena.o lzflist.o \
 bstr.o dynarr.o \
 lzhtable.o memory.o \
 factory.o utils.o lexer.o \
@@ -18,8 +24,12 @@ parser.o compiler.o \
 dumpper.o vmu.o \
 vm.o
 
+LINKS.COMMON := -lm
+LINKS.WINDOWS := -lshlwapi
+LINKS := $(LINKS.COMMON) $(LINKS.$(PLATFORM))
+
 zeus: $(OBJS)
-	$(COMPILER) -o $(OUT_DIR)/zeus $(FLAGS) $(OUT_DIR)/*.o $(SRC_DIR)/zeus.c -lm
+	$(COMPILER) -o $(OUT_DIR)/zeus $(FLAGS) $(OUT_DIR)/*.o $(SRC_DIR)/zeus.c $(LINKS)
 vm.o:
 	$(COMPILER) -c -o $(OUT_DIR)/vm.o $(FLAGS) $(SRC_DIR)/vm.c
 vmu.o:

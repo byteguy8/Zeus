@@ -18,8 +18,8 @@ static Token *peek(Parser *parser);
 static Token *previous(Parser *parser);
 static int is_at_end(Parser *parser);
 static int match(Parser *parser, int count, ...);
-static int check(Parser *parser, TokenType type);
-Token *consume(Parser *parser, TokenType type, char *err_msg, ...);
+static int check(Parser *parser, TokType type);
+Token *consume(Parser *parser, TokType type, char *err_msg, ...);
 DynArr *record_key_values(Token *record_token, Parser *parser);
 // EXPRESSIONS
 Expr *parse_expr(Parser *paser);
@@ -110,7 +110,7 @@ int match(Parser *parser, int count, ...){
 	va_start(args, count);
 
 	for(int i = 0; i < count; i++){
-		TokenType type = va_arg(args, TokenType);
+		TokType type = va_arg(args, TokType);
 
 		if(token->type == type){
 			parser->current++;
@@ -123,12 +123,12 @@ int match(Parser *parser, int count, ...){
 	return 0;
 }
 
-int check(Parser *parser, TokenType type){
+int check(Parser *parser, TokType type){
     Token *token = peek(parser);
     return token->type == type;
 }
 
-Token *consume(Parser *parser, TokenType type, char *err_msg, ...){
+Token *consume(Parser *parser, TokType type, char *err_msg, ...){
     Token *token = peek(parser);
 
     if(token->type == type){

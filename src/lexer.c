@@ -34,16 +34,16 @@ static Token *create_token_raw(
     char *lexeme,
     void *literal,
     size_t literal_size,
-    TokenType type,
+    TokType type,
     Lexer *lexer
 );
 static Token *create_token_literal(
 	void *literal,
 	size_t literal_size,
-	TokenType type,
+	TokType type,
 	Lexer *lexer
 );
-static Token *create_token(TokenType type, Lexer *lexer);
+static Token *create_token(TokType type, Lexer *lexer);
 #define ADD_TOKEN_RAW(token)(dynarr_insert_ptr((token), lexer->tokens))
 static void comment(Lexer *lexer);
 static Token *number(Lexer *lexer);
@@ -180,7 +180,7 @@ Token *create_token_raw(
     char *lexeme,
     void *literal,
     size_t literal_size,
-    TokenType type,
+    TokType type,
     Lexer *lexer
 ){
     Token *token = (Token *)MEMORY_ALLOC(Token, 1, lexer->rtallocator);
@@ -199,7 +199,7 @@ Token *create_token_raw(
 Token *create_token_literal(
 	void *literal,
 	size_t literal_size,
-	TokenType type,
+	TokType type,
 	Lexer *lexer
 ){
 	char *lexeme = lexeme_current(lexer);
@@ -213,7 +213,7 @@ Token *create_token_literal(
 	);
 }
 
-Token *create_token(TokenType type, Lexer *lexer){
+Token *create_token(TokType type, Lexer *lexer){
 	return create_token_literal(NULL, 0, type, lexer);
 }
 
@@ -227,7 +227,7 @@ void comment(Lexer *lexer){
 }
 
 Token *number(Lexer *lexer){
-    TokenType type = INT_TYPE_TOKTYPE;
+    TokType type = INT_TYPE_TOKTYPE;
 
     while (!is_at_end(lexer) && is_digit(peek(lexer))){
         advance(lexer);
@@ -279,7 +279,7 @@ Token *identifier(Lexer *lexer){
     char lexeme[lexeme_len + 1];
     lexeme_current_copy(lexeme, lexer);
 
-    TokenType *type = (TokenType *)lzhtable_get(
+    TokType *type = (TokType *)lzhtable_get(
         (uint8_t *)lexeme,
         lexeme_len,
         lexer->keywords
@@ -308,7 +308,7 @@ Token *string(Lexer *lexer){
     int from = 0;
 	int lines = 0;
     DynArr *tokens = NULL;
-    TokenType type = STR_TYPE_TOKTYPE;
+    TokType type = STR_TYPE_TOKTYPE;
     BStr *bstr = FACTORY_BSTR(lexer->rtallocator);
 
 	while(!is_at_end(lexer) && peek(lexer) != '"'){
@@ -456,7 +456,37 @@ Token *string(Lexer *lexer){
 
 Token *scan_token(char c, Lexer *lexer){
     switch (c){
-        case '+':{
+        case '?':{
+        	return create_token(QUESTION_MARK_TOKTYPE, lexer);
+        }case ':':{
+			return create_token(COLON_TOKTYPE, lexer);
+		}case ';':{
+            return create_token(SEMICOLON_TOKTYPE, lexer);
+        }case '[':{
+            return create_token(LEFT_SQUARE_TOKTYPE, lexer);
+        }case ']':{
+            return create_token(RIGHT_SQUARE_TOKTYPE, lexer);
+        }case '(':{
+            return create_token(LEFT_PAREN_TOKTYPE, lexer);
+        }case ')':{
+            return create_token(RIGHT_PAREN_TOKTYPE, lexer);
+        }case '{':{
+            return create_token(LEFT_BRACKET_TOKTYPE, lexer);
+        }case '}':{
+            return create_token(RIGHT_BRACKET_TOKTYPE, lexer);
+        }case '~':{
+            return create_token(NOT_BITWISE_TOKTYPE, lexer);
+        }case '&':{
+            return create_token(AND_BITWISE_TOKTYPE, lexer);
+        }case '^':{
+            return create_token(XOR_BITWISE_TOKTYPE, lexer);
+        }case '|':{
+            return create_token(OR_BITWISE_TOKTYPE, lexer);
+        }case ',':{
+			return create_token(COMMA_TOKTYPE, lexer);
+		}case '.':{
+			return create_token(DOT_TOKTYPE, lexer);
+		}case '+':{
 			if(match('=', lexer)){
 				return create_token(COMPOUND_ADD_TOKTYPE, lexer);
 			}else{
@@ -483,19 +513,7 @@ Token *scan_token(char c, Lexer *lexer){
 			}else{
 				return create_token(SLASH_TOKTYPE, lexer);
 			}
-        }case '~':{
-            return create_token(NOT_BITWISE_TOKTYPE, lexer);
-        }case '&':{
-            return create_token(AND_BITWISE_TOKTYPE, lexer);
-        }case '^':{
-            return create_token(XOR_BITWISE_TOKTYPE, lexer);
-        }case '|':{
-            return create_token(OR_BITWISE_TOKTYPE, lexer);
-        }case ',':{
-			return create_token(COMMA_TOKTYPE, lexer);
-		}case '.':{
-			return create_token(DOT_TOKTYPE, lexer);
-		}case '<':{
+        }case '<':{
             if(match('<', lexer)){
                 return create_token(LEFT_SHIFT_TOKTYPE, lexer);
             }else if(match('=', lexer)){
@@ -523,30 +541,13 @@ Token *scan_token(char c, Lexer *lexer){
 			}else{
 				return create_token(EXCLAMATION_TOKTYPE, lexer);
 			}
-        }case '?':{
-        	return create_token(QUESTION_MARK_TOKTYPE, lexer);
-        	break;
-        }case ':':{
-			return create_token(COLON_TOKTYPE, lexer);
-		}case ';':{
-            return create_token(SEMICOLON_TOKTYPE, lexer);
-        }case '[':{
-            return create_token(LEFT_SQUARE_TOKTYPE, lexer);
-        }case ']':{
-            return create_token(RIGHT_SQUARE_TOKTYPE, lexer);
-        }case '(':{
-            return create_token(LEFT_PAREN_TOKTYPE, lexer);
-        }case ')':{
-            return create_token(RIGHT_PAREN_TOKTYPE, lexer);
-        }case '{':{
-            return create_token(LEFT_BRACKET_TOKTYPE, lexer);
-        }case '}':{
-            return create_token(RIGHT_BRACKET_TOKTYPE, lexer);
         }case '\n':{
             lexer->line++;
             return NULL;
         }case ' ':
-         case '\t':{
+         case '\r':
+         case '\t':
+         case '\0':{
             return NULL;
         }default:{
             if(is_digit(c)){
@@ -556,7 +557,7 @@ Token *scan_token(char c, Lexer *lexer){
 			}else if(c == '"'){
 				return string(lexer);
 			}else{
-				error(lexer, "Unknown token '%c'", c);
+				error(lexer, "Unknown token '%c':%d", c, c);
 				return NULL;
 			}
         }

@@ -1,15 +1,21 @@
 #include "utils.h"
 #include "memory.h"
+#include "factory.h"
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
-//> LINUX
-#include <unistd.h>
-#include <libgen.h>
-#include <sys/utsname.h>
-#include <errno.h>
-//< LINUX
+
+#if _WIN32
+    #include <shlwapi.h>
+#elif __linux__
+    #define _POSIX_C_SOURCE 200809L
+
+    #include <errno.h>
+    #include <time.h>
+    #include <libgen.h>
+    #include <sys/utsname.h>
+#endif
 
 char *utils_join_raw_strs(
     size_t buffa_len,
@@ -204,7 +210,7 @@ int utils_read_file(
     char *err_str,
     Allocator *allocator
 ){
-    if(!UTILS_FILE_EXISTS(pathname)){
+    if(!UTILS_FILES_EXISTS(pathname)){
         snprintf(err_str, err_len, "Pathname does not exists");
         return 1;
     }
@@ -212,7 +218,7 @@ int utils_read_file(
         snprintf(err_str, err_len, "Pathname can not be read");
         return 1;
     }
-    if(!utils_file_is_regular(pathname)){
+    if(!utils_files_is_regular(pathname)){
         snprintf(err_str, err_len, "Pathname is not a regular file");
         return 1;
     }
@@ -269,50 +275,116 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator){
 	return rstr;
 }
 
-int utils_file_is_regular(char *filename){
-	struct stat file = {0};
 
-    if(stat(filename, &file) == -1){return -1;}
+#ifdef _WIN32
+    int utils_files_is_regular(LPCSTR pathname){
+	    DWORD attributes = GetFileAttributesA(pathname);
+        return attributes & FILE_ATTRIBUTE_ARCHIVE;
+    }
 
-	return S_ISREG(file.st_mode);
-}
+    char *utils_files_parent_pathname(char *pathname){
+        PathRemoveFileSpecA(pathname);
+        return pathname;
+    }
 
-char *utils_parent_pathname(char *pathname){
-    return dirname(pathname);
-}
+    char *utils_files_cwd(Allocator *allocator){
+        DWORD buff_len = 0;
+        LPTSTR buff = NULL;
 
-char *utils_cwd(Allocator *allocator){
-    char *pathname = getcwd(NULL, 0);
-    size_t pathname_len = strlen(pathname);
-    char *cloned_pathname = MEMORY_ALLOC(char, pathname_len + 1, allocator);
+        buff_len = GetCurrentDirectory(buff_len, buff);
+        buff = MEMORY_ALLOC(CHAR, buff_len, allocator);
 
-    if(!cloned_pathname){
+        if(!buff){
+            return NULL;
+        }
+
+        if(GetCurrentDirectory(buff_len, buff) == 0){
+            MEMORY_DEALLOC(CHAR, buff_len, buff, allocator);
+            return NULL;
+        }
+
+        return buff;
+    }
+
+    int64_t utils_millis(){
+        FILETIME current_filetime = {0};
+        GetSystemTimeAsFileTime(&current_filetime);
+
+        SYSTEMTIME epoch_systime = {0};
+        epoch_systime.wYear = 1970;
+        epoch_systime.wMonth = 1;
+        epoch_systime.wDayOfWeek = 4;
+        epoch_systime.wDay = 1;
+
+        FILETIME epoch_filetime = {0};
+        SystemTimeToFileTime(&epoch_systime, &epoch_filetime);
+
+        ULARGE_INTEGER current_ularge = {0};
+        current_ularge.u.LowPart = current_filetime.dwLowDateTime;
+        current_ularge.u.HighPart = current_filetime.dwHighDateTime;
+
+        ULARGE_INTEGER epoch_ularge = {0};
+        epoch_ularge.u.LowPart = epoch_filetime.dwLowDateTime;
+        epoch_ularge.u.HighPart = epoch_filetime.dwHighDateTime;
+
+        ULARGE_INTEGER new_current_ularge = {0};
+        new_current_ularge.QuadPart = current_ularge.QuadPart - epoch_ularge.QuadPart;
+
+        return (new_current_ularge.QuadPart * 100) / 1000000;
+    }
+
+    void utils_sleep(int64_t time){
+        Sleep(time);
+    }
+
+    char *utils_files_sysname(Allocator *allocator){
+        return factory_clone_raw_str("Windows", allocator);
+    }
+#elif __linux__
+    int utils_files_is_regular(char *pathname){
+        struct stat file = {0};
+
+        if(stat(pathname, &file) == -1){
+            return -1;
+        }
+
+        return S_ISREG(file.st_mode);
+    }
+
+    char *utils_files_parent_pathname(char *pathname){
+        return dirname(pathname);
+    }
+
+    char *utils_files_cwd(Allocator *allocator){
+        char *pathname = getcwd(NULL, 0);
+        size_t pathname_len = strlen(pathname);
+        char *cloned_pathname = MEMORY_ALLOC(char, pathname_len + 1, allocator);
+
+        if(!cloned_pathname){
+            free(pathname);
+            return NULL;
+        }
+
+        memcpy(cloned_pathname, pathname, pathname_len);
+        cloned_pathname[pathname_len] = '\0';
+
         free(pathname);
-        return NULL;
+
+        return cloned_pathname;
     }
 
-    memcpy(cloned_pathname, pathname, pathname_len);
-    cloned_pathname[pathname_len] = '\0';
+    int64_t utils_millis(){
+        struct timespec spec = {0};
+        clock_gettime(CLOCK_REALTIME, &spec);
 
-    free(pathname);
-
-    return cloned_pathname;
-}
-
-char *utils_sysname(Allocator *allocator){
-    struct utsname sysinfo = {0};
-
-    if(uname(&sysinfo) == 0){
-        size_t name_len = strlen(sysinfo.sysname);
-        char *name = allocator->alloc(name_len + 1, allocator->ctx);
-
-        if(!name){return NULL;}
-
-        memcpy(name, sysinfo.sysname, name_len);
-        name[name_len] = 0;
-
-        return name;
+        return spec.tv_nsec / 1e+6 + spec.tv_sec * 1000;
     }
 
-    return NULL;
-}
+    void utils_sleep(int64_t time){
+        usleep(time * 1000);
+    }
+
+    char *utils_files_sysname(Allocator *allocator){
+        return factory_clone_raw_str("Linux", allocator);
+    }
+#endif

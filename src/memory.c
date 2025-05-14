@@ -44,7 +44,7 @@ void *lzflist_link_alloc(size_t size, void *ctx){
         memory_deinit();
         exit(EXIT_FAILURE);
     }
-    
+
     return ptr;
 }
 
@@ -56,7 +56,7 @@ void *lzflist_link_realloc(void *ptr, size_t old_size, size_t new_size, void *ct
         memory_deinit();
         exit(EXIT_FAILURE);
     }
-    
+
     return new_ptr;
 }
 

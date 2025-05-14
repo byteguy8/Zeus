@@ -11,13 +11,11 @@
 #include "native_array.h"
 #include "native_list.h"
 #include "native_dict.h"
-#include "native_lib.h"
 
 #include <stdio.h>
 #include <stdarg.h>
 #include <assert.h>
 #include <setjmp.h>
-#include <dlfcn.h>
 
 void *vm_alloc(size_t size, void * ctx){
     VM *vm = (VM *)ctx;

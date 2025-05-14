@@ -4,8 +4,19 @@
 #include "types.h"
 #include <stdint.h>
 #include <string.h>
-#include <unistd.h>
-#include <sys/stat.h>
+
+#ifdef _WIN32
+    #include <io.h>
+    #include <windows.h>
+
+    #define ACCESS_MODE_EXISTS 0
+    #define ACCESS_MODE_WRITE_ONLY 2
+    #define ACCESS_MODE_READ_ONLY 4
+    #define ACCESS_MODE_READ_AND_WRITE 6
+#elif __linux__
+    #include <unistd.h>
+    #include <sys/stat.h>
+#endif
 
 char *utils_join_raw_strs(
     size_t buffa_len,
@@ -36,13 +47,22 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator);
 
 //> SYSTEM DEPENDENT
 // test for the existence of a file
-#define UTILS_FILE_EXISTS(pathname) (access(pathname, F_OK) == 0)
-// test for the existence of a file and if can be read
-#define UTILS_FILE_CAN_READ(pathname) (access(pathname, R_OK) == 0)
-int utils_file_is_regular(char *filename);
-char *utils_parent_pathname(char *pathname);
-char *utils_cwd(Allocator *allocator);
-char *utils_sysname(Allocator *allocator);
-//< SYSTEM DEPENDENT
+
+#ifdef _WIN32
+    #define UTILS_FILES_EXISTS(pathname) (_access(pathname, ACCESS_MODE_EXISTS) == 0)
+    #define UTILS_FILE_CAN_READ(pathname) (access(pathname, ACCESS_MODE_READ_ONLY) == 0)
+    int utils_files_is_regular(LPCSTR pathname);
+#elif __linux__
+    #define UTILS_FILES_EXISTS(pathname) (access(pathname, F_OK) == 0)
+    #define UTILS_FILE_CAN_READ(pathname) (access(pathname, R_OK) == 0)
+    int utils_files_is_regular(char *pathname);
+#endif
+
+char *utils_files_parent_pathname(char *pathname);
+char *utils_files_cwd(Allocator *allocator);
+char *utils_files_sysname(Allocator *allocator);
+
+int64_t utils_millis();
+void utils_sleep(int64_t time);
 
 #endif

@@ -704,13 +704,13 @@ char *resolve_module_location(
             }
         }
 
-        if(!UTILS_FILE_EXISTS(module_pathname)){continue;}
+        if(!UTILS_FILES_EXISTS(module_pathname)){continue;}
 
 		if(!UTILS_FILE_CAN_READ(module_pathname)){
 			error(compiler, import_token, "File at '%s' do not exists or cannot be read", module_pathname);
 		}
 
-        if(!utils_file_is_regular(module_pathname)){
+        if(!utils_files_is_regular(module_pathname)){
             error(compiler, import_token, "File at '%s' is not a regular file", module_pathname);
         }
 
@@ -1875,7 +1875,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             Compiler *import_compiler = compiler_create(compiler->ctallocator, compiler->rtallocator);
 
             char *cloned_module_pathname = factory_clone_raw_str(module_pathname, compiler->ctallocator);
-            import_compiler->paths[import_compiler->paths_len++] = utils_parent_pathname(cloned_module_pathname);
+            import_compiler->paths[import_compiler->paths_len++] = utils_files_parent_pathname(cloned_module_pathname);
 
             for (int i = 0; i < compiler->paths_len; i++){
 				import_compiler->paths[import_compiler->paths_len++] = compiler->paths[i];
@@ -2073,9 +2073,9 @@ void define_natives(Compiler *compiler){
 Compiler *compiler_create(Allocator *ctallocator, Allocator *rtallocator){
     Compiler *compiler = MEMORY_ALLOC(Compiler, 1, ctallocator);
 
-    if(!compiler){return NULL;}
-
-    memset(compiler, 0, sizeof(Compiler));
+    if(!compiler){
+        return NULL;
+    }
 
     compiler->ctallocator = ctallocator;
     compiler->rtallocator = rtallocator;

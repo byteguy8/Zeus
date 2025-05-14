@@ -40,8 +40,8 @@ void add_native(char *name, int arity, RawNativeFn raw_native, LZHTable *natives
     lzhtable_put((uint8_t *)name, strlen(name), native, natives, NULL);
 }
 
-void add_keyword(char *name, TokenType type, LZHTable *keywords, Allocator *allocator){
-    TokenType *ctype = (TokenType *)MEMORY_ALLOC(TokenType, 1, allocator);
+void add_keyword(char *name, TokType type, LZHTable *keywords, Allocator *allocator){
+    TokType *ctype = (TokType *)MEMORY_ALLOC(TokType, 1, allocator);
     *ctype = type;
     lzhtable_put((uint8_t *)name, strlen(name), ctype, keywords, NULL);
 }
@@ -104,7 +104,7 @@ int main(int argc, char const *argv[]){
 		exit(EXIT_FAILURE);
 	}
 
-	if(!utils_file_is_regular(source_path)){
+	if(!utils_files_is_regular(source_path)){
 		fprintf(stderr, "File at '%s' is not a regular file.\n", source_path);
 		exit(EXIT_FAILURE);
 	}
@@ -151,15 +151,15 @@ int main(int argc, char const *argv[]){
 
 	Lexer *lexer = lexer_create(rtallocator);
 	Parser *parser = parser_create(ctallocator);
-    Compiler *compiler = compiler_create(ctallocator, rtallocator);
+    Compiler *compiler = compiler_create(memory_arena_allocator(NULL), rtallocator);
     Dumpper *dumpper = dumpper_create(ctallocator);
     VM *vm = vm_create(rtallocator);
 
     if(module_path[0] == '/'){
         char *cloned_module_path = factory_clone_raw_str(module_path, rtallocator);
-		compiler->paths[compiler->paths_len++] = utils_parent_pathname(cloned_module_path);
+		compiler->paths[compiler->paths_len++] = utils_files_parent_pathname(cloned_module_path);
 	}else{
-		compiler->paths[compiler->paths_len++] = utils_cwd(ctallocator);
+		compiler->paths[compiler->paths_len++] = utils_files_cwd(ctallocator);
 	}
 
     if(args.lex){
@@ -194,7 +194,7 @@ int main(int argc, char const *argv[]){
 			goto CLEAN_UP;
 		}
 
-		printf("no errors during compilation\n");
+		printf("No errors during compilation\n");
     }else if(args.dump){
         if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)){
             result = 1;
@@ -224,8 +224,9 @@ int main(int argc, char const *argv[]){
 			goto CLEAN_UP;
 		}
 
-        result = vm_execute(natives, module, vm);
-        if(result){goto CLEAN_UP;}
+        if((result = vm_execute(natives, module, vm))){
+            goto CLEAN_UP;
+        }
     }
 
 CLEAN_UP:

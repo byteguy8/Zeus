@@ -1,11 +1,9 @@
 #ifndef NATIVE_TIME_H
 #define NATIVE_TIME_H
 
-#define _POSIX_C_SOURCE 200809L
-
 #include "vmu.h"
+#include "utils.h"
 #include <time.h>
-#include <unistd.h>
 
 NativeModule *time_module = NULL;
 
@@ -16,29 +14,16 @@ Value native_fn_time(uint8_t argsc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_time_millis(uint8_t argsc, Value *values, Value *target, VM *vm){
-    struct timespec spec = {0};
-    clock_gettime(CLOCK_REALTIME, &spec);
-
-    int64_t millis = spec.tv_nsec / 1e+6 + spec.tv_sec * 1000;
-
-    return INT_VALUE(millis);
+    return INT_VALUE(utils_millis());
 }
 
 Value native_fn_time_sleep(uint8_t argsc, Value *values, Value *target, VM *vm){
-    Value *raw_value = &values[0];
-    int64_t value = -1;
+    Value *raw_time = &values[0];
 
-    if(!IS_VALUE_INT(raw_value)){
-        vmu_error(vm, "Parameter 0 (value) must be integer");
-    }
+    VALIDATE_VALUE_INT_ARG(raw_time, 1, "time", vm)
+    VALIDATE_VALUE_INT_RANGE_ARG(0, "time", raw_time, 0, INT32_MAX, vm)
 
-    value = VALUE_TO_INT(raw_value);
-
-    if(value < 0){
-        vmu_error(vm, "Parameter 0 (value: %ld) must be greater than 0", value);
-    }
-
-    usleep(value * 1000);
+    utils_sleep(VALUE_TO_INT(raw_time));
 
     return EMPTY_VALUE;
 }

@@ -1,7 +1,7 @@
 #ifndef TOKEN_H
 #define TOKEN_H
 
-typedef enum token_type{
+typedef enum tok_type{
     EXCLAMATION_TOKTYPE,
     QUESTION_MARK_TOKTYPE,
 
@@ -52,14 +52,14 @@ typedef enum token_type{
 
     IDENTIFIER_TOKTYPE,
     EOF_TOKTYPE
-}TokenType;
+}TokType;
 
 typedef struct token{
     int line;
 	char *lexeme;
 	void *literal;
 	size_t literal_size;
-	TokenType type;
+	TokType type;
     char *pathname;
     void *extra;
 }Token;

@@ -5,6 +5,8 @@
 #include "tutils.h"
 #include <math.h>
 
+#define PI 3.1415926535897932384626433
+
 NativeModule *math_module = NULL;
 
 static void populate(const aidx_t len, int64_t *numbers){
@@ -217,7 +219,7 @@ Value native_fn_rad2deg(uint8_t argsc, Value *values, Value *target, VM *vm){
 
 	double rad = VALUE_TO_FLOAT(raw_value);
 
-    return FLOAT_VALUE(rad * (1.0 / (M_PI * 2.0 / 360.0)));
+    return FLOAT_VALUE(rad * (1.0 / (PI * 2.0 / 360.0)));
 }
 
 // this function assumes the radio of the calculated radian value is of value 1
@@ -230,7 +232,7 @@ Value native_fn_deg2rad(uint8_t argsc, Value *values, Value *target, VM *vm){
 
 	double degrees = VALUE_TO_FLOAT(raw_value);
 
-    return FLOAT_VALUE(degrees / (1.0 / (M_PI * 2.0 / 360.0)));
+    return FLOAT_VALUE(degrees / (1.0 / (PI * 2.0 / 360.0)));
 }
 
 void math_module_init(Allocator *allocator){
