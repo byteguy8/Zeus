@@ -88,7 +88,7 @@ Value native_fn_primes(uint8_t argsc, Value *values, Value *target, VM *vm){
 
     int64_t until = VALUE_TO_INT(until_value);
 
-    VALIDATE_VALUE_INT_RANGE_ARG(0, "until", until_value, 2, ARRAY_LENGTH_MAX, vm)
+    VALIDATE_VALUE_INT_RANGE_ARG(until_value, 0, "until", 2, ARRAY_LENGTH_MAX, vm)
 
     Obj *array_obj = sieve_eratosthenes(until, vm);
 

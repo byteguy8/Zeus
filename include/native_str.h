@@ -13,23 +13,11 @@ Value native_fn_str_insert(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *at_value = &values[0];
     Value *value_str = &values[1];
 
-    if(!IS_VALUE_INT(at_value)){
-        vmu_error(vm, "Illegal type for argument 'at': must be of type 'int'");
-    }
+    VALIDATE_VALUE_INT_ARG(at_value, 1, "at", vm)
+    VALIDATE_VALUE_INT_RANGE_ARG(at_value, 1, "at", 0, target_str->len, vm);
+    VALIDATE_VALUE_STR_ARG(value_str, 2, "to_insert", vm)
 
     int64_t at = VALUE_TO_INT(at_value);
-
-    if(at < 0){
-        vmu_error(vm, "Illegal value for argument 'at': indexes must be greater than 0");
-    }
-    if(at >= (int64_t)(target_str->len + 1)){
-        vmu_error(vm, "Illegal value for argument 'at': cannot be greater than %d", target_str->len);
-    }
-
-    if(!IS_VALUE_STR(value_str)){
-        vmu_error(vm, "Argument 1: must be of type 'str'");
-    }
-
     Str *str = VALUE_TO_STR(value_str);
     size_t raw_str_len = target_str->len + str->len;
     char *raw_str = MEMORY_ALLOC(char, raw_str_len + 1, vm->fake_allocator);

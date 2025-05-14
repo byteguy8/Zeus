@@ -21,7 +21,7 @@ Value native_fn_time_sleep(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *raw_time = &values[0];
 
     VALIDATE_VALUE_INT_ARG(raw_time, 1, "time", vm)
-    VALIDATE_VALUE_INT_RANGE_ARG(0, "time", raw_time, 0, INT32_MAX, vm)
+    VALIDATE_VALUE_INT_RANGE_ARG(raw_time, 0, "time", 0, INT32_MAX, vm)
 
     utils_sleep(VALUE_TO_INT(raw_time));
 
