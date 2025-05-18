@@ -452,7 +452,7 @@ static int execute(VM *vm){
                     Value *length_value = pop(vm);
 
                     VALIDATE_VALUE_INT(length_value, vm)
-                    VALIDATE_ARRAY_SIZE(TO_ARRAY_LENGTH(length_value))
+                    VALIDATE_ARRAY_SIZE(TO_ARRAY_LENGTH(length_value), vm)
 
                     Obj *array_obj = vmu_array_obj(TO_ARRAY_LENGTH(length_value), vm);
 

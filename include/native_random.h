@@ -61,7 +61,7 @@ Value native_fn_random_next_ints(uint8_t argsc, Value *values, Value *target, VM
     Value *length_value = &values[0];
 
     VALIDATE_VALUE_INT_ARG(length_value, 1, "length", vm)
-    VALIDATE_ARRAY_INDEX_ARG(1, "length", length_value, vm)
+    VALIDATE_VALUE_ARRAY_INDEX_ARG(length_value, 1, "length", vm)
 
     int64_t length = VALUE_TO_INT(length_value);
     Obj *values_array_obj = vmu_array_obj(length, vm);
@@ -84,7 +84,7 @@ Value native_fn_random_next_ints_range(uint8_t argsc, Value *values, Value *targ
     VALIDATE_VALUE_INT_ARG(min_value, 1, "min", vm)
     VALIDATE_VALUE_INT_ARG(max_value, 2, "max", vm)
     VALIDATE_VALUE_INT_ARG(length_value, 3, "length", vm)
-    VALIDATE_ARRAY_INDEX_ARG(3, "length", length_value, vm)
+    VALIDATE_VALUE_ARRAY_INDEX_ARG(length_value, 3, "length", vm)
 
     int64_t min = VALUE_TO_INT(min_value);
     int64_t max = VALUE_TO_INT(max_value);

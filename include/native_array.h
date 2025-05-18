@@ -28,10 +28,10 @@ Value native_fn_array_make_room(uint8_t argsc, Value *values, Value *target, VM 
     VALIDATE_VALUE_INT_ARG(plus_value, 1, "plus", vm);
 
     int64_t plus = VALUE_TO_INT(plus_value);
-    VALIDATE_ARRAY_SIZE(plus)
+    VALIDATE_ARRAY_SIZE(plus, vm)
 
     int new_size = array->len + plus;
-    VALIDATE_ARRAY_SIZE(new_size)
+    VALIDATE_ARRAY_SIZE(new_size, vm)
 
     Obj *new_array_obj = vmu_array_obj(array->len + plus, vm);
     Array *new_array = OBJ_TO_ARRAY(new_array_obj);
@@ -59,7 +59,7 @@ Value native_fn_array_join(uint8_t argsc, Value *values, Value *target, VM *vm){
     int64_t arr_b_size = (int64_t)arr_b->len;
     int64_t arr_c_size = arr_a_size + arr_b_size;
 
-    VALIDATE_ARRAY_SIZE(arr_c_size)
+    VALIDATE_ARRAY_SIZE(arr_c_size, vm)
 
     Obj *arr_c_obj = vmu_array_obj(arr_c_size, vm);
     Array *arr_c = OBJ_TO_ARRAY(arr_c_obj);
