@@ -652,7 +652,8 @@ uint32_t vmu_raw_str_to_table(char **raw_str_ptr, VM *vm, char **out_raw_str){
         char *saved_raw_str = (char *)raw_str_node->value;
 
         if(raw_str != saved_raw_str){
-            //factory_destroy_raw_str(raw_str, vm->rtallocator);
+            factory_destroy_raw_str(raw_str, vm->fake_allocator);
+            *raw_str_ptr = NULL;
         }
 
         if(out_raw_str){

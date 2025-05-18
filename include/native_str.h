@@ -13,18 +13,20 @@ Value native_fn_str_insert(uint8_t argsc, Value *values, Value *target, VM *vm){
     Value *at_value = &values[0];
     Value *value_str = &values[1];
 
+    sidx_t str_len = target_str->len;
+
     VALIDATE_VALUE_INT_ARG(at_value, 1, "at", vm)
-    VALIDATE_VALUE_INT_RANGE_ARG(at_value, 1, "at", 0, target_str->len, vm);
+    VALIDATE_VALUE_INT_RANGE_ARG(at_value, 1, "at", 0, str_len, vm);
     VALIDATE_VALUE_STR_ARG(value_str, 2, "to_insert", vm)
 
     int64_t at = VALUE_TO_INT(at_value);
     Str *str = VALUE_TO_STR(value_str);
-    size_t raw_str_len = target_str->len + str->len;
+    size_t raw_str_len = str_len + str->len;
     char *raw_str = MEMORY_ALLOC(char, raw_str_len + 1, vm->fake_allocator);
 
     memcpy(raw_str, target_str->buff, at);
     memcpy(raw_str + at, str->buff, str->len);
-    memcpy(raw_str + at + str->len, target_str->buff + at, target_str->len - (at));
+    memcpy(raw_str + at + str->len, target_str->buff + at, str_len - (at));
 
     raw_str[raw_str_len] = '\0';
 
@@ -37,19 +39,22 @@ Value native_fn_str_remove(uint8_t argsc, Value *values, Value *target, VM *vm){
 	Str *target_str = VALUE_TO_STR(target);
     Value *from_value = &values[0];
     Value *to_value = &values[1];
-    int64_t from = -1;
-    int64_t to = -1;
+    sidx_t str_len = target_str->len;
 
-    if(target_str->len == 0){
-        vmu_error(vm, "Cannot remove on empty strings");
+    if(str_len == 0){
+        vmu_error(vm, "Cannot remove from empty string");
     }
 
-    VALIDATE_INDEX_ARG("from", from_value, from, target_str->len)
-    VALIDATE_INDEX_ARG("to", to_value, to, target_str->len)
+    sidx_t max_idx = str_len == 0 ? 0 : str_len - 1;
 
-    if(from > to){
-        vmu_error(vm, "Illegal value for argument 'from': cannot be greater than argument 'to'");
-    }
+    VALIDATE_VALUE_INT_ARG(from_value, 1, "from", vm)
+    VALIDATE_VALUE_INT_ARG(to_value, 2, "to", vm)
+
+    int64_t from = VALUE_TO_INT(from_value);
+    int64_t to = VALUE_TO_INT(to_value);
+
+    VALIDATE_VALUE_INT_RANGE_ARG(from_value, 1, "from", 0, max_idx, vm)
+    VALIDATE_VALUE_INT_RANGE_ARG(to_value, 2, "to", from, max_idx, vm)
 
     size_t raw_str_len = target_str->len - (to - from + 1);
     char *raw_str = MEMORY_ALLOC(char, raw_str_len + 1, vm->fake_allocator);
@@ -79,12 +84,18 @@ Value native_fn_str_size(uint8_t argsc, Value *values, Value *target, VM *vm){
 }
 
 Value native_fn_str_char_at(uint8_t argc, Value *values, Value *target, VM *vm){
-    Value *index_value = &values[0];
+    Value *at_value = &values[0];
     Str *target_str = VALUE_TO_STR(target);
+    sidx_t str_len = target_str->len;
 
-    VALIDATE_STR_INDEX(target_str->len, index_value, vm)
+    if(str_len == 0){
+        vmu_error(vm, "Cannot get char from empty string");
+    }
 
-    int64_t index = VALUE_TO_INT(index_value);
+    VALIDATE_VALUE_INT_ARG(at_value, 1, "at", vm)
+    VALIDATE_VALUE_INT_RANGE_ARG(at_value, 1, "at", 0, str_len - 1, vm)
+
+    int64_t index = VALUE_TO_INT(at_value);
     char *raw_str = factory_clone_raw_str_range((size_t)index, 1, target_str->buff, vm->fake_allocator);
     Obj *str_obj = vmu_str_obj(&raw_str, vm);
 
@@ -95,15 +106,20 @@ Value native_fn_str_sub_str(uint8_t argc, Value *values, Value *target, VM *vm){
     Str *target_str = VALUE_TO_STR(target);
     Value *from_value = &values[0];
     Value *to_value = &values[1];
-    int64_t from = -1;
-    int64_t to = -1;
+    sidx_t str_len = target_str->len;
 
-    VALIDATE_INDEX_NAME(from_value, from, target_str->len, "from")
-    VALIDATE_INDEX_NAME(to_value, to, target_str->len, "to")
-
-    if(from > to){
-        vmu_error(vm, "Illegal index 'from'(%ld). Must be less or equals to 'to'(%ld)", from, to);
+    if(str_len == 0){
+        vmu_error(vm, "Cannot make substring from empty string");
     }
+
+    VALIDATE_VALUE_INT_ARG(from_value, 1, "from", vm)
+    VALIDATE_VALUE_INT_ARG(to_value, 2, "to", vm)
+
+    int64_t from = VALUE_TO_INT(from_value);
+    int64_t to = VALUE_TO_INT(to_value);
+
+    VALIDATE_VALUE_INT_RANGE_ARG(from_value, 1, "from", 0, str_len - 1, vm)
+    VALIDATE_VALUE_INT_RANGE_ARG(to_value, 2, "to", from, str_len - 1, vm)
 
     char *raw_sub_str = factory_clone_raw_str_range(from, to - from + 1, target_str->buff, vm->fake_allocator);
     Obj *sub_str_obj = vmu_str_obj(&raw_sub_str, vm);
@@ -113,11 +129,17 @@ Value native_fn_str_sub_str(uint8_t argc, Value *values, Value *target, VM *vm){
 
 Value native_fn_str_char_code(uint8_t argc, Value *values, Value *target, VM *vm){
     Str *target_str = VALUE_TO_STR(target);
-    Value *index_value = &values[0];
-    int64_t index = -1;
+    Value *at_value = &values[0];
+    sidx_t str_len = target_str->len;
 
-    VALIDATE_INDEX(index_value, index, target_str->len)
+    if(str_len == 0){
+        vmu_error(vm, "Cannot get char code from empty string");
+    }
 
+    VALIDATE_VALUE_INT_ARG(at_value, 1, "at", vm)
+    VALIDATE_VALUE_INT_RANGE_ARG(at_value, 1, "at", 0, str_len - 1, vm)
+
+    int64_t index = VALUE_TO_INT(at_value);
     int64_t code = (int64_t)target_str->buff[index];
 
     return INT_VALUE(code);
@@ -126,29 +148,30 @@ Value native_fn_str_char_code(uint8_t argc, Value *values, Value *target, VM *vm
 Value native_fn_str_split(uint8_t argc, Value *values, Value *target, VM *vm){
     Str *target_str = VALUE_TO_STR(target);
     Value *by_value = &values[0];
-    Str *by_str = NULL;
 
-    if(!IS_VALUE_STR(by_value)){
-        vmu_error(vm, "Expect string as 'by' to split");
-    }
+    VALIDATE_VALUE_STR_ARG(by_value, 1, "by", vm)
 
-    by_str = VALUE_TO_STR(by_value);
+    Str *by_str = VALUE_TO_STR(by_value);
 
     if(by_str->len != 1){
-        vmu_error(vm, "Expect string of length 1 as 'by' to split");
+        vmu_error(vm, "Illegal size or argument 1: expect 'by' of size 1");
     }
 
-    Obj *list_obj = vmu_list_obj(vm);
-    DynArr *list = OBJ_TO_LIST(list_obj);
+    char *str_buff = target_str->buff;
+    sidx_t str_len = target_str->len;
+    char *by_buff = by_str->buff;
+
+    DynArr *list = FACTORY_DYNARR(sizeof(Value), vm->fake_allocator);
+
 	char coincidence = 0;
     size_t from = 0;
     size_t to = 0;
     sidx_t i = 0;
 
-    while (i < target_str->len){
-        char c = target_str->buff[i++];
+    while (i < str_len){
+        char c = str_buff[i++];
 
-        if(c == by_str->buff[0]){
+        if(c == by_buff[0]){
             to = i - 1;
 			size_t len = to - from;
 
@@ -156,7 +179,7 @@ Value native_fn_str_split(uint8_t argc, Value *values, Value *target, VM *vm){
                 coincidence = 1;
             }
 
-            char *raw_str = factory_clone_raw_str_range(from, len, target_str->buff, vm->fake_allocator);
+            char *raw_str = factory_clone_raw_str_range(from, len, str_buff, vm->fake_allocator);
             Obj *str_obj = vmu_str_obj(&raw_str, vm);
 
             dynarr_insert(&OBJ_VALUE(str_obj), list);
@@ -166,38 +189,54 @@ Value native_fn_str_split(uint8_t argc, Value *values, Value *target, VM *vm){
     }
 
 	if(coincidence){
-        char *raw_str = factory_clone_raw_str_range(from, i - 1, target_str->buff, vm->fake_allocator);
+        char *raw_str = factory_clone_raw_str_range(from, i - 1, str_buff, vm->fake_allocator);
 		Obj *str_obj = vmu_str_obj(&raw_str, vm);
 
         dynarr_insert(&OBJ_VALUE(str_obj), list);
 	}
 
-    return OBJ_VALUE(list_obj);
+    size_t list_size = DYNARR_LEN(list);
+
+    if(list_size > (size_t)ARRAY_LENGTH_MAX){
+        vmu_error(vm, "Cannot create array from count of split");
+    }
+
+    aidx_t arr_size = (aidx_t)list_size;
+    Obj *arr_obj = vmu_array_obj(arr_size, vm);
+    Array *arr = OBJ_TO_ARRAY(arr_obj);
+    Value *arr_values = arr->values;
+
+    for (aidx_t i = 0; i < arr_size; i++){
+        arr_values[i] = DYNARR_GET_AS(Value, i, list);
+    }
+
+    dynarr_destroy(list);
+
+    return OBJ_VALUE(arr_obj);
 }
 
 Value native_fn_str_lstrip(uint8_t argsc, Value *values, Value *target, VM *vm){
 	Str *target_str = VALUE_TO_STR(target);
 
-	if(target_str->len == 0){
-        vmu_error(vm, "Expect a not empty string");
-    }
+    sidx_t str_len = target_str->len;
+    char *str_buff = target_str->buff;
 
-	size_t from = 0;
-    size_t len = target_str->len;
-    char *raw_str = target_str->buff;
+    sidx_t ptr = 0;
 
-	while(1){
-		char c = raw_str[from++];
+    while (ptr < str_len){
+        char c = str_buff[ptr];
 
 		if(c != ' ' && c != '\t'){
             break;
         }
-		if(from >= len){
-            break;
-        }
-	}
 
-    char *strip_raw_str = factory_clone_raw_str_range(from - 1, len - from + 1, target_str->buff, vm->fake_allocator);
+        ptr++;
+    }
+
+    size_t from = ptr == str_len ? 0 : ptr;
+    size_t len = ptr == str_len ? 0 : str_len - ptr + 1;
+
+    char *strip_raw_str = factory_clone_raw_str_range(from, len, str_buff, vm->fake_allocator);
     Obj *strip_str_obj = vmu_str_obj(&strip_raw_str, vm);
 
 	return OBJ_VALUE(strip_str_obj);
@@ -206,25 +245,24 @@ Value native_fn_str_lstrip(uint8_t argsc, Value *values, Value *target, VM *vm){
 Value native_fn_str_rstrip(uint8_t argsc, Value *values, Value *target, VM *vm){
 	Str *target_str = VALUE_TO_STR(target);
 
-	if(target_str->len == 0){
-        vmu_error(vm, "Expect a not empty string");
-    }
+    sidx_t str_len = target_str->len;
+    char *str_buff = target_str->buff;
 
-	size_t to = target_str->len;
-    char *raw_str = target_str->buff;
+    sidx_t ptr = str_len - 1;
 
-	while(1){
-		char cs = raw_str[--to];
+	while(ptr >= 0){
+		char c = str_buff[ptr];
 
-		if(to == 0){
+		if(c != ' ' && c != '\t'){
             break;
         }
-		if(cs != ' ' && cs != '\t'){
-            break;
-        }
+
+        ptr--;
 	}
 
-	char *strip_raw_str = factory_clone_raw_str_range(0, to + 1, raw_str, vm->fake_allocator);
+    size_t len = str_len == 0 ? 0 : ptr + 1;
+
+	char *strip_raw_str = factory_clone_raw_str_range(0, len, str_buff, vm->fake_allocator);
     Obj *strip_str_obj = vmu_str_obj(&strip_raw_str, vm);
 
     return OBJ_VALUE(strip_str_obj);
@@ -233,37 +271,46 @@ Value native_fn_str_rstrip(uint8_t argsc, Value *values, Value *target, VM *vm){
 Value native_fn_str_strip(uint8_t argsc, Value *values, Value *target, VM *vm){
 	Str *target_str = VALUE_TO_STR(target);
 
-	if(target_str->len == 0){
-        vmu_error(vm, "Expect a not empty string");
+    sidx_t str_len = target_str->len;
+    char *str_buff = target_str->buff;
+
+    char left_set = 1;
+    char right_set = 1;
+    sidx_t left_ptr = 0;
+	sidx_t right_ptr = str_len == 0 ? 0 : str_len - 1;
+
+    while(left_ptr < str_len || right_ptr >= 0){
+        if(left_set && left_ptr < str_len){
+            char a = str_buff[left_ptr];
+
+            if(a == ' ' || a == '\t'){
+                left_ptr++;
+            }else{
+                left_set = 0;
+            }
+        }
+        if(right_set && right_ptr >= 0){
+            char b = str_buff[right_ptr];
+
+            if(b == ' ' || b == '\t'){
+                right_ptr--;
+            }else{
+                right_set = 0;
+            }
+        }
+
+        if(left_ptr > right_ptr){
+            break;
+        }
+        if(!left_set && !right_set){
+            break;
+        }
     }
 
-	char from_set = 0;
-	size_t from = 0;
-	char to_set = 0;
-	size_t to = target_str->len - 1;
+    sidx_t len = left_ptr > right_ptr ? 0 : right_ptr - left_ptr + 1;
+    sidx_t from = left_ptr > right_ptr ? 0 : left_ptr;
 
-	for(sidx_t i = 0, o = target_str->len - 1; i < target_str->len; i++, o--){
-		char cs = target_str->buff[i];
-		char ce = target_str->buff[o];
-
-		if((cs != ' ' && cs != '\t') && !from_set){
-			from = i;
-			from_set = 1;
-		}
-		if((ce != ' ' && ce != '\t') && !to_set){
-			to = o;
-			to_set = 1;
-		}
-
-		if(from_set && to_set){
-            break;
-        }
-		if(from == to){
-            break;
-        }
-	}
-
-    char *strip_raw_str = factory_clone_raw_str_range(from, to - from + 1, target_str->buff, vm->fake_allocator);
+    char *strip_raw_str = factory_clone_raw_str_range(from, len, str_buff, vm->fake_allocator);
     Obj *strip_str_obj = vmu_str_obj(&strip_raw_str, vm);
 
     return OBJ_VALUE(strip_str_obj);
@@ -271,62 +318,68 @@ Value native_fn_str_strip(uint8_t argsc, Value *values, Value *target, VM *vm){
 
 Value native_fn_str_lower(uint8_t argsc, Value *values, Value *target, VM *vm){
 	Str *target_str = VALUE_TO_STR(target);
+
     char *lower_raw_str = factory_clone_raw_str(target_str->buff, vm->fake_allocator);
-    Obj *lower_str_obj = vmu_str_obj(&lower_raw_str, vm);
-    Str *lower_str = OBJ_TO_STR(lower_str_obj);
+    sidx_t lower_len = target_str->len;
 
-	for(sidx_t i = 0; i < lower_str->len; i++){
-		char c = lower_str->buff[i];
-
-		if(c < 'A' || c > 'Z'){
-            continue;
-        }
-
-		lower_str->buff[i] = c - 65 + 97;
+	for(sidx_t i = 0; i < lower_len; i++){
+		char c = lower_raw_str[i];
+        lower_raw_str[i] = c >= 'A' && c <= 'Z' ? c - 65 + 97 : c;
 	}
+
+    Obj *lower_str_obj = vmu_str_obj(&lower_raw_str, vm);
 
 	return OBJ_VALUE(lower_str_obj);
 }
 
 Value native_fn_str_upper(uint8_t argsc, Value *values, Value *target, VM *vm){
 	Str *target_str = VALUE_TO_STR(target);
+
 	char *upper_raw_str = factory_clone_raw_str(target_str->buff, vm->fake_allocator);
-    Obj *upper_str_obj = vmu_str_obj(&upper_raw_str, vm);
-    Str *upper_str = OBJ_TO_STR(upper_str_obj);
+    sidx_t upper_len = target_str->len;
 
-	for(sidx_t i = 0; i < upper_str->len; i++){
-		char c = upper_str->buff[i];
-
-		if(c < 'a' || c > 'z'){
-            continue;
-        }
-
-		upper_str->buff[i] = c - 97 + 65;
+	for(sidx_t i = 0; i < upper_len; i++){
+		char c = upper_raw_str[i];
+        upper_raw_str[i] = c >= 'a' && c <= 'z' ? c - 97 + 65 : c;
 	}
+
+    Obj *upper_str_obj = vmu_str_obj(&upper_raw_str, vm);
 
 	return OBJ_VALUE(upper_str_obj);
 }
 
 Value native_fn_str_title(uint8_t argsc, Value *values, Value *target, VM *vm){
     Str *target_str = VALUE_TO_STR(target);
+
     char *title_raw_str = factory_clone_raw_str(target_str->buff, vm->fake_allocator);
-    Obj *title_str_obj = vmu_str_obj(&title_raw_str, vm);
-    Str *title_str = OBJ_TO_STR(title_str_obj);
+    sidx_t title_len = target_str->len;
 
-    for (sidx_t i = 0; i < title_str->len; i++){
-        char c = title_str->buff[i];
+    char state = 0;
 
-        char before = i == 0 ? '\0' : title_str->buff[i - 1];
-        int is_word = before == ' ' || before == '\t' || i == 0;
+    for(sidx_t i = 0; i < title_len; i++){
+        char c = title_raw_str[i];
 
-        if(is_word && (c >= 'a' && c <= 'z')){
-            title_str->buff[i] = c - 97 + 65;
-            continue;
-        }
-        if(!is_word && (c >= 'A' && c <= 'Z')){
-            title_str->buff[i] = c - 65 + 97;
+        if(state){
+            if((c >= 'a' && c <= 'z')){
+                title_raw_str[i] = c - 97 + 65;
+                state = 0;
+                continue;
+            }
+            if(c >= 'A' && c <= 'Z'){
+                state = 0;
+            }
+        }else{
+            if((c < 'a' || c > 'z') && (c < 'A' || c > 'Z')){
+                state = 1;
+                continue;
+            }
+            if(c >= 'A' && c <= 'Z'){
+                title_raw_str[i] = c - 65 + 97;
+            }
         }
     }
+
+    Obj *title_str_obj = vmu_str_obj(&title_raw_str, vm);
 
     return OBJ_VALUE(title_str_obj);
 }
