@@ -16,7 +16,8 @@ FLAGS.LINUX := --std=gnu99
 FLAGS.WINDOWS := --std=c99
 FLAGS := $(FLAGS.COMMON) $(FLAGS.$(BUILD)) $(FLAGS.$(BUILD).$(PLATFORM)) $(FLAGS.$(PLATFORM))
 
-OBJS := lzarena.o lzflist.o \
+OBJS := splitmix64.o xoshiro256.o \
+lzarena.o lzflist.o \
 bstr.o dynarr.o \
 lzhtable.o memory.o \
 factory.o utils.o lexer.o \
@@ -58,3 +59,7 @@ lzarena.o:
 	$(COMPILER) -c -o $(OUT_DIR)/lzarena.o $(FLAGS) $(SRC_DIR)/lzarena.c
 lzflist.o:
 	$(COMPILER) -c -o $(OUT_DIR)/lzflist.o $(FLAGS) $(SRC_DIR)/lzflist.c
+xoshiro256.o:
+	$(COMPILER) -c -o $(OUT_DIR)/xoshiro256.o $(FLAGS) $(SRC_DIR)/xoshiro256.c
+splitmix64.o:
+	$(COMPILER) -c -o $(OUT_DIR)/splitmix64.o $(FLAGS) $(SRC_DIR)/splitmix64.c

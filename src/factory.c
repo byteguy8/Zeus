@@ -67,6 +67,7 @@ Record *factory_create_record(uint32_t length, Allocator *allocator){
     LZHTable *attributes = length == 0 ? NULL : FACTORY_LZHTABLE_LEN(length, allocator);
     Record *record = MEMORY_ALLOC(Record, 1, allocator);
 
+    record->type = NONE_RTYPE;
     record->attributes = attributes;
 
     return record;

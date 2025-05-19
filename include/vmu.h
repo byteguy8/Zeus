@@ -37,6 +37,12 @@
     }                                                                                                 \
 }
 
+#define VALIDATE_VALUE_RECORD_ARG(_value, _param, _name, _vm){                                          \
+    if(!IS_VALUE_RECORD((_value))){                                                                     \
+        vmu_error(_vm, "Illegal type of argument %d: expect '%s' of type 'record'", (_param), (_name)); \
+    }                                                                                                   \
+}
+
 #define VALIDATE_VALUE_INT_RANGE_ARG(_value, _param, _name, _min, _max, _vm){                         \
     if(VALUE_TO_INT((_value)) < (_min)){                                                              \
         vmu_error(_vm, "Illegal value of argument '%s': cannot be less than %ld", (_name), (_min));   \
