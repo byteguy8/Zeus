@@ -1,7 +1,6 @@
-.vscode
-build
-*.out
-*.swp
-*.txt
-.cache
-*.json
+*
+!include
+!src
+!makefile
+!.gitignore
+!README.md

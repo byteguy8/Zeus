@@ -36,10 +36,15 @@ typedef struct block_stmt{
     DynArr *stmts;
 }BlockStmt;
 
+typedef struct if_stmt_branch{
+    Token *branch_token;
+    Expr *condition_expr;
+    DynArr *stmts;
+}IfStmtBranch;
+
 typedef struct if_stmt{
-    Token *if_token;
-	Expr *if_condition;
-	DynArr *if_stmts;
+    IfStmtBranch *if_branch;
+    DynArr *elif_branches;
 	DynArr *else_stmts;
 }IfStmt;
 

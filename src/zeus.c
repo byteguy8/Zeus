@@ -58,6 +58,7 @@ LZHTable *create_keywords_table(Allocator *allocator){
     add_keyword("or", OR_TOKTYPE, keywords, allocator);
     add_keyword("and", AND_TOKTYPE, keywords, allocator);
 	add_keyword("if", IF_TOKTYPE, keywords, allocator);
+    add_keyword("elif", ELIF_TOKTYPE, keywords, allocator);
 	add_keyword("else", ELSE_TOKTYPE, keywords, allocator);
 	add_keyword("while", WHILE_TOKTYPE, keywords, allocator);
 	add_keyword("stop", STOP_TOKTYPE, keywords, allocator);
@@ -112,7 +113,7 @@ int main(int argc, char const *argv[]){
 	memory_init();
 
     LZArena *compile_arena = NULL;
-    Allocator *ctallocator = memory_arena_allocator(&compile_arena);
+    Allocator *ctallocator = memory_create_arena_allocator(&compile_arena);
     Allocator *rtallocator = memory_allocator();
 
     LZHTable *natives = FACTORY_LZHTABLE(rtallocator);
@@ -151,7 +152,7 @@ int main(int argc, char const *argv[]){
 
 	Lexer *lexer = lexer_create(rtallocator);
 	Parser *parser = parser_create(ctallocator);
-    Compiler *compiler = compiler_create(memory_arena_allocator(NULL), rtallocator);
+    Compiler *compiler = compiler_create(memory_create_arena_allocator(NULL), rtallocator);
     Dumpper *dumpper = dumpper_create(ctallocator);
     VM *vm = vm_create(rtallocator);
 
@@ -223,6 +224,8 @@ int main(int argc, char const *argv[]){
             result = 1;
 			goto CLEAN_UP;
 		}
+
+        memory_destroy_arena_allocator(ctallocator);
 
         if((result = vm_execute(natives, module, vm))){
             goto CLEAN_UP;

@@ -18,6 +18,9 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#define COMPILE_ALLOCATOR (compiler->ctallocator)
+#define LABELS_ALLOCATOR (compiler->labels_allocator)
+
 //>PRIVATE INTERFACE
 static void error(Compiler *compiler, Token *token, char *msg, ...);
 void descompose_i16(int16_t value, uint8_t *bytes);
@@ -39,6 +42,13 @@ Scope *symbol_fn_scope(Symbol *symbol, Compiler *compiler);
 int count_fn_scopes(int from, int to, Compiler *compiler);
 Scope *current_scope(Compiler *compiler);
 Scope *previous_scope(Scope *scope, Compiler *compiler);
+void insert_label(Scope *scope, Label *label);
+Label *label(Compiler *compiler, char *fmt, ...);
+void insert_jmp(Scope *scope, JMP *jmp);
+void remove_jmp(JMP *jmp);
+JMP *jif(Compiler *compiler, Token *ref_token, char *fmt, ...);
+JMP *jmp(Compiler *compiler, Token *ref_token, char *fmt, ...);
+void resolve_jmps(Scope *current, Compiler *compiler);
 int resolve_symbol(Token *identifier, Symbol *symbol, Compiler *compiler);
 Symbol *exists_scope(char *name, Scope *scope, Compiler *compiler);
 Symbol *exists_local(char *name, Compiler *compiler);
@@ -79,7 +89,6 @@ size_t add_module_symbol(Module *module, DynArr *symbols);
 void compile_stmt(Stmt *stmt, Compiler *compiler);
 void define_natives(Compiler *compiler);
 //<PRIVATE INTERFACE
-
 void add_captured_symbol(Token *identifier, Symbol *symbol, Scope *scope, Compiler *compiler){
     if(scope->captured_symbols_len >= SYMBOLS_LENGTH){
         error(compiler, identifier, "Cannot capture more than %d symbols", SYMBOLS_LENGTH);
@@ -241,6 +250,8 @@ Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function, size_t *ou
 void scope_out(Compiler *compiler){
     Scope *current = current_scope(compiler);
 
+    resolve_jmps(current, compiler);
+
     if(current->depth > 1){
         for (uint8_t i = 0; i < current->scope_locals; i++){
             write_chunk(POP_OPCODE, compiler);
@@ -252,6 +263,17 @@ void scope_out(Compiler *compiler){
 
 void scope_out_fn(Compiler *compiler){
     assert(compiler->fn_ptr > 0);
+
+    Scope *scope = current_scope(compiler);
+
+    resolve_jmps(scope, compiler);
+
+    // A scope with depth 2 is any function which parent scope is GLOBAL.
+    // Iff scope's depth == 2, we clean up labels arena to be able to reuse it
+    if(scope->depth == 2){
+        lzarena_free_all((LZArena *)LABELS_ALLOCATOR->ctx);
+    }
+
     compiler->fn_ptr--;
     compiler->depth--;
 }
@@ -325,6 +347,185 @@ Scope *current_scope(Compiler *compiler){
 Scope *previous_scope(Scope *scope, Compiler *compiler){
     if(scope->depth == 1) return NULL;
     return &compiler->scopes[scope->depth - 1];
+}
+
+void insert_label(Scope *scope, Label *label){
+    LabelList *list = &scope->labels;
+
+    if(list->tail){
+        list->tail->next = label;
+        label->prev = list->tail;
+    }else{
+        list->head = label;
+    }
+
+    list->tail = label;
+}
+
+Label *label(Compiler *compiler, char *fmt, ...){
+    va_list args;
+    va_start(args, fmt);
+
+    Scope *scope = current_scope(compiler);
+    Allocator *allocator = scope->depth == 1 ? COMPILE_ALLOCATOR : LABELS_ALLOCATOR;
+
+    char *name = MEMORY_ALLOC(char, LABEL_NAME_LENGTH, allocator);
+    int out_count = vsnprintf(name, LABEL_NAME_LENGTH, fmt, args);
+
+    va_end(args);
+    assert(out_count < LABEL_NAME_LENGTH);
+
+    Label *label = MEMORY_ALLOC(Label, 1, allocator);
+
+    label->name = name;
+    label->location = chunks_len(compiler);
+    label->prev = NULL;
+    label->next = NULL;
+
+    insert_label(scope, label);
+
+    return label;
+}
+
+void insert_jmp(Scope *scope, JMP *jmp){
+    JMPList *list = &scope->jmps;
+
+    if(list->tail){
+        list->tail->next = jmp;
+        jmp->prev = list->tail;
+    }else{
+        list->head = jmp;
+    }
+
+    list->tail = jmp;
+    jmp->scope = scope;
+}
+
+void remove_jmp(JMP *jmp){
+    Scope *scope = (Scope *)jmp->scope;
+    JMPList *list = &scope->jmps;
+
+    if(jmp == list->head){
+        list->head = jmp->next;
+    }
+    if(jmp == list->tail){
+        list->tail = jmp->prev;
+    }
+
+    if(jmp->prev){
+        jmp->prev->next = jmp->next;
+    }
+    if(jmp->next){
+        jmp->next->prev = jmp->prev;
+    }
+}
+
+JMP *jif(Compiler *compiler, Token *ref_token, char *fmt, ...){
+    size_t bef = chunks_len(compiler);
+
+    write_chunk(JIF_OPCODE, compiler);
+    write_location(ref_token, compiler);
+
+    size_t idx = write_i16(0, compiler);
+    size_t af = chunks_len(compiler);
+
+    va_list args;
+    va_start(args, fmt);
+
+    Scope *scope = current_scope(compiler);
+    Allocator *allocator = scope->depth == 1 ? COMPILE_ALLOCATOR : LABELS_ALLOCATOR;
+
+    char *label = MEMORY_ALLOC(char, LABEL_NAME_LENGTH, allocator);
+    int out_count = vsnprintf(label, LABEL_NAME_LENGTH, fmt, args);
+
+    va_end(args);
+    assert(out_count < LABEL_NAME_LENGTH);
+
+    JMP *jmp = (JMP *)MEMORY_ALLOC(JMP, 1, allocator);
+
+    jmp->bef = bef;
+    jmp->af = af;
+    jmp->idx = idx;
+    jmp->label = label;
+    jmp->prev = NULL;
+    jmp->next = NULL;
+
+    insert_jmp(scope, jmp);
+
+    return jmp;
+}
+
+JMP *jmp(Compiler *compiler, Token *ref_token, char *fmt, ...){
+    size_t bef = chunks_len(compiler);
+
+    write_chunk(JMP_OPCODE, compiler);
+    write_location(ref_token, compiler);
+
+    size_t idx = write_i16(0, compiler);
+    size_t af = chunks_len(compiler);
+
+    va_list args;
+    va_start(args, fmt);
+
+    Scope *scope = current_scope(compiler);
+    Allocator *allocator = scope->depth == 1 ? COMPILE_ALLOCATOR : LABELS_ALLOCATOR;
+
+    char *label = MEMORY_ALLOC(char, LABEL_NAME_LENGTH, allocator);
+    int out_count = vsnprintf(label, LABEL_NAME_LENGTH, fmt, args);
+
+    va_end(args);
+    assert(out_count < LABEL_NAME_LENGTH);
+
+    JMP *jmp = (JMP *)MEMORY_ALLOC(JMP, 1, allocator);
+
+    jmp->bef = bef;
+    jmp->af = af;
+    jmp->idx = idx;
+    jmp->label = label;
+    jmp->prev = NULL;
+    jmp->next = NULL;
+
+    insert_jmp(scope, jmp);
+
+    return jmp;
+}
+
+void resolve_jmps(Scope *current, Compiler *compiler){
+    LabelList *labels = &current->labels;
+    JMPList *jmps = &current->jmps;
+
+    for(JMP *jmp = jmps->head; jmp; jmp = jmp->next){
+        Label *selected = NULL;
+
+        for (Label *label = labels->head; label; label = label->next){
+            if(strcmp(jmp->label, label->name) == 0){
+                selected = label;
+                break;
+            }
+        }
+
+        if(selected){
+            if(selected->location < jmp->bef){
+                size_t len = jmp->bef - selected->location + 1;
+                update_i16(jmp->idx, -len, compiler);
+            }else{
+                size_t len = selected->location - jmp->af + 1;
+                update_i16(jmp->idx, len, compiler);
+            }
+
+            remove_jmp(jmp);
+        }else{
+            assert(compiler->depth > 1 && "All jmps must be resolved");
+
+            Scope *enclosing = &compiler->scopes[current->depth - 2];
+
+            remove_jmp(jmp);
+            insert_jmp(enclosing, jmp);
+        }
+    }
+
+    labels->head = NULL;
+    labels->tail = NULL;
 }
 
 int resolve_symbol(Token *identifier, Symbol *symbol, Compiler *compiler){
@@ -1553,53 +1754,68 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             break;
         }case IF_STMTTYPE:{
 			IfStmt *if_stmt = (IfStmt *)stmt->sub_stmt;
-            Token *if_token = if_stmt->if_token;
-			Expr *if_condition = if_stmt->if_condition;
-			DynArr *if_stmts = if_stmt->if_stmts;
-			DynArr *else_stmts = if_stmt->else_stmts;
+            IfStmtBranch *if_branch = if_stmt->if_branch;
+            DynArr *elif_branches = if_stmt->elif_branches;
+            DynArr *else_stmts = if_stmt->else_stmts;
 
-			compile_expr(if_condition, compiler);
+            Token *if_branch_token = if_branch->branch_token;
+            Expr *if_condition = if_branch->condition_expr;
+            DynArr *if_stmts = if_branch->stmts;
 
-			write_chunk(JIF_OPCODE, compiler);
-            write_location(if_stmt->if_token, compiler);
-			size_t jif_index = write_i16(0, compiler);
+            compile_expr(if_condition, compiler);
+            jif(compiler, if_branch_token, "IFB_END");
 
-			//> if branch body
-			size_t len_bef_if = chunks_len(compiler);
-			scope_in_soft(BLOCK_SCOPE, compiler);
+            scope_in_soft(IF_SCOPE, compiler);
 
-			for(size_t i = 0; i < DYNARR_LEN(if_stmts); i++){
-				compile_stmt((Stmt *)dynarr_get_ptr(i, if_stmts), compiler);
-			}
+            if(if_stmts){
+                for (size_t i = 0; i < DYNARR_LEN(if_stmts); i++){
+                    Stmt *stmt = (Stmt *)dynarr_get_ptr(i, if_stmts);
+                    compile_stmt(stmt, compiler);
+                }
+            }
 
-			scope_out(compiler);
+            scope_out(compiler);
 
-            write_chunk(JMP_OPCODE, compiler);
-            write_location(if_token, compiler);
-            size_t jmp_index = write_i16(0, compiler);
+            jmp(compiler, if_branch_token, "IF_END");
+            label(compiler, "IFB_END");
 
-			size_t len_af_if = chunks_len(compiler);
-			size_t if_len = len_af_if - len_bef_if;
-			//< if branch body
+            if(elif_branches){
+                for (size_t branch_idx = 0; branch_idx < DYNARR_LEN(elif_branches); branch_idx++){
+                    IfStmtBranch *elif_branch = (IfStmtBranch *)dynarr_get_ptr(branch_idx, elif_branches);
 
-			update_i16(jif_index, (int32_t)if_len + 1, compiler);
+                    Token *elif_branch_token = elif_branch->branch_token;
+                    Expr *elif_condition = elif_branch->condition_expr;
+                    DynArr *elif_stmts = elif_branch->stmts;
+
+                    compile_expr(elif_condition, compiler);
+                    jif(compiler, elif_branch_token, "ELIF_END_%zu", branch_idx);
+
+                    scope_in_soft(IF_SCOPE, compiler);
+
+                    for (size_t i = 0; i < DYNARR_LEN(elif_stmts); i++){
+                        Stmt *stmt = (Stmt *)dynarr_get_ptr(i, elif_stmts);
+                        compile_stmt(stmt, compiler);
+                    }
+
+                    scope_out(compiler);
+
+                    jmp(compiler, elif_branch_token, "IF_END");
+                    label(compiler, "ELIF_END_%zu", branch_idx);
+                }
+            }
 
             if(else_stmts){
-				//> else body
-                size_t len_bef_else = chunks_len(compiler);
-                scope_in_soft(BLOCK_SCOPE, compiler);
+                scope_in_soft(IF_SCOPE, compiler);
 
-                for(size_t i = 0; i < DYNARR_LEN(else_stmts); i++){
-                    compile_stmt((Stmt *)dynarr_get_ptr(i, else_stmts), compiler);
+                for (size_t i = 0; i < DYNARR_LEN(else_stmts); i++){
+                    Stmt *stmt = (Stmt *)dynarr_get_ptr(i, else_stmts);
+                    compile_stmt(stmt, compiler);
                 }
 
-			    scope_out(compiler);
-                size_t len_af_else = chunks_len(compiler);
-                size_t else_len = len_af_else - len_bef_else;
-				//< else body
-
-				update_i16(jmp_index, (int16_t)else_len + 1, compiler);
+                scope_out(compiler);
             }
+
+            label(compiler, "IF_END");
 
 			break;
 		}case WHILE_STMTTYPE:{
@@ -1927,13 +2143,16 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             Scope *scope = current_scope(compiler);
 
-            if(!inside_function(compiler))
+            if(!inside_function(compiler)){
                 error(compiler, throw_token, "Can not use 'throw' statement in global scope.");
-            if(scope->type == CATCH_SCOPE)
+            }
+            if(scope->type == CATCH_SCOPE){
                 error(compiler, throw_token, "Can not use 'throw' statement inside catch blocks.");
+            }
 
-			if(value) compile_expr(value, compiler);
-			else {
+			if(value){
+                compile_expr(value, compiler);
+            }else{
                 write_chunk(EMPTY_OPCODE, compiler);
                 write_location(throw_token, compiler);
             }
@@ -2079,6 +2298,7 @@ Compiler *compiler_create(Allocator *ctallocator, Allocator *rtallocator){
 
     compiler->ctallocator = ctallocator;
     compiler->rtallocator = rtallocator;
+    compiler->labels_allocator = memory_create_arena_allocator(NULL);
 
     return compiler;
 }

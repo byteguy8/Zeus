@@ -83,7 +83,7 @@ Allocator *memory_allocator(){
     return &allocator;
 }
 
-Allocator *memory_arena_allocator(LZArena **out_arena){
+Allocator *memory_create_arena_allocator(LZArena **out_arena){
     Allocator *arena_allocator = (Allocator *)MEMORY_ALLOC(Allocator, 1, &allocator);
     LZArena *arena = lzarena_create((LZArenaAllocator *)&allocator);
 
@@ -95,6 +95,17 @@ Allocator *memory_arena_allocator(LZArena **out_arena){
     if(out_arena){*out_arena = arena;}
 
     return arena_allocator;
+}
+
+void memory_destroy_arena_allocator(Allocator *arena_allocator){
+    if(!arena_allocator){
+        return;
+    }
+
+    LZArena *arena = (LZArena *)arena_allocator->ctx;
+
+    lzarena_destroy(arena);
+    MEMORY_DEALLOC(Allocator, 1, arena_allocator, &allocator);
 }
 
 void *memory_alloc(size_t size){

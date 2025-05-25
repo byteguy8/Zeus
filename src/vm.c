@@ -83,13 +83,13 @@ void *get_symbol(size_t index, SubModuleSymbolType type, Module *module, VM *vm)
 static Value *peek(VM *vm);
 static Value *peek_at(int offset, VM *vm);
 
-#define PUSH(value, vm) {                                    \
-    uintptr_t top = (uintptr_t)(vm)->stack_top;              \
-    uintptr_t end = (uintptr_t)((vm)->stack + STACK_LENGTH); \
-    if(top + VALUE_SIZE > end){                              \
-        vmu_error((vm), "Stack over flow");                  \
-    }                                                        \
-    *((vm)->stack_top++) = (value);                          \
+#define PUSH(_value, _vm) {                                   \
+    uintptr_t top = (uintptr_t)((_vm)->stack_top);            \
+    uintptr_t end = (uintptr_t)((_vm)->stack + STACK_LENGTH); \
+    if(top + VALUE_SIZE > end){                               \
+        vmu_error((_vm), "Stack over flow");                  \
+    }                                                         \
+    *((_vm)->stack_top++) = (_value);                         \
 }
 
 #define PUSH_EMPTY(vm) {             \
@@ -102,9 +102,9 @@ static Value *peek_at(int offset, VM *vm);
     PUSH(bool_value, vm)                  \
 }
 
-#define PUSH_INT(value, vm) {           \
-    Value int_value = INT_VALUE(value); \
-    PUSH(int_value, vm)                 \
+#define PUSH_INT(_value, _vm) {          \
+    Value int_value = INT_VALUE(_value); \
+    PUSH(int_value, _vm)                 \
 }
 
 #define PUSH_FLOAT(value, vm) {             \
@@ -1028,8 +1028,8 @@ static int execute(VM *vm){
                 Value *vb = pop(vm);
 
                 if(IS_VALUE_INT(vb)){
-                    int64_t right = VALUE_TO_INT(vb);
-                    PUSH_INT(-right, vm)
+                    int64_t right = -VALUE_TO_INT(vb);
+                    PUSH_INT(right, vm)
                     break;
                 }
 
@@ -1656,14 +1656,14 @@ static int execute(VM *vm){
                     Record *record = VALUE_TO_RECORD(value);
 
                     if(record->attributes){
-                        char *key = "message";
+                        char *raw_key = "message";
 
-                        uint8_t *k = (uint8_t *)key;
-                        size_t ks = strlen(key);
+                        uint8_t *key = (uint8_t *)raw_key;
+                        size_t key_size = strlen(raw_key);
 
                         LZHTableNode *message_node = NULL;
 
-                        if(lzhtable_contains(k, ks, record->attributes, &message_node)){
+                        if(lzhtable_contains(key, key_size, record->attributes, &message_node)){
                             Value *value = (Value *)message_node->value;
 
                             if(!IS_VALUE_STR(value)){
@@ -1676,22 +1676,23 @@ static int execute(VM *vm){
                 }
 
                 char throw = 1;
-                int ptr = (int)vm->frame_ptr;
+                int frame_ptr = (int)vm->frame_ptr;
 
-                while(ptr > 0){
-                    Frame *frame = &vm->frame_stack[--ptr];
+                while(frame_ptr > 0){
+                    Frame *frame = &vm->frame_stack[--frame_ptr];
                     Fn *fn = frame->fn;
                     Module *module = fn->module;
                     SubModule *submodule = module->submodule;
-                    LZHTable *fn_tries = submodule->tries;
-                    LZHTableNode *node = NULL;
+                    LZHTable *tries = submodule->tries;
 
                     uint8_t *key = (uint8_t *)fn;
                     size_t key_size = sizeof(Fn);
 
-                    if(lzhtable_contains(key, key_size, fn_tries, &node)){
-                        TryBlock *try = NULL;
-                        DynArr *tries = (DynArr *)node->value;
+                    LZHTableNode *tries_node = NULL;
+
+                    if(lzhtable_contains(key, key_size, tries, &tries_node)){
+                        TryBlock *selected_try_block = NULL;
+                        DynArr *tries = (DynArr *)tries_node->value;
 
                         for(size_t i = 0; i < tries->used; i++){
                             TryBlock *try_block = (TryBlock *)dynarr_get_ptr(i, tries);
@@ -1699,18 +1700,20 @@ static int execute(VM *vm){
                             size_t end = try_block->catch;
                             size_t ip = frame->ip;
 
-                            if(ip < start || ip > end){continue;}
+                            if(ip < start || ip > end){
+                                continue;
+                            }
 
-                            try = try_block;
+                            selected_try_block = try_block;
 
                             break;
                         }
 
-                        if(try){
+                        if(selected_try_block){
                             throw = 0;
-                            frame->ip = try->catch;
-                            vm->frame_ptr = ptr + 1;
-                            frame->locals[try->local] = *value;
+                            frame->ip = selected_try_block->catch;
+                            vm->frame_ptr = frame_ptr + 1;
+                            FRAME_LOCAL(selected_try_block->local, vm) = *value;
 
                             break;
                         }

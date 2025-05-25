@@ -7,6 +7,7 @@
 #include "fn.h"
 #include <stdio.h>
 #include <stdarg.h>
+#include <inttypes.h>
 #include <assert.h>
 
 #define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
@@ -609,12 +610,7 @@ void vmu_print_value(FILE *stream, Value *value){
             fprintf(stream, "%s", bool == 0 ? "false" : "true");
             break;
         }case INT_VTYPE:{
-            #ifdef _WIN32
-                fprintf(stream, "%zu", VALUE_TO_INT(value));
-            #else
-                fprintf(stream, "%zu", VALUE_TO_INT(value));
-            #endif
-
+            fprintf(stream, "%" PRId64, VALUE_TO_INT(value));
             break;
         }case FLOAT_VTYPE:{
 			fprintf(stream, "%.8f", VALUE_TO_FLOAT(value));

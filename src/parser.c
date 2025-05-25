@@ -954,26 +954,50 @@ DynArr *parse_block_stmt(Parser *parser){
     return stmts;
 }
 
+IfStmtBranch *parse_if_stmt_branch(Token *branch_token, Parser *parser){
+    Expr *condition = NULL;
+    DynArr *stmts = NULL;
+
+    consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after '%s' keyword", branch_token->lexeme);
+	condition = parse_expr(parser);
+	consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' at end of '%s' condition", branch_token->lexeme);
+
+    if(match(parser, 1, COLON_TOKTYPE)){
+		stmts = FACTORY_DYNARR_PTR(parser->ctallocator);
+		Stmt *stmt = parse_stmt(parser);
+        dynarr_insert_ptr(stmt, stmts);
+	}else{
+		consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of '%s' body", branch_token->lexeme);
+		stmts = parse_block_stmt(parser);
+	}
+
+    IfStmtBranch *branch = MEMORY_ALLOC(IfStmtBranch, 1, parser->ctallocator);
+
+    branch->branch_token = branch_token;
+    branch->condition_expr = condition;
+    branch->stmts = stmts;
+
+    return branch;
+}
+
 Stmt *parse_if_stmt(Parser *parser){
-    Token *if_token = NULL;
-	Expr *if_condition = NULL;
-	DynArr *if_stmts = NULL;
+    IfStmtBranch *if_branch = NULL;
+    DynArr *elif_branches = NULL;
 	DynArr *else_stmts = NULL;
 
-    if_token = previous(parser);
+    Token *if_token = previous(parser);
+    if_branch = parse_if_stmt_branch(if_token, parser);
 
-	consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'if' keyword.");
-	if_condition = parse_expr(parser);
-	consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' at end of if condition.");
+    if(check(parser, ELIF_TOKTYPE)){
+        elif_branches = FACTORY_DYNARR_PTR(parser->ctallocator);
 
-	if(match(parser, 1, COLON_TOKTYPE)){
-		if_stmts = FACTORY_DYNARR_PTR(parser->ctallocator);
-		Stmt *stmt = parse_stmt(parser);
-        dynarr_insert_ptr(stmt, if_stmts);
-	}else{
-		consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of if body.");
-		if_stmts = parse_block_stmt(parser);
-	}
+        while (match(parser, 1, ELIF_TOKTYPE)){
+            Token *elif_token = previous(parser);
+            IfStmtBranch *branch = parse_if_stmt_branch(elif_token, parser);
+
+            dynarr_insert_ptr(branch, elif_branches);
+        }
+    }
 
 	if(match(parser, 1, ELSE_TOKTYPE)){
 		if(match(parser, 1, COLON_TOKTYPE)){
@@ -988,10 +1012,9 @@ Stmt *parse_if_stmt(Parser *parser){
 
 	IfStmt *if_stmt = MEMORY_ALLOC(IfStmt, 1, parser->ctallocator);
 
-    if_stmt->if_token = if_token;
-	if_stmt->if_condition = if_condition;
-	if_stmt->if_stmts = if_stmts;
-	if_stmt->else_stmts = else_stmts;
+    if_stmt->if_branch = if_branch;
+    if_stmt->elif_branches = elif_branches;
+    if_stmt->else_stmts = else_stmts;
 
 	return create_stmt(IF_STMTTYPE, if_stmt, parser);
 }

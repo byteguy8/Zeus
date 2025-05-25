@@ -34,7 +34,8 @@
 int memory_init();
 void memory_deinit();
 Allocator *memory_allocator();
-Allocator *memory_arena_allocator(LZArena **out_arena);
+Allocator *memory_create_arena_allocator(LZArena **out_arena);
+void memory_destroy_arena_allocator(Allocator *allocator);
 
 void *memory_alloc(size_t size);
 void *memory_realloc(void *ptr, size_t size);

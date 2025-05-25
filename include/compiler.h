@@ -10,6 +10,7 @@
 #include <setjmp.h>
 
 #define PATHS_LENGTH 256
+#define LABEL_NAME_LENGTH 64
 #define SCOPES_LENGTH 32
 #define SYMBOLS_LENGTH 255
 #define SYMBOL_NAME_LENGTH 32
@@ -38,24 +39,55 @@ typedef struct symbol{
 
 typedef enum scope_type{
     BLOCK_SCOPE,
+    IF_SCOPE,
 	WHILE_SCOPE,
     TRY_SCOPE,
     CATCH_SCOPE,
     FUNCTION_SCOPE
 }ScopeType;
 
+typedef struct label{
+    char *name;
+    size_t location;
+    struct label *prev;
+    struct label *next;
+}Label;
+
+typedef struct label_list{
+    Label *head;
+    Label *tail;
+}LabelList;;
+
+typedef struct jmp{
+    size_t bef;
+    size_t af;
+    size_t idx;
+    char *label;
+    struct jmp *prev;
+    struct jmp *next;
+    void *scope;
+}JMP;
+
+typedef struct jmp_list{
+    JMP *head;
+    JMP *tail;
+}JMPList;
+
 typedef struct scope{
     int depth;
     int locals;
     int scope_locals;
-    TryBlock *try;
     ScopeType type;
+    TryBlock *try;
 
     uint8_t symbols_len;
     Symbol symbols[SYMBOLS_LENGTH];
 
     int captured_symbols_len;
     Symbol *captured_symbols[SYMBOLS_LENGTH];
+
+    LabelList labels;
+    JMPList jmps;
 }Scope;
 
 typedef struct loop_mark{
@@ -95,6 +127,7 @@ typedef struct compiler{
 
     Allocator *ctallocator;
     Allocator *rtallocator;
+    Allocator *labels_allocator;
 }Compiler;
 
 Compiler *compiler_create(Allocator *ctallocator, Allocator *rtallocator);
