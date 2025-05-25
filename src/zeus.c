@@ -113,8 +113,8 @@ int main(int argc, char const *argv[]){
 	memory_init();
 
     LZArena *compile_arena = NULL;
-    Allocator *ctallocator = memory_create_arena_allocator(&compile_arena);
     Allocator *rtallocator = memory_allocator();
+    Allocator *ctallocator = memory_create_arena_allocator(rtallocator, &compile_arena);
 
     LZHTable *natives = FACTORY_LZHTABLE(rtallocator);
 
@@ -152,7 +152,7 @@ int main(int argc, char const *argv[]){
 
 	Lexer *lexer = lexer_create(rtallocator);
 	Parser *parser = parser_create(ctallocator);
-    Compiler *compiler = compiler_create(memory_create_arena_allocator(NULL), rtallocator);
+    Compiler *compiler = compiler_create(ctallocator, rtallocator);
     Dumpper *dumpper = dumpper_create(ctallocator);
     VM *vm = vm_create(rtallocator);
 

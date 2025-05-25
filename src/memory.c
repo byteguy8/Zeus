@@ -83,16 +83,23 @@ Allocator *memory_allocator(){
     return &allocator;
 }
 
-Allocator *memory_create_arena_allocator(LZArena **out_arena){
-    Allocator *arena_allocator = (Allocator *)MEMORY_ALLOC(Allocator, 1, &allocator);
-    LZArena *arena = lzarena_create((LZArenaAllocator *)&allocator);
+Allocator *memory_create_arena_allocator(Allocator *allocator, LZArena **out_arena){
+    LZArena *arena = lzarena_create((LZArenaAllocator *)allocator);
+    Allocator *arena_allocator = MEMORY_ALLOC(Allocator, 1, allocator);
 
-    arena_allocator->ctx = arena;
-    arena_allocator->alloc = lzarena_link_alloc;
-    arena_allocator->realloc = lzarena_link_realloc;
-    arena_allocator->dealloc = lzarena_link_dealloc;
+    MEMORY_INIT_ALLOCATOR(
+        arena,
+        lzarena_link_alloc,
+        lzarena_link_realloc,
+        lzarena_link_dealloc,
+        arena_allocator
+    )
 
-    if(out_arena){*out_arena = arena;}
+    arena_allocator->extra = allocator;
+
+    if(out_arena){
+        *out_arena = arena;
+    }
 
     return arena_allocator;
 }
@@ -102,10 +109,11 @@ void memory_destroy_arena_allocator(Allocator *arena_allocator){
         return;
     }
 
+    Allocator *origin_allocator = (Allocator *)arena_allocator->extra;
     LZArena *arena = (LZArena *)arena_allocator->ctx;
 
     lzarena_destroy(arena);
-    MEMORY_DEALLOC(Allocator, 1, arena_allocator, &allocator);
+    MEMORY_DEALLOC(Allocator, 1, arena_allocator, origin_allocator);
 }
 
 void *memory_alloc(size_t size){

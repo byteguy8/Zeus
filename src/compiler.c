@@ -2288,7 +2288,7 @@ void define_natives(Compiler *compiler){
     }
 }
 //<PRIVATE IMPLEMENTATION
-
+//>PUBLIC IMPLEMENTATION
 Compiler *compiler_create(Allocator *ctallocator, Allocator *rtallocator){
     Compiler *compiler = MEMORY_ALLOC(Compiler, 1, ctallocator);
 
@@ -2298,7 +2298,7 @@ Compiler *compiler_create(Allocator *ctallocator, Allocator *rtallocator){
 
     compiler->ctallocator = ctallocator;
     compiler->rtallocator = rtallocator;
-    compiler->labels_allocator = memory_create_arena_allocator(NULL);
+    compiler->labels_allocator = memory_create_arena_allocator(ctallocator, NULL);
 
     return compiler;
 }
@@ -2351,8 +2351,9 @@ int compiler_import(
     LZHTable *modules,
     Compiler *compiler
 ){
-    if(setjmp(compiler->err_jmp) == 1) return 1;
-    else{
+    if(setjmp(compiler->err_jmp) == 1){
+        return 1;
+    }else{
         compiler->keywords = keywords;
         compiler->natives = natives;
         compiler->stmts = stmts;
@@ -2380,3 +2381,4 @@ int compiler_import(
         return compiler->is_err;
     }
 }
+//<PUBLIC IMPLEMENTATION
