@@ -1724,13 +1724,13 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 error(compiler, identifier_token, "'%s' declared as constant, but is not being initialized.", identifier_token->lexeme);
             }
 
-            Symbol *symbol = declare(is_const ? IMUT_SYMTYPE : MUT_SYMTYPE, identifier_token, compiler);
-
             if(initializer_expr == NULL){
                 write_chunk(EMPTY_OPCODE, compiler);
             }else{
                 compile_expr(initializer_expr, compiler);
             }
+
+            Symbol *symbol = declare(is_const ? IMUT_SYMTYPE : MUT_SYMTYPE, identifier_token, compiler);
 
             if(symbol->depth == 1){
                 write_chunk(GDEF_OPCODE, compiler);
