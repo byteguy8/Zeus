@@ -32,7 +32,6 @@ typedef struct symbol{
     int local;
     int index;
     SymbolType type;
-    size_t name_len;
     char name[SYMBOL_NAME_LENGTH];
     Token *identifier_token;
 }Symbol;

@@ -603,7 +603,6 @@ Symbol *declare_native(char *identifier, Compiler *compiler){
     symbol->depth = scope->depth;
     symbol->local = -1;
     symbol->type = NATIVE_FN_SYMTYPE;
-    symbol->name_len = identifier_len;
     memcpy(symbol->name, identifier, identifier_len);
     symbol->name[identifier_len] = '\0';
     symbol->identifier_token = NULL;
@@ -647,7 +646,6 @@ Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler){
     symbol->local = local;
     symbol->index = -1;
     symbol->type = type;
-    symbol->name_len = identifier_len;
     memcpy(symbol->name, identifier, identifier_len);
     symbol->name[identifier_len] = '\0';
     symbol->identifier_token = identifier_token;
