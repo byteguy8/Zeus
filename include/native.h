@@ -268,4 +268,21 @@ Value native_fn_eprintln(uint8_t argsc, Value *values, Value *target, VM *vm){
     return EMPTY_VALUE;
 }
 
+Value native_fn_readln(uint8_t argsc, Value *values, Value *target, VM *vm){
+	size_t buff_len = 1024;
+	char buff[buff_len];
+	char *out_buff = fgets(buff, buff_len, stdin);
+
+	if(!out_buff){
+        vmu_error(vm, "Failed to read input");
+    }
+
+    size_t out_buff_len = strlen(out_buff);
+
+    char *raw_str = factory_clone_raw_str_range(0, out_buff_len - 1, buff, vm->fake_allocator);
+    Obj *str_obj = vmu_str_obj(&raw_str, vm);
+
+	return OBJ_VALUE(str_obj);
+}
+
 #endif

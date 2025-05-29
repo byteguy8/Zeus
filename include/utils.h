@@ -51,10 +51,12 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator);
 #ifdef _WIN32
     #define UTILS_FILES_EXISTS(pathname) (_access(pathname, ACCESS_MODE_EXISTS) == 0)
     #define UTILS_FILE_CAN_READ(pathname) (access(pathname, ACCESS_MODE_READ_ONLY) == 0)
+    int utils_files_is_directory(LPCSTR pathname);
     int utils_files_is_regular(LPCSTR pathname);
 #elif __linux__
     #define UTILS_FILES_EXISTS(pathname) (access(pathname, F_OK) == 0)
     #define UTILS_FILE_CAN_READ(pathname) (access(pathname, R_OK) == 0)
+    int utils_files_is_directory(char *pathname);
     int utils_files_is_regular(char *pathname);
 #endif
 

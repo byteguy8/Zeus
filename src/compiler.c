@@ -25,12 +25,7 @@
 static void error(Compiler *compiler, Token *token, char *msg, ...);
 void descompose_i16(int16_t value, uint8_t *bytes);
 void descompose_i32(int32_t value, uint8_t *bytes);
-#define WHILE_IN(compiler) (++compiler->while_counter)
-#define WHILE_OUT(compiler) (--compiler->while_counter)
-static void mark_stop(size_t len, size_t index, Compiler *compiler);
-static void unmark_stop(size_t which, Compiler *compiler);
-static void mark_continue(size_t len, size_t index, Compiler *compiler);
-static void unmark_continue(size_t which, Compiler *compiler);
+int32_t generate_id(Compiler *compiler);
 Scope *scope_in(ScopeType type, Compiler *compiler);
 Scope *scope_in_soft(ScopeType type, Compiler *compiler);
 Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function, size_t *out_fn_index);
@@ -159,53 +154,14 @@ void descompose_i32(int32_t value, uint8_t *bytes){
     }
 }
 
-static void mark_stop(size_t len, size_t index, Compiler *compiler){
-	assert(compiler->stop_ptr < LOOP_MARK_LENGTH);
-    LoopMark *loop_mark = &compiler->stops[compiler->stop_ptr++];
-
-    loop_mark->id = compiler->while_counter;
-	loop_mark->len = len;
-    loop_mark->index = index;
-}
-
-static void unmark_stop(size_t which, Compiler *compiler){
-	assert(which < compiler->stop_ptr);
-
-	for(size_t i = which; i + 1 < compiler->stop_ptr; i++){
-        LoopMark *a = &compiler->stops[i];
-        LoopMark *b = &compiler->stops[i + 1];
-
-		memcpy(a, b, sizeof(LoopMark));
-	}
-
-	compiler->stop_ptr--;
-}
-
-static void mark_continue(size_t len, size_t index, Compiler *compiler){
-	assert(compiler->stop_ptr < LOOP_MARK_LENGTH);
-    LoopMark *loop_mark = &compiler->continues[compiler->continue_ptr++];
-
-    loop_mark->id = compiler->while_counter;
-	loop_mark->len = len;
-    loop_mark->index = index;
-}
-
-static void unmark_continue(size_t which, Compiler *compiler){
-	assert(which < compiler->continue_ptr);
-
-	for(size_t i = which; i + 1 < compiler->continue_ptr; i++){
-        LoopMark *a = &compiler->stops[i];
-        LoopMark *b = &compiler->stops[i + 1];
-
-		memcpy(a, b, sizeof(LoopMark));
-	}
-
-	compiler->continue_ptr--;
+inline int32_t generate_id(Compiler *compiler){
+    return ++compiler->counter_id;
 }
 
 Scope *scope_in(ScopeType type, Compiler *compiler){
     Scope *scope = &compiler->scopes[compiler->depth++];
 
+    scope->id = -1;
     scope->depth = compiler->depth;
     scope->locals = 0;
     scope->scope_locals = 0;
@@ -221,6 +177,7 @@ Scope *scope_in_soft(ScopeType type, Compiler *compiler){
     Scope *enclosing = &compiler->scopes[compiler->depth - 1];
     Scope *scope = &compiler->scopes[compiler->depth++];
 
+    scope->id = -1;
     scope->depth = compiler->depth;
     scope->locals = enclosing->locals;
     scope->scope_locals = 0;
@@ -455,6 +412,41 @@ JMP *jif(Compiler *compiler, Token *ref_token, char *fmt, ...){
     return jmp;
 }
 
+JMP *jit(Compiler *compiler, Token *ref_token, char *fmt, ...){
+    size_t bef = chunks_len(compiler);
+
+    write_chunk(JIT_OPCODE, compiler);
+    write_location(ref_token, compiler);
+
+    size_t idx = write_i16(0, compiler);
+    size_t af = chunks_len(compiler);
+
+    va_list args;
+    va_start(args, fmt);
+
+    Scope *scope = current_scope(compiler);
+    Allocator *allocator = scope->depth == 1 ? COMPILE_ALLOCATOR : LABELS_ALLOCATOR;
+
+    char *label = MEMORY_ALLOC(char, LABEL_NAME_LENGTH, allocator);
+    int out_count = vsnprintf(label, LABEL_NAME_LENGTH, fmt, args);
+
+    va_end(args);
+    assert(out_count < LABEL_NAME_LENGTH);
+
+    JMP *jmp = (JMP *)MEMORY_ALLOC(JMP, 1, allocator);
+
+    jmp->bef = bef;
+    jmp->af = af;
+    jmp->idx = idx;
+    jmp->label = label;
+    jmp->prev = NULL;
+    jmp->next = NULL;
+
+    insert_jmp(scope, jmp);
+
+    return jmp;
+}
+
 JMP *jmp(Compiler *compiler, Token *ref_token, char *fmt, ...){
     size_t bef = chunks_len(compiler);
 
@@ -505,12 +497,10 @@ void resolve_jmps(Scope *current, Compiler *compiler){
         }
 
         if(selected){
-            if(selected->location < jmp->bef){
-                size_t len = jmp->bef - selected->location + 1;
-                update_i16(jmp->idx, -len, compiler);
+            if(jmp->idx > selected->location){
+                update_i16(jmp->idx, -(jmp->bef - selected->location), compiler);
             }else{
-                size_t len = selected->location - jmp->af + 1;
-                update_i16(jmp->idx, len, compiler);
+                update_i16(jmp->idx, selected->location - jmp->af + 1, compiler);
             }
 
             remove_jmp(jmp);
@@ -1753,6 +1743,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             break;
         }case IF_STMTTYPE:{
+            int32_t id = generate_id(compiler);
+
 			IfStmt *if_stmt = (IfStmt *)stmt->sub_stmt;
             IfStmtBranch *if_branch = if_stmt->if_branch;
             DynArr *elif_branches = if_stmt->elif_branches;
@@ -1763,7 +1755,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             DynArr *if_stmts = if_branch->stmts;
 
             compile_expr(if_condition, compiler);
-            jif(compiler, if_branch_token, "IFB_END");
+            jif(compiler, if_branch_token, "IFB_END_%d", id);
 
             scope_in_soft(IF_SCOPE, compiler);
 
@@ -1776,8 +1768,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             scope_out(compiler);
 
-            jmp(compiler, if_branch_token, "IF_END");
-            label(compiler, "IFB_END");
+            jmp(compiler, if_branch_token, "IF_END_%d", id);
+            label(compiler, "IFB_END_%d", id);
 
             if(elif_branches){
                 for (size_t branch_idx = 0; branch_idx < DYNARR_LEN(elif_branches); branch_idx++){
@@ -1788,7 +1780,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                     DynArr *elif_stmts = elif_branch->stmts;
 
                     compile_expr(elif_condition, compiler);
-                    jif(compiler, elif_branch_token, "ELIF_END_%zu", branch_idx);
+                    jif(compiler, elif_branch_token, "ELIF_END_%d_%zu", id, branch_idx);
 
                     scope_in_soft(IF_SCOPE, compiler);
 
@@ -1799,8 +1791,8 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
                     scope_out(compiler);
 
-                    jmp(compiler, elif_branch_token, "IF_END");
-                    label(compiler, "ELIF_END_%zu", branch_idx);
+                    jmp(compiler, elif_branch_token, "IF_END_%d", id);
+                    label(compiler, "ELIF_END_%d_%zu", id, branch_idx);
                 }
             }
 
@@ -1815,102 +1807,63 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 scope_out(compiler);
             }
 
-            label(compiler, "IF_END");
+            label(compiler, "IF_END_%d", id);
 
 			break;
 		}case WHILE_STMTTYPE:{
+            int32_t while_id = generate_id(compiler);
+
 			WhileStmt *while_stmt = (WhileStmt *)stmt->sub_stmt;
             Token *while_token = while_stmt->while_token;
 			Expr *condition = while_stmt->condition;
 			DynArr *stmts = while_stmt->stmts;
 
-			write_chunk(JMP_OPCODE, compiler);
-            write_location(while_stmt->while_token, compiler);
-			size_t jmp_index = write_i16(0, compiler);
+            jmp(compiler, while_token, "WHILE_CONDITION_%d", while_id);
+            label(compiler, "WHILE_BODY_%d", while_id);
 
-			size_t len_bef_body = chunks_len(compiler);
-
-			scope_in_soft(WHILE_SCOPE, compiler);
-			char while_id = WHILE_IN(compiler);
+			Scope *scope = scope_in_soft(WHILE_SCOPE, compiler);
+            scope->id = while_id;
 
 			for(size_t i = 0; i < DYNARR_LEN(stmts); i++){
 				compile_stmt((Stmt *)dynarr_get_ptr(i, stmts), compiler);
 			}
 
-			WHILE_OUT(compiler);
 			scope_out(compiler);
 
-            size_t len_af_body = chunks_len(compiler);
-			size_t body_len = len_af_body - len_bef_body;
-
-            update_i16(jmp_index, (int16_t)body_len + 1, compiler);
-
+            label(compiler, "WHILE_CONDITION_%d", while_id);
 			compile_expr(condition, compiler);
-            size_t len_af_while = chunks_len(compiler);
-			size_t while_len = len_af_while - len_bef_body;
-
-			write_chunk(JIT_OPCODE, compiler);
-            write_location(while_token, compiler);
-			write_i16(-((int16_t)while_len), compiler);
-
-			size_t af_header = chunks_len(compiler);
-			size_t ptr = 0;
-
-			while (compiler->stop_ptr > 0 && ptr < compiler->stop_ptr){
-				LoopMark *loop_mark = &compiler->stops[ptr];
-
-				if(loop_mark->id != while_id){
-					ptr++;
-					continue;
-				}
-
-				update_i16(loop_mark->index, af_header - loop_mark->len + 1, compiler);
-				unmark_stop(ptr, compiler);
-			}
-
-            ptr = 0;
-
-            while (compiler->continue_ptr > 0 && ptr < compiler->continue_ptr){
-				LoopMark *loop_mark = &compiler->continues[ptr];
-
-				if(loop_mark->id != while_id){
-					ptr++;
-					continue;
-				}
-
-				update_i16(loop_mark->index, len_af_body - loop_mark->len + 1, compiler);
-                unmark_continue(ptr, compiler);
-			}
+            jit(compiler, while_token, "WHILE_BODY_%d", while_id);
+            label(compiler, "WHILE_END_%d", while_id);
 
 			break;
 		}case STOP_STMTTYPE:{
 			StopStmt *stop_stmt = (StopStmt *)stmt->sub_stmt;
 			Token *stop_token = stop_stmt->stop_token;
 
-			if(!inside_while(compiler))
-				error(compiler, stop_token, "Can't use 'stop' statement outside loops.");
+            Scope *scope = inside_while(compiler);
 
-			write_chunk(JMP_OPCODE, compiler);
-            write_location(stop_token, compiler);
-			size_t index = write_i16(0, compiler);
+            assert(scope->id != -1);
 
-            size_t len = chunks_len(compiler);
-			mark_stop(len, index, compiler);
+            if(!scope){
+                error(compiler, stop_token, "Can't use 'stop' statement outside loops.");
+            }
+
+			jmp(compiler, stop_token, "WHILE_END_%d", scope->id);
 
 			break;
 		}case CONTINUE_STMTTYPE:{
             ContinueStmt *continue_stmt = (ContinueStmt *)stmt->sub_stmt;
             Token *continue_token = continue_stmt->continue_token;
 
-            if(!inside_while(compiler))
+            Scope *scope = inside_while(compiler);
+
+            assert(scope->id != -1);
+
+            if(!scope){
                 error(compiler, continue_token, "Can't use 'continue' statement outside loops.");
+            }
 
-            write_chunk(JMP_OPCODE, compiler);
-            write_location(continue_token, compiler);
-            size_t index = write_i16(0, compiler);
-
-            size_t len = chunks_len(compiler);
-            mark_continue(len, index, compiler);
+            jmp(compiler, continue_token, "WHILE_CONDITION_%d", scope->id);
 
             break;
         }case RETURN_STMTTYPE:{

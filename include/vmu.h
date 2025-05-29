@@ -2,6 +2,7 @@
 #define VM_UTILS_H
 
 #include "vm.h"
+#include "array.h"
 #include "bstr.h"
 #include "native_fn.h"
 #include "tutils.h"
@@ -23,6 +24,13 @@
     if(!IS_VALUE_STR((_value))){                                                                     \
         vmu_error(_vm, "Illegal type of argument %d: expect '%s' of type 'str'", (_param), (_name)); \
     }                                                                                                \
+}
+
+#define VALIDATE_VALUE_STR_EMPTY_ARG(_value, _param, _name, _vm){                         \
+    VALIDATE_VALUE_STR_ARG(_value, _param, _name, _vm);                                   \
+    if(VALUE_TO_STR(_value)->len == 0){                                                   \
+        vmu_error(_vm, "Illegal value of argument %d: '%s' is empty", (_param), (_name)); \
+    }                                                                                     \
 }
 
 #define VALIDATE_VALUE_ARRAY_ARG(_value, _param, _name, _vm){                                          \
@@ -52,11 +60,21 @@
     }                                                                                                 \
 }
 
+#define VALIDATE_VALUE_ARRAY_SIZE_ARG(_value, _param, _name, _vm){                                             \
+    VALIDATE_VALUE_INT_ARG(_value, _param, _name, _vm)                                                         \
+    if(VALUE_TO_INT(_value) < 0){                                                                              \
+        vmu_error((_vm), "Illegal argument %d: '%s' cannot be less than 0", (_param), (_name));                \
+    }                                                                                                          \
+    if(VALUE_TO_INT(_value) > ARRAY_LENGTH_MAX){                                                               \
+        vmu_error((_vm), "Illegal argument %d: '%s' cannot be greater than %d", (_param), (_name), INT32_MAX); \
+    }                                                                                                          \
+}
+
 #define VALIDATE_VALUE_ARRAY_INDEX_ARG(_value, _param, _name, _vm){                                            \
     if(VALUE_TO_INT(_value) < 0){                                                                              \
         vmu_error((_vm), "Illegal argument %d: '%s' cannot be less than 0", (_param), (_name));                \
     }                                                                                                          \
-    if(VALUE_TO_INT(_value) > INT32_MAX){                                                                      \
+    if(VALUE_TO_INT(_value) > ARRAY_LENGTH_MAX - 1){                                                           \
         vmu_error((_vm), "Illegal argument %d: '%s' cannot be greater than %d", (_param), (_name), INT32_MAX); \
     }                                                                                                          \
 }
@@ -127,6 +145,15 @@
     }                                                                                                                           \
 }
 
+#define VALIDATE_I64_RANGE(_min, _max, _value, _param, _name, _vm){\
+    if((int64_t)(_value) < (int64_t)(_min)){\
+        vmu_error((_vm), "Illegal value for '%s': must be greater of equals to %ld, but got %ld", (_name), (int64_t)(_min), (int64_t)(_value));\
+    }\
+    if((_value) > (_max)){\
+        vmu_error((_vm), "Illegal value for '%s': must be less of equals to %ld, but got %ld", (_name), (int64_t)(_max), (int64_t)(_value));\
+    }\
+}
+
 #define TO_ARRAY_LENGTH(_value) ((ARRAY_LENGTH_TYPE)(VALUE_TO_INT((_value))))
 #define TO_ARRAY_INDEX(_value) ((ARRAY_LENGTH_TYPE)(VALUE_TO_INT((_value))))
 #define TO_LIST_INDEX(_value) ((LIST_LENGTH_TYPE)(VALUE_TO_INT((_value))))
@@ -166,7 +193,7 @@ void vmu_destroy_obj(Obj *obj, VM *vm);
 
 Obj *vmu_str_obj(char **raw_str_ptr, VM *vm);
 Obj *vmu_unchecked_str_obj(char *raw_str, VM *vm);
-Obj *vmu_array_obj(int32_t len, VM *vm);
+Obj *vmu_array_obj(aidx_t len, VM *vm);
 Obj *vmu_list_obj(VM *vm);
 Obj *vmu_dict_obj(VM *vm);
 Obj *vmu_record_obj(uint8_t length, VM *vm);

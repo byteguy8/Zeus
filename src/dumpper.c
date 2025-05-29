@@ -233,30 +233,27 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 
             break;
         }case GDEF_OPCODE:{
-            uint32_t hash = 0;
-            char *value = read_str(dumpper, &hash);
+            char *value = read_str(dumpper, NULL);
             size_t end = dumpper->ip;
 
             printf("%8.8s %.7zu", "GDEF", end - start);
-            printf(" | %u '%s'\n", hash, value);
+            printf(" | '%s'\n", value);
 
             break;
         }case GSET_OPCODE:{
-            uint32_t hash = 0;
-            char *value = read_str(dumpper, &hash);
+            char *value = read_str(dumpper, NULL);
             size_t end = dumpper->ip;
 
             printf("%8.8s %.7zu", "GSET", end - start);
-            printf(" | hash: %u value: '%s'\n", hash, value);
+            printf(" | '%s'\n", value);
 
             break;
         }case GGET_OPCODE:{
-            uint32_t hash = 0;
-            char *value = read_str(dumpper, &hash);
+            char *value = read_str(dumpper, NULL);
             size_t end = dumpper->ip;
 
             printf("%8.8s %.7zu", "GGET", end - start);
-            printf(" | hash: %u value: '%s'\n", hash, value);
+            printf(" | '%s'\n", value);
 
             break;
         }case GASET_OPCODE:{
@@ -269,12 +266,11 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 
             break;
         }case NGET_OPCODE:{
-            uint32_t hash = 0;
-            char *value = read_str(dumpper, &hash);
+            char *value = read_str(dumpper, NULL);
             size_t end = dumpper->ip;
 
             printf("%8.8s %.7zu", "NGET", end - start);
-            printf(" | hash: %u value: '%s'\n", hash, value);
+            printf(" | '%s'\n", value);
 
             break;
         }case SGET_OPCODE:{

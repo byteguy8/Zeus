@@ -135,6 +135,7 @@ int main(int argc, char const *argv[]){
     add_native("println", 1, native_fn_println, natives, rtallocator);
     add_native("eprint", 1, native_fn_eprint, natives, rtallocator);
     add_native("eprintln", 1, native_fn_eprintln, natives, rtallocator);
+    add_native("readln", 0, native_fn_readln, natives, rtallocator);
 
 	RawStr *source = utils_read_source(source_path, rtallocator);
     char *module_path = factory_clone_raw_str(source_path, rtallocator);

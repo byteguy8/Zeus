@@ -91,6 +91,13 @@ void destroy_obj(Obj *obj, VM *vm){
             lzhtable_destroy(vm, clean_up_table, OBJ_TO_DICT(obj));
             break;
         }case RECORD_OTYPE:{
+            Record *record = OBJ_TO_RECORD(obj);
+
+            if(record->type == FILE_RTYPE){
+                factory_destroy_raw_str(record->content.file.pathname, vm->fake_allocator);
+                fclose(record->content.file.handler);
+            }
+
             factory_destroy_record(vm, clean_up_record, OBJ_TO_RECORD(obj), vm->fake_allocator);
 			break;
 		}case NATIVE_FN_OTYPE:{
@@ -571,7 +578,20 @@ void vmu_print_obj(FILE *stream, Obj *object){
             break;
         }case RECORD_OTYPE:{
 			Record *record = OBJ_TO_RECORD(object);
-            fprintf(stream, "<record %zu at %p>", record->attributes ? record->attributes->n : 0, record);
+
+            switch (record->type) {
+                case RANDOM_RTYPE:{
+                    fprintf(stream, "<random context %p>", record);
+                    break;
+                }case FILE_RTYPE:{
+                    fprintf(stream, "<file %p>", record);
+                    break;
+                }default:{
+                    fprintf(stream, "<record %zu at %p>", record->attributes ? record->attributes->n : 0, record);
+                    break;
+                }
+            }
+
 			break;
 		}case NATIVE_FN_OTYPE:{
             NativeFn *native_fn = OBJ_TO_NATIVE_FN(object);
@@ -739,7 +759,7 @@ Obj *vmu_unchecked_str_obj(char *raw_str, VM *vm){
     return str_obj;
 }
 
-Obj *vmu_array_obj(int32_t len, VM *vm){
+Obj *vmu_array_obj(aidx_t len, VM *vm){
     Array *array = factory_create_array(len, vm->fake_allocator);
     Obj *array_obj = vmu_create_obj(ARRAY_OTYPE, vm);
 

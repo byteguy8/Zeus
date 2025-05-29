@@ -277,6 +277,11 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator){
 
 
 #ifdef _WIN32
+    int utils_files_is_directory(LPCSTR pathname){
+        DWORD attributes = GetFileAttributesA(pathname);
+        return attributes & FILE_ATTRIBUTE_DIRECTORY;
+    }
+
     int utils_files_is_regular(LPCSTR pathname){
 	    DWORD attributes = GetFileAttributesA(pathname);
         return attributes & FILE_ATTRIBUTE_ARCHIVE;
@@ -341,6 +346,16 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator){
         return factory_clone_raw_str("Windows", allocator);
     }
 #elif __linux__
+    int utils_files_is_directory(char *pathname){
+        struct stat file = {0};
+
+        if(stat(pathname, &file) == -1){
+            return -1;
+        }
+
+        return S_ISDIR(file.st_mode);
+    }
+
     int utils_files_is_regular(char *pathname){
         struct stat file = {0};
 

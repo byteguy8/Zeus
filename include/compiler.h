@@ -74,6 +74,8 @@ typedef struct jmp_list{
 }JMPList;
 
 typedef struct scope{
+    int32_t id;
+
     int depth;
     int locals;
     int scope_locals;
@@ -90,13 +92,9 @@ typedef struct scope{
     JMPList jmps;
 }Scope;
 
-typedef struct loop_mark{
-    uint8_t id;
-    size_t len;
-    size_t index;
-}LoopMark;
-
 typedef struct compiler{
+    int32_t counter_id;
+
 	char is_err;
     jmp_buf err_jmp;
 
@@ -110,13 +108,6 @@ typedef struct compiler{
 
     uint8_t fn_ptr;
     Fn *fn_stack[FUNCTIONS_LENGTH];
-
-	uint8_t while_counter;
-	uint8_t stop_ptr;
-	LoopMark stops[LOOP_MARK_LENGTH];
-
-    uint8_t continue_ptr;
-    LoopMark continues[LOOP_MARK_LENGTH];
 
     LZHTable *keywords;
     LZHTable *natives;
