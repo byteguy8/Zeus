@@ -1359,8 +1359,15 @@ void compile_expr(Expr *expr, Compiler *compiler){
 				Token *identifier = identifier_expr->identifier_token;
 	            Symbol *symbol = get(identifier, compiler);
 
-    	        if(symbol->type == IMUT_SYMTYPE)
-        	        error(compiler, identifier, "'%s' declared as constant. Can't change its value.", identifier->lexeme);
+    	        if(symbol->type == IMUT_SYMTYPE){
+                    error(compiler, identifier, "'%s' declared as constant. Can not change its value", identifier->lexeme);
+                }
+                if(symbol->type == FN_SYMTYPE){
+                    error(compiler, identifier, "'%s' declared as function. Functions symbols are protected", identifier->lexeme);
+                }
+                if(symbol->type == MODULE_SYMTYPE){
+                    error(compiler, identifier, "'%s' declared as module. Modules symbols are protected", identifier->lexeme);
+                }
 
                 int is_out = resolve_symbol(identifier, symbol, compiler);
 
