@@ -24,6 +24,6 @@ typedef struct value{
 
 #define VALUE_SIZE sizeof(Value)
 #define VALUE_TYPE(_value)((_value)->type)
-#define IS_VALUE_MARKED(_object)(((Obj *)(_object))->marked == 1)
+#define IS_VALUE_MARKED(_object)(((ObjHeader *)(_object))->marked == 1)
 
 #endif

@@ -1,11 +1,10 @@
 #ifndef NATIVE_FN_H
 #define NATIVE_FN_H
 
-#include "vm.h"
 #include "value.h"
 #include <stdint.h>
 
-typedef Value (*RawNativeFn)(uint8_t argc, Value *values, Value *target, VM *vm);
+typedef Value (*RawNativeFn)(uint8_t argc, Value *values, Value *target, void *context);
 
 typedef struct native_fn_info{
     uint8_t arity;

@@ -2,7 +2,6 @@
 #define CLOSURE_H
 
 #include "value.h"
-#include "obj.h"
 #include "fn.h"
 #include <stdint.h>
 
@@ -24,7 +23,7 @@ typedef struct out_value{
     Value *value;
     struct out_value *prev;
     struct out_value *next;
-    Obj *closure;
+    void *closure;
 }OutValue;
 
 typedef struct closure{

@@ -1,6 +1,7 @@
 #ifndef VM_H
 #define VM_H
 
+#include "obj.h"
 #include "memory.h"
 #include "value.h"
 #include "types.h"
@@ -63,11 +64,11 @@ typedef struct vm{
 //> GARBAGE COLLECTOR
     size_t allocated_size;
     size_t allocated_limit;
-    Obj *red_head;
-    Obj *red_tail;
+    ObjHeader *red_head;
+    ObjHeader *red_tail;
 
-    Obj *blue_head;
-    Obj *blue_tail;
+    ObjHeader *blue_head;
+    ObjHeader *blue_tail;
 //< GARBAGE COLLECTOR
     Allocator *allocator;
     Allocator *fake_allocator;

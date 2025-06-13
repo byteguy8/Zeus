@@ -26,62 +26,6 @@ void factory_destroy_raw_str(char *raw_str, Allocator *allocator){
     MEMORY_DEALLOC(char, raw_str_len + 1, raw_str, allocator);
 }
 
-Str *factory_create_str(char *buff, Allocator *allocator){
-    Str *str = MEMORY_ALLOC(Str, 1, allocator);
-
-    str->runtime = 1;
-    str->len = strlen(buff);
-    str->buff = buff;
-
-    return str;
-}
-
-void factory_destroy_str(Str *str, Allocator *allocator){
-    if(!str){
-        return;
-    }
-
-    MEMORY_DEALLOC(Str, 1, str, allocator);
-}
-
-Array *factory_create_array(int32_t length, Allocator *allocator){
-    Value *values = MEMORY_ALLOC(Value, (size_t)length, allocator);
-    Array *array = MEMORY_ALLOC(Array, 1, allocator);
-
-    array->len = length;
-    array->values = values;
-
-    return array;
-}
-
-void factory_destroy_array(Array* array, Allocator *allocator){
-    if(!array){
-        return;
-    }
-
-    MEMORY_DEALLOC(Value, array->len, array->values, allocator);
-    MEMORY_DEALLOC(Array, 1, array, allocator);
-}
-
-Record *factory_create_record(uint32_t length, Allocator *allocator){
-    LZHTable *attributes = length == 0 ? NULL : FACTORY_LZHTABLE_LEN(length, allocator);
-    Record *record = MEMORY_ALLOC(Record, 1, allocator);
-
-    record->type = NONE_RTYPE;
-    record->attributes = attributes;
-
-    return record;
-}
-
-void factory_destroy_record(void *extra, void (*clean_up)(void *, void *, void *), Record *record, Allocator *allocator){
-    if(!record){
-        return;
-    }
-
-    lzhtable_destroy(extra, clean_up, record->attributes);
-    MEMORY_DEALLOC(Record, 1, record, allocator);
-}
-
 NativeFn *factory_create_native_fn(uint8_t core, char *name, uint8_t arity, Value *target, RawNativeFn raw_native, Allocator *allocator){
     char *cloned_name = factory_clone_raw_str(name, allocator);
     NativeFn *native_fn = MEMORY_ALLOC(NativeFn, 1, allocator);
@@ -107,7 +51,7 @@ void factory_add_native_fn(char *name, uint8_t arity, RawNativeFn raw_native, Na
 	NativeModuleSymbol *symbol = MEMORY_ALLOC(NativeModuleSymbol, 1, allocator);
 
 	symbol->type = NATIVE_FUNCTION_NMSYMTYPE;
-	symbol->value.fn = native;
+	symbol->value.native_fn = native;
 
     lzhtable_put((uint8_t *)name, strlen(name), symbol, module->symbols, NULL);
 }

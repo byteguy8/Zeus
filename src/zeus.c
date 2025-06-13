@@ -3,7 +3,7 @@
 #include "utils.h"
 
 #include "vmu.h"
-#include "native.h"
+#include "native_module/native_module_default.h"
 
 #include "lzhtable.h"
 #include "token.h"
@@ -136,6 +136,7 @@ int main(int argc, char const *argv[]){
     add_native("eprint", 1, native_fn_eprint, natives, rtallocator);
     add_native("eprintln", 1, native_fn_eprintln, natives, rtallocator);
     add_native("readln", 0, native_fn_readln, natives, rtallocator);
+    add_native("gc", 0, native_fn_gc, natives, rtallocator);
 
 	RawStr *source = utils_read_source(source_path, rtallocator);
     char *module_path = factory_clone_raw_str(source_path, rtallocator);

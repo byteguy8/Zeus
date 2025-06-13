@@ -2,11 +2,16 @@
 #define VM_UTILS_H
 
 #include "vm.h"
-#include "array.h"
 #include "bstr.h"
 #include "native_fn.h"
 #include "tutils.h"
 #include <stdio.h>
+
+#define VALIDATE_VALUE_BOOL_ARG(_value, _param, _name, _vm){                                          \
+    if(!IS_VALUE_BOOL((_value))){                                                                     \
+        vmu_error(_vm, "Illegal type of argument %d: expect '%s' of type 'bool'", (_param), (_name)); \
+    }                                                                                                 \
+}
 
 #define VALIDATE_VALUE_INT_ARG(_value, _param, _name, _vm){                                          \
     if(!IS_VALUE_INT((_value))){                                                                     \
@@ -92,7 +97,7 @@
 }
 
 #define VALIDATE_ARRAY_SIZE(_size, _vm){                                                                \
-    if((_size) < 0){                                                                                    \
+    if((int64_t)(_size) < 0){                                                                           \
         vmu_error(_vm, "Illegal size value for 'array': cannont be less than 0");                       \
     }                                                                                                   \
     if((_size) > ARRAY_LENGTH_MAX){                                                                     \
@@ -168,13 +173,13 @@
 
 void vmu_error(VM *vm, char *msg, ...);
 
-uint32_t vmu_hash_obj(Obj *obj);
+uint32_t vmu_hash_obj(ObjHeader *obj);
 uint32_t vmu_hash_value(Value *value);
 
-int vmu_obj_to_str(Obj *obj, BStr *bstr);
+int vmu_obj_to_str(ObjHeader *obj, BStr *bstr);
 int vmu_value_to_str(Value *value, BStr *bstr);
 
-void vmu_print_obj(FILE *stream, Obj *obj);
+void vmu_print_obj(FILE *stream, ObjHeader *obj);
 void vmu_print_value(FILE *stream, Value *value);
 
 void vmu_clean_up(VM *vm);
@@ -188,21 +193,42 @@ void vmu_destroy_value(Value *value, VM *vm);
 GlobalValue *vmu_global_value(VM *vm);
 void vmu_destroy_global_value(GlobalValue *global_value, VM *vm);
 
-Obj *vmu_create_obj(ObjType type, VM *vm);
-void vmu_destroy_obj(Obj *obj, VM *vm);
+ObjHeader *vmu_create_str_obj(char **raw_str_ptr, VM *vm);
+ObjHeader *vmu_create_str_cpy_obj(char *raw_str, VM *vm);
+ObjHeader *vmu_create_unchecked_str_obj(char *raw_str, VM *vm);
+void vmu_destroy_str_obj(StrObj *str_obj, VM *vm);
 
-Obj *vmu_str_obj(char **raw_str_ptr, VM *vm);
-Obj *vmu_unchecked_str_obj(char *raw_str, VM *vm);
-Obj *vmu_array_obj(aidx_t len, VM *vm);
-Obj *vmu_list_obj(VM *vm);
-Obj *vmu_dict_obj(VM *vm);
-Obj *vmu_record_obj(uint8_t length, VM *vm);
-Obj *vmu_native_fn_obj(int arity, char *name, Value *target, RawNativeFn raw_native, VM *vm);
-Obj *vmu_closure_obj(MetaClosure *meta, VM *vm);
+ObjHeader *vmu_create_array_obj(aidx_t len, VM *vm);
+void vmu_destroy_array_obj(ArrayObj *array_obj, VM *vm);
 
-void vmu_insert_obj(Obj *obj, Obj **raw_head, Obj **raw_tail);
-void vmu_remove_obj(Obj *obj, Obj **raw_head, Obj **raw_tail);
+ObjHeader *vmu_create_list_obj(VM *vm);
+void vmu_destroy_list_obj(ListObj *list_obj, VM *vm);
 
-#define ACKNOWLEDGE_OBJ(_obj, _vm)(vmu_insert_obj((_obj), (Obj **)&(_vm)->red_head, (Obj **)&(_vm)->red_tail))
+ObjHeader *vmu_create_dict_obj(VM *vm);
+void vmu_destroy_dict_obj(DictObj *dict_obj, VM *vm);
+
+ObjHeader *vmu_create_record_obj(uint8_t length, VM *vm);
+void vmu_destroy_record_obj(RecordObj *record_obj, VM *vm);
+
+ObjHeader *vmu_create_raw_native_fn_obj(int arity, char *name, Value *target, RawNativeFn raw_native, VM *vm);
+ObjHeader *vmu_create_native_fn_obj(NativeFn *native_fn, VM *vm);
+void vmu_destroy_native_fn_obj(NativeFnObj *native_fn_obj, VM *vm);
+
+ObjHeader *vmu_create_fn_obj(Fn *fn, VM *vm);
+void vmu_destroy_fn_obj(FnObj *fn_obj, VM *vm);
+
+ObjHeader *vmu_closure_obj(MetaClosure *meta, VM *vm);
+void vmu_destroy_closure_obj(ClosureObj *closure_obj, VM *vm);
+
+ObjHeader *vmu_create_native_module_obj(NativeModule *native_module, VM *vm);
+void vmu_destroy_native_module_obj(NativeModuleObj *native_module_obj, VM *vm);
+
+ObjHeader *vmu_create_module_obj(Module *module, VM *vm);
+void vmu_destroy_module_obj(ModuleObj *module_obj, VM *vm);
+
+void vmu_insert_obj(ObjHeader *obj, ObjHeader **raw_head, ObjHeader **raw_tail);
+void vmu_remove_obj(ObjHeader *obj, ObjHeader **raw_head, ObjHeader **raw_tail);
+
+#define ACKNOWLEDGE_OBJ(_obj, _vm)(vmu_insert_obj((_obj), (ObjHeader **)&(_vm)->red_head, (ObjHeader **)&(_vm)->red_tail))
 
 #endif

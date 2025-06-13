@@ -8,11 +8,11 @@
 #include "opcode.h"
 #include "lexer.h"
 #include "parser.h"
-#include "native_math.h"
-#include "native_random.h"
-#include "native_time.h"
-#include "native_io.h"
-#include "native_os.h"
+#include "native_module/native_module_math.h"
+#include "native_module/native_module_random.h"
+#include "native_module/native_module_time.h"
+#include "native_module/native_module_io.h"
+#include "native_module/native_module_os.h"
 #include <stdint.h>
 #include <assert.h>
 #include <stdarg.h>

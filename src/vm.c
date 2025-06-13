@@ -1,16 +1,16 @@
 #include "vm.h"
+#include "vmu.h"
+#include "opcode.h"
+#include "memory.h"
 #include "types.h"
 #include "value.h"
-#include "vmu.h"
-#include "memory.h"
 #include "utils.h"
-#include "opcode.h"
 #include "tutils.h"
 
-#include "native_str.h"
-#include "native_array.h"
-#include "native_list.h"
-#include "native_dict.h"
+#include "native_module/native_module_str.h"
+#include "native_module/native_module_array.h"
+#include "native_module/native_module_list.h"
+#include "native_module/native_module_dict.h"
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -112,27 +112,11 @@ static Value *peek_at(int offset, VM *vm);
     PUSH(float_value, vm)                   \
 }
 
-#define PUSH_NATIVE_FN(fn, vm) {                    \
-    Obj *obj = vmu_create_obj(NATIVE_FN_OTYPE, vm); \
-    obj->content = fn;                              \
-    Value fn_value = OBJ_VALUE(obj);                \
-    PUSH(fn_value, vm)                              \
-}
-
-#define PUSH_NATIVE_MODULE(m, vm){                      \
-	Obj *obj = vmu_create_obj(NATIVE_MODULE_OTYPE, vm); \
-	obj->content = (m);                                 \
-	PUSH(OBJ_VALUE(obj), vm);                           \
-}
-
-#define PUSH_MODULE(m, vm) {                     \
-    Obj *obj = vmu_create_obj(MODULE_OTYPE, vm); \
-	obj->content = m;                            \
-	PUSH(OBJ_VALUE(obj), vm);                    \
-}
-
-static Obj *push_fn(Fn *fn, VM *vm);
-static void push_closure(MetaClosure *meta, VM *vm);
+static ObjHeader *push_native_fn(NativeFn *native_fn, VM *vm);
+static ObjHeader *push_fn(Fn *fn, VM *vm);
+static ObjHeader *push_closure(MetaClosure *meta, VM *vm);
+static ObjHeader *push_native_module(NativeModule *native_module, VM *vm);
+static ObjHeader *push_module(Module *module, VM *vm);
 static void push_module_symbol(int32_t index, Module *module, VM *vm);
 static Value *pop(VM *vm);
 // FRAMES FUNCTIONS
@@ -245,16 +229,22 @@ Value *peek_at(int offset, VM *vm){
     return (Value *)at;
 }
 
-Obj *push_fn(Fn *fn, VM *vm){
-	Obj *fn_obj = vmu_create_obj(FN_OTYPE, vm);
-	fn_obj->content = fn;
-	PUSH(OBJ_VALUE(fn_obj), vm);
-    return fn_obj;
+ObjHeader *push_native_fn(NativeFn *native_fn, VM *vm){
+    ObjHeader *native_fn_obj_header = vmu_create_native_fn_obj(native_fn, vm);
+    PUSH(OBJ_VALUE(native_fn_obj_header), vm)
+    return native_fn_obj_header;
 }
 
-void push_closure(MetaClosure *meta, VM *vm){
-    Obj *closure_obj = vmu_closure_obj(meta, vm);
-    Closure *closure = OBJ_TO_CLOSURE(closure_obj);
+ObjHeader *push_fn(Fn *fn, VM *vm){
+    ObjHeader *fn_obj_header = vmu_create_fn_obj(fn, vm);
+	PUSH(OBJ_VALUE(fn_obj_header), vm)
+    return fn_obj_header;
+}
+
+ObjHeader *push_closure(MetaClosure *meta, VM *vm){
+    ObjHeader *closure_obj_header = vmu_closure_obj(meta, vm);
+    ClosureObj *closure_obj = OBJ_TO_CLOSURE(closure_obj_header);
+    Closure *closure = closure_obj->closure;
 
     for (int i = 0; i < meta->values_len; i++){
         OutValue *out_value = &closure->out_values[i];
@@ -269,7 +259,21 @@ void push_closure(MetaClosure *meta, VM *vm){
         add_value_to_frame(out_value, vm);
     }
 
-    PUSH(OBJ_VALUE(closure_obj), vm);
+    PUSH(OBJ_VALUE(closure_obj_header), vm)
+
+    return closure_obj_header;
+}
+
+ObjHeader *push_native_module(NativeModule *native_module, VM *vm){
+    ObjHeader *native_module_obj_header = vmu_create_native_module_obj(native_module, vm);
+    PUSH(OBJ_VALUE(native_module_obj_header), vm)
+    return native_module_obj_header;
+}
+
+ObjHeader *push_module(Module *module, VM *vm){
+    ObjHeader *module_obj_header = vmu_create_module_obj(module, vm);
+    PUSH(OBJ_VALUE(module_obj_header), vm)
+    return module_obj_header;
 }
 
 void push_module_symbol(int32_t index, Module *module, VM *vm){
@@ -282,13 +286,17 @@ void push_module_symbol(int32_t index, Module *module, VM *vm){
     SubModuleSymbol *module_symbol = &(DYNARR_GET_AS(SubModuleSymbol, (size_t)index, symbols));
 
 	if(module_symbol->type == FUNCTION_MSYMTYPE){
-        push_fn((Fn *)module_symbol->value, vm);
+        ObjHeader *fn_obj_header = push_fn((Fn *)module_symbol->value, vm);
+        ACKNOWLEDGE_OBJ(fn_obj_header, vm);
     }else if(module_symbol->type == CLOSURE_MSYMTYPE){
-        push_closure((MetaClosure *)module_symbol->value, vm);
+        ObjHeader *closure_obj_header = push_closure((MetaClosure *)module_symbol->value, vm);
+        ACKNOWLEDGE_OBJ(closure_obj_header, vm);
     }else if(module_symbol->type == NATIVE_MODULE_MSYMTYPE){
-        PUSH_NATIVE_MODULE((NativeModule *)module_symbol->value, vm);
+        ObjHeader *native_module_obj_header = push_native_module((NativeModule *)module_symbol->value, vm);
+        ACKNOWLEDGE_OBJ(native_module_obj_header, vm);
     }else if(module_symbol->type == MODULE_MSYMTYPE){
-        PUSH_MODULE((Module *)module_symbol->value, vm);
+        ObjHeader *module_obj_header = push_module((Module *)module_symbol->value, vm);
+        ACKNOWLEDGE_OBJ(module_obj_header, vm);
     }
 }
 
@@ -415,13 +423,13 @@ static int execute(VM *vm){
                 break;
             }case STRING_OPCODE:{
                 char *raw_str = read_str(vm, NULL);
-                Obj *str_obj = vmu_unchecked_str_obj(raw_str, vm);
-                Str *str = OBJ_TO_STR(str_obj);
+                ObjHeader *str_header = vmu_create_unchecked_str_obj(raw_str, vm);
+                StrObj *str_obj = OBJ_TO_STR(str_header);
 
-                str->runtime = 0;
+                str_obj->runtime = 0;
 
-                ACKNOWLEDGE_OBJ(str_obj, vm);
-                PUSH(OBJ_VALUE(str_obj), vm)
+                ACKNOWLEDGE_OBJ(str_header, vm);
+                PUSH(OBJ_VALUE(str_header), vm)
 
                 break;
             }case TEMPLATE_OPCODE:{
@@ -434,7 +442,7 @@ static int execute(VM *vm){
                 }
 
                 char *raw_str = factory_clone_raw_str((char *)bstr->buff, vm->fake_allocator);
-                Obj *str_obj = vmu_str_obj(&raw_str, vm);
+                ObjHeader *str_obj = vmu_create_str_obj(&raw_str, vm);
 
                 bstr_destroy(bstr);
 
@@ -454,7 +462,7 @@ static int execute(VM *vm){
                     VALIDATE_VALUE_INT(length_value, vm)
                     VALIDATE_ARRAY_SIZE(TO_ARRAY_LENGTH(length_value), vm)
 
-                    Obj *array_obj = vmu_array_obj(TO_ARRAY_LENGTH(length_value), vm);
+                    ObjHeader *array_obj = vmu_create_array_obj(TO_ARRAY_LENGTH(length_value), vm);
 
                     ACKNOWLEDGE_OBJ(array_obj, vm);
                     PUSH(OBJ_VALUE(array_obj), vm)
@@ -464,7 +472,7 @@ static int execute(VM *vm){
 
                     VALIDATE_VALUE_ARRAY(array_value, vm)
 
-                    Array *array = VALUE_TO_ARRAY(array_value);
+                    ArrayObj *array = VALUE_TO_ARRAY(array_value);
 
                     VALIDATE_ARRAY_INDEX(array->len, &INT_VALUE(index), vm)
 
@@ -476,8 +484,9 @@ static int execute(VM *vm){
                 break;
             }case LIST_OPCODE:{
                 int16_t len = read_i16(vm);
-                Obj *list_obj = vmu_list_obj(vm);
-                DynArr *list = OBJ_TO_LIST(list_obj);
+                ObjHeader *list_header = vmu_create_list_obj(vm);
+                ListObj *list_obj = OBJ_TO_LIST(list_header);
+                DynArr *list = list_obj->list;
 
                 for(int32_t i = 0; i < len; i++){
                     Value *value = peek_at(i, vm);
@@ -486,14 +495,15 @@ static int execute(VM *vm){
 
                 vm->stack_top = peek_at(len - 1, vm);
 
-                ACKNOWLEDGE_OBJ(list_obj, vm);
-                PUSH(OBJ_VALUE(list_obj), vm)
+                ACKNOWLEDGE_OBJ(list_header, vm);
+                PUSH(OBJ_VALUE(list_header), vm)
 
                 break;
             }case DICT_OPCODE:{
                 int16_t len = read_i16(vm);
-                Obj *dict_obj = vmu_dict_obj(vm);
-                LZHTable *dict = OBJ_TO_DICT(dict_obj);
+                ObjHeader *dict_header = vmu_create_dict_obj(vm);
+                DictObj *dict_obj = OBJ_TO_DICT(dict_header);
+                LZHTable *dict = dict_obj->dict;
 
                 for (int16_t i = 0; i < len; i++){
                     Value *value = peek_at(i * 2, vm);
@@ -512,21 +522,21 @@ static int execute(VM *vm){
 
                 vm->stack_top = peek_at(len * 2 - 1, vm);
 
-                ACKNOWLEDGE_OBJ(dict_obj, vm);
-                PUSH(OBJ_VALUE(dict_obj), vm)
+                ACKNOWLEDGE_OBJ(dict_header, vm);
+                PUSH(OBJ_VALUE(dict_header), vm)
 
                 break;
             }case RECORD_OPCODE:{
                 uint8_t len = ADVANCE(vm);
-                Obj *record_obj = vmu_record_obj(len, vm);
+                ObjHeader *record_header = vmu_create_record_obj(len, vm);
 
                 if(len == 0){
-                    PUSH(OBJ_VALUE(record_obj), vm);
+                    PUSH(OBJ_VALUE(record_header), vm)
                     break;
                 }
 
-                Record *record = OBJ_TO_RECORD(record_obj);
-                LZHTable *attributes = record->attributes;
+                RecordObj *record_obj = OBJ_TO_RECORD(record_header);
+                LZHTable *attributes = record_obj->attributes;
 
                 for(size_t i = 0; i < len; i++){
                     char *key = read_str(vm, NULL);
@@ -541,13 +551,13 @@ static int execute(VM *vm){
                     char *cloned_key = factory_clone_raw_str(key, vm->fake_allocator);
                     Value *cloned_value = vmu_clone_value(value, vm);
 
-                    lzhtable_hash_put_key(cloned_key, hash, cloned_value, record->attributes);
+                    lzhtable_hash_put_key(cloned_key, hash, cloned_value, record_obj->attributes);
                 }
 
                 vm->stack_top = peek_at(len - 1, vm);
 
-                ACKNOWLEDGE_OBJ(record_obj, vm);
-                PUSH(OBJ_VALUE(record_obj), vm)
+                ACKNOWLEDGE_OBJ(record_header, vm);
+                PUSH(OBJ_VALUE(record_header), vm)
 
                 break;
             }case ADD_OPCODE:{
@@ -577,8 +587,8 @@ static int execute(VM *vm){
                 }
 
                 if(IS_VALUE_STR(va) && IS_VALUE_STR(vb)){
-                    Str *astr = VALUE_TO_STR(va) ;
-                    Str *bstr = VALUE_TO_STR(vb);
+                    StrObj *astr = VALUE_TO_STR(va) ;
+                    StrObj *bstr = VALUE_TO_STR(vb);
 
                     char *raw_str = utils_join_raw_strs(
                         astr->len,
@@ -587,10 +597,12 @@ static int execute(VM *vm){
                         bstr->buff,
                         vm->fake_allocator
                     );
-                    Obj *str_obj = vmu_str_obj(&raw_str, vm);
+                    ObjHeader *str_obj = vmu_create_str_obj(&raw_str, vm);
 
                     pop(vm);
                     pop(vm);
+
+                    ACKNOWLEDGE_OBJ(str_obj, vm);
                     PUSH(OBJ_VALUE(str_obj), vm)
 
                     break;
@@ -651,29 +663,33 @@ static int execute(VM *vm){
                 }
 
                 if(IS_VALUE_STR(va) && IS_VALUE_INT(vb)){
-                    Str *str = VALUE_TO_STR(va);
+                    StrObj *str = VALUE_TO_STR(va);
                     int64_t by = VALUE_TO_INT(vb);
 
                     char *raw_str = utils_multiply_raw_str((size_t)by, str->len, str->buff, vm->fake_allocator);
-                    Obj *str_obj = vmu_str_obj(&raw_str, vm);
+                    ObjHeader *str_obj = vmu_create_str_obj(&raw_str, vm);
 
                     pop(vm);
                     pop(vm);
-                    PUSH(OBJ_VALUE(str_obj), vm);
+
+                    ACKNOWLEDGE_OBJ(str_obj, vm);
+                    PUSH(OBJ_VALUE(str_obj), vm)
 
                     break;
                 }
 
                 if(IS_VALUE_INT(va) && IS_VALUE_STR(vb)){
-                    Str *str = VALUE_TO_STR(vb);
+                    StrObj *str = VALUE_TO_STR(vb);
                     int64_t by = VALUE_TO_INT(va);
 
                     char *raw_str = utils_multiply_raw_str((size_t)by, str->len, str->buff, vm->fake_allocator);
-                    Obj *str_obj = vmu_str_obj(&raw_str, vm);
+                    ObjHeader *str_obj = vmu_create_str_obj(&raw_str, vm);
 
                     pop(vm);
                     pop(vm);
-                    PUSH(OBJ_VALUE(str_obj), vm);
+
+                    ACKNOWLEDGE_OBJ(str_obj, vm);
+                    PUSH(OBJ_VALUE(str_obj), vm)
 
                     break;
                 }
@@ -1050,7 +1066,7 @@ static int execute(VM *vm){
             }case LGET_OPCODE:{
                 uint8_t index = ADVANCE(vm);
                 Value value = FRAME_LOCAL(index, vm);
-                PUSH(value, vm);
+                PUSH(value, vm)
                 break;
             }case OSET_OPCODE:{
                 Value *value = peek(vm);
@@ -1078,7 +1094,7 @@ static int execute(VM *vm){
                     OutValue *value = &closure->out_values[i];
 
                     if(value->at == index){
-                        PUSH(*value->value, vm);
+                        PUSH(*value->value, vm)
                         break;
                     }
                 }
@@ -1140,14 +1156,15 @@ static int execute(VM *vm){
                 GlobalValue *global_value = (GlobalValue *)value_node->value;
                 Value *value = global_value->value;
 
-                if(IS_VALUE_MODULE(value) && !(VALUE_TO_MODULE(value)->submodule->resolved)){
+                if(IS_VALUE_MODULE(value) && !(VALUE_TO_MODULE(value)->module->submodule->resolved)){
                     if(vm->module_ptr >= MODULES_LENGTH){
                         vmu_error(vm, "Cannot resolve module '%s'. No space available", module->name);
                     }
 
                     CURRENT_FRAME(vm)->ip = CURRENT_FRAME(vm)->last_offset;
 
-                    Module *module = VALUE_TO_MODULE(value);
+                    ModuleObj *module_obj = VALUE_TO_MODULE(value);
+                    Module *module = module_obj->module;
                     Fn *import_fn = (Fn *)get_symbol(0, FUNCTION_MSYMTYPE, module, vm);
                     push_fn(import_fn, vm);
                     Frame *frame = push_frame(0, vm);
@@ -1158,7 +1175,7 @@ static int execute(VM *vm){
                     break;
                 }
 
-                PUSH(*value, vm);
+                PUSH(*value, vm)
 
                 break;
             }case GASET_OPCODE:{
@@ -1197,8 +1214,8 @@ static int execute(VM *vm){
                 LZHTableNode *node = NULL;
 
                 if(lzhtable_contains((uint8_t *)key, key_size, vm->natives, &node)){
-                    NativeFn *native = (NativeFn *)node->value;
-                    PUSH_NATIVE_FN(native, vm);
+                    NativeFn *native_fn = (NativeFn *)node->value;
+                    push_native_fn(native_fn, vm);
                     break;
                 }
 
@@ -1217,7 +1234,7 @@ static int execute(VM *vm){
 
                 VALIDATE_VALUE_ARRAY(target_value, vm)
 
-                Array *array = VALUE_TO_ARRAY(target_value);
+                ArrayObj *array = VALUE_TO_ARRAY(target_value);
 
                 VALIDATE_ARRAY_INDEX(array->len, index_value, vm)
 
@@ -1228,7 +1245,7 @@ static int execute(VM *vm){
                 Value *target = pop(vm);
                 Value *value = peek(vm);
                 char *symbol = read_str(vm, NULL);
-                Record *record = NULL;
+                RecordObj *record = NULL;
 
                 if(!IS_VALUE_RECORD(target)){
                     vmu_error(vm, "Expect a record, but got something else");
@@ -1309,7 +1326,8 @@ static int execute(VM *vm){
                 Value *callable_value = peek_at(args_count, vm);
 
                 if(IS_VALUE_FN(callable_value)){
-                    Fn *fn = VALUE_TO_FN(callable_value);
+                    FnObj *fn_obj = VALUE_TO_FN(callable_value);
+                    Fn *fn = fn_obj->fn;
                     uint8_t params_count = fn->params ? DYNARR_LEN(fn->params) : 0;
 
                     if(params_count != args_count){
@@ -1324,7 +1342,8 @@ static int execute(VM *vm){
                 }
 
                 if(IS_VALUE_CLOSURE(callable_value)){
-                    Closure *closure = VALUE_TO_CLOSURE(callable_value);
+                    ClosureObj *closure_obj = VALUE_TO_CLOSURE(callable_value);
+                    Closure *closure = closure_obj->closure;
                     Fn *fn = closure->meta->fn;
                     uint8_t params_count = fn->params ? DYNARR_LEN(fn->params) : 0;
 
@@ -1341,7 +1360,8 @@ static int execute(VM *vm){
                 }
 
                 if(IS_VALUE_NATIVE_FN(callable_value)){
-                    NativeFn *native_fn = VALUE_TO_NATIVE_FN(callable_value);
+                    NativeFnObj *native_fn_obj = VALUE_TO_NATIVE_FN(callable_value);
+                    NativeFn *native_fn = native_fn_obj->native_fn;
                     Value *target = &native_fn->target;
                     RawNativeFn raw_fn = native_fn->raw_fn;
 
@@ -1366,7 +1386,7 @@ static int execute(VM *vm){
 
                     vm->stack_top = callable_value;
 
-                    PUSH(out_value, vm);
+                    PUSH(out_value, vm)
 
                     break;
                 }
@@ -1380,69 +1400,75 @@ static int execute(VM *vm){
                 Value *value = peek(vm);
 
                 if(IS_VALUE_STR(value)){
-                    NativeFnInfo *info = native_str_get(symbol, vm);
+                    NativeFnInfo *info = native_str_get(symbol, vm->fake_allocator);
 
                     if(!info){
                         vmu_error(vm, "String does not have symbol '%s'", symbol);
                     }
 
-                    Obj *native_fn_obj = vmu_native_fn_obj(info->arity, symbol, value, info->raw_native, vm);
+                    ObjHeader *native_fn_obj_header = vmu_create_raw_native_fn_obj(info->arity, symbol, value, info->raw_native, vm);
 
                     pop(vm);
-                    PUSH(OBJ_VALUE(native_fn_obj), vm);
+
+                    ACKNOWLEDGE_OBJ(native_fn_obj_header, vm);
+                    PUSH(OBJ_VALUE(native_fn_obj_header), vm)
 
                     break;
                 }
 
                 if(IS_VALUE_ARRAY(value)){
-                    NativeFnInfo *info = native_array_get(symbol, vm);
+                    NativeFnInfo *info = native_array_get(symbol, vm->fake_allocator);
 
                     if(!info){
                         vmu_error(vm, "Array does not have symbol '%s'", symbol);
                     }
 
-                    Obj *native_fn_obj = vmu_native_fn_obj(info->arity, symbol, value, info->raw_native, vm);
+                    ObjHeader *native_fn_obj_header = vmu_create_raw_native_fn_obj(info->arity, symbol, value, info->raw_native, vm);
 
                     pop(vm);
-                    PUSH(OBJ_VALUE(native_fn_obj), vm);
+
+                    ACKNOWLEDGE_OBJ(native_fn_obj_header, vm);
+                    PUSH(OBJ_VALUE(native_fn_obj_header), vm)
 
                     break;
                 }
 
                 if(IS_VALUE_LIST(value)){
-                    NativeFnInfo *info = native_list_get(symbol, vm);
+                    NativeFnInfo *info = native_list_get(symbol, vm->fake_allocator);
 
                     if(!info){
                         vmu_error(vm, "List does not have symbol '%s'", symbol);
                     }
 
-                    Obj *native_fn_obj = vmu_native_fn_obj(info->arity, symbol, value, info->raw_native, vm);
+                    ObjHeader *native_fn_obj_header = vmu_create_raw_native_fn_obj(info->arity, symbol, value, info->raw_native, vm);
 
                     pop(vm);
 
-                    ACKNOWLEDGE_OBJ(native_fn_obj, vm);
-                    PUSH(OBJ_VALUE(native_fn_obj), vm);
+                    ACKNOWLEDGE_OBJ(native_fn_obj_header, vm);
+                    PUSH(OBJ_VALUE(native_fn_obj_header), vm)
 
                     break;
                 }
 
                 if(IS_VALUE_DICT(value)){
-                    NativeFnInfo *info = native_dict_get(symbol, vm);
+                    NativeFnInfo *info = native_dict_get(symbol, vm->fake_allocator);
 
                     if(!info){
                         vmu_error(vm, "List does not have symbol '%s'", symbol);
                     }
 
-                    Obj *native_fn_obj = vmu_native_fn_obj(info->arity, symbol, value, info->raw_native, vm);
+                    ObjHeader *native_fn_obj_header = vmu_create_raw_native_fn_obj(info->arity, symbol, value, info->raw_native, vm);
 
                     pop(vm);
-                    PUSH(OBJ_VALUE(native_fn_obj), vm);
+
+                    ACKNOWLEDGE_OBJ(native_fn_obj_header, vm);
+                    PUSH(OBJ_VALUE(native_fn_obj_header), vm)
 
                     break;
                 }
 
                 if(IS_VALUE_RECORD(value)){
-                    Record *record = VALUE_TO_RECORD(value);
+                    RecordObj *record = VALUE_TO_RECORD(value);
                     LZHTable *key_values = record->attributes;
 
                     if(!key_values){
@@ -1458,35 +1484,39 @@ static int execute(VM *vm){
                     }
 
                     pop(vm);
-                    PUSH(*value, vm);
+                    PUSH(*value, vm)
 
                     break;
                 }
 
                 if(IS_VALUE_NATIVE_MODULE(value)){
-                    NativeModule *module = VALUE_TO_NATIVE_MODULE(value);
+                    NativeModuleObj *native_module_obj = VALUE_TO_NATIVE_MODULE(value);
+                    NativeModule *native_module = native_module_obj->native_module;
                     uint8_t *key = (uint8_t *)symbol;
                     size_t key_size = strlen(symbol);
-                    LZHTable *symbols = module->symbols;
+                    LZHTable *symbols = native_module->symbols;
                     LZHTableNode *symbol_node = NULL;
 
                     if(!lzhtable_contains(key, key_size, symbols, &symbol_node)){
-                        vmu_error(vm, "Module '%s' do not contains a symbol '%s'", module->name, symbol);
+                        vmu_error(vm, "Module '%s' do not contains a symbol '%s'", native_module->name, symbol);
                     }
 
                     NativeModuleSymbol *symbol = (NativeModuleSymbol *)symbol_node->value;
 
                     if(symbol->type == NATIVE_FUNCTION_NMSYMTYPE){
-                        NativeFn native_fn = *symbol->value.fn;
-                        Obj *native_fn_obj = vmu_native_fn_obj(native_fn.arity, native_fn.name, NULL, native_fn.raw_fn, vm);
+                        NativeFn native_fn = *symbol->value.native_fn;
+                        ObjHeader *native_fn_obj_header = vmu_create_raw_native_fn_obj(native_fn.arity, native_fn.name, NULL, native_fn.raw_fn, vm);
 
                         pop(vm);
-                        PUSH(OBJ_VALUE(native_fn_obj), vm);
+
+                        ACKNOWLEDGE_OBJ(native_fn_obj_header, vm);
+                        PUSH(OBJ_VALUE(native_fn_obj_header), vm)
 
                         break;
                     }
                 }else if(IS_VALUE_MODULE(value)){
-                    Module *module = VALUE_TO_MODULE(value);
+                    ModuleObj *module_obj = VALUE_TO_MODULE(value);
+                    Module *module = module_obj->module;
                     LZHTable *globals = MODULE_GLOBALS(module);
                     LZHTableNode *value_node = NULL;
 
@@ -1499,7 +1529,7 @@ static int execute(VM *vm){
                         }
 
                         pop(vm);
-                        PUSH(*value, vm);
+                        PUSH(*value, vm)
 
                         break;
                     }else{
@@ -1515,35 +1545,36 @@ static int execute(VM *vm){
                 Value *index_value = pop(vm);
 
                 if(IS_VALUE_ARRAY(target_value)){
-                    Array *array = VALUE_TO_ARRAY(target_value);
+                    ArrayObj *array = VALUE_TO_ARRAY(target_value);
 
                     VALIDATE_ARRAY_INDEX(array->len, index_value, vm)
 
                     Value value = array->values[TO_ARRAY_INDEX(index_value)];
 
-                    PUSH(value, vm);
+                    PUSH(value, vm)
 
                     break;
                 }
 
                 if(IS_VALUE_LIST(target_value)){
                     Value value = native_fn_list_get(1, index_value, target_value, vm);
-                    PUSH(value, vm);
+                    PUSH(value, vm)
                     break;
                 }
 
                 if(IS_VALUE_DICT(target_value)){
-                    LZHTable *dict = VALUE_TO_DICT(target_value);
+                    DictObj *dict_obj = VALUE_TO_DICT(target_value);
+                    LZHTable *dict = dict_obj->dict;
                     LZHTableNode *value_node = NULL;
                     uint32_t hash = vmu_hash_value(index_value);
 
                     if(lzhtable_hash_contains(hash, dict, &value_node)){
                         Value *value = (Value *)value_node->value;
-                        PUSH(*value, vm);
+                        PUSH(*value, vm)
                         break;
                     }
 
-                    vmu_error(vm, "Unknown key");
+                    PUSH_EMPTY(vm)
 
                     break;
                 }
@@ -1592,28 +1623,28 @@ static int execute(VM *vm){
                 uint8_t type = ADVANCE(vm);
 
                 if(IS_VALUE_OBJ(value)){
-                    Obj *obj = VALUE_TO_OBJ(value);
+                    ObjHeader *obj = VALUE_TO_OBJ(value);
 
                     switch(obj->type){
                         case STR_OTYPE:{
-                            PUSH(BOOL_VALUE(type == 4), vm);
+                            PUSH(BOOL_VALUE(type == 4), vm)
                             break;
                         }case ARRAY_OTYPE:{
-                            PUSH(BOOL_VALUE(type == 5), vm);
+                            PUSH(BOOL_VALUE(type == 5), vm)
                             break;
                         }case LIST_OTYPE:{
-                            PUSH(BOOL_VALUE(type == 6), vm);
+                            PUSH(BOOL_VALUE(type == 6), vm)
                             break;
                         }case DICT_OTYPE:{
-                            PUSH(BOOL_VALUE(type == 7), vm);
+                            PUSH(BOOL_VALUE(type == 7), vm)
                             break;
                         }case RECORD_OTYPE:{
-                            PUSH(BOOL_VALUE(type == 8), vm);
+                            PUSH(BOOL_VALUE(type == 8), vm)
                             break;
                         }case FN_OTYPE:
                         case CLOSURE_OTYPE:
                         case NATIVE_FN_OTYPE:{
-                            PUSH(BOOL_VALUE(type == 9), vm);
+                            PUSH(BOOL_VALUE(type == 9), vm)
                             break;
                         }default:{
                             vmu_error(vm, "Illegal object type");
@@ -1623,16 +1654,16 @@ static int execute(VM *vm){
                 }else{
                     switch(value->type){
                         case EMPTY_VTYPE:{
-                            PUSH(BOOL_VALUE(type == 0), vm);
+                            PUSH(BOOL_VALUE(type == 0), vm)
                             break;
                         }case BOOL_VTYPE:{
-                            PUSH(BOOL_VALUE(type == 1), vm);
+                            PUSH(BOOL_VALUE(type == 1), vm)
                             break;
                         }case INT_VTYPE:{
-                            PUSH(BOOL_VALUE(type == 2), vm);
+                            PUSH(BOOL_VALUE(type == 2), vm)
                             break;
                         }case FLOAT_VTYPE:{
-                            PUSH(BOOL_VALUE(type == 3), vm);
+                            PUSH(BOOL_VALUE(type == 3), vm)
                             break;
                         }default:{
                             vmu_error(vm, "Illegal value type");
@@ -1648,12 +1679,12 @@ static int execute(VM *vm){
                 }
 
                 Value *value = pop(vm);
-                Str *throw_message = NULL;
+                StrObj *throw_message = NULL;
 
                 if(IS_VALUE_STR(value)){
                     throw_message = VALUE_TO_STR(value);
                 }else if(IS_VALUE_RECORD(value)){
-                    Record *record = VALUE_TO_RECORD(value);
+                    RecordObj *record = VALUE_TO_RECORD(value);
 
                     if(record->attributes){
                         char *raw_key = "message";

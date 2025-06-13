@@ -3,10 +3,8 @@
 
 #include "value.h"
 #include "obj.h"
-#include "array.h"
 #include "dynarr.h"
 #include "lzhtable.h"
-#include "record.h"
 
 #define EMPTY_VALUE ((Value){.type = EMPTY_VTYPE})
 #define BOOL_VALUE(_value)((Value){.type = BOOL_VTYPE, .content.bool = (_value)})
@@ -14,21 +12,21 @@
 #define FLOAT_VALUE(_value)((Value){.type = FLOAT_VTYPE, .content.fvalue = (_value)})
 #define OBJ_VALUE(_value)((Value){.type = OBJ_VTYPE, .content.obj = (_value)})
 
-#define OBJ_TO_STR(_obj)((Str *)((_obj)->content))
-#define OBJ_TO_ARRAY(_obj)((Array *)((_obj)->content))
-#define OBJ_TO_LIST(_obj)((DynArr *)((_obj)->content))
-#define OBJ_TO_DICT(_obj)((LZHTable *)((_obj)->content))
-#define OBJ_TO_RECORD(_obj)((Record *)((_obj)->content))
-#define OBJ_TO_NATIVE_FN(_obj)((NativeFn *)((_obj)->content))
-#define OBJ_TO_FN(_obj)((Fn *)((_obj)->content))
-#define OBJ_TO_CLOSURE(_obj)((Closure *)((_obj)->content))
-#define OBJ_TO_NATIVE_MODULE(_obj)((NativeModule *)((_obj)->content))
-#define OBJ_TO_MODULE(_obj)((Module *)((_obj)->content))
+#define OBJ_TO_STR(_obj)((StrObj *)(_obj))
+#define OBJ_TO_ARRAY(_obj)((ArrayObj *)(_obj))
+#define OBJ_TO_LIST(_obj)((ListObj *)(_obj))
+#define OBJ_TO_DICT(_obj)((DictObj *)(_obj))
+#define OBJ_TO_RECORD(_obj)((RecordObj *)(_obj))
+#define OBJ_TO_NATIVE_FN(_obj)((NativeFnObj *)(_obj))
+#define OBJ_TO_FN(_obj)((FnObj *)(_obj))
+#define OBJ_TO_CLOSURE(_obj)((ClosureObj *)(_obj))
+#define OBJ_TO_NATIVE_MODULE(_obj)((NativeModuleObj *)(_obj))
+#define OBJ_TO_MODULE(_obj)((ModuleObj *)(_obj))
 
 #define VALUE_TO_BOOL(_value)((_value)->content.bool)
 #define VALUE_TO_INT(_value)((_value)->content.i64)
 #define VALUE_TO_FLOAT(_value)((_value)->content.fvalue)
-#define VALUE_TO_OBJ(_value)((Obj *)((_value)->content.obj))
+#define VALUE_TO_OBJ(_value)((ObjHeader *)((_value)->content.obj))
 #define VALUE_TO_STR(_value)(OBJ_TO_STR(VALUE_TO_OBJ(_value)))
 #define VALUE_TO_ARRAY(_value)(OBJ_TO_ARRAY(VALUE_TO_OBJ(_value)))
 #define VALUE_TO_LIST(_value)(OBJ_TO_LIST(VALUE_TO_OBJ(_value)))

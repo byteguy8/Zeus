@@ -37,7 +37,7 @@ void lzarena_link_dealloc(void *ptr, size_t size, void *ctx){
 }
 
 void *lzflist_link_alloc(size_t size, void *ctx){
-    void *ptr = lzflist_alloc(size, ctx);
+    void *ptr = lzflist_calloc(size, ctx);
 
     if(!ptr){
         fprintf(stderr, "Out of memory\n");
