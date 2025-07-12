@@ -61,6 +61,9 @@ LZHTable *create_keywords_table(Allocator *allocator){
     add_keyword("elif", ELIF_TOKTYPE, keywords, allocator);
 	add_keyword("else", ELSE_TOKTYPE, keywords, allocator);
 	add_keyword("while", WHILE_TOKTYPE, keywords, allocator);
+    add_keyword("for", FOR_TOKTYPE, keywords, allocator);
+    add_keyword("upto", UPTO_TOKTYPE, keywords, allocator);
+    add_keyword("downto", DOWNTO_TOKTYPE, keywords, allocator);
 	add_keyword("stop", STOP_TOKTYPE, keywords, allocator);
     add_keyword("continue", CONTINUE_TOKTYPE, keywords, allocator);
     add_keyword("array", ARRAY_TOKTYPE, keywords, allocator);
@@ -100,7 +103,7 @@ int main(int argc, char const *argv[]){
 		exit(EXIT_FAILURE);
 	}
 
-	if(!UTILS_FILE_CAN_READ(source_path)){
+	if(!UTILS_FILES_CAN_READ(source_path)){
 		fprintf(stderr, "File at '%s' do not exists or cannot be read.\n", source_path);
 		exit(EXIT_FAILURE);
 	}

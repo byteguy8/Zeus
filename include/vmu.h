@@ -208,7 +208,13 @@ ObjHeader *vmu_create_dict_obj(VM *vm);
 void vmu_destroy_dict_obj(DictObj *dict_obj, VM *vm);
 
 ObjHeader *vmu_create_record_obj(uint8_t length, VM *vm);
+RecordRandom *vmu_create_record_random(VM *vm);
+RecordFile *vmu_create_record_file(char *raw_mode, char mode, char *pathname, VM *vm);
+ObjHeader *vmu_create_record_random_obj(VM *vm);
+ObjHeader *vmu_create_record_file_obj(char *raw_mode, char mode, char *pathname, VM *vm);
 void vmu_destroy_record_obj(RecordObj *record_obj, VM *vm);
+void vmu_destroy_record_random(RecordRandom *record_random, VM *vm);
+void vmu_destroy_record_file(RecordFile *record_file, VM *vm);
 
 ObjHeader *vmu_create_raw_native_fn_obj(int arity, char *name, Value *target, RawNativeFn raw_native, VM *vm);
 ObjHeader *vmu_create_native_fn_obj(NativeFn *native_fn, VM *vm);

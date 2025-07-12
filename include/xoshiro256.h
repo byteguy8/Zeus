@@ -36,6 +36,7 @@ typedef struct xoshiro256{
     uint64_t s[4];
 }XOShiro256;
 
+XOShiro256 xoshiro256_init_seed(uint64_t value);
 XOShiro256 xoshiro256_init();
 uint64_t xoshiro256_next(XOShiro256 *xos256);
 

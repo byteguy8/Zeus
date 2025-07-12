@@ -31,7 +31,7 @@ Scope *scope_in_soft(ScopeType type, Compiler *compiler);
 Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function, size_t *out_fn_index);
 void scope_out(Compiler *compiler);
 void scope_out_fn(Compiler *compiler);
-Scope *inside_while(Compiler *compiler);
+Scope *inside_loop(Compiler *compiler);
 Scope *inside_function(Compiler *compiler);
 Scope *symbol_fn_scope(Symbol *symbol, Compiler *compiler);
 int count_fn_scopes(int from, int to, Compiler *compiler);
@@ -198,8 +198,13 @@ Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function, size_t *ou
     SubModuleSymbol module_symbol = {0};
     dynarr_insert(&module_symbol, symbols);
 
-    if(out_function) *out_function = fn;
-    if(out_symbol_index) *out_symbol_index = DYNARR_LEN(symbols) - 1;
+    if(out_function){
+        *out_function = fn;
+    }
+
+    if(out_symbol_index){
+        *out_symbol_index = DYNARR_LEN(symbols) - 1;
+    }
 
     return scope_in(FUNCTION_SCOPE, compiler);
 }
@@ -235,13 +240,19 @@ void scope_out_fn(Compiler *compiler){
     compiler->depth--;
 }
 
-Scope *inside_while(Compiler *compiler){
+Scope *inside_loop(Compiler *compiler){
 	assert(compiler->depth > 0);
 
 	for(int i = (int)compiler->depth - 1; i >= 0; i--){
 		Scope *scope = compiler->scopes + i;
-		if(scope->type == WHILE_SCOPE) return scope;
-		if(scope->type == FUNCTION_SCOPE) return NULL;
+
+		if(scope->type == WHILE_SCOPE || scope->type == FOR_SCOPE){
+            return scope;
+        }
+
+		if(scope->type == FUNCTION_SCOPE){
+            return NULL;
+        }
 	}
 
 	return NULL;
@@ -610,6 +621,40 @@ Symbol *declare_native(char *identifier, Compiler *compiler){
     return symbol;
 }
 
+Symbol *declare_unknown(Token *ref_token, SymbolType type, Compiler *compiler){
+    Scope *scope = current_scope(compiler);
+
+    if(scope->symbols_len >= SYMBOLS_LENGTH){
+        error(compiler, ref_token, "Cannot define more than %d symbols per scope", SYMBOLS_LENGTH);
+    }
+
+    int local = 0;
+    Symbol *symbol = &scope->symbols[scope->symbols_len++];
+
+	if(type == MUT_SYMTYPE || type == IMUT_SYMTYPE){
+        if(scope->depth == 1){
+            local = -1;
+        }else{
+            if(scope->locals >= LOCALS_LENGTH){
+                error(compiler, ref_token, "Cannot define more than %d locals", LOCALS_LENGTH);
+            }
+
+            local = scope->locals++;
+        }
+    }
+
+    symbol->depth = scope->depth;
+    symbol->local = local;
+    symbol->index = -1;
+    symbol->type = type;
+    symbol->name[0] = 0;
+    symbol->identifier_token = NULL;
+
+    scope->scope_locals++;
+
+    return symbol;
+}
+
 Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler){
     Scope *scope = current_scope(compiler);
 
@@ -893,9 +938,11 @@ char *resolve_module_location(
             }
         }
 
-        if(!UTILS_FILES_EXISTS(module_pathname)){continue;}
+        if(!UTILS_FILES_EXISTS(module_pathname)){
+            continue;
+        }
 
-		if(!UTILS_FILE_CAN_READ(module_pathname)){
+		if(!UTILS_FILES_CAN_READ(module_pathname)){
 			error(compiler, import_token, "File at '%s' do not exists or cannot be read", module_pathname);
 		}
 
@@ -933,16 +980,6 @@ void compile_expr(Expr *expr, Compiler *compiler){
             IntExpr *int_expr = (IntExpr *)expr->sub_expr;
             Token *token = int_expr->token;
             int64_t value = *(int64_t *)token->literal;
-
-            if((value >= -128 && value <= 127) ||
-            (value >= 0 && value <= 255)){
-                write_chunk(CINT_OPCODE, compiler);
-                write_location(token, compiler);
-
-                write_chunk((uint8_t)value, compiler);
-
-                break;
-            }
 
             write_chunk(INT_OPCODE, compiler);
 			write_location(token, compiler);
@@ -1841,11 +1878,140 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             label(compiler, "WHILE_END_%d", while_id);
 
 			break;
-		}case STOP_STMTTYPE:{
+		}case FOR_RANGE_STMTTYPE:{
+            int32_t for_id = generate_id(compiler);
+
+            ForRangeStmt *for_range_stmt = (ForRangeStmt *)stmt->sub_stmt;
+            Token *for_token = for_range_stmt->for_token;
+            Token *symbol_token = for_range_stmt->symbol_token;
+            Expr *left_expr = for_range_stmt->left_expr;
+            Token *for_type_token = for_range_stmt->for_type_token;
+            Expr *right_expr = for_range_stmt->right_expr;
+            DynArr *stmts = for_range_stmt->stmts;
+
+            scope_in_soft(BLOCK_SCOPE, compiler);
+
+            if(for_type_token->type == UPTO_TOKTYPE){
+                compile_expr(left_expr, compiler);
+                Symbol *symbol = declare(IMUT_SYMTYPE, symbol_token, compiler);
+
+                compile_expr(right_expr, compiler);
+                Symbol *right_symbol = declare_unknown(symbol_token, IMUT_SYMTYPE, compiler);
+
+                label(compiler, "FOR_RANGE_START_%d", for_id);
+                write_chunk(LGET_OPCODE, compiler);
+                write_location(symbol_token, compiler);
+                write_chunk(symbol->local, compiler);
+
+                write_chunk(LGET_OPCODE, compiler);
+                write_location(for_token, compiler);
+                write_chunk(right_symbol->local, compiler);
+
+                write_chunk(GE_OPCODE, compiler);
+                write_location(for_token, compiler);
+
+                jit(compiler, for_token, "FOR_RANGE_END_%d", for_id);
+
+                Scope *scope = scope_in_soft(FOR_SCOPE, compiler);
+                scope->id = for_id;
+
+                if(stmts){
+                    for (size_t i = 0; i < DYNARR_LEN(stmts); i++){
+                        Stmt *stmt = (Stmt *)dynarr_get_ptr(i, stmts);
+                        compile_stmt(stmt, compiler);
+                    }
+                }
+
+                scope_out(compiler);
+
+                label(compiler, "FOR_RANGE_CONDITION_%d", for_id);
+                write_chunk(LGET_OPCODE, compiler);
+                write_location(symbol_token, compiler);
+                write_chunk(symbol->local, compiler);
+
+                write_chunk(CINT_OPCODE, compiler);
+                write_location(for_token, compiler);
+                write_chunk(1, compiler);
+
+                write_chunk(ADD_OPCODE, compiler);
+                write_location(for_token, compiler);
+
+                write_chunk(LSET_OPCODE, compiler);
+                write_location(symbol_token, compiler);
+                write_chunk(symbol->local, compiler);
+
+                write_chunk(POP_OPCODE, compiler);
+                write_location(for_token, compiler);
+
+                jmp(compiler, for_token, "FOR_RANGE_START_%d", for_id);
+
+                label(compiler, "FOR_RANGE_END_%d", for_id);
+            }
+
+            if(for_type_token->type == DOWNTO_TOKTYPE){
+                compile_expr(right_expr, compiler);
+                Symbol *symbol = declare(IMUT_SYMTYPE, symbol_token, compiler);
+
+                compile_expr(left_expr, compiler);
+                Symbol *left_symbol = declare_unknown(symbol_token, IMUT_SYMTYPE, compiler);
+
+                jmp(compiler, for_token, "FOR_RANGE_CONDITION_%d", for_id);
+
+                label(compiler, "FOR_RANGE_START_%d", for_id);
+                write_chunk(LGET_OPCODE, compiler);
+                write_chunk(symbol->local, compiler);
+
+                write_chunk(LGET_OPCODE, compiler);
+                write_chunk(left_symbol->local, compiler);
+
+                write_chunk(GE_OPCODE, compiler);
+
+                jif(compiler, for_token, "FOR_RANGE_END_%d", for_id);
+
+                Scope *scope = scope_in_soft(FOR_SCOPE, compiler);
+                scope->id = for_id;
+
+                if(stmts){
+                    for (size_t i = 0; i < DYNARR_LEN(stmts); i++){
+                        Stmt *stmt = (Stmt *)dynarr_get_ptr(i, stmts);
+                        compile_stmt(stmt, compiler);
+                    }
+                }
+
+                scope_out(compiler);
+
+                label(compiler, "FOR_RANGE_CONDITION_%d", for_id);
+                write_chunk(LGET_OPCODE, compiler);
+                write_location(symbol_token, compiler);
+                write_chunk(symbol->local, compiler);
+
+                write_chunk(CINT_OPCODE, compiler);
+                write_location(for_token, compiler);
+                write_chunk(1, compiler);
+
+                write_chunk(SUB_OPCODE, compiler);
+                write_location(for_token, compiler);
+
+                write_chunk(LSET_OPCODE, compiler);
+                write_location(symbol_token, compiler);
+                write_chunk(symbol->local, compiler);
+
+                write_chunk(POP_OPCODE, compiler);
+                write_location(for_token, compiler);
+
+                jmp(compiler, for_token, "FOR_RANGE_START_%d", for_id);
+
+                label(compiler, "FOR_RANGE_END_%d", for_id);
+            }
+
+            scope_out(compiler);
+
+            break;
+        } case STOP_STMTTYPE:{
 			StopStmt *stop_stmt = (StopStmt *)stmt->sub_stmt;
 			Token *stop_token = stop_stmt->stop_token;
 
-            Scope *scope = inside_while(compiler);
+            Scope *scope = inside_loop(compiler);
 
             assert(scope->id != -1);
 
@@ -1853,14 +2019,20 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 error(compiler, stop_token, "Can't use 'stop' statement outside loops.");
             }
 
-			jmp(compiler, stop_token, "WHILE_END_%d", scope->id);
+            if(scope->type == WHILE_SCOPE){
+                jmp(compiler, stop_token, "WHILE_END_%d", scope->id);
+            }
+
+            if(scope->type == FOR_SCOPE){
+                jmp(compiler, stop_token, "FOR_RANGE_END_%d", scope->id);
+            }
 
 			break;
 		}case CONTINUE_STMTTYPE:{
             ContinueStmt *continue_stmt = (ContinueStmt *)stmt->sub_stmt;
             Token *continue_token = continue_stmt->continue_token;
 
-            Scope *scope = inside_while(compiler);
+            Scope *scope = inside_loop(compiler);
 
             assert(scope->id != -1);
 
@@ -1868,7 +2040,13 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 error(compiler, continue_token, "Can't use 'continue' statement outside loops.");
             }
 
-            jmp(compiler, continue_token, "WHILE_CONDITION_%d", scope->id);
+            if(scope->type == WHILE_SCOPE){
+                jmp(compiler, continue_token, "WHILE_CONDITION_%d", scope->id);
+            }
+
+            if(scope->type == FOR_SCOPE){
+                jmp(compiler, continue_token, "FOR_RANGE_CONDITION_%d", scope->id);
+            }
 
             break;
         }case RETURN_STMTTYPE:{

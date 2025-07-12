@@ -164,7 +164,7 @@ Value native_fn_str_to_int(uint8_t argsc, Value *values, Value *target, void *co
     VALIDATE_VALUE_STR_ARG(raw_value, 1, "value", context)
 	str = VALUE_TO_STR(raw_value);
 
-	if(utils_str_to_i64(str->buff, &value)){
+	if(utils_decimal_str_to_i64(str->buff, &value)){
         vmu_error(context, "String do not contains a valid integer");
     }
 

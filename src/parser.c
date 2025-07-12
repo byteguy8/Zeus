@@ -49,6 +49,7 @@ Stmt *parse_expr_stmt(Parser *parser);
 DynArr *parse_block_stmt(Parser *parser);
 Stmt *parse_if_stmt(Parser *parser);
 Stmt *parse_while_stmt(Parser *parser);
+Stmt *parse_for_stmt(Parser *parser);
 Stmt *parse_throw_stmt(Parser *parser);
 Stmt *parse_try_stmt(Parser *parser);
 Stmt *parse_return_stmt(Parser *parser);
@@ -251,7 +252,7 @@ Expr *parse_is_expr(Parser *parser){
 
 		is_token = previous(parser);
 
-		if(match(parser, 7,
+		if(match(parser, 9,
 			EMPTY_TOKTYPE,
 			BOOL_TOKTYPE,
 			INT_TOKTYPE,
@@ -879,6 +880,10 @@ Stmt *parse_stmt(Parser *parser){
 	if(match(parser, 1, WHILE_TOKTYPE))
 		return parse_while_stmt(parser);
 
+    if(match(parser, 1, FOR_TOKTYPE)){
+        return parse_for_stmt(parser);
+    }
+
 	if(match(parser, 1, STOP_TOKTYPE)){
 		Token *stop_token = previous(parser);
 		consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of 'stop' statement.");
@@ -1039,6 +1044,47 @@ Stmt *parse_while_stmt(Parser *parser){
 	while_stmt->stmts = stmts;
 
 	return create_stmt(WHILE_STMTTYPE, while_stmt, parser);
+}
+
+Stmt *parse_for_stmt(Parser *parser){
+    Token *for_token = NULL;
+    Token *symbol_token = NULL;
+    Expr *left_expr = NULL;
+    Token *for_type_token = NULL;
+    Expr *right_expr = NULL;
+    DynArr *stmts = NULL;
+
+    for_token = previous(parser);
+
+    consume(parser, LEFT_PAREN_TOKTYPE, "Expect '(' after 'for' token");
+    symbol_token = consume(parser, IDENTIFIER_TOKTYPE, "Expect placeholder symbol");
+
+    consume(parser, EQUALS_TOKTYPE, "Expect '=' after placeholder symbol");
+
+    left_expr = parse_factor(parser);
+
+    if(match(parser, 2, UPTO_TOKTYPE, DOWNTO_TOKTYPE)){
+        for_type_token = previous(parser);
+    }else{
+        error(parser, peek(parser), "Expect 'upto' or 'downto'");
+    }
+
+    right_expr = parse_factor(parser);
+    consume(parser, RIGHT_PAREN_TOKTYPE, "Expect ')' after right range expressio");
+    consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of for body");
+
+    stmts = parse_block_stmt(parser);
+
+    ForRangeStmt *for_range_stmt = MEMORY_ALLOC(ForRangeStmt, 1, parser->ctallocator);
+
+    for_range_stmt->for_token = for_token;
+    for_range_stmt->symbol_token = symbol_token;
+    for_range_stmt->left_expr = left_expr;
+    for_range_stmt->for_type_token = for_type_token;
+    for_range_stmt->right_expr = right_expr;
+    for_range_stmt->stmts = stmts;
+
+    return create_stmt(FOR_RANGE_STMTTYPE, for_range_stmt, parser);
 }
 
 Stmt *parse_throw_stmt(Parser *parser){

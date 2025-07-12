@@ -12,6 +12,7 @@ typedef enum stmt_type{
     STOP_STMTTYPE,
     CONTINUE_STMTTYPE,
     WHILE_STMTTYPE,
+    FOR_RANGE_STMTTYPE,
     THROW_STMTTYPE,
     TRY_STMTTYPE,
     RETURN_STMTTYPE,
@@ -61,6 +62,15 @@ typedef struct while_stmt{
 	Expr *condition;
 	DynArr *stmts;
 }WhileStmt;
+
+typedef struct for_range_stmt{
+    Token *for_token;
+    Token *symbol_token;
+    Expr *left_expr;
+    Token *for_type_token;
+    Expr *right_expr;
+    DynArr *stmts;
+}ForRangeStmt;
 
 typedef struct throw_stmt{
     Token *throw_token;

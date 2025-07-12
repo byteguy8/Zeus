@@ -87,21 +87,27 @@ typedef enum record_type{
 #define FILE_CAN_APPEND(_mode) ((_mode) & FILE_APPEND_MODE)
 #define FILE_IS_BINARY(_mode)((_mode) & FILE_BINARY_MODE)
 
+typedef XOShiro256 RecordRandom;
+
+typedef struct record_file{
+    char mode;
+    char *pathname;
+    FILE *handler;
+}RecordFile;
+
 typedef struct record_obj{
     ObjHeader header;
     RecordType type;
-
-    union{
-        XOShiro256 xos256;
-        struct {
-            char mode;
-            char *pathname;
-            FILE *handler;
-        }file;
-    }content;
-
 	LZHTable *attributes;
+    void *content;
 }RecordObj;
+
+#define RECORD_RANDOM(_record)((RecordRandom *)((_record)->content))
+
+#define RECORD_FILE(_record)((RecordFile *)((_record)->content))
+#define RECORD_FILE_MODE(_record)(RECORD_FILE(_record)->mode)
+#define RECORD_FILE_PATHNAME(_record)(RECORD_FILE(_record)->pathname)
+#define RECORD_FILE_HANDLER(_record)(RECORD_FILE(_record)->handler)
 
 typedef struct native_fn_obj{
     ObjHeader header;

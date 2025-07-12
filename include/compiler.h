@@ -40,6 +40,7 @@ typedef enum scope_type{
     BLOCK_SCOPE,
     IF_SCOPE,
 	WHILE_SCOPE,
+    FOR_SCOPE,
     TRY_SCOPE,
     CATCH_SCOPE,
     FUNCTION_SCOPE

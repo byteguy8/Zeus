@@ -5,13 +5,17 @@ static inline uint64_t rotl(const uint64_t x, int k) {
 	return (x << k) | (x >> (64 - k));
 }
 
-XOShiro256 xoshiro256_init(){
-    SplitMix64 sm64 = splitmix64_init((uint64_t)time(NULL));
+XOShiro256 xoshiro256_init_seed(uint64_t seed){
+    SplitMix64 sm64 = splitmix64_init(seed);
     return (XOShiro256){.s = {
         splitmix64_next(&sm64),
         splitmix64_next(&sm64),
         splitmix64_next(&sm64),
         splitmix64_next(&sm64)}};
+}
+
+XOShiro256 xoshiro256_init(){
+    return xoshiro256_init_seed((uint64_t)time(NULL));
 }
 
 uint64_t xoshiro256_next(XOShiro256 *xos256){

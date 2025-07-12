@@ -95,22 +95,90 @@ int utils_is_float(char *buff){
 	return decimal_dot;
 }
 
-int utils_str_to_i64(char *str, int64_t *out_value){
+int utils_hexadecimal_str_to_i64(char *str, int64_t *out_value){
     int len = (int)strlen(str);
-    int is_negative = 0;
+
+    if(len <= 2 || len > 18){
+        return INVLEN;
+    }
+
+    if(strncasecmp(str, "0x", 2) != 0){
+        return INVPRE;
+    }
+
+    uint8_t value_offset = (len - 2) * 4;
     int64_t value = 0;
 
-    if(len == 0){return 1;}
-
-    for(int i = 0; i < len; i++){
+    for (int i = 2; i < len; i++){
         char c = str[i];
 
-        if(c == '-' && i == 0){
-            is_negative = 1;
-            continue;
+        if((c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F')){
+            return INVDIG;
         }
 
-        if(c < '0' || c > '9'){return 1;}
+        uint64_t nibble = 0;
+
+        switch (c){
+            case 'a':
+            case 'A':{
+                nibble = 10;
+                break;
+            }
+            case 'b':
+            case 'B':{
+                nibble = 11;
+                break;
+            }
+            case 'c':
+            case 'C':{
+                nibble = 12;
+                break;
+            }
+            case 'd':
+            case 'D':{
+                nibble = 13;
+                break;
+            }
+            case 'e':
+            case 'E':{
+                nibble = 14;
+                break;
+            }
+            case 'f':
+            case 'F':{
+                nibble = 15;
+                break;
+            }
+            default:{
+                nibble = (int64_t)c;
+            }
+        }
+
+        nibble <<= value_offset -= 4;
+        value |= nibble;
+    }
+
+    *out_value = value;
+
+    return 0;
+}
+
+int utils_decimal_str_to_i64(char *str, int64_t *out_value){
+    int len = (int)strlen(str);
+
+    if(len == 0){
+        return INVLEN;
+    }
+
+    int64_t value = 0;
+    int is_negative = str[0] == '-';
+
+    for(int i = is_negative ? 1 : 0; i < len; i++){
+        char c = str[i];
+
+        if(c < '0' || c > '9'){
+            return INVDIG;
+        }
 
         int64_t digit = ((int64_t)c) - 48;
 
@@ -118,7 +186,9 @@ int utils_str_to_i64(char *str, int64_t *out_value){
         value += digit;
     }
 
-    if(is_negative == 1){value *= -1;}
+    if(is_negative == 1){
+        value *= -1;
+    }
 
     *out_value = value;
 
@@ -214,7 +284,7 @@ int utils_read_file(
         snprintf(err_str, err_len, "Pathname does not exists");
         return 1;
     }
-    if(!UTILS_FILE_CAN_READ(pathname)){
+    if(!UTILS_FILES_CAN_READ(pathname)){
         snprintf(err_str, err_len, "Pathname can not be read");
         return 1;
     }

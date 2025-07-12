@@ -12,7 +12,7 @@
 // PRIVATE INTERFACE
 static void error(Lexer *lexer, char *msg, ...);
 static int is_at_end(Lexer *lexer);
-static int is_digit(char c);
+static int is_decimal_digit(char c);
 static int is_alpha(char c);
 static int is_alpha_numeric(char c);
 static char peek(Lexer *lexer);
@@ -46,7 +46,7 @@ static Token *create_token_literal(
 static Token *create_token(TokType type, Lexer *lexer);
 #define ADD_TOKEN_RAW(token)(dynarr_insert_ptr((token), lexer->tokens))
 static void comment(Lexer *lexer);
-static Token *number(Lexer *lexer);
+static Token *decimal(Lexer *lexer);
 static Token *identifier(Lexer *lexer);
 static uint32_t *str_to_table(size_t len, char *str, Lexer *lexer);
 static Token *string(Lexer *lexer);
@@ -75,8 +75,12 @@ int is_at_end(Lexer *lexer){
     return lexer->current >= ((int) source->size);
 }
 
-int is_digit(char c){
+int is_decimal_digit(char c){
     return c >= '0' && c <= '9';
+}
+
+int is_hex_digit(char c){
+    return is_decimal_digit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 }
 
 int is_alpha(char c){
@@ -84,7 +88,7 @@ int is_alpha(char c){
 }
 
 int is_alpha_numeric(char c){
-    return is_digit(c) || is_alpha(c);
+    return is_decimal_digit(c) || is_alpha(c);
 }
 
 char peek(Lexer *lexer){
@@ -226,17 +230,17 @@ void comment(Lexer *lexer){
 	}
 }
 
-Token *number(Lexer *lexer){
+Token *decimal(Lexer *lexer){
     TokType type = INT_TYPE_TOKTYPE;
 
-    while (!is_at_end(lexer) && is_digit(peek(lexer))){
+    while (!is_at_end(lexer) && is_decimal_digit(peek(lexer))){
         advance(lexer);
     }
 
 	if(match('.', lexer)){
 		type = FLOAT_TYPE_TOKTYPE;
 
-		while (!is_at_end(lexer) && is_digit(peek(lexer))){
+		while (!is_at_end(lexer) && is_decimal_digit(peek(lexer))){
             advance(lexer);
         }
 	}
@@ -245,7 +249,7 @@ Token *number(Lexer *lexer){
 
     if(type == INT_TYPE_TOKTYPE){
         int64_t *value = MEMORY_ALLOC(int64_t, 1, lexer->rtallocator);
-        utils_str_to_i64(lexeme, value);
+        utils_decimal_str_to_i64(lexeme, value);
 
 		return create_token_raw(
 			lexer->line,
@@ -268,6 +272,38 @@ Token *number(Lexer *lexer){
 			lexer
 		);
 	}
+}
+
+Token *hexadecimal(Lexer *lexer){
+    while(is_hex_digit(peek(lexer))){
+        advance(lexer);
+    }
+
+    char *lexeme = lexeme_current(lexer);
+    size_t lexeme_len = strlen(lexeme);
+
+    if(lexeme_len == 2){
+        error(lexer, "Expect digit(s) after '%s' prefix", lexeme);
+        return NULL;
+    }
+
+    if(lexeme_len > 18){
+        error(lexer, "Expect at most 18 digits after hexadecimal prefix");
+        return NULL;
+    }
+
+    int64_t *value = MEMORY_ALLOC(int64_t, 1, lexer->rtallocator);
+
+    utils_hexadecimal_str_to_i64(lexeme, value);
+
+    return create_token_raw(
+        lexer->line,
+        lexeme,
+        value,
+        sizeof(int64_t),
+        INT_TYPE_TOKTYPE,
+        lexer
+    );
 }
 
 Token *identifier(Lexer *lexer){
@@ -322,7 +358,7 @@ Token *string(Lexer *lexer){
 
             char escape;
 
-            if(peek(lexer) == '0'){escape = '\0';}
+            if(peek(lexer) == '3'){escape = '\3';}
             else if(peek(lexer) == 'a'){escape = '\a';}
             else if(peek(lexer) == 'b'){escape = '\b';}
             else if(peek(lexer) == 'f'){escape = '\f';}
@@ -550,8 +586,10 @@ Token *scan_token(char c, Lexer *lexer){
          case '\0':{
             return NULL;
         }default:{
-            if(is_digit(c)){
-				return number(lexer);
+            if(is_decimal_digit(c) && (match('x', lexer) || match('X', lexer))){
+                return hexadecimal(lexer);
+            }else if(is_decimal_digit(c)){
+				return decimal(lexer);
 			}else if(is_alpha_numeric(c)){
 				return identifier(lexer);
 			}else if(c == '"'){

@@ -17,9 +17,14 @@ static NativeModule *io_module = NULL;
     }                                                                                                           \
 }
 
-#define VALUE_TO_FILE_MODE(_value)(VALUE_TO_RECORD(_value)->content.file.mode)
-#define VALUE_TO_FILE_PATHNAME(_value)(VALUE_TO_RECORD(_value)->content.file.pathname)
-#define VALUE_TO_FILE_HANDLER(_value)(VALUE_TO_RECORD(_value)->content.file.handler)
+#define VALUE_TO_FILE_MODE(_value)(RECORD_FILE_MODE(VALUE_TO_RECORD(_value)))
+#define VALUE_TO_FILE_PATHNAME(_value)(RECORD_FILE_PATHNAME(VALUE_TO_RECORD(_value)))
+#define VALUE_TO_FILE_HANDLER(_value)(RECORD_FILE_HANDLER(VALUE_TO_RECORD(_value)))
+
+Value native_fn_io_is_file(uint8_t argsc, Value *values, Value *target, void *context){
+    Value *file_value = &values[0];
+    return BOOL_VALUE(IS_VALUE_RECORD(file_value) && VALUE_TO_RECORD(file_value)->type == FILE_RTYPE);
+}
 
 Value native_fn_io_can_read(uint8_t argsc, Value *values, Value *target, void *context){
     Value *file_value = &values[0];
@@ -108,7 +113,6 @@ Value native_fn_io_open_file(uint8_t argsc, Value *values, Value *target, void *
     VALIDATE_I64_RANGE(1, 3, mode_len, 2, "mode", context)
 
     char mode = 0;
-    char *pathname = factory_clone_raw_str(path_raw_str, ((VM *)context)->fake_allocator);
 
     for (size_t i = 0; i < mode_len; i++){
         char current_char = mode_raw_str[i];
@@ -177,19 +181,7 @@ Value native_fn_io_open_file(uint8_t argsc, Value *values, Value *target, void *
         }
     }
 
-    FILE *handler = fopen(path_raw_str, mode_raw_str);
-
-    if(!handler){
-        vmu_error(context, "Illegal value of argument %d: '%s': %s", strerror(errno));
-    }
-
-    ObjHeader *record_header = vmu_create_record_obj(0, context);
-    RecordObj *record_obj = OBJ_TO_RECORD(record_header);
-
-    record_obj->type = FILE_RTYPE;
-    record_obj->content.file.mode = mode;
-    record_obj->content.file.pathname = pathname;
-    record_obj->content.file.handler = handler;
+    ObjHeader *record_header = vmu_create_record_file_obj(mode_raw_str, mode, path_raw_str, context);
 
     return OBJ_VALUE(record_header);
 }
@@ -199,16 +191,16 @@ Value native_fn_io_close_file(uint8_t argsc, Value *values, Value *target, void 
 
     VALIDATE_VALUE_FILE_ARG(file_value, 1, "file", context)
 
-    RecordObj *record = VALUE_TO_RECORD(file_value);
-    FILE *handler = VALUE_TO_FILE_HANDLER(file_value);
+    RecordObj *record_obj = VALUE_TO_RECORD(file_value);
+    RecordFile *record_file = RECORD_FILE(record_obj);
+    FILE *handler = record_file->handler;
 
     if(!handler){
         vmu_error(context, "File already closed");
     }
 
-    record->content.file.handler = NULL;
-
     fclose(handler);
+    record_file->handler = NULL;
 
     return EMPTY_VALUE;
 }
@@ -350,6 +342,8 @@ Value native_fn_io_read_file(uint8_t argsc, Value *values, Value *target, void *
 
 void io_module_init(Allocator *allocator){
     io_module = factory_native_module("io", allocator);
+
+    factory_add_native_fn("is_file", 1, native_fn_io_is_file, io_module, allocator);
 
     factory_add_native_fn("can_read", 1, native_fn_io_can_read, io_module, allocator);
     factory_add_native_fn("can_write", 1, native_fn_io_can_write, io_module, allocator);

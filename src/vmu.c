@@ -848,17 +848,85 @@ ObjHeader *vmu_create_record_obj(uint8_t length, VM *vm){
 	return &record_obj->header;
 }
 
+RecordRandom *vmu_create_record_random(VM *vm){
+    RecordRandom *random = MEMORY_ALLOC(RecordRandom, 1, vm->fake_allocator);
+    return random;
+}
+
+RecordFile *vmu_create_record_file(char *raw_mode, char mode, char *pathname, VM *vm){
+    char *cloned_pathname = factory_clone_raw_str(pathname, vm->fake_allocator);
+    FILE *handler = fopen(pathname, raw_mode);
+    RecordFile *record_file = MEMORY_ALLOC(RecordFile, 1, vm->fake_allocator);
+
+    if(!handler){
+        factory_destroy_raw_str(cloned_pathname, vm->fake_allocator);
+        MEMORY_DEALLOC(RecordFile, 1, record_file, vm->fake_allocator);
+        return NULL;
+    }
+
+    record_file->mode = mode;
+    record_file->handler = handler;
+    record_file->pathname = cloned_pathname;
+
+    return record_file;
+}
+
+ObjHeader *vmu_create_record_random_obj(VM *vm){
+    RecordObj *record = OBJ_TO_RECORD(vmu_create_record_obj(0, vm));
+    RecordRandom *record_random = vmu_create_record_random(vm);
+
+    record->type = RANDOM_RTYPE;
+    record->content = record_random;
+
+    return &record->header;
+}
+
+ObjHeader *vmu_create_record_file_obj(char *raw_mode, char mode, char *pathname, VM *vm){
+    RecordObj *record = OBJ_TO_RECORD(vmu_create_record_obj(0, vm));
+    RecordFile *record_file = vmu_create_record_file(raw_mode, mode, pathname, vm);
+
+    if(!record_file){
+        return NULL;
+    }
+
+    record->type = FILE_RTYPE;
+    record->content = record_file;
+
+    return &record->header;
+}
+
 void vmu_destroy_record_obj(RecordObj *record_obj, VM *vm){
     if(!record_obj){
         return;
     }
 
+    if(record_obj->type == RANDOM_RTYPE){
+        vmu_destroy_record_random(RECORD_RANDOM(record_obj), vm);
+    }
+
     if(record_obj->type == FILE_RTYPE){
-        factory_destroy_raw_str(record_obj->content.file.pathname, vm->fake_allocator);
-        fclose(record_obj->content.file.handler);
+        vmu_destroy_record_file(RECORD_FILE(record_obj), vm);
     }
 
     lzhtable_destroy(vm, clean_up_record, record_obj->attributes);
+}
+
+void vmu_destroy_record_random(RecordRandom *record_random, VM *vm){
+    if(!record_random){
+        return;
+    }
+
+    MEMORY_DEALLOC(RecordRandom, 1, record_random, vm->fake_allocator);
+}
+
+void vmu_destroy_record_file(RecordFile *record_file, VM *vm){
+    if(!record_file){
+        return;
+    }
+
+    factory_destroy_raw_str(record_file->pathname, vm->fake_allocator);
+    fclose(record_file->handler);
+    MEMORY_DEALLOC(RecordFile, 1, record_file, vm->fake_allocator);
 }
 
 ObjHeader *vmu_create_raw_native_fn_obj(
