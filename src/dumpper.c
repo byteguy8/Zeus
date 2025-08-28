@@ -4,6 +4,7 @@
 #include "closure.h"
 #include <stdio.h>
 #include <assert.h>
+#include <inttypes.h>
 
 #ifdef _WIN32
     #define SIZE_T_FORMAT "%zu"
@@ -21,10 +22,10 @@ static int32_t compose_i32(uint8_t *bytes){
 
 #define CURRENT_MODULE(d)(d->current_module)
 #define CURRENT_SUBMODULE(d)(CURRENT_MODULE(d)->submodule)
-#define CURRENT_STRINGS(d)(CURRENT_SUBMODULE(d)->strings)
+#define CURRENT_STRINGS(d)(CURRENT_SUBMODULE(d)->static_strs)
 #define CURRENT_FN(d)(d->current_fn)
-#define CURRENT_CONSTANTS(d)(CURRENT_FN(d)->integers)
-#define CURRENT_FLOAT_VALUES(d)(CURRENT_FN(d)->floats)
+#define CURRENT_CONSTANTS(d)(CURRENT_FN(d)->iconsts)
+#define CURRENT_FLOAT_VALUES(d)(CURRENT_FN(d)->fconsts)
 #define CURRENT_CHUNKS(d)(CURRENT_FN(d)->chunks)
 
 static int is_at_end(Dumpper *dumpper){
@@ -63,15 +64,20 @@ static int64_t read_i64_const(Dumpper *dumpper){
 
 static double read_float_const(Dumpper *dumpper){
     DynArr *float_values = CURRENT_FLOAT_VALUES(dumpper);
-    size_t index = (size_t)read_i16(dumpper);
-    return DYNARR_GET_AS(double, index, float_values);
+    size_t idx = (size_t)read_i16(dumpper);
+    return DYNARR_GET_AS(double, idx, float_values);
 }
 
-static char *read_str(Dumpper *dumpper, uint32_t *out_hash){
-    LZHTable *strings = CURRENT_STRINGS(dumpper);
-    uint32_t hash = (uint32_t)read_i32(dumpper);
-    if(out_hash) *out_hash = hash;
-    return lzhtable_hash_get(hash, strings);
+static char *read_str(Dumpper *dumpper, size_t *out_len){
+    DynArr *static_strs = CURRENT_STRINGS(dumpper);
+    size_t idx = (size_t)read_i16(dumpper);
+    RawStr str = DYNARR_GET_AS(RawStr, idx, static_strs);
+
+    if(out_len){
+        *out_len = str.len;
+    }
+
+    return str.buff;
 }
 
 static void execute(uint8_t chunk, Dumpper *dumpper){
@@ -116,12 +122,29 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 
 			break;
 		}case STRING_OPCODE:{
-            uint32_t hash = 0;
-            char *value = read_str(dumpper, &hash);
+            size_t len = 0;
+            char *raw_str = read_str(dumpper, &len);
             size_t end = dumpper->ip;
 
             printf("%8.8s %.7zu", "STRING", end - start);
-            printf(" | hash: %u value: '%s'\n", hash, value);
+            printf(" | '");
+
+            for (size_t i = 0; i < len; i++){
+                char c = raw_str[i];
+
+                if(i == 16){
+                    printf("...");
+                    break;
+                }
+
+                if(c == '\n'){
+                    continue;
+                }
+
+                printf("%c", c);
+            }
+
+            printf("'\n");
 
             break;
         }case TEMPLATE_OPCODE:{
@@ -131,6 +154,14 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf("%8.8s %.7zu", "TEMPLATE", end - start);
             printf(" | length: %d\n", len);
 
+            break;
+        }case CONCAT_OPCODE:{
+            size_t end = dumpper->ip;
+            printf("%8.8s %.7zu\n", "CONCAT", end - start);
+            break;
+        }case MULSTR_OPCODE:{
+            size_t end = dumpper->ip;
+            printf("%8.8s %.7zu\n", "MULSTR", end - start);
             break;
         }case ADD_OPCODE:{
             size_t end = dumpper->ip;
@@ -353,29 +384,16 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 
 			break;
 		}case ARRAY_OPCODE:{
-			uint8_t parameter = advance(dumpper);
-            int32_t index = read_i32(dumpper);
             size_t end = dumpper->ip;
-
-			printf("%8.8s %.7zu", "ARRAY", end - start);
-            printf(" | parameter: %d index: %d\n", parameter, index);
-
+			printf("%8.8s %.7zu\n", "ARRAY", end - start);
             break;
 		}case LIST_OPCODE:{
-			int16_t len = read_i16(dumpper);
             size_t end = dumpper->ip;
-
-			printf("%8.8s %.7zu", "LIST", end - start);
-            printf(" | length: %d\n", len);
-
+			printf("%8.8s %.7zu\n", "LIST", end - start);
             break;
 		}case DICT_OPCODE:{
-            int16_t len = read_i16(dumpper);
             size_t end = dumpper->ip;
-
-			printf("%8.8s %.7zu", "DICT", end - start);
-            printf(" | length: %d\n", len);
-
+			printf("%8.8s %.7zu\n", "DICT", end - start);
             break;
         }case RECORD_OPCODE:{
 			uint8_t len = advance(dumpper);
@@ -389,7 +407,23 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | length: %d\n", len);
 
             break;
-		}case CALL_OPCODE:{
+		}case IARRAY_OPCODE:{
+            int16_t idx = read_i16(dumpper);
+            size_t end = dumpper->ip;
+
+            printf("%8.8s %.7zu", "IARRAY", end - start);
+            printf(" | at: %" PRId16 "\n", idx);
+
+            break;
+        }case ILIST_OPCODE:{
+            size_t end = dumpper->ip;
+            printf("%8.8s %.7zu\n", "ILIST", end - start);
+            break;
+        }case IDICT_OPCODE:{
+            size_t end = dumpper->ip;
+            printf("%8.8s %.7zu\n", "IDICT", end - start);
+            break;
+        }case CALL_OPCODE:{
             uint8_t args_count = advance(dumpper);
             size_t end = dumpper->ip;
 
@@ -488,9 +522,14 @@ static void dump_module(Module *module, Dumpper *dumpper){
 
 Dumpper *dumpper_create(Allocator *allocator){
 	Dumpper *dumpper = MEMORY_ALLOC(Dumpper, 1, allocator);
-    if(!dumpper){return NULL;}
+
+    if(!dumpper){
+        return NULL;
+    }
+
 	memset(dumpper, 0, sizeof(Dumpper));
     dumpper->allocator = allocator;
+
 	return dumpper;
 }
 

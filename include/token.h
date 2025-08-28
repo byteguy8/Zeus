@@ -8,6 +8,8 @@ typedef enum tok_type{
     PLUS_TOKTYPE, MINUS_TOKTYPE,
 	SLASH_TOKTYPE, ASTERISK_TOKTYPE,
 	COMMA_TOKTYPE, DOT_TOKTYPE,
+    DOUBLE_DOT_TOKTYPE,
+    DOUBLE_ASTERISK_TOKTYPE,
 
     LESS_TOKTYPE, GREATER_TOKTYPE,
     LESS_EQUALS_TOKTYPE, GREATER_EQUALS_TOKTYPE,
@@ -57,10 +59,11 @@ typedef enum tok_type{
 
 typedef struct token{
     int line;
-	char *lexeme;
+    TokType type;
+    size_t lexeme_len;
+    char *lexeme;
+    size_t literal_size;
 	void *literal;
-	size_t literal_size;
-	TokType type;
     char *pathname;
     void *extra;
 }Token;

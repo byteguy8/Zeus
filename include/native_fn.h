@@ -1,6 +1,7 @@
 #ifndef NATIVE_FN_H
 #define NATIVE_FN_H
 
+#include "memory.h"
 #include "value.h"
 #include <stdint.h>
 
@@ -14,9 +15,9 @@ typedef struct native_fn_info{
 typedef struct native_fn{
     uint8_t core;
     uint8_t arity;
-    Value target;
     char *name;
     RawNativeFn raw_fn;
+    Allocator *allocator;
 }NativeFn;
 
 #endif

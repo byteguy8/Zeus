@@ -339,7 +339,7 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator){
 
 	buff[source_size] = '\0';
 
-	rstr->size = source_size;
+	rstr->len = source_size;
 	rstr->buff = buff;
 
 	return rstr;
@@ -413,7 +413,7 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator){
     }
 
     char *utils_files_sysname(Allocator *allocator){
-        return factory_clone_raw_str("Windows", allocator);
+        return factory_clone_raw_str("Windows", allocator, NULL);
     }
 #elif __linux__
     int utils_files_is_directory(char *pathname){
@@ -470,6 +470,6 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator){
     }
 
     char *utils_files_sysname(Allocator *allocator){
-        return factory_clone_raw_str("Linux", allocator);
+        return factory_clone_raw_str("Linux", allocator, NULL);
     }
 #endif

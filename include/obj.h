@@ -11,8 +11,14 @@
 #include "native_module.h"
 #include "module.h"
 #include <stdio.h>
+#include <inttypes.h>
 
-typedef enum obj_type{
+typedef enum obj_type ObjType;
+typedef enum obj_color ObjColor;
+typedef struct obj Obj;
+typedef struct obj_list ObjList;
+
+enum obj_type{
 	STR_OTYPE,
     ARRAY_OTYPE,
 	LIST_OTYPE,
@@ -23,51 +29,50 @@ typedef enum obj_type{
     CLOSURE_OTYPE,
     NATIVE_MODULE_OTYPE,
     MODULE_OTYPE,
-}ObjType;
+};
 
-typedef struct obj_header{
+enum obj_color{
+    WHITE_OBJ_COLOR,
+    GRAY_OBJ_COLOR,
+    BLACK_OBJ_COLOR,
+};
+
+struct obj{
     ObjType type;
     char marked;
-    struct obj_header *prev;
-    struct obj_header *next;
-}ObjHeader;
+    ObjColor color;
+    Obj *prev;
+    Obj *next;
+    ObjList *list;
+};
 
-#define OBJ_TYPE(_obj)((_obj)->type)
-
-typedef int32_t sidx_t;
-#define STR_LENGTH_MAX INT32_MAX
-#define STR_LENGTH_TYPE sidx_t
+struct obj_list{
+    size_t len;
+    Obj *head;
+    Obj *tail;
+};
 
 typedef struct str_obj{
-    ObjHeader header;
-	uint32_t hash;
-    sidx_t len;
+    Obj header;
     char runtime;
+    size_t len;
 	char *buff;
 }StrObj;
 
-typedef int32_t aidx_t;
-#define ARRAY_LENGTH_MAX INT32_MAX
-#define ARRAY_LENGTH_TYPE aidx_t
-
 typedef struct array_obj{
-    ObjHeader header;
-    aidx_t len;
+    Obj header;
+    size_t len;
     Value *values;
 }ArrayObj;
 
-typedef int32_t lidx_t;
-#define LIST_LENGTH_MAX INT32_MAX
-#define LIST_LENGTH_TYPE lidx_t
-
 typedef struct list_obj{
-    ObjHeader header;
-    DynArr *list;
+    Obj header;
+    DynArr *items;
 }ListObj;
 
 typedef struct dict_obj{
-    ObjHeader header;
-    LZHTable *dict;
+    Obj header;
+    LZOHTable *key_values;
 }DictObj;
 
 typedef enum record_type{
@@ -75,6 +80,55 @@ typedef enum record_type{
     RANDOM_RTYPE,
     FILE_RTYPE,
 }RecordType;
+
+typedef XOShiro256 RecordRandom;
+
+typedef struct record_file{
+    char mode;
+    char *pathname;
+    FILE *handler;
+}RecordFile;
+
+typedef struct record_obj{
+    Obj header;
+    RecordType type;
+    void *content;
+	LZOHTable *attrs;
+}RecordObj;
+
+typedef struct native_fn_obj{
+    Obj header;
+    Value target;
+    NativeFn *native_fn;
+}NativeFnObj;
+
+typedef struct fn_obj{
+    Obj header;
+    Fn *fn;
+}FnObj;
+
+typedef struct closure_obj{
+    Obj header;
+    Closure *closure;
+}ClosureObj;
+
+typedef struct native_module_obj{
+    Obj header;
+    NativeModule *native_module;
+}NativeModuleObj;
+
+typedef struct module_obj{
+    Obj header;
+    Module *module;
+}ModuleObj;
+
+#define OBJ_TYPE(_obj)((_obj)->type)
+#define RECORD_RANDOM(_record)((RecordRandom *)((_record)->content))
+
+#define RECORD_FILE(_record)((RecordFile *)((_record)->content))
+#define RECORD_FILE_MODE(_record)(RECORD_FILE(_record)->mode)
+#define RECORD_FILE_PATHNAME(_record)(RECORD_FILE(_record)->pathname)
+#define RECORD_FILE_HANDLER(_record)(RECORD_FILE(_record)->handler)
 
 #define FILE_READ_MODE   0b10000000
 #define FILE_WRITE_MODE  0b01000000
@@ -87,51 +141,7 @@ typedef enum record_type{
 #define FILE_CAN_APPEND(_mode) ((_mode) & FILE_APPEND_MODE)
 #define FILE_IS_BINARY(_mode)((_mode) & FILE_BINARY_MODE)
 
-typedef XOShiro256 RecordRandom;
-
-typedef struct record_file{
-    char mode;
-    char *pathname;
-    FILE *handler;
-}RecordFile;
-
-typedef struct record_obj{
-    ObjHeader header;
-    RecordType type;
-	LZHTable *attributes;
-    void *content;
-}RecordObj;
-
-#define RECORD_RANDOM(_record)((RecordRandom *)((_record)->content))
-
-#define RECORD_FILE(_record)((RecordFile *)((_record)->content))
-#define RECORD_FILE_MODE(_record)(RECORD_FILE(_record)->mode)
-#define RECORD_FILE_PATHNAME(_record)(RECORD_FILE(_record)->pathname)
-#define RECORD_FILE_HANDLER(_record)(RECORD_FILE(_record)->handler)
-
-typedef struct native_fn_obj{
-    ObjHeader header;
-    NativeFn *native_fn;
-}NativeFnObj;
-
-typedef struct fn_obj{
-    ObjHeader header;
-    Fn *fn;
-}FnObj;
-
-typedef struct closure_obj{
-    ObjHeader header;
-    Closure *closure;
-}ClosureObj;
-
-typedef struct native_module_obj{
-    ObjHeader header;
-    NativeModule *native_module;
-}NativeModuleObj;
-
-typedef struct module_obj{
-    ObjHeader header;
-    Module *module;
-}ModuleObj;
+void obj_list_insert(Obj *obj, ObjList *list);
+void obj_list_remove(Obj *obj);
 
 #endif

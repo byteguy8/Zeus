@@ -4,7 +4,7 @@
 #include <stddef.h>
 
 typedef struct rawstr{
-	size_t size;
+	size_t len;
 	char *buff;
 }RawStr;
 

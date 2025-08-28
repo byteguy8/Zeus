@@ -17,26 +17,35 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <inttypes.h>
 
-#define COMPILE_ALLOCATOR (compiler->ctallocator)
+#define CTALLOCATOR (&(compiler->fake_ctallocator))
+#define RTALLOCATOR (&(compiler->fake_rtallocator))
 #define LABELS_ALLOCATOR (compiler->labels_allocator)
-
-//>PRIVATE INTERFACE
+#define CURRENT_MODULE (compiler->current_module)
+//--------------------------------------------------------------------------//
+//                            PRIVATE INTERFACE                             //
+//--------------------------------------------------------------------------//
+//--------------------------------  ERROR  ---------------------------------//
 static void error(Compiler *compiler, Token *token, char *msg, ...);
-void descompose_i16(int16_t value, uint8_t *bytes);
-void descompose_i32(int32_t value, uint8_t *bytes);
-int32_t generate_id(Compiler *compiler);
+static void fatal_error(Compiler *compiler, char *fmt, ...);
+//--------------------------------  MEMORY  --------------------------------//
+static void *lzalloc(size_t size, void *ctx);
+static void *lzrealloc(void *ptr, size_t old_size, size_t new_size, void *ctx);
+static void lzdealloc(void *ptr, size_t size, void *ctx);
+//--------------------------------  SCOPE  ---------------------------------//
 Scope *scope_in(ScopeType type, Compiler *compiler);
 Scope *scope_in_soft(ScopeType type, Compiler *compiler);
 Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function, size_t *out_fn_index);
 void scope_out(Compiler *compiler);
 void scope_out_fn(Compiler *compiler);
 Scope *inside_loop(Compiler *compiler);
-Scope *inside_function(Compiler *compiler);
-Scope *symbol_fn_scope(Symbol *symbol, Compiler *compiler);
+Scope *inside_fn(Compiler *compiler);
+Scope *inside_fn_from_symbol(Symbol *symbol, Compiler *compiler);
 int count_fn_scopes(int from, int to, Compiler *compiler);
 Scope *current_scope(Compiler *compiler);
 Scope *previous_scope(Scope *scope, Compiler *compiler);
+//--------------------------------  LABEL  ---------------------------------//
 void insert_label(Scope *scope, Label *label);
 Label *label(Compiler *compiler, char *fmt, ...);
 void insert_jmp(Scope *scope, JMP *jmp);
@@ -44,29 +53,36 @@ void remove_jmp(JMP *jmp);
 JMP *jif(Compiler *compiler, Token *ref_token, char *fmt, ...);
 JMP *jmp(Compiler *compiler, Token *ref_token, char *fmt, ...);
 void resolve_jmps(Scope *current, Compiler *compiler);
+//--------------------------------  SYMBOL  --------------------------------//
 int resolve_symbol(Token *identifier, Symbol *symbol, Compiler *compiler);
 Symbol *exists_scope(char *name, Scope *scope, Compiler *compiler);
 Symbol *exists_local(char *name, Compiler *compiler);
 Symbol *get(Token *identifier_token, Compiler *compiler);
 void to_local(Symbol *symbol, Compiler *compiler);
 void from_symbols_to_global(size_t symbol_index, Token *location_token, char *name, Compiler *compiler);
-Symbol *declare_native(char *identifier, Compiler *compiler);
+Symbol *declare_native_fn(char *identifier, Compiler *compiler);
 Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler);
 DynArr *current_chunks(Compiler *compiler);
 DynArr *current_locations(Compiler *compiler);
 DynArr *current_constants(Compiler *compiler);
 DynArr *current_float_values(Compiler *compiler);
+//--------------------------------  CHUNKS  --------------------------------//
+void descompose_i16(int16_t value, uint8_t *bytes);
+void descompose_i32(int32_t value, uint8_t *bytes);
 size_t chunks_len(Compiler *compiler);
 size_t write_chunk(uint8_t chunk, Compiler *compiler);
 void write_location(Token *token, Compiler *compiler);
 void update_chunk(size_t index, uint8_t chunk, Compiler *compiler);
 size_t write_i16(int16_t i16, Compiler *compiler);
 size_t write_i32(int32_t i32, Compiler *compiler);
+size_t write_iconst(int64_t i64, Compiler *compiler);
+size_t write_fconst(double value, Compiler *compiler);
+void write_str(size_t len, char *rstr, Compiler *compiler);
+void write_str_alloc(size_t len, char *rstr, Compiler *compiler);
 void update_i16(size_t index, int16_t i16, Compiler *compiler);
 void update_i32(size_t index, int32_t i32, Compiler *compiler);
-size_t write_i64_const(int64_t i64, Compiler *compiler);
-size_t write_double_const(double value, Compiler *compiler);
-void write_str(char *rstr, Compiler *compiler);
+//--------------------------------  OTHER  ---------------------------------//
+int32_t generate_id(Compiler *compiler);
 char *names_to_name(DynArr *names, Token **out_name, Compiler *compiler);
 NativeModule *resolve_native_module(char *module_name, Compiler *compiler);
 char *resolve_module_location(
@@ -83,45 +99,12 @@ size_t add_native_module_symbol(NativeModule *module, DynArr *symbols);
 size_t add_module_symbol(Module *module, DynArr *symbols);
 void compile_stmt(Stmt *stmt, Compiler *compiler);
 void define_natives(Compiler *compiler);
-//<PRIVATE INTERFACE
-void add_captured_symbol(Token *identifier, Symbol *symbol, Scope *scope, Compiler *compiler){
-    if(scope->captured_symbols_len >= SYMBOLS_LENGTH){
-        error(compiler, identifier, "Cannot capture more than %d symbols", SYMBOLS_LENGTH);
-    }
-
-    Scope *sfn_scope = symbol_fn_scope(symbol, compiler);
-    int fns_between = count_fn_scopes(sfn_scope->depth - 1, scope->depth - 1, compiler);
-
-    if(fns_between > 0){
-        error(compiler, identifier, "Cannot capture symbols from a distance greater than 1");
-    }
-
-    scope->captured_symbols[scope->captured_symbols_len++] = symbol;
-}
-
-void set_fn(size_t index, Fn *fn, Compiler *compiler){
-    Module *module = compiler->current_module;
-	DynArr *symbols = MODULE_SYMBOLS(module);
-	SubModuleSymbol symbol = (SubModuleSymbol){
-        .type = FUNCTION_MSYMTYPE,
-        .value = fn
-    };
-
-    DYNARR_SET(&symbol, index, symbols);
-}
-
-void set_closure(size_t index, MetaClosure *closure, Compiler *compiler){
-    Module *module = compiler->current_module;
-	DynArr *symbols = MODULE_SYMBOLS(module);
-	SubModuleSymbol symbol = (SubModuleSymbol){
-        .type = CLOSURE_MSYMTYPE,
-        .value = closure
-    };
-
-    DYNARR_SET(&symbol, index, symbols);
-}
-
-//>PRIVATE IMPLEMENTATION
+void add_captured_symbol(Token *identifier, Symbol *symbol, Scope *scope, Compiler *compiler);
+void set_fn(size_t index, Fn *fn, Compiler *compiler);
+void set_closure(size_t index, MetaClosure *closure, Compiler *compiler);
+//--------------------------------------------------------------------------//
+//                          PRIVATE IMPLEMENTATION                          //
+//--------------------------------------------------------------------------//
 static void error(Compiler *compiler, Token *token, char *msg, ...){
     va_list args;
     va_start(args, msg);
@@ -134,28 +117,48 @@ static void error(Compiler *compiler, Token *token, char *msg, ...){
     longjmp(compiler->err_jmp, 1);
 }
 
-void descompose_i16(int16_t value, uint8_t *bytes){
-    uint8_t mask = 0b11111111;
+static void fatal_error(Compiler *compiler, char *fmt, ...){
+    va_list args;
+    va_start(args, fmt);
 
-    for (size_t i = 0; i < 2; i++){
-        uint8_t r = value & mask;
-        value = value >> 8;
-        bytes[i] = r;
-    }
+    fprintf(stderr, "COMPILER FATAL ERROR:\n\t");
+    vfprintf(stderr, fmt, args);
+    fprintf(stderr, "\n");
+
+    va_end(args);
+    longjmp(compiler->err_jmp, 1);
 }
 
-void descompose_i32(int32_t value, uint8_t *bytes){
-    uint8_t mask = 0b11111111;
+static void *lzalloc(size_t size, void *ctx){
+    ComplexContext *complex_ctx = (ComplexContext *)ctx;
+    void *worker = complex_ctx->arg0;
+    Allocator *allocator = (Allocator *)complex_ctx->arg1;
+    void *ptr = allocator->alloc(size, allocator->ctx);
 
-    for (size_t i = 0; i < 4; i++){
-        uint8_t r = value & mask;
-        value = value >> 8;
-        bytes[i] = r;
+    if(!ptr){
+        fatal_error(worker, "Failed to allocate %ld bytes", size);
     }
+
+    return ptr;
 }
 
-inline int32_t generate_id(Compiler *compiler){
-    return ++compiler->counter_id;
+static void *lzrealloc(void *ptr, size_t old_size, size_t new_size, void *ctx){
+    ComplexContext *complex_ctx = (ComplexContext *)ctx;
+    void *worker = complex_ctx->arg0;
+    Allocator *allocator = (Allocator *)complex_ctx->arg1;
+    void *new_ptr = allocator->realloc(ptr, old_size, new_size, allocator->ctx);
+
+    if(!new_ptr){
+        fatal_error(worker, "Failed to reallocate %ld bytes", new_size);
+    }
+
+    return new_ptr;
+}
+
+static void lzdealloc(void *ptr, size_t size, void *ctx){
+    ComplexContext *complex_ctx = (ComplexContext *)ctx;
+    Allocator *allocator = (Allocator *)complex_ctx->arg1;
+    allocator->dealloc(ptr, size, allocator->ctx);
 }
 
 Scope *scope_in(ScopeType type, Compiler *compiler){
@@ -190,7 +193,7 @@ Scope *scope_in_soft(ScopeType type, Compiler *compiler){
 Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function, size_t *out_symbol_index){
     assert(compiler->fn_ptr < FUNCTIONS_LENGTH);
 
-    Fn *fn = factory_create_fn(name, compiler->current_module, compiler->rtallocator);
+    Fn *fn = factory_create_fn(name, compiler->current_module, RTALLOCATOR);
     compiler->fn_stack[compiler->fn_ptr++] = fn;
 
     DynArr *symbols = MODULE_SYMBOLS(compiler->current_module);
@@ -258,13 +261,17 @@ Scope *inside_loop(Compiler *compiler){
 	return NULL;
 }
 
-Scope *inside_function(Compiler *compiler){
+Scope *inside_fn(Compiler *compiler){
 	assert(compiler->depth > 0);
 
 	for(int i = (int)compiler->depth - 1; i >= 0; i--){
 		Scope *scope = compiler->scopes + i;
+
 		if(scope->type == FUNCTION_SCOPE){
-            if(i == 0) return NULL;
+            if(i == 0){
+                return NULL;
+            }
+
             return scope;
         }
 	}
@@ -272,13 +279,17 @@ Scope *inside_function(Compiler *compiler){
 	return NULL;
 }
 
-Scope *symbol_fn_scope(Symbol *symbol, Compiler *compiler){
+Scope *inside_fn_from_symbol(Symbol *symbol, Compiler *compiler){
     assert(compiler->depth > 0);
 
 	for(int i = (int)symbol->depth - 1; i >= 0; i--){
 		Scope *scope = compiler->scopes + i;
+
 		if(scope->type == FUNCTION_SCOPE){
-            if(i == 0) return NULL;
+            if(i == 0){
+                return NULL;
+            }
+
             return scope;
         }
 	}
@@ -335,7 +346,7 @@ Label *label(Compiler *compiler, char *fmt, ...){
     va_start(args, fmt);
 
     Scope *scope = current_scope(compiler);
-    Allocator *allocator = scope->depth == 1 ? COMPILE_ALLOCATOR : LABELS_ALLOCATOR;
+    Allocator *allocator = scope->depth == 1 ? CTALLOCATOR : LABELS_ALLOCATOR;
 
     char *name = MEMORY_ALLOC(char, LABEL_NAME_LENGTH, allocator);
     int out_count = vsnprintf(name, LABEL_NAME_LENGTH, fmt, args);
@@ -401,7 +412,7 @@ JMP *jif(Compiler *compiler, Token *ref_token, char *fmt, ...){
     va_start(args, fmt);
 
     Scope *scope = current_scope(compiler);
-    Allocator *allocator = scope->depth == 1 ? COMPILE_ALLOCATOR : LABELS_ALLOCATOR;
+    Allocator *allocator = scope->depth == 1 ? CTALLOCATOR : LABELS_ALLOCATOR;
 
     char *label = MEMORY_ALLOC(char, LABEL_NAME_LENGTH, allocator);
     int out_count = vsnprintf(label, LABEL_NAME_LENGTH, fmt, args);
@@ -436,7 +447,7 @@ JMP *jit(Compiler *compiler, Token *ref_token, char *fmt, ...){
     va_start(args, fmt);
 
     Scope *scope = current_scope(compiler);
-    Allocator *allocator = scope->depth == 1 ? COMPILE_ALLOCATOR : LABELS_ALLOCATOR;
+    Allocator *allocator = LABELS_ALLOCATOR;
 
     char *label = MEMORY_ALLOC(char, LABEL_NAME_LENGTH, allocator);
     int out_count = vsnprintf(label, LABEL_NAME_LENGTH, fmt, args);
@@ -471,7 +482,7 @@ JMP *jmp(Compiler *compiler, Token *ref_token, char *fmt, ...){
     va_start(args, fmt);
 
     Scope *scope = current_scope(compiler);
-    Allocator *allocator = scope->depth == 1 ? COMPILE_ALLOCATOR : LABELS_ALLOCATOR;
+    Allocator *allocator = scope->depth == 1 ? CTALLOCATOR : LABELS_ALLOCATOR;
 
     char *label = MEMORY_ALLOC(char, LABEL_NAME_LENGTH, allocator);
     int out_count = vsnprintf(label, LABEL_NAME_LENGTH, fmt, args);
@@ -534,7 +545,7 @@ int resolve_symbol(Token *identifier, Symbol *symbol, Compiler *compiler){
 
     if(symbol->depth > 1 && compiler->depth >= 2){
         // depth 1 means we are in the global scope or the main function
-        Scope *fn_scope = inside_function(compiler);
+        Scope *fn_scope = inside_fn(compiler);
 
         if(fn_scope && symbol->depth < fn_scope->depth){
             is_out = 1;
@@ -603,10 +614,10 @@ void from_symbols_to_global(
 
     write_chunk(GDEF_OPCODE, compiler);
     write_location(location_token, compiler);
-    write_str(name, compiler);
+    write_str(strlen(name), name, compiler);
 }
 
-Symbol *declare_native(char *identifier, Compiler *compiler){
+Symbol *declare_native_fn(char *identifier, Compiler *compiler){
     size_t identifier_len = strlen(identifier);
     Scope *scope = current_scope(compiler);
     Symbol *symbol = &scope->symbols[scope->symbols_len++];
@@ -717,13 +728,33 @@ DynArr *current_locations(Compiler *compiler){
 DynArr *current_constants(Compiler *compiler){
     assert(compiler->fn_ptr > 0 && compiler->fn_ptr < FUNCTIONS_LENGTH);
     Fn *fn = compiler->fn_stack[compiler->fn_ptr - 1];
-    return fn->integers;
+    return fn->iconsts;
 }
 
 DynArr *current_float_values(Compiler *compiler){
     assert(compiler->fn_ptr > 0 && compiler->fn_ptr < FUNCTIONS_LENGTH);
     Fn *fn = compiler->fn_stack[compiler->fn_ptr - 1];
-    return fn->floats;
+    return fn->fconsts;
+}
+
+void descompose_i16(int16_t value, uint8_t *bytes){
+    uint8_t mask = 0b11111111;
+
+    for (size_t i = 0; i < 2; i++){
+        uint8_t r = value & mask;
+        value = value >> 8;
+        bytes[i] = r;
+    }
+}
+
+void descompose_i32(int32_t value, uint8_t *bytes){
+    uint8_t mask = 0b11111111;
+
+    for (size_t i = 0; i < 4; i++){
+        uint8_t r = value & mask;
+        value = value >> 8;
+        bytes[i] = r;
+    }
 }
 
 size_t chunks_len(Compiler *compiler){
@@ -744,7 +775,7 @@ void write_location(Token *token, Compiler *compiler){
 
 	location.offset = chunks->used - 1;
 	location.line = token->line;
-    location.filepath = factory_clone_raw_str(token->pathname, compiler->rtallocator);
+    location.filepath = factory_clone_raw_str(token->pathname, RTALLOCATOR, NULL);
 
 	dynarr_insert(&location, locations);
 }
@@ -778,6 +809,66 @@ size_t write_i32(int32_t i32, Compiler *compiler){
 	return index;
 }
 
+size_t write_iconst(int64_t i64, Compiler *compiler){
+    DynArr *constants = current_constants(compiler);
+    int32_t used = (int32_t) constants->used;
+
+    assert(used < 32767 && "Too many constants");
+
+    dynarr_insert(&i64, constants);
+
+	return write_i16(used, compiler);
+}
+
+size_t write_fconst(double value, Compiler *compiler){
+	DynArr *float_values = current_float_values(compiler);
+	int32_t length = (int32_t) float_values->used;
+
+	assert(length < 32767 && "Too many constants");
+
+	dynarr_insert(&value, float_values);
+
+	return write_i16(length, compiler);
+}
+
+void write_str(size_t len, char *rstr, Compiler *compiler){
+    DynArr *static_strs = MODULE_STRINGS(CURRENT_MODULE);
+    size_t idx = DYNARR_LEN(static_strs);
+
+    if(idx >= UINT16_MAX){
+        fatal_error(compiler, "Only " PRIu16 " strings literals per module are allowed", UINT16_MAX);
+    }
+
+    RawStr str = (RawStr){
+        .len = len,
+        .buff = rstr
+    };
+
+    dynarr_insert(&str, static_strs);
+    write_i16((int16_t)idx, compiler);
+}
+
+void write_str_alloc(size_t len, char *rstr, Compiler *compiler){
+    char *new_rstr = MEMORY_ALLOC(char, len + 1, RTALLOCATOR);
+    DynArr *static_strs = MODULE_STRINGS(CURRENT_MODULE);
+    size_t idx = DYNARR_LEN(static_strs);
+
+    memcpy(new_rstr, rstr, len);
+    new_rstr[len] = 0;
+
+    if(idx >= UINT16_MAX){
+        fatal_error(compiler, "Only " PRIu16 " strings literals per module are allowed", UINT16_MAX);
+    }
+
+    RawStr str = (RawStr){
+        .len = len,
+        .buff = new_rstr
+    };
+
+    dynarr_insert(&str, static_strs);
+    write_i16((int16_t)idx, compiler);
+}
+
 void update_i16(size_t index, int16_t i16, Compiler *compiler){
     uint8_t bytes[2];
 	DynArr *chunks = current_chunks(compiler);
@@ -798,43 +889,8 @@ void update_i32(size_t index, int32_t i32, Compiler *compiler){
         DYNARR_SET(bytes + i, index + i, chunks);
 }
 
-size_t write_i64_const(int64_t i64, Compiler *compiler){
-    DynArr *constants = current_constants(compiler);
-    int32_t used = (int32_t) constants->used;
-
-    assert(used < 32767 && "Too many constants");
-
-    dynarr_insert(&i64, constants);
-
-	return write_i16(used, compiler);
-}
-
-size_t write_double_const(double value, Compiler *compiler){
-	DynArr *float_values = current_float_values(compiler);
-	int32_t length = (int32_t) float_values->used;
-
-	assert(length < 32767 && "Too many constants");
-
-	dynarr_insert(&value, float_values);
-
-	return write_i16(length, compiler);
-}
-
-void write_str(char *rstr, Compiler *compiler){
-    uint8_t *key = (uint8_t *)rstr;
-    size_t key_size = strlen(rstr);
-    uint32_t hash = lzhtable_hash(key, key_size);
-
-    Module *module = compiler->current_module;
-    SubModule *submodule = module->submodule;
-    LZHTable *strings = submodule->strings;
-
-    if(!lzhtable_hash_contains(hash, strings, NULL)){
-        char *str = factory_clone_raw_str(rstr, compiler->rtallocator);
-        lzhtable_hash_put(hash, str, strings);
-    }
-
-    write_i32((int32_t)hash, compiler);
+inline int32_t generate_id(Compiler *compiler){
+    return ++compiler->counter_id;
 }
 
 char *names_to_name(DynArr *names, Token **out_name, Compiler *compiler){
@@ -845,7 +901,7 @@ char *names_to_name(DynArr *names, Token **out_name, Compiler *compiler){
     }
 
     Token *name = NULL;
-    BStr *bstr = FACTORY_BSTR(compiler->ctallocator);
+    BStr *bstr = FACTORY_BSTR(CTALLOCATOR);
 
     for (size_t i = 0; i < DYNARR_LEN(names); i++){
         name = (Token *)DYNARR_GET(i, names);
@@ -861,7 +917,7 @@ char *names_to_name(DynArr *names, Token **out_name, Compiler *compiler){
 NativeModule *resolve_native_module(char *module_name, Compiler *compiler){
 	if(strcmp("math", module_name) == 0){
 		if(!math_module){
-			math_module_init(compiler->rtallocator);
+			math_module_init(RTALLOCATOR);
 		}
 
 		return math_module;
@@ -869,7 +925,7 @@ NativeModule *resolve_native_module(char *module_name, Compiler *compiler){
 
     if(strcmp("random", module_name) == 0){
         if(!random_module){
-            random_module_init(compiler->rtallocator);
+            random_module_init(RTALLOCATOR);
         }
 
         return random_module;
@@ -877,7 +933,7 @@ NativeModule *resolve_native_module(char *module_name, Compiler *compiler){
 
     if(strcmp("time", module_name) == 0){
         if(!time_module){
-            time_module_init(compiler->rtallocator);
+            time_module_init(RTALLOCATOR);
         }
 
         return time_module;
@@ -885,7 +941,7 @@ NativeModule *resolve_native_module(char *module_name, Compiler *compiler){
 
     if(strcmp("io", module_name) == 0){
         if(!io_module){
-            io_module_init(compiler->rtallocator);
+            io_module_init(RTALLOCATOR);
         }
 
         return io_module;
@@ -893,7 +949,7 @@ NativeModule *resolve_native_module(char *module_name, Compiler *compiler){
 
     if(strcmp("os", module_name) == 0){
         if(!os_module){
-            os_module_init(compiler->rtallocator);
+            os_module_init(RTALLOCATOR);
         }
 
         return os_module;
@@ -953,7 +1009,7 @@ char *resolve_module_location(
         *out_module_name_len = module_name_len;
         *out_module_pathname_len = module_pathname_len;
 
-        return factory_clone_raw_str(module_pathname, compiler->ctallocator);
+        return factory_clone_raw_str(module_pathname, CTALLOCATOR, NULL);
     }
 
     error(compiler, import_token, "module %s not found", module_name);
@@ -984,7 +1040,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             write_chunk(INT_OPCODE, compiler);
 			write_location(token, compiler);
 
-            write_i64_const(value, compiler);
+            write_iconst(value, compiler);
 
             break;
         }case FLOAT_EXPRTYPE:{
@@ -995,17 +1051,16 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			write_chunk(FLOAT_OPCODE, compiler);
 			write_location(float_token, compiler);
 
-			write_double_const(value, compiler);
+			write_fconst(value, compiler);
 
 			break;
 		}case STRING_EXPRTYPE:{
-			StringExpr *string_expr = (StringExpr *)expr->sub_expr;
-			uint32_t hash = string_expr->hash;
+			StrExpr *str_expr = (StrExpr *)expr->sub_expr;
+            Token *str_token = str_expr->str_token;
 
 			write_chunk(STRING_OPCODE, compiler);
-			write_location(string_expr->string_token, compiler);
-
-			write_i32((int32_t) hash, compiler);
+			write_location(str_token, compiler);
+			write_str(str_token->literal_size, str_token->literal, compiler);
 
 			break;
 		}case TEMPLATE_EXPRTYPE:{
@@ -1039,7 +1094,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
                     Token *param_identifier = (Token *)dynarr_get_ptr(i, params);
                     declare(MUT_SYMTYPE, param_identifier, compiler);
 
-                    char *name = factory_clone_raw_str(param_identifier->lexeme, compiler->rtallocator);
+                    char *name = factory_clone_raw_str(param_identifier->lexeme, RTALLOCATOR, NULL);
                     dynarr_insert_ptr(name, fn->params);
                 }
             }
@@ -1066,12 +1121,12 @@ void compile_expr(Expr *expr, Compiler *compiler){
             scope_out_fn(compiler);
 
             if(fn_scope->captured_symbols_len > 0){
-                MetaClosure *closure = MEMORY_ALLOC(MetaClosure, 1, compiler->rtallocator);
+                MetaClosure *closure = MEMORY_ALLOC(MetaClosure, 1, RTALLOCATOR);
 
-                closure->values_len = fn_scope->captured_symbols_len;
+                closure->meta_out_values_len = fn_scope->captured_symbols_len;
 
                 for (int i = 0; i < fn_scope->captured_symbols_len; i++){
-                    closure->values[i].at = fn_scope->captured_symbols[i]->local;
+                    closure->meta_out_values[i].at = fn_scope->captured_symbols[i]->local;
                 }
 
                 closure->fn = fn;
@@ -1096,7 +1151,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             if(symbol->type == NATIVE_FN_SYMTYPE){
                 write_chunk(NGET_OPCODE, compiler);
                 write_location(identifier, compiler);
-                write_str(identifier->lexeme, compiler);
+                write_str(identifier->lexeme_len, identifier->lexeme, compiler);
 
                 break;
             }
@@ -1104,7 +1159,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             if(symbol->depth == 1){
                 write_chunk(GGET_OPCODE, compiler);
                 write_location(identifier, compiler);
-                write_str(identifier->lexeme, compiler);
+                write_str_alloc(identifier->lexeme_len, identifier->lexeme, compiler);
             }else{
                 uint8_t opcode = is_out ? OGET_OPCODE : LGET_OPCODE;
 
@@ -1150,8 +1205,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             write_chunk(ACCESS_OPCODE, compiler);
 			write_location(access_expr->dot_token, compiler);
-
-            write_str(symbol_token->lexeme, compiler);
+            write_str(symbol_token->lexeme_len, symbol_token->lexeme, compiler);
 
             break;
         }case INDEX_EXPRTYPE:{
@@ -1228,6 +1282,32 @@ void compile_expr(Expr *expr, Compiler *compiler){
             }
 
 			write_location(operator, compiler);
+
+            break;
+        }case MULSTR_EXPRTYPE:{
+            MulStrExpr *mulstr_expr = (MulStrExpr *)expr->sub_expr;
+            Expr *left = mulstr_expr->left;
+            Token *operator = mulstr_expr->operator;
+            Expr *right = mulstr_expr->right;
+
+            compile_expr(left, compiler);
+            compile_expr(right, compiler);
+
+            write_chunk(MULSTR_OPCODE, compiler);
+            write_location(operator, compiler);
+
+            break;
+        } case CONCAT_EXPRTYPE:{
+            ConcatExpr *concat_expr = (ConcatExpr *)expr->sub_expr;
+            Expr *left = concat_expr->left;
+            Token *operator = concat_expr->operator;
+            Expr *right = concat_expr->right;
+
+            compile_expr(left, compiler);
+            compile_expr(right, compiler);
+
+            write_chunk(CONCAT_OPCODE, compiler);
+            write_location(operator, compiler);
 
             break;
         }case BITWISE_EXPRTYPE:{
@@ -1414,7 +1494,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
                 	write_chunk(GSET_OPCODE, compiler);
    					write_location(equals_token, compiler);
 
-                	write_str(identifier->lexeme, compiler);
+                	write_str(identifier->lexeme_len, identifier->lexeme, compiler);
             	}else{
                     uint8_t opcode = is_out ? OSET_OPCODE : LSET_OPCODE;
 
@@ -1438,7 +1518,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 				write_chunk(PUT_OPCODE, compiler);
 				write_location(equals_token, compiler);
 
-				write_str(symbol_token->lexeme, compiler);
+				write_str(symbol_token->literal_size, symbol_token->lexeme, compiler);
 
 				break;
 			}
@@ -1474,7 +1554,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
 			if(symbol->depth == 1){
                 write_chunk(GGET_OPCODE, compiler);
-			    write_str(identifier_token->lexeme, compiler);
+			    write_str(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
             }else{
                 write_chunk(LGET_OPCODE, compiler);
 			    write_chunk(symbol->local, compiler);
@@ -1510,7 +1590,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
                 write_chunk(GSET_OPCODE, compiler);
 				write_location(identifier_token, compiler);
 
-			    write_str(identifier_token->lexeme, compiler);
+			    write_str(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
             }else{
                 write_chunk(LSET_OPCODE, compiler);
 				write_location(identifier_token, compiler);
@@ -1527,32 +1607,26 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             if(len_expr){
                 compile_expr(len_expr, compiler);
+                write_chunk(ARRAY_OPCODE, compiler);
+                write_location(array_token, compiler);
             }else{
+                const size_t array_len = values ? DYNARR_LEN(values) : 0;
+
                 write_chunk(INT_OPCODE, compiler);
                 write_location(array_token, compiler);
+                write_iconst((int64_t)array_len, compiler);
 
-                if(values){
-                    write_i64_const((int64_t)DYNARR_LEN(values), compiler);
-                }else{
-                    write_i64_const((int64_t)0, compiler);
-                }
-            }
+                write_chunk(ARRAY_OPCODE, compiler);
+                write_location(array_token, compiler);
 
-            write_chunk(ARRAY_OPCODE, compiler);
-            write_location(array_token, compiler);
+                for (size_t i = 0 ; i < array_len; i++){
+                    Expr *expr = (Expr *)dynarr_get_ptr(i, values);
 
-            write_chunk(1, compiler);
-            write_i32(0, compiler);
+                    compile_expr(expr, compiler);
 
-            if(values){
-                for (int32_t i = (int32_t)DYNARR_LEN(values) - 1; i >= 0; i--){
-                    compile_expr((Expr *)dynarr_get_ptr(i, values), compiler);
-
-                    write_chunk(ARRAY_OPCODE, compiler);
+                    write_chunk(IARRAY_OPCODE, compiler);
                     write_location(array_token, compiler);
-
-                    write_chunk(2, compiler);
-                    write_i32(i, compiler);
+                    write_i16((int16_t)i, compiler);
                 }
             }
 
@@ -1562,41 +1636,45 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			Token *list_token = list_expr->list_token;
 			DynArr *exprs = list_expr->exprs;
 
-            if(exprs){
-				for(int i = DYNARR_LEN(exprs) - 1; i >= 0; i--){
-					compile_expr((Expr *)dynarr_get_ptr(i, exprs), compiler);
-				}
-			}
-
-            int16_t len = exprs ? (int16_t)DYNARR_LEN(exprs) : 0;
-
             write_chunk(LIST_OPCODE, compiler);
 			write_location(list_token, compiler);
 
-            write_i16(len, compiler);
+            if(exprs){
+                const size_t len = DYNARR_LEN(exprs);
+
+				for(size_t i = 0; i < len; i++){
+                    Expr *expr = (Expr *)dynarr_get_ptr(i, exprs);
+
+                    compile_expr(expr, compiler);
+
+                    write_chunk(ILIST_OPCODE, compiler);
+                    write_location(list_token, compiler);
+				}
+			}
 
 			break;
 		}case DICT_EXPRTYPE:{
             DictExpr *dict_expr = (DictExpr *)expr->sub_expr;
             DynArr *key_values = dict_expr->key_values;
 
+            write_chunk(DICT_OPCODE, compiler);
+			write_location(dict_expr->dict_token, compiler);
+
             if(key_values){
-                for (int i = DYNARR_LEN(key_values) - 1; i >= 0; i--){
+                size_t len = DYNARR_LEN(key_values);
+
+                for (size_t i = 0; i < len; i++){
                     DictKeyValue *key_value = (DictKeyValue *)dynarr_get_ptr(i, key_values);
                     Expr *key = key_value->key;
                     Expr *value = key_value->value;
 
                     compile_expr(key, compiler);
                     compile_expr(value, compiler);
+
+                    write_chunk(IDICT_OPCODE, compiler);
+			        write_location(dict_expr->dict_token, compiler);
                 }
             }
-
-            int16_t len = (int16_t)(key_values ? key_values->used : 0);
-
-            write_chunk(DICT_OPCODE, compiler);
-			write_location(dict_expr->dict_token, compiler);
-
-            write_i16(len, compiler);
 
             break;
         }case RECORD_EXPRTYPE:{
@@ -1612,13 +1690,12 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
 			write_chunk(RECORD_OPCODE, compiler);
 			write_location(record_expr->record_token, compiler);
-
 			write_chunk((uint8_t)(key_values ? DYNARR_LEN(key_values) : 0), compiler);
 
 			if(key_values){
 				for(size_t i = 0; i < DYNARR_LEN(key_values); i++){
 					RecordExprValue *key_value = (RecordExprValue *)dynarr_get_ptr(i, key_values);
-					write_str(key_value->key->lexeme, compiler);
+					write_str(key_value->key->literal_size, key_value->key->lexeme, compiler);
 				}
 			}
 
@@ -1767,7 +1844,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             if(symbol->depth == 1){
                 write_chunk(GDEF_OPCODE, compiler);
 				write_location(identifier_token, compiler);
-                write_str(identifier_token->lexeme, compiler);
+                write_str(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
             }
 
             break;
@@ -2054,7 +2131,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			Token *return_token = return_stmt->return_token;
             Expr *value = return_stmt->value;
 
-			Scope *scope = inside_function(compiler);
+			Scope *scope = inside_fn(compiler);
 
 			if(!scope || scope->depth == 1)
 				error(compiler, return_token, "Can't use 'return' statement outside functions.");
@@ -2075,7 +2152,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             DynArr *params = function_stmt->params;
             DynArr *stmts = function_stmt->stmts;
 
-            Scope *enclosing = inside_function(compiler);
+            Scope *enclosing = inside_fn(compiler);
 
             Fn *fn = NULL;
             size_t symbol_index = 0;
@@ -2088,29 +2165,33 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             if(params){
                 for (size_t i = 0; i < DYNARR_LEN(params); i++){
                     Token *param_token = (Token *)dynarr_get_ptr(i, params);
+                    char *param_name = factory_clone_raw_str(param_token->lexeme, RTALLOCATOR, NULL);
+
                     declare(MUT_SYMTYPE, param_token, compiler);
-
-                    char *name = factory_clone_raw_str(param_token->lexeme, compiler->rtallocator);
-                    dynarr_insert_ptr(name, fn->params);
+                    dynarr_insert_ptr(param_name, fn->params);
                 }
             }
 
-            char returned = 0;
+            if(stmts){
+                char return_empty = 1;
+                size_t stmts_len = DYNARR_LEN(stmts);
 
-            for (size_t i = 0; i < DYNARR_LEN(stmts); i++){
-                compile_stmt((Stmt *)dynarr_get_ptr(i, stmts), compiler);
+                for (size_t i = 0; i < stmts_len; i++){
+                    Stmt *stmt = (Stmt *)dynarr_get_ptr(i, stmts);
+                    compile_stmt(stmt, compiler);
 
-                if(i + 1 >= DYNARR_LEN(stmts) && stmt->type == RETURN_STMTTYPE){
-                    returned = 1;
+                    if(i == stmts_len - 1 && stmt->type == RETURN_STMTTYPE){
+                        return_empty = 0;
+                    }
                 }
-            }
 
-            if(!returned){
-                write_chunk(EMPTY_OPCODE, compiler);
-                write_location(identifier_token, compiler);
+                if(return_empty){
+                    write_chunk(EMPTY_OPCODE, compiler);
+                    write_location(identifier_token, compiler);
 
-                write_chunk(RET_OPCODE, compiler);
-                write_location(identifier_token, compiler);
+                    write_chunk(RET_OPCODE, compiler);
+                    write_location(identifier_token, compiler);
+                }
             }
 
             scope_out_fn(compiler);
@@ -2118,12 +2199,12 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             int is_normal = enclosing == NULL;
 
             if(fn_scope->captured_symbols_len > 0){
-                MetaClosure *closure = MEMORY_ALLOC(MetaClosure, 1, compiler->rtallocator);
+                MetaClosure *closure = MEMORY_ALLOC(MetaClosure, 1, RTALLOCATOR);
 
-                closure->values_len = fn_scope->captured_symbols_len;
+                closure->meta_out_values_len = fn_scope->captured_symbols_len;
 
                 for (int i = 0; i < fn_scope->captured_symbols_len; i++){
-                    closure->values[i].at = fn_scope->captured_symbols[i]->local;
+                    closure->meta_out_values[i].at = fn_scope->captured_symbols[i]->local;
                 }
 
                 closure->fn = fn;
@@ -2142,7 +2223,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             if(is_normal){
                 write_chunk(GDEF_OPCODE, compiler);
                 write_location(identifier_token, compiler);
-                write_str(identifier_token->lexeme, compiler);
+                write_str(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
             }
 
             break;
@@ -2199,7 +2280,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             if(lzhtable_contains((uint8_t *)module_pathname, module_pathname_len, modules, &module_node)){
                 Module *imported_module = (Module *)module_node->value;
-                Module *cloned_module = factory_clone_module(module_name, module_pathname, imported_module, compiler->rtallocator);
+                Module *cloned_module = factory_create_clone_module(module_name, module_pathname, imported_module, RTALLOCATOR);
 
                 size_t symbol_index = add_module_symbol(cloned_module, current_symbols);
                 Symbol *symbol = declare(MODULE_SYMTYPE, alt_name ? alt_name : name, compiler);
@@ -2211,22 +2292,21 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 break;
             }
 
-            RawStr *source = utils_read_source(module_pathname, compiler->ctallocator);
+            RawStr *source = utils_read_source(module_pathname, CTALLOCATOR);
 
-            LZHTable *keywords = compiler->keywords;
-            LZHTable *natives = compiler->natives;
+            LZOHTable *keywords = compiler->keywords;
+            LZOHTable *natives = compiler->natives_fns;
 
-            DynArr *tokens = FACTORY_DYNARR_PTR(compiler->ctallocator);
-            DynArr *stmts = FACTORY_DYNARR_PTR(compiler->ctallocator);
+            DynArr *tokens = FACTORY_DYNARR_PTR(CTALLOCATOR);
+            DynArr *stmts = FACTORY_DYNARR_PTR(CTALLOCATOR);
 
-            Module *module = factory_module(module_name, module_pathname, compiler->rtallocator);
-            SubModule *submodule = module->submodule;
+            Module *module = factory_create_module(module_name, module_pathname, RTALLOCATOR);
 
-            Lexer *lexer = lexer_create(compiler->ctallocator);
-	        Parser *parser = parser_create(compiler->ctallocator);
-            Compiler *import_compiler = compiler_create(compiler->ctallocator, compiler->rtallocator);
+            Lexer *lexer = lexer_create(CTALLOCATOR, RTALLOCATOR);
+	        Parser *parser = parser_create(CTALLOCATOR);
+            Compiler *import_compiler = compiler_create(CTALLOCATOR, RTALLOCATOR);
 
-            char *cloned_module_pathname = factory_clone_raw_str(module_pathname, compiler->ctallocator);
+            char *cloned_module_pathname = factory_clone_raw_str(module_pathname, CTALLOCATOR, NULL);
             import_compiler->paths[import_compiler->paths_len++] = utils_files_parent_pathname(cloned_module_pathname);
 
             for (int i = 0; i < compiler->paths_len; i++){
@@ -2236,7 +2316,6 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             if(lexer_scan(
                 source,
                 tokens,
-                submodule->strings,
                 keywords,
                 module_pathname,
                 lexer
@@ -2279,7 +2358,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             Scope *scope = current_scope(compiler);
 
-            if(!inside_function(compiler)){
+            if(!inside_fn(compiler)){
                 error(compiler, throw_token, "Can not use 'throw' statement in global scope.");
             }
             if(scope->type == CATCH_SCOPE){
@@ -2304,7 +2383,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			DynArr *catch_stmts = try_stmt->catch_stmts;
 
             size_t try_jmp_index = 0;
-            TryBlock *try_block = MEMORY_ALLOC(TryBlock, 1, compiler->rtallocator);
+            TryBlock *try_block = MEMORY_ALLOC(TryBlock, 1, RTALLOCATOR);
 
 			memset(try_block, 0, sizeof(TryBlock));
 
@@ -2363,7 +2442,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			if(lzhtable_contains(key, key_size, fn_tries, &node)){
 				tries = (DynArr *)node->value;
 			}else{
-				tries = (DynArr *)FACTORY_DYNARR_PTR(compiler->rtallocator);
+				tries = (DynArr *)FACTORY_DYNARR_PTR(RTALLOCATOR);
 				lzhtable_put(key, key_size, tries, fn_tries, NULL);
 			}
 
@@ -2384,7 +2463,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             write_chunk(GSET_OPCODE, compiler);
             write_location(load_token, compiler);
-            write_str(name_token->lexeme, compiler);
+            write_str(name_token->literal_size, name_token->lexeme, compiler);
 
             write_chunk(POP_OPCODE, compiler);
             write_location(load_token, compiler);
@@ -2399,7 +2478,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
                 write_chunk(GASET_OPCODE, compiler);
                 write_location(symbol_identifier, compiler);
-                write_str(symbol_identifier->lexeme, compiler);
+                write_str(symbol_identifier->literal_size, symbol_identifier->lexeme, compiler);
                 write_chunk(1, compiler);
             }
 
@@ -2412,36 +2491,91 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
 void define_natives(Compiler *compiler){
     assert(compiler->depth > 0);
-    LZHTableNode *current = compiler->natives->head;
 
-    while (current){
-        LZHTableNode *next = current->next_table_node;
+    LZOHTable *native_fns = compiler->natives_fns;
 
-        NativeFn *native = (NativeFn *)current->value;
-        declare_native(native->name, compiler);
+    for (size_t i = 0; i < native_fns->m; i++){
+        LZOHTableSlot *slot = &native_fns->slots[i];
 
-        current = next;
+        if(!slot->used){
+            continue;
+        }
+
+        NativeFn *native_fn = (NativeFn *)slot->value;
+
+        declare_native_fn(native_fn->name, compiler);
     }
 }
-//<PRIVATE IMPLEMENTATION
-//>PUBLIC IMPLEMENTATION
+
+void add_captured_symbol(Token *identifier, Symbol *symbol, Scope *scope, Compiler *compiler){
+    if(scope->captured_symbols_len >= SYMBOLS_LENGTH){
+        error(compiler, identifier, "Cannot capture more than %d symbols", SYMBOLS_LENGTH);
+    }
+
+    Scope *sfn_scope = inside_fn_from_symbol(symbol, compiler);
+    int fns_between = count_fn_scopes(sfn_scope->depth - 1, scope->depth - 1, compiler);
+
+    if(fns_between > 0){
+        error(compiler, identifier, "Cannot capture symbols from a distance greater than 1");
+    }
+
+    scope->captured_symbols[scope->captured_symbols_len++] = symbol;
+}
+
+void set_fn(size_t index, Fn *fn, Compiler *compiler){
+    Module *module = compiler->current_module;
+	DynArr *symbols = MODULE_SYMBOLS(module);
+	SubModuleSymbol symbol = (SubModuleSymbol){
+        .type = FUNCTION_MSYMTYPE,
+        .value = fn
+    };
+
+    DYNARR_SET(&symbol, index, symbols);
+}
+
+void set_closure(size_t index, MetaClosure *closure, Compiler *compiler){
+    Module *module = compiler->current_module;
+	DynArr *symbols = MODULE_SYMBOLS(module);
+	SubModuleSymbol symbol = (SubModuleSymbol){
+        .type = CLOSURE_MSYMTYPE,
+        .value = closure
+    };
+
+    DYNARR_SET(&symbol, index, symbols);
+}
+//--------------------------------------------------------------------------//
+//                          PUBLIC IMPLEMENTATION                           //
+//--------------------------------------------------------------------------//
 Compiler *compiler_create(Allocator *ctallocator, Allocator *rtallocator){
+    Allocator *labels_allocator = memory_create_arena_allocator(ctallocator, NULL);
     Compiler *compiler = MEMORY_ALLOC(Compiler, 1, ctallocator);
 
     if(!compiler){
+        memory_destroy_arena_allocator(labels_allocator);
+        MEMORY_DEALLOC(Compiler, 1, compiler, ctallocator);
         return NULL;
     }
 
+    memset(compiler, 0, sizeof(Compiler));
     compiler->ctallocator = ctallocator;
     compiler->rtallocator = rtallocator;
-    compiler->labels_allocator = memory_create_arena_allocator(ctallocator, NULL);
+    compiler->labels_allocator = labels_allocator;
 
     return compiler;
 }
 
+void compiler_destroy(Compiler *compiler){
+    if(!compiler){
+        return;
+    }
+
+    memory_destroy_arena_allocator(compiler->labels_allocator);
+    MEMORY_DEALLOC(Compiler, 1, compiler, compiler->ctallocator);
+}
+
 int compiler_compile(
-    LZHTable *keywords,
-    LZHTable *natives,
+    LZOHTable *keywords,
+    LZOHTable *native_fns,
     DynArr *stmts,
     Module *current_module,
     LZHTable *modules,
@@ -2452,10 +2586,22 @@ int compiler_compile(
     }else{
         compiler->symbols = 1;
         compiler->keywords = keywords;
-        compiler->natives = natives;
+        compiler->natives_fns = native_fns;
         compiler->current_module = current_module;
         compiler->modules = modules;
         compiler->stmts = stmts;
+
+        ComplexContext compile_ctx = (ComplexContext){
+            .arg0 = compiler,
+            .arg1 = compiler->ctallocator
+        };
+        ComplexContext runtime_ctx = (ComplexContext){
+            .arg0 = compiler,
+            .arg1 = compiler->rtallocator
+        };
+
+        MEMORY_INIT_ALLOCATOR(&compile_ctx, lzalloc, lzrealloc, lzdealloc, &compiler->fake_ctallocator);
+        MEMORY_INIT_ALLOCATOR(&runtime_ctx, lzalloc, lzrealloc, lzdealloc, &compiler->fake_rtallocator);
 
         Fn *fn = NULL;
         size_t symbol_index = 0;
@@ -2479,8 +2625,8 @@ int compiler_compile(
 }
 
 int compiler_import(
-    LZHTable *keywords,
-    LZHTable *natives,
+    LZOHTable *keywords,
+    LZOHTable *native_fns,
     DynArr *stmts,
     Module *previous_module,
     Module *current_module,
@@ -2491,11 +2637,23 @@ int compiler_import(
         return 1;
     }else{
         compiler->keywords = keywords;
-        compiler->natives = natives;
+        compiler->natives_fns = native_fns;
         compiler->stmts = stmts;
         compiler->previous_module = previous_module;
         compiler->current_module = current_module;
         compiler->modules = modules;
+
+        ComplexContext compile_ctx = (ComplexContext){
+            .arg0 = compiler,
+            .arg1 = CTALLOCATOR
+        };
+        ComplexContext runtime_ctx = (ComplexContext){
+            .arg0 = compiler,
+            .arg1 = RTALLOCATOR
+        };
+
+        MEMORY_INIT_ALLOCATOR(&compile_ctx, lzalloc, lzrealloc, lzdealloc, &compiler->fake_ctallocator);
+        MEMORY_INIT_ALLOCATOR(&runtime_ctx, lzalloc, lzrealloc, lzdealloc, &compiler->fake_rtallocator);
 
         Fn *fn = NULL;
         size_t symbol_index = 0;

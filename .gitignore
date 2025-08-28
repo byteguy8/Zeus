@@ -2,6 +2,7 @@
 !include
 !include/**
 !src
+!src/**
 !makefile
 !.gitignore
 !README.md

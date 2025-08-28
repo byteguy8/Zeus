@@ -206,7 +206,9 @@ int grow(LZHTable *table){
         table->allocator
     );
 
-    if(!new_buckets){return 1;}
+    if(!new_buckets){
+        return 1;
+    }
 
     table->m = new_len;
     table->buckets = new_buckets;
@@ -307,7 +309,7 @@ void lzhtable_destroy(void *extra, void (*destroy_value)(void *key, void *value,
 void lzhtable_print(LZHTable *table){
     for (size_t i = 0; i < LZHTABLE_LENGTH(table); i++){
         LZHTableBucket *bucket = &table->buckets[i];
-        
+
         printf("bucket %ld (%p): ", i + 1, bucket);
         print_bucket(bucket);
         printf("\n");

@@ -12,18 +12,18 @@ typedef struct meta_out_value{
 }MetaOutValue;
 
 typedef struct meta_closure{
-    uint8_t values_len;
-    MetaOutValue values[OUT_VALUES_LENGTH];
+    uint8_t meta_out_values_len;
+    MetaOutValue meta_out_values[OUT_VALUES_LENGTH];
     Fn *fn;
 }MetaClosure;
 
 typedef struct out_value{
     uint8_t linked;
-    uint8_t at;
-    Value *value;
+    int16_t at;
+    Value value;
     struct out_value *prev;
     struct out_value *next;
-    void *closure;
+    void *closure_obj;
 }OutValue;
 
 typedef struct closure{

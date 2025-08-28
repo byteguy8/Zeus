@@ -19,6 +19,8 @@ typedef enum expr_type{
     INDEX_EXPRTYPE,
     UNARY_EXPRTYPE,
 	BINARY_EXPRTYPE,
+    CONCAT_EXPRTYPE,
+    MULSTR_EXPRTYPE,
     BITWISE_EXPRTYPE,
     COMPARISON_EXPRTYPE,
     LOGICAL_EXPRTYPE,
@@ -55,9 +57,8 @@ typedef struct float_expr{
 }FloatExpr;
 
 typedef struct string_expr{
-	uint32_t hash;
-	Token *string_token;
-}StringExpr;
+	Token *str_token;
+}StrExpr;
 
 typedef struct template_expr{
     Token *template_token;
@@ -107,6 +108,18 @@ typedef struct binary_expr{
 	Token *operator;
 	Expr *right;
 }BinaryExpr;
+
+typedef struct concat_expr{
+    Expr *left;
+	Token *operator;
+	Expr *right;
+}ConcatExpr;
+
+typedef struct mul_str_expr{
+    Expr *left;
+	Token *operator;
+	Expr *right;
+}MulStrExpr;
 
 typedef struct bitwise_expr{
     Expr *left;

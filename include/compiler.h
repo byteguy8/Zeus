@@ -56,7 +56,7 @@ typedef struct label{
 typedef struct label_list{
     Label *head;
     Label *tail;
-}LabelList;;
+}LabelList;
 
 typedef struct jmp{
     size_t bef;
@@ -109,8 +109,8 @@ typedef struct compiler{
     uint8_t fn_ptr;
     Fn *fn_stack[FUNCTIONS_LENGTH];
 
-    LZHTable *keywords;
-    LZHTable *natives;
+    LZOHTable *keywords;
+    LZOHTable *natives_fns;
     DynArr *stmts;
     Module *previous_module;
     Module *current_module;
@@ -119,13 +119,16 @@ typedef struct compiler{
     Allocator *ctallocator;
     Allocator *rtallocator;
     Allocator *labels_allocator;
+    Allocator fake_rtallocator;
+    Allocator fake_ctallocator;
 }Compiler;
 
 Compiler *compiler_create(Allocator *ctallocator, Allocator *rtallocator);
+void compiler_destroy(Compiler *compiler);
 
 int compiler_compile(
-    LZHTable *keywords,
-    LZHTable *natives,
+    LZOHTable *keywords,
+    LZOHTable *native_fns,
     DynArr *stmts,
     Module *module,
     LZHTable *modules,
@@ -133,8 +136,8 @@ int compiler_compile(
 );
 
 int compiler_import(
-    LZHTable *keywords,
-    LZHTable *natives,
+    LZOHTable *keywords,
+    LZOHTable *native_fns,
     DynArr *stmts,
     Module *previous_module,
     Module *module,

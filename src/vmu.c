@@ -2,331 +2,285 @@
 #include "memory.h"
 #include "factory.h"
 #include "bstr.h"
+#include "lzbstr.h"
 #include "fn.h"
 #include <stdio.h>
 #include <stdarg.h>
 #include <inttypes.h>
 #include <assert.h>
 
-#define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
-#define CURRENT_LOCATIONS(vm)(CURRENT_FN(vm)->locations)
 #define FIND_LOCATION(index, arr)(dynarr_find(&((OPCodeLocation){.offset = index, .line = -1}), compare_locations, arr))
 #define FRAME_AT(at, vm)(&vm->frame_stack[at])
+#define ALLOCATOR (&(vm->fake_allocator))
 
-// GARBAGE COLLECTOR
-void clean_up_module(Module *module, VM *vm);
-void destroy_obj(ObjHeader *obj, VM *vm);
+#define VMU_IS_VALUE_IN(_value)((_value).type == INT_VTYPE)
+#define VMU_IS_VALUE_OBJ(_value)((_value).type == OBJ_VTYPE)
+#define VMU_VALUE_TO_OBJ(_value)((Obj *)((_value).content.obj))
+
+static inline void init_obj(ObjType type, Obj *obj, VM *vm){
+    obj->type = type;
+    obj->marked = 0;
+    obj->color = WHITE_OBJ_COLOR;
+    obj->prev = NULL;
+    obj->next = NULL;
+    obj_list_insert(obj, &vm->while_objs);
+}
+//--------------------------------------------------
+//               PRIVATE INTERFACE                //
+//--------------------------------------------------
+//----------      GARBAGE COLLECTOR       --------//`
+void prepare_module_globals(Module *module, VM *vm);
+void prepare_worklist(VM *vm);
+void mark_objs(VM *vm);
 void sweep_objs(VM *vm);
-void mark_globals(LZHTable *globals, VM *vm);
-void mark_obj(ObjHeader *obj, VM *vm);
-void mark_roots(VM *vm);
-int compare_locations(void *a, void *b);
-BStr *prepare_stacktrace(unsigned int spaces, VM *vm);
-//< PRIVATE INTERFACE
-//> PRIVATE IMPLEMENTATION
-void clean_up_record(void *key, void *value, void *extra){
-    VM *vm = (VM *)extra;
-    factory_destroy_raw_str(key, vm->fake_allocator);
-    vmu_destroy_value(value, vm);
-}
+void normalize_objs(VM *vm);
+//----------            OTHERS            --------//
+static int compare_locations(void *a, void *b);
+static BStr *prepare_stacktrace(unsigned int spaces, VM *vm);
+static int prepare_stacktrace_new(unsigned int spaces, LZBStr *str, VM *vm);
 
-void clean_up_dict(void *value, void *key, void *vm){
-    vmu_destroy_value(key, vm);
-    vmu_destroy_value(value, vm);
-}
+static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str);
+static void value_to_str(Value value, Obj *parent, LZBStr *str);
+//--------------------------------------------------
+//             PRIVATE IMPLEMENTATION             //
+//--------------------------------------------------
+void prepare_module_globals(Module *module, VM *vm){
+    LZOHTable *globals = MODULE_GLOBALS(module);
 
-void clean_up_module(Module *module, VM *vm){
-    if(module->shadow){return;}
+    for (size_t i = 0; i < globals->m; i++){
+        LZOHTableSlot *slot = &globals->slots[i];
 
-    SubModule *submodule = module->submodule;
-	LZHTable *globals = submodule->globals;
-	// Due to the same module can be imported in others modules
-	// we need to make sure we already handled its globals in order
-	// to not make a double free on them.
-	if(globals){
-		LZHTableNode *global_node = submodule->globals->head;
-        LZHTableNode *next = NULL;
-        GlobalValue *global_value = NULL;
+        if(!slot->used){
+            continue;
+        }
 
-		while(global_node){
-			next = global_node->next_table_node;
-            global_value = (GlobalValue *)(global_node->value);
+        GlobalValue *global_value = (GlobalValue *)slot->value;
+        Value *value = &global_value->value;
 
-            vmu_destroy_value(global_value->value, vm);
-            vmu_destroy_global_value(global_value, vm);
+        if(IS_VALUE_OBJ(value) && VALUE_TO_OBJ(value)->color == WHITE_OBJ_COLOR){
+            Obj *obj = VALUE_TO_OBJ(value);
+            obj->color = GRAY_OBJ_COLOR;
+            obj_list_remove(obj);
+            obj_list_insert(obj, &vm->gray_objs);
 
-            global_node = next;
-		}
-
-		submodule->globals = NULL;
-	}
-
-    DynArr *symbols = submodule->symbols;
-
-    for (size_t i = 0; i < DYNARR_LEN(symbols); i++){
-        SubModuleSymbol symbol = DYNARR_GET_AS(SubModuleSymbol, i, symbols);
-
-        if(symbol.type == MODULE_MSYMTYPE){
-            clean_up_module(symbol.value, vm);
+            if(obj->type == MODULE_OTYPE){
+                Module *module = OBJ_TO_MODULE(obj)->module;
+                prepare_module_globals(module, vm);
+            }
         }
     }
 }
 
-void destroy_obj(ObjHeader *obj, VM *vm){
-    assert(!obj->marked && "Must not destroy market objects");
+void prepare_worklist(VM *vm){
+    prepare_module_globals(vm->main_module, vm);
 
-	switch(obj->type){
-		case STR_OTYPE:{
-            vmu_destroy_str_obj(OBJ_TO_STR(obj), vm);
-			break;
-		}case ARRAY_OTYPE:{
-            vmu_destroy_array_obj(OBJ_TO_ARRAY(obj), vm);
-            break;
-        }case LIST_OTYPE:{
-            vmu_destroy_list_obj(OBJ_TO_LIST(obj), vm);
-			break;
-		}case DICT_OTYPE:{
-            vmu_destroy_dict_obj(OBJ_TO_DICT(obj), vm);
-            break;
-        }case RECORD_OTYPE:{
-            vmu_destroy_record_obj(OBJ_TO_RECORD(obj), vm);
-            break;
-		}case NATIVE_FN_OTYPE:{
-            vmu_destroy_native_fn_obj(OBJ_TO_NATIVE_FN(obj), vm);
-            break;
-        }case FN_OTYPE:{
-            vmu_destroy_fn_obj(OBJ_TO_FN(obj), vm);
-            break;
-        }case CLOSURE_OTYPE:{
-            vmu_destroy_closure_obj(OBJ_TO_CLOSURE(obj), vm);
-            break;
-        }case NATIVE_MODULE_OTYPE:{
-            vmu_destroy_native_module_obj(OBJ_TO_NATIVE_MODULE(obj), vm);
-            break;
-        }case MODULE_OTYPE:{
-            vmu_destroy_module_obj(OBJ_TO_MODULE(obj), vm);
-            break;
-        }default:{
-			assert("Illegal object type");
-		}
-	}
+    const Value *stack_top = vm->stack_top;
+
+    for (Value *value = vm->stack; value < stack_top; value++){
+        if(IS_VALUE_OBJ(value) && VALUE_TO_OBJ(value)->color == WHITE_OBJ_COLOR){
+            Obj *obj = VALUE_TO_OBJ(value);
+            obj->color = GRAY_OBJ_COLOR;
+            obj_list_remove(obj);
+            obj_list_insert(obj, &vm->gray_objs);
+
+            if(obj->type == MODULE_OTYPE){
+                Module *module = OBJ_TO_MODULE(obj)->module;
+                prepare_module_globals(module, vm);
+            }
+        }
+    }
 }
 
-void sweep_objs(VM *vm){
-    ObjHeader *current = vm->red_head;
-    ObjHeader *next = NULL;
+void mark_objs(VM *vm){
+    ObjList *gray_objs = &vm->gray_objs;
+    Obj *current = gray_objs->head;
+    Obj *next = NULL;
 
     while (current){
         next = current->next;
-        vmu_remove_obj(current, (ObjHeader **)&vm->red_head, (ObjHeader **)&vm->red_tail);
-        destroy_obj(current, vm);
-        current = next;
-    }
-}
 
-void mark_globals(LZHTable *globals, VM *vm){
-    LZHTableNode *current = globals->head;
-    LZHTableNode *next = NULL;
+        switch (current->type){
+            case STR_OTYPE:{
+                break;
+            }case ARRAY_OTYPE:{
+                ArrayObj *array_obj = OBJ_TO_ARRAY(current);
+                size_t len = array_obj->len;
+                Value *values = array_obj->values;
 
-    GlobalValue *global_value = NULL;
-    Value *value = NULL;
+                for (size_t i = 0; i < len; i++){
+                    Value value = values[i];
 
-    while (current){
-        next = current->next_table_node;
-        global_value = (GlobalValue *)current->value;
-        value = global_value->value;
-
-        if(IS_VALUE_OBJ(value) && !IS_VALUE_MARKED(VALUE_TO_OBJ(value))){
-            mark_obj(VALUE_TO_OBJ(value), vm);
-        }
-
-        current = next;
-    }
-}
-
-void mark_obj(ObjHeader *obj, VM *vm){
-    if(obj->marked){
-        return;
-    }
-
-    obj->marked = 1;
-
-	switch(obj->type){
-		case ARRAY_OTYPE:{
-            ArrayObj *array = OBJ_TO_ARRAY(obj);
-            Value *values = array->values;
-            Value *value = NULL;
-
-            for (aidx_t i = 0; i < array->len; i++){
-                value = &values[i];
-
-                if(IS_VALUE_OBJ(value) && !IS_VALUE_MARKED(VALUE_TO_OBJ(value))){
-                    mark_obj(VALUE_TO_OBJ(value), vm);
-                }
-            }
-
-            break;
-        }case LIST_OTYPE:{
-            ListObj *list_obj = OBJ_TO_LIST(obj);
-			DynArr *list = list_obj->list;
-			Value *value = NULL;
-
-			for(lidx_t i = 0; i < (lidx_t)DYNARR_LEN(list); i++){
-				value = (Value *)DYNARR_GET(i, list);
-
-                if(IS_VALUE_OBJ(value) && !IS_VALUE_MARKED(VALUE_TO_OBJ(value))){
-                    mark_obj(VALUE_TO_OBJ(value), vm);
-                }
-			}
-
-			break;
-		}case DICT_OTYPE:{
-            DictObj *dict_obj = OBJ_TO_DICT(obj);
-            LZHTable *dict = dict_obj->dict;
-            LZHTableNode *current = dict->head;
-			LZHTableNode *next = NULL;
-			Value *key_value = NULL;
-            Value *value = NULL;
-
-			while (current){
-				next = current->next_table_node;
-                key_value = (Value *)current->key;
-				value = (Value *)current->value;
-
-                if(IS_VALUE_OBJ(key_value) && !IS_VALUE_MARKED(VALUE_TO_OBJ(key_value))){
-                    mark_obj(VALUE_TO_OBJ(key_value), vm);
-                }
-                if(IS_VALUE_OBJ(value) && !IS_VALUE_MARKED(VALUE_TO_OBJ(value))){
-                    mark_obj(VALUE_TO_OBJ(value), vm);
+                    if(VMU_IS_VALUE_OBJ(value) && VMU_VALUE_TO_OBJ(value)->color == WHITE_OBJ_COLOR){
+                        Obj *obj = VMU_VALUE_TO_OBJ(value);
+                        obj->color = GRAY_OBJ_COLOR;
+                        obj_list_remove(obj);
+                        obj_list_insert(obj, &vm->gray_objs);
+                    }
                 }
 
-				current = next;
-			}
+                break;
+            }case LIST_OTYPE:{
+                ListObj *list_obj = OBJ_TO_LIST(current);
+                DynArr *items = list_obj->items;
+                size_t len = DYNARR_LEN(items);
 
-            break;
-        }case RECORD_OTYPE:{
-			RecordObj *record_obj = OBJ_TO_RECORD(obj);
-			LZHTable *key_values = record_obj->attributes;
+                for (size_t i = 0; i < len; i++){
+                    Value value = DYNARR_GET_AS(Value, i, items);
 
-			if(!key_values){
+                    if(VMU_IS_VALUE_OBJ(value) && VMU_VALUE_TO_OBJ(value)->color == WHITE_OBJ_COLOR){
+                        Obj *obj = VMU_VALUE_TO_OBJ(value);
+                        obj->color = GRAY_OBJ_COLOR;
+                        obj_list_remove(obj);
+                        obj_list_insert(obj, &vm->gray_objs);
+                    }
+                }
+
+                break;
+            }case DICT_OTYPE:{
+                break;
+            }case RECORD_OTYPE:{
+                RecordObj *record_obj = OBJ_TO_RECORD(current);
+                LZOHTable *attrs = record_obj->attrs;
+                LZOHTableSlot *slots = attrs->slots;
+                size_t len = attrs->n;
+
+                for (size_t i = 0; i < len; i++){
+                    LZOHTableSlot slot = slots[i];
+
+                    if(!slot.used){
+                        continue;
+                    }
+
+                    Value value = *(Value *)slot.value;
+
+                    if(VMU_IS_VALUE_OBJ(value) && VMU_VALUE_TO_OBJ(value)->color == WHITE_OBJ_COLOR){
+                        Obj *obj = VMU_VALUE_TO_OBJ(value);
+                        obj->color = GRAY_OBJ_COLOR;
+                        obj_list_remove(obj);
+                        obj_list_insert(obj, &vm->gray_objs);
+                    }
+                }
+
+                break;
+            }case NATIVE_FN_OTYPE:{
+                NativeFnObj *native_fn_obj = OBJ_TO_NATIVE_FN(current);
+                Value target = native_fn_obj->target;
+
+                if(VMU_IS_VALUE_OBJ(target) && VMU_VALUE_TO_OBJ(target)->color == WHITE_OBJ_COLOR){
+                    Obj *obj = VMU_VALUE_TO_OBJ(target);
+                    obj->color = GRAY_OBJ_COLOR;
+                    obj_list_remove(obj);
+                    obj_list_insert(obj, &vm->gray_objs);
+                }
+
+                break;
+            }case FN_OTYPE:{
+                break;
+            }case CLOSURE_OTYPE:{
+                break;
+            }case NATIVE_MODULE_OTYPE:{
+                break;
+            }case MODULE_OTYPE:{
+                break;
+            }default:{
                 break;
             }
+        }
 
-			LZHTableNode *current = key_values->head;
-			LZHTableNode *next = NULL;
-			Value *value = NULL;
-
-			while (current){
-				next = current->next_table_node;
-				value = (Value *)current->value;
-
-				if(IS_VALUE_OBJ(value) && !IS_VALUE_MARKED(VALUE_TO_OBJ(value))){
-                    mark_obj(VALUE_TO_OBJ(value), vm);
-                }
-
-				current = next;
-			}
-
-			break;
-		}case NATIVE_FN_OTYPE:{
-            NativeFnObj *native_fn_obj = OBJ_TO_NATIVE_FN(obj);
-            NativeFn *native_fn = native_fn_obj->native_fn;
-
-            if(IS_VALUE_OBJ(&native_fn->target) && !IS_VALUE_MARKED(VALUE_TO_OBJ(&native_fn->target))){
-                mark_obj(VALUE_TO_OBJ(&native_fn->target), vm);
-            }
-
-            break;
-        }case FN_OTYPE:{
-            // No work to be done
-            break;
-        }case CLOSURE_OTYPE:{
-            ClosureObj *closure_obj = OBJ_TO_CLOSURE(obj);
-            Closure *closure = closure_obj->closure;
-            MetaClosure *meta = closure->meta;
-
-            for (int i = 0; i < meta->values_len; i++){
-                Value *value = closure->out_values[i].value;
-
-                if(IS_VALUE_OBJ(value) && !IS_VALUE_MARKED(VALUE_TO_OBJ(value))){
-                    mark_obj(VALUE_TO_OBJ(value), vm);
-                }
-            }
-
-            break;
-        }case NATIVE_MODULE_OTYPE:{
-            // No work to be done
-            break;
-        }case MODULE_OTYPE:{
-            ModuleObj *module_obj = OBJ_TO_MODULE(obj);
-            Module *module = module_obj->module;
-            mark_globals(MODULE_GLOBALS(module), vm);
-            break;
-        }default:{
-			assert("Illegal object type");
-		}
-	}
-
-    vmu_remove_obj(obj, (ObjHeader **)&vm->red_head, (ObjHeader **)&vm->red_tail);
-    vmu_insert_obj(obj, (ObjHeader **)&vm->blue_head, (ObjHeader **)&vm->blue_tail);
+        current->color = BLACK_OBJ_COLOR;
+        obj_list_remove(current);
+        obj_list_insert(current, &vm->black_objs);
+        current = next;
+    }
 }
 
-void mark_roots(VM *vm){
-    //> MARKING STACK
-    for(Value *current = vm->stack; current < vm->stack_top; current++){
-        if(IS_VALUE_OBJ(current) && !IS_VALUE_MARKED(VALUE_TO_OBJ(current))){
-            mark_obj(VALUE_TO_OBJ(current), vm);
-        }
-    }
-    //< MARKING STACK
-    //> MARKING OUTS
-    Frame *frame = NULL;
+void sweep_objs(VM *vm){
+    ObjList *white_objs = &vm->while_objs;
+    Obj *current = white_objs->head;
+    Obj *next = NULL;
 
-    for (int frame_ptr = 0; frame_ptr < vm->frame_ptr; frame_ptr++){
-        frame = &vm->frame_stack[frame_ptr];
+    while (current){
+        next = current->next;
 
-        for(OutValue *out_value = frame->outs_head; out_value; out_value = out_value->next){
-            if(!IS_VALUE_MARKED(out_value->closure)){
-                mark_obj(out_value->closure, vm);
+        switch(current->type){
+            case STR_OTYPE:{
+                vmu_destroy_str(OBJ_TO_STR(current), vm);
+                break;
+            }case ARRAY_OTYPE:{
+                vmu_destroy_array(OBJ_TO_ARRAY(current), vm);
+                break;
+            }case LIST_OTYPE:{
+                vmu_destroy_list(OBJ_TO_LIST(current), vm);
+                break;
+            }case DICT_OTYPE:{
+                vmu_destroy_dict(OBJ_TO_DICT(current), vm);
+                break;
+            }case RECORD_OTYPE:{
+                vmu_destroy_record(OBJ_TO_RECORD(current), vm);
+                break;
+            }case NATIVE_FN_OTYPE:{
+                vmu_destroy_native_fn(OBJ_TO_NATIVE_FN(current), vm);
+                break;
+            }case FN_OTYPE:{
+                vmu_destroy_fn(OBJ_TO_FN(current), vm);
+                break;
+            }case CLOSURE_OTYPE:{
+                vmu_destroy_closure(OBJ_TO_CLOSURE(current), vm);
+                break;
+            }case NATIVE_MODULE_OTYPE:{
+                vmu_destroy_native_module_obj(OBJ_TO_NATIVE_MODULE(current), vm);
+                break;
+            }case MODULE_OTYPE:{
+                vmu_destroy_module_obj(OBJ_TO_MODULE(current), vm);
+                break;
+            }default:{
+                assert(0 && "Illegal object type");
             }
         }
-    }
-    //< MARKING OUTS
-    //> MARKING GLOBALS
-    mark_globals(MODULE_GLOBALS(vm->modules[0]), vm);
-    //< MARKING GLOBALS
-}
 
-void vmu_gc(VM *vm){
-    mark_roots(vm);
-    sweep_objs(vm);
-
-    for(ObjHeader *current = vm->blue_head; current; current = current->next){
-        current->marked = 0;
+        current = next;
     }
 
-    vm->red_head = vm->blue_head;
-    vm->red_tail = vm->blue_tail;
-
-    vm->blue_head = NULL;
-    vm->blue_tail = NULL;
+    white_objs->len = 0;
+    white_objs->head = NULL;
+    white_objs->tail = NULL;
 }
 
-int compare_locations(void *a, void *b){
-	OPCodeLocation *al = (OPCodeLocation *)a;
-	OPCodeLocation *bl = (OPCodeLocation *)b;
+void normalize_objs(VM *vm){
+    ObjList *white_objs = &vm->while_objs;
+    ObjList *black_objs = &vm->black_objs;
+    Obj *current = black_objs->head;
+    Obj *next = NULL;
 
-	if(al->offset < bl->offset){return -1;}
-	else if(al->offset > bl->offset){return 1;}
-	else{return 0;}
+    while (current){
+        next = current->next;
+
+        current->color = WHITE_OBJ_COLOR;
+        obj_list_remove(current);
+        obj_list_insert(current, white_objs);
+
+        current = next;
+    }
 }
 
-BStr *prepare_stacktrace(unsigned int spaces, VM *vm){
-	BStr *st = FACTORY_BSTR(vm->fake_allocator);
+static int compare_locations(void *a, void *b){
+	OPCodeLocation *location_a = (OPCodeLocation *)a;
+	OPCodeLocation *location_b = (OPCodeLocation *)b;
 
-	for(int i = vm->frame_ptr - 1; i >= 0; i--){
-		Frame *frame = FRAME_AT(i, vm);
-		Fn *fn = frame->fn;
+	if(location_a->offset < location_b->offset){
+        return -1;
+    }else if(location_a->offset > location_b->offset){
+        return 1;
+    }else{
+        return 0;
+    }
+}
+
+static BStr *prepare_stacktrace(unsigned int spaces, VM *vm){
+	BStr *st = FACTORY_BSTR(ALLOCATOR);
+
+    for(Frame *frame = vm->frame_stack; frame < vm->frame_ptr; frame++){
+        Fn *fn = frame->fn;
 		DynArr *locations = fn->locations;
 		int index = FIND_LOCATION(frame->last_offset, locations);
 		OPCodeLocation *location = index == -1 ? NULL : (OPCodeLocation *)DYNARR_GET(index, locations);
@@ -344,12 +298,195 @@ BStr *prepare_stacktrace(unsigned int spaces, VM *vm){
 		}else{
 			bstr_append_args(st, "inside function '%s'\n", fn->name);
         }
-	}
+    }
 
 	return st;
 }
-//< Private Implementation
-void vmu_error(VM *vm, char *msg, ...){
+
+static int prepare_stacktrace_new(unsigned int spaces, LZBStr *str, VM *vm){
+    for(Frame *frame = vm->frame_stack; frame < vm->frame_ptr; frame++){
+        Fn *fn = frame->fn;
+		DynArr *locations = fn->locations;
+		int idx = FIND_LOCATION(frame->last_offset, locations);
+		OPCodeLocation *location = idx == -1 ? NULL : (OPCodeLocation *)DYNARR_GET(idx, locations);
+
+		if(location){
+            if(lzbstr_append_args(
+                str,
+                "%*sin file: '%s' at %s:%d\n",
+                spaces,
+                "",
+                location->filepath,
+				frame->fn->name,
+				location->line
+            )){
+                return 1;
+            }
+		}else{
+            if(lzbstr_append_args(str, "inside function '%s'\n", fn->name)){
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
+    if(obj == parent){
+        lzbstr_append("self", str);
+        return;
+    }
+
+    switch (obj->type){
+        case STR_OTYPE:{
+            StrObj *str_obj = OBJ_TO_STR(obj);
+            lzbstr_append(str_obj->buff, str);
+            break;
+        }case ARRAY_OTYPE:{
+            ArrayObj *array_obj = OBJ_TO_ARRAY(obj);
+            size_t len = array_obj->len;
+            Value *values = array_obj->values;
+
+            lzbstr_append("[", str);
+
+            for (size_t i = 0; i < len; i++){
+                Value *value = &values[i];
+
+                value_to_str(*value, obj, str);
+
+                if(i + 1 < len){
+                    lzbstr_append(", ", str);
+                }
+            }
+
+            lzbstr_append("]", str);
+
+            break;
+        }case LIST_OTYPE:{
+            ListObj *list_obj = OBJ_TO_LIST(obj);
+            DynArr *items = list_obj->items;
+            size_t len = DYNARR_LEN(items);
+
+            lzbstr_append("(", str);
+
+            for (size_t i = 0; i < len; i++){
+                Value *value = (Value *)DYNARR_GET(i, items);
+
+                value_to_str(*value, obj, str);
+
+                if(i + 1 < len){
+                    lzbstr_append(", ", str);
+                }
+            }
+
+            lzbstr_append(")", str);
+
+            break;
+        }case DICT_OTYPE:{
+            DictObj *dict_obj = OBJ_TO_DICT(obj);
+            LZOHTable *key_values = dict_obj->key_values;
+            size_t m = key_values->m;
+            size_t n = key_values->n;
+            size_t count = 0;
+
+            lzbstr_append("{", str);
+
+            for (size_t i = 0; i < m; i++){
+                LZOHTableSlot slot = key_values->slots[i];
+
+                if(!slot.used){
+                    continue;
+                }
+
+                Value *key = (Value *)slot.key;
+                Value *value = (Value *)slot.value;
+
+                value_to_str(*key, obj, str);
+                lzbstr_append(": ", str);
+                value_to_str(*value, obj, str);
+
+                if(count + 1 < n){
+                    lzbstr_append(", ", str);
+                }
+
+                count++;
+            }
+
+            lzbstr_append("}", str);
+
+            break;
+        }case RECORD_OTYPE:{
+            RecordObj *record_obj = OBJ_TO_RECORD(obj);
+            LZOHTable *attrs = record_obj->attrs;
+
+            lzbstr_append_args(str, "<record %zu %p>", attrs->n, record_obj);
+
+            break;
+        }case NATIVE_FN_OTYPE:{
+            NativeFnObj *native_fn_obj = OBJ_TO_NATIVE_FN(obj);
+            NativeFn *native_fn = native_fn_obj->native_fn;
+
+            lzbstr_append_args(str, "<native function " PRIu8 " %p>", native_fn->arity, native_fn_obj);
+
+            break;
+        }case FN_OTYPE:{
+            FnObj *fn_obj = OBJ_TO_FN(obj);
+            Fn *fn = fn_obj->fn;
+
+            lzbstr_append_args(str, "<function %zu %p>", DYNARR_LEN(fn->params), fn_obj);
+
+            break;
+        }case CLOSURE_OTYPE:{
+            ClosureObj *closure_obj = OBJ_TO_CLOSURE(obj);
+            lzbstr_append_args(str, "<closure %p>", closure_obj);
+            break;
+        }case NATIVE_MODULE_OTYPE:{
+            NativeModuleObj *native_module_obj = OBJ_TO_NATIVE_MODULE(obj);
+            lzbstr_append_args(str, "<native module %p>", native_module_obj);
+            break;
+        }case MODULE_OTYPE:{
+            ModuleObj *module_obj = OBJ_TO_MODULE(obj);
+            lzbstr_append_args(str, "<module %p>", module_obj);
+            break;
+        }default:{
+            assert(0 && "Illegal object type");
+            break;
+        }
+    }
+}
+
+static void value_to_str(Value value, Obj *parent, LZBStr *str){
+    switch (value.type){
+        case EMPTY_VTYPE:{
+            lzbstr_append("empty", str);
+            break;
+        }case BOOL_VTYPE:{
+            uint8_t bool_value = value.content.bool;
+            lzbstr_append_args(str, "%s", bool_value ? "true" : "false");
+            break;
+        }case INT_VTYPE:{
+            int64_t int_value = value.content.ivalue;
+            lzbstr_append_args(str, "%" PRId64, int_value);
+            break;
+        }case FLOAT_VTYPE:{
+            double float_value = value.content.fvalue;
+            lzbstr_append_args(str, "%f", float_value);
+            break;
+        }case OBJ_VTYPE:{
+            Obj *obj = VMU_VALUE_TO_OBJ(value);
+            obj_to_str(obj, parent, str);
+            break;
+        }default:{
+            assert(0 && "Illegal value type");
+            break;
+        }
+    }
+}
+//--------------------------------------------------
+//             PUBLIC IMPLEMENTATION              //
+//--------------------------------------------------
+int vmu_error(VM *vm, char *msg, ...){
 	BStr *st = prepare_stacktrace(4, vm);
 
     va_list args;
@@ -365,18 +502,195 @@ void vmu_error(VM *vm, char *msg, ...){
 
 	va_end(args);
 	bstr_destroy(st);
-    vmu_clean_up(vm);
 
     vm->exit_code = ERR_VMRESULT;
 
     longjmp(vm->err_jmp, 1);
+
+    return 0;
 }
 
-uint32_t vmu_hash_obj(ObjHeader *obj){
+static inline void print_x_times(FILE *stream, char *format, unsigned int times){
+    for (unsigned int i = 0; i < times; i++){
+        fprintf(stream, "%s", format);
+    }
+}
+
+int vmu_internal_error(VM *vm, char *msg, ...){
+    BStr *st = prepare_stacktrace(4, vm);
+    LZBStr *err_str = FACTORY_LZBSTR(vm->allocator);
+
+    if(lzbstr_append("FATAL RUNTIME ERROR.\nA UNEXPECTED OPERATION IN THE VIRTUAL MACHINE WITH AN ILLEGAL STATE HAVE BEEN DETECTED.\nPLEASE, READ WITH CARE THE CAUSE:\n\n\n", err_str)){
+        return 0;
+    }
+
+    va_list args;
+
+	va_start(args, msg);
+    int len = vsnprintf(NULL, 0, msg, args);
+    char *allocated_err_msg = MEMORY_ALLOC(char, len + 1, vm->allocator);
+
+    if(allocated_err_msg){
+        va_start(args, msg);
+        vsnprintf(allocated_err_msg, len + 1, msg, args);
+
+        lzbstr_append(allocated_err_msg, err_str);
+        lzbstr_append_args(err_str, "\n%s", st->buff);
+
+        int line_len = 0;
+        int max_line_len = 0;
+
+        for (int i = 0; i < err_str->offset; i++){
+            char c = err_str->buff[i];
+
+            if(c == '\n'){
+                if(line_len > max_line_len){
+                    max_line_len = line_len;
+                }
+
+                line_len = 0;
+
+                continue;
+            }
+
+            line_len++;
+        }
+
+        if(max_line_len == 0){
+            max_line_len = line_len;
+        }
+
+        fprintf(stderr, "//**");
+        print_x_times(stderr, "*", max_line_len);
+        fprintf(stderr, "**//\n");
+
+        fprintf(stderr, "//  ");
+        print_x_times(stderr, " ", max_line_len);
+        fprintf(stderr, "  //\n");
+
+        fprintf(stderr, "//  ");
+
+        int chars_count = 0;
+
+        for (int i = 0; i < err_str->offset; i++){
+            char c = err_str->buff[i];
+
+            if(c == '\n'){
+                int diff = max_line_len - chars_count;
+
+                print_x_times(stderr, " ", diff);
+                fprintf(stderr, "  //\n");
+                fprintf(stderr, "//  ");
+
+                chars_count = 0;
+
+                continue;
+            }
+
+            fprintf(stderr, "%c", c);
+            chars_count++;
+        }
+
+        int diff = max_line_len - chars_count;
+
+        print_x_times(stderr, " ", diff);
+        fprintf(stderr, "  //\n");
+
+        fprintf(stderr, "//  ");
+        print_x_times(stderr, " ", max_line_len);
+        fprintf(stderr, "  //\n");
+
+        fprintf(stderr, "//**");
+        print_x_times(stderr, "*", max_line_len);
+        fprintf(stderr, "**//\n");
+
+        MEMORY_DEALLOC(char, len + 1, allocated_err_msg, vm->allocator);
+    }else{
+        fprintf(stderr, "FATAL RUNTIME ERROR:\n\t");
+        vfprintf(stderr, msg, args);
+
+        if(st && st->buff){
+            fprintf(stderr, "%s", (char *)st->buff);
+        }
+
+        fprintf(stderr, "\n--------------------");
+        fprintf(stderr, "\n");
+    }
+
+	va_end(args);
+	bstr_destroy(st);
+
+    vm->exit_code = ERR_VMRESULT;
+
+    longjmp(vm->err_jmp, 1);
+
+    return 0;
+}
+
+void vmu_clean_up(VM *vm){
+    ObjList *white_objs = &vm->while_objs;
+    Obj *current = white_objs->head;
+    Obj *next = NULL;
+
+    while (current){
+        next = current->next;
+        obj_list_remove(current);
+
+        switch(current->type){
+            case STR_OTYPE:{
+                vmu_destroy_str(OBJ_TO_STR(current), vm);
+                break;
+            }case ARRAY_OTYPE:{
+                vmu_destroy_array(OBJ_TO_ARRAY(current), vm);
+                break;
+            }case LIST_OTYPE:{
+                vmu_destroy_list(OBJ_TO_LIST(current), vm);
+                break;
+            }case DICT_OTYPE:{
+                vmu_destroy_dict(OBJ_TO_DICT(current), vm);
+                break;
+            }case RECORD_OTYPE:{
+                vmu_destroy_record(OBJ_TO_RECORD(current), vm);
+                break;
+            }case NATIVE_FN_OTYPE:{
+                vmu_destroy_native_fn(OBJ_TO_NATIVE_FN(current), vm);
+                break;
+            }case FN_OTYPE:{
+                vmu_destroy_fn(OBJ_TO_FN(current), vm);
+                break;
+            }case CLOSURE_OTYPE:{
+                vmu_destroy_closure(OBJ_TO_CLOSURE(current), vm);
+                break;
+            }case NATIVE_MODULE_OTYPE:{
+                vmu_destroy_native_module_obj(OBJ_TO_NATIVE_MODULE(current), vm);
+                break;
+            }case MODULE_OTYPE:{
+                vmu_destroy_module_obj(OBJ_TO_MODULE(current), vm);
+                break;
+            }default:{
+                assert(0 && "Illegal object type");
+            }
+        }
+
+        current = next;
+    }
+}
+
+void vmu_gc(VM *vm){
+    prepare_worklist(vm);
+    mark_objs(vm);
+    sweep_objs(vm);
+    normalize_objs(vm);
+}
+
+inline Frame *vmu_current_frame(VM *vm){
+    return vm->frame_ptr - 1;
+}
+
+uint32_t vmu_hash_obj(Obj *obj){
     switch (obj->type){
         case STR_OTYPE :{
-            StrObj *str = OBJ_TO_STR(obj);
-            return str->hash;
+            return 0;
         }default:{
             uintptr_t iaddr = (uintptr_t)obj;
             uint32_t hash = lzhtable_hash((uint8_t *)&iaddr, sizeof(uintptr_t));
@@ -397,151 +711,24 @@ uint32_t vmu_hash_value(Value *value){
             uint32_t hash = lzhtable_hash((uint8_t *)&VALUE_TO_FLOAT(value), sizeof(double));
             return hash;
         }default:{
-            ObjHeader *obj = VALUE_TO_OBJ(value);
+            Obj *obj = VALUE_TO_OBJ(value);
             return vmu_hash_obj(obj);
         }
     }
 }
 
-int vmu_obj_to_str(ObjHeader *object, BStr *bstr){
-    switch (object->type){
-        case STR_OTYPE:{
-            StrObj *str = OBJ_TO_STR(object);
-            return bstr_append(str->buff, bstr);
-        }case ARRAY_OTYPE:{
-            size_t buff_len = 1024;
-            char buff[buff_len];
+char *vmu_value_to_str(Value value, VM *vm, size_t *out_len){
+    char *str_value = NULL;
+    LZBStr *str = FACTORY_LZBSTR(ALLOCATOR);
 
-            ArrayObj *array = OBJ_TO_ARRAY(object);
+    value_to_str(value, NULL, str);
+    str_value = lzbstr_rclone_buff((LZBStrAllocator *)ALLOCATOR, str, out_len);
+    lzbstr_destroy(str);
 
-            snprintf(buff, buff_len, "<array %d at %p>", array->len, array);
-
-            return bstr_append(buff, bstr);
-		}case LIST_OTYPE:{
-            size_t buff_len = 1024;
-            char buff[buff_len];
-
-            ListObj *list_obj = OBJ_TO_LIST(object);
-            DynArr *list = list_obj->list;
-
-            snprintf(buff, buff_len, "<list %zu at %p>", list->used, list);
-
-            return bstr_append(buff, bstr);
-		}case DICT_OTYPE:{
-            size_t buff_len = 1024;
-            char buff[buff_len];
-
-            DictObj *dict_obj = OBJ_TO_DICT(object);
-            LZHTable *dict = dict_obj->dict;
-
-            snprintf(buff, buff_len, "<dict %zu at %p>", dict->n, dict);
-
-            return bstr_append(buff, bstr);
-        }case RECORD_OTYPE:{
-            size_t buff_len = 1024;
-            char buff[buff_len];
-
-            RecordObj *record_obj = OBJ_TO_RECORD(object);
-
-            snprintf(buff, buff_len, "<record %zu at %p>", record_obj->attributes ? record_obj->attributes->n : 0, record_obj);
-
-            return bstr_append(buff, bstr);
-		}case NATIVE_FN_OTYPE:{
-            size_t buff_len = 1024;
-            char buff[buff_len];
-
-            NativeFnObj *native_fn_obj = OBJ_TO_NATIVE_FN(object);
-            NativeFn *native_fn = native_fn_obj->native_fn;
-
-            snprintf(buff, buff_len, "<native function '%s' - %d at %p>", native_fn->name, native_fn->arity, native_fn);
-
-            return bstr_append(buff, bstr);
-        }case FN_OTYPE:{
-            size_t buff_len = 1024;
-            char buff[buff_len];
-
-            FnObj *fn_obj = OBJ_TO_FN(object);
-            Fn *fn = fn_obj->fn;
-
-            snprintf(buff, buff_len, "<function '%s' - %d at %p>", fn->name, (uint8_t)(fn->params ? DYNARR_LEN(fn->params) : 0), fn);
-
-            return bstr_append(buff, bstr);
-        }case CLOSURE_OTYPE:{
-            size_t buff_len = 1024;
-            char buff[buff_len];
-
-            ClosureObj *closure_obj = OBJ_TO_CLOSURE(object);
-            Closure *closure = closure_obj->closure;
-            Fn *fn = closure->meta->fn;
-
-            snprintf(buff, buff_len, "<closure '%s' - %d at %p>", fn->name, (uint8_t)(fn->params ? DYNARR_LEN(fn->params) : 0), fn);
-
-            return bstr_append(buff, bstr);
-        }case NATIVE_MODULE_OTYPE:{
-			size_t buff_len = 1024;
-            char buff[buff_len];
-
-            NativeModuleObj *native_module_obj = OBJ_TO_NATIVE_MODULE(object);
-            NativeModule *module = native_module_obj->native_module;
-
-            snprintf(buff, buff_len, "<native module '%s' at %p>", module->name, module);
-
-            return bstr_append(buff, bstr);
-		}case MODULE_OTYPE:{
-            size_t buff_len = 1024;
-            char buff[buff_len];
-
-            ModuleObj *module_obj = OBJ_TO_MODULE(object);
-            Module *module = module_obj->module;
-
-            snprintf(buff, buff_len, "<module '%s' from '%s' at %p>", module->name, module->pathname, module);
-
-            return bstr_append(buff, bstr);
-        }default:{
-            assert("Illegal object type");
-        }
-    }
-
-    return 1;
+    return str_value;
 }
 
-int vmu_value_to_str(Value *value, BStr *bstr){
-    switch (value->type){
-        case EMPTY_VTYPE:{
-            return bstr_append("empty", bstr);
-        }case BOOL_VTYPE:{
-            uint8_t bool = VALUE_TO_BOOL(value);
-
-            if(bool){
-                return bstr_append("true", bstr);
-            }else{
-                return bstr_append("false", bstr);
-            }
-        }case INT_VTYPE:{
-            size_t buff_len = 1024;
-            char buff[buff_len];
-
-            snprintf(buff, buff_len, "%zu", VALUE_TO_INT(value));
-
-            return bstr_append(buff, bstr);
-        }case FLOAT_VTYPE:{
-            size_t buff_len = 1024;
-            char buff[buff_len];
-
-            snprintf(buff, buff_len, "%.8f", VALUE_TO_FLOAT(value));
-
-            return bstr_append(buff, bstr);
-		}case OBJ_VTYPE:{
-            return vmu_obj_to_str(VALUE_TO_OBJ(value), bstr);
-        }default:{
-            assert("Illegal value type");
-        }
-    }
-
-    return 1;
-}
-
-void vmu_print_obj(FILE *stream, ObjHeader *object){
+void vmu_print_obj(FILE *stream, Obj *object){
     switch (object->type){
         case STR_OTYPE:{
             StrObj *str = OBJ_TO_STR(object);
@@ -549,16 +736,16 @@ void vmu_print_obj(FILE *stream, ObjHeader *object){
             break;
         }case ARRAY_OTYPE:{
 			ArrayObj *array = OBJ_TO_ARRAY(object);
-            fprintf(stream, "<array %d at %p>", array->len, array);
+            fprintf(stream, "<array %zu at %p>", array->len, array);
 			break;
 		}case LIST_OTYPE:{
 			ListObj *list_obj = OBJ_TO_LIST(object);
-            DynArr *list = list_obj->list;
+            DynArr *list = list_obj->items;
             fprintf(stream, "<list %zu at %p>", list->used, list);
 			break;
 		}case DICT_OTYPE:{
             DictObj *dict_obj = OBJ_TO_DICT(object);
-            LZHTable *dict = dict_obj->dict;
+            LZOHTable *dict = dict_obj->key_values;
             fprintf(stream, "<dict %zu at %p>", dict->n, dict);
             break;
         }case RECORD_OTYPE:{
@@ -572,7 +759,7 @@ void vmu_print_obj(FILE *stream, ObjHeader *object){
                     fprintf(stream, "<file %p>", record_obj);
                     break;
                 }default:{
-                    fprintf(stream, "<record %zu at %p>", record_obj->attributes ? record_obj->attributes->n : 0, record_obj);
+                    fprintf(stream, "<record %zu at %p>", record_obj->attrs ? record_obj->attrs->n : 0, record_obj);
                     break;
                 }
             }
@@ -634,233 +821,629 @@ void vmu_print_value(FILE *stream, Value *value){
     }
 }
 
-void vmu_clean_up(VM *vm){
-	ObjHeader *obj = vm->red_head;
-
-	while(obj){
-		ObjHeader *next = obj->next;
-		destroy_obj(obj, vm);
-		obj = next;
-	}
-
-    clean_up_module(vm->modules[0], vm);
-}
-
-uint32_t vmu_raw_str_to_table(char **raw_str_ptr, VM *vm, char **out_raw_str){
-    char *raw_str = *raw_str_ptr;
-    uint8_t *key = (uint8_t *)raw_str;
-    size_t key_size = strlen(raw_str);
-    uint32_t hash = lzhtable_hash(key, key_size);
-    LZHTable *strings = MODULE_STRINGS(CURRENT_FN(vm)->module);
-    LZHTableNode *raw_str_node = NULL;
-
-    if(lzhtable_hash_contains(hash, strings, &raw_str_node)){
-        char *saved_raw_str = (char *)raw_str_node->value;
-
-        if(raw_str != saved_raw_str){
-            factory_destroy_raw_str(raw_str, vm->fake_allocator);
-            *raw_str_ptr = NULL;
-        }
-
-        if(out_raw_str){
-            *out_raw_str = saved_raw_str;
-        }
-    }else{
-        lzhtable_hash_put(hash, raw_str, MODULE_STRINGS(CURRENT_MODULE(vm)));
-
-        if(out_raw_str){
-            *out_raw_str = raw_str;
-        }
-    }
-
-    *raw_str_ptr = NULL;
-
-    return hash;
-}
-
-Value *vmu_clone_value(Value *value, VM *vm){
-    Value *cloned_value = MEMORY_ALLOC(Value, 1, vm->fake_allocator);
-    if(!cloned_value){return NULL;}
-    *cloned_value = *value;
+inline Value *vmu_clone_value(Value value, VM *vm){
+    Value *cloned_value = MEMORY_ALLOC(Value, 1, ALLOCATOR);
+    *cloned_value = value;
     return cloned_value;
 }
 
-void vmu_destroy_value(Value *value, VM *vm){
+inline void vmu_destroy_value(Value *value, VM *vm){
     if(!value){
         return;
     }
 
-    MEMORY_DEALLOC(Value, 1, value, vm->fake_allocator);
+    MEMORY_DEALLOC(Value, 1, value, ALLOCATOR);
 }
 
-GlobalValue *vmu_global_value(VM *vm){
-    GlobalValue *global_value = MEMORY_ALLOC(GlobalValue, 1, vm->fake_allocator);
+int vmu_create_str(char runtime, size_t raw_str_len, char *raw_str, VM *vm, StrObj **out_str_obj){
+    LZOHTable *runtime_strs = vm->runtime_strs;
+    StrObj *str_obj = NULL;
 
-    if(!global_value){return NULL;}
-
-    global_value->access = PRIVATE_GVATYPE;
-    global_value->value = NULL;
-
-    return global_value;
-}
-
-void vmu_destroy_global_value(GlobalValue *global_value, VM *vm){
-    if(!global_value){return;}
-    MEMORY_DEALLOC(GlobalValue, 1, global_value, vm->fake_allocator);
-}
-
-ObjHeader *vmu_raw_str_obj(char runtime, uint32_t hash, size_t len, char *raw_str, VM *vm){
-    StrObj *str_obj = MEMORY_ALLOC(StrObj, 1, vm->fake_allocator);
-
-    str_obj->header.type = STR_OTYPE;
-    str_obj->hash = hash;
-    str_obj->len = len;
-    str_obj->runtime = runtime;
-    str_obj->buff = raw_str;
-
-    return &str_obj->header;
-}
-
-ObjHeader *vmu_create_str_obj(char **raw_str_ptr, VM *vm){
-    char *out_raw_str = NULL;
-    uint32_t hash = vmu_raw_str_to_table(raw_str_ptr, vm, &out_raw_str);
-    StrObj *str_obj = MEMORY_ALLOC(StrObj, 1, vm->fake_allocator);
-
-    str_obj->header.type = STR_OTYPE;
-    str_obj->runtime = 1;
-    str_obj->hash = hash;
-    str_obj->len = strlen(out_raw_str);
-    str_obj->buff = out_raw_str;
-
-    return &str_obj->header;
-}
-
-ObjHeader *vmu_create_str_cpy_obj(char *raw_str, VM *vm){
-    uint8_t *key = (uint8_t *)raw_str;
-    size_t key_size = strlen(raw_str);
-    uint32_t hash = lzhtable_hash(key, key_size);
-
-    LZHTable *strings = MODULE_STRINGS(CURRENT_FN(vm)->module);
-    LZHTableNode *string_node = NULL;
-
-    char runtime = 0;
-    char *out_str = NULL;
-
-    if(lzhtable_hash_contains(hash, strings, &string_node)){
-        out_str = (char *)string_node->value;
-    }else{
-        runtime = 1;
-        out_str = factory_clone_raw_str(raw_str, vm->fake_allocator);
+    if(lzohtable_lookup(raw_str, raw_str_len, runtime_strs, (void **)&str_obj)){
+        *out_str_obj = str_obj;
+        return 1;
     }
 
-    return vmu_raw_str_obj(runtime, hash, key_size, out_str, vm);
-}
+    str_obj = MEMORY_ALLOC(StrObj, 1, ALLOCATOR);
+    Obj *obj = (Obj *)str_obj;
 
-ObjHeader *vmu_create_unchecked_str_obj(char *raw_str, VM *vm){
-    uint8_t *key = (uint8_t *)raw_str;
-    size_t key_size = strlen(raw_str);
-    uint32_t hash = lzhtable_hash(key, key_size);
-    StrObj *str_obj = MEMORY_ALLOC(StrObj, 1, vm->fake_allocator);
-
-    str_obj->header.type = STR_OTYPE;
-    str_obj->runtime = 1;
-    str_obj->hash = hash;
-    str_obj->len = strlen(raw_str);
+    init_obj(STR_OTYPE, obj, vm);
+    str_obj->runtime = runtime;
+    str_obj->len = raw_str_len;
     str_obj->buff = raw_str;
 
-    return &str_obj->header;
+    lzohtable_put_ck(raw_str, raw_str_len, str_obj, runtime_strs, NULL);
+    *out_str_obj = str_obj;
+
+    return 0;
 }
 
-void vmu_destroy_str_obj(StrObj *str_obj, VM *vm){
+void vmu_destroy_str(StrObj *str_obj, VM *vm){
     if(!str_obj){
         return;
     }
 
-    MEMORY_DEALLOC(StrObj, 1, str_obj, vm->fake_allocator);
+    char *key = str_obj->buff;
+    size_t key_len = str_obj->len;
+    LZOHTable *runtime_strs = vm->runtime_strs;
+
+    LZOHTABLE_REMOVE(key, key_len, runtime_strs);
+
+    if(str_obj->runtime){
+        MEMORY_DEALLOC(char, key_len + 1, key, ALLOCATOR);
+    }
+
+    MEMORY_DEALLOC(StrObj, 1, str_obj, ALLOCATOR);
 }
 
-ObjHeader *vmu_create_array_obj(aidx_t len, VM *vm){
-    Value *values = MEMORY_ALLOC(Value, (size_t)len, vm->fake_allocator);
-    ArrayObj *array_obj = MEMORY_ALLOC(ArrayObj, 1, vm->fake_allocator);
+int vmu_str_is_int(StrObj *str_obj){
+    size_t len = str_obj->len;
+    char *buff = str_obj->buff;
 
-    array_obj->header.type = ARRAY_OTYPE;
+    if(len == 0){
+        return 0;
+    }
+
+    if(buff[0] == '-' && len == 1){
+        return 0;
+    }
+
+    for (size_t i = buff[0] == '-' ? 1 : 0; i < len; i++){
+        char c = buff[i];
+
+        if(c < '0' || c > '9'){
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+int vmu_str_is_float(StrObj *str_obj){
+    size_t len = str_obj->len;
+    char *buff = str_obj->buff;
+
+    if(len == 0){
+        return 0;
+    }
+
+    char ndot = 1;
+    char is_negative = buff[0] == '-';
+    size_t dot_from = is_negative ? 2 : 1;
+
+    if(is_negative && len == 1){
+        return 0;
+    }
+
+    for (size_t i = is_negative ? 1 : 0; i < len; i++){
+        char c = buff[i];
+
+        if(c == '.' && i >= dot_from && ndot){
+            ndot = 0;
+            continue;
+        }
+
+        if(c < '0' || c > '9'){
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+inline int64_t vmu_str_len(StrObj *str_obj){
+    return (int64_t)(str_obj->len);
+}
+
+StrObj *vmu_str_char(int64_t idx, StrObj *str_obj, VM *vm){
+    size_t len = str_obj->len;
+    char *buff = str_obj->buff;
+
+    if((uint64_t)idx >= len){
+        vmu_error(vm, "Index (%" PRId64 ") out of bounds (%zu)", idx, len);
+    }
+
+    StrObj *char_str_obj = NULL;
+    char *new_buff = MEMORY_ALLOC(char, 2, ALLOCATOR);
+
+    new_buff[0] = buff[idx];
+    new_buff[1] = 0;
+
+    if(lzohtable_lookup(new_buff, 1, vm->runtime_strs, (void **)(&char_str_obj))){
+        MEMORY_DEALLOC(char, 2, new_buff, ALLOCATOR);
+        return char_str_obj;
+    }
+
+    vmu_create_str(1, 1, new_buff, vm, &char_str_obj);
+
+    return char_str_obj;
+}
+
+int64_t vmu_str_code(int64_t idx, StrObj *str_obj, VM *vm){
+    if(idx < 0){
+        vmu_error(vm, "Failed to get string's character code: 'at' index (%" PRId64 ") less than 0", idx);
+    }
+
+    size_t at = (size_t)idx;
+    size_t len = str_obj->len;
+    char *buff = str_obj->buff;
+
+    if(at >= len){
+        vmu_error(vm, "Failed to get string's character code: 'at' index (%zu) out of bounds", at);
+    }
+
+    return (int64_t)buff[at];
+}
+
+StrObj *vmu_str_concat(StrObj *a_str_obj, StrObj *b_str_obj, VM *vm){
+    size_t a_len = a_str_obj->len;
+    size_t b_len = b_str_obj->len;
+    size_t new_len = a_len + b_len;
+    char *new_buff = MEMORY_ALLOC(char, new_len + 1, ALLOCATOR);
+    StrObj *new_str_obj = NULL;
+
+    memcpy(new_buff, a_str_obj->buff, a_len);
+    memcpy(new_buff + a_len, b_str_obj->buff, b_len);
+    new_buff[new_len] = 0;
+
+    if(vmu_create_str(1, new_len, new_buff, vm, &new_str_obj)){
+        MEMORY_DEALLOC(char, new_len + 1, new_buff, ALLOCATOR);
+        return new_str_obj;
+    }
+
+    return new_str_obj;
+}
+
+StrObj *vmu_str_mul(int64_t by, StrObj *str_obj, VM *vm){
+    size_t old_len = str_obj->len;
+
+    char junk = (old_len * by + 1 > SIZE_MAX) && vmu_error(vm, "Failed to multiply string: resulting length exceed max capacity");
+
+    size_t new_len = old_len * by;
+    char *new_buff = MEMORY_ALLOC(char, new_len + 1, ALLOCATOR);
+    StrObj *new_str_obj = NULL;
+
+    for (size_t i = 0; i < new_len; i += old_len){
+        memcpy(new_buff + i, str_obj->buff, old_len);
+    }
+
+    new_buff[new_len] = 0;
+
+    if(vmu_create_str(1, new_len, new_buff, vm, &new_str_obj)){
+        MEMORY_DEALLOC(char, new_len + 1, new_buff, ALLOCATOR);
+    }
+
+    return new_str_obj + junk;
+}
+
+StrObj *vmu_str_insert_at(int64_t idx, StrObj *a_str_obj, StrObj *b_str_obj, VM *vm){
+    if(idx < 0){
+        vmu_error(vm, "Failed to insert string: 'at' index %" PRId64 " is negative", idx);
+    }
+
+    size_t at = (size_t)idx;
+    size_t a_len = a_str_obj->len;
+    size_t b_len = b_str_obj->len;
+    char *a_buff = a_str_obj->buff;
+    char *b_buff = b_str_obj->buff;
+
+    if(at > a_len){
+        vmu_error(vm, "Failed to insert string: 'at' index (%zu) pass string length (%zu)", at, a_len);
+    }
+
+    size_t c_len = a_len + b_len;
+    char *c_buff = MEMORY_ALLOC(char, c_len + 1, ALLOCATOR);
+    StrObj *c_str_obj = NULL;
+
+    if(at < a_len){
+        memcpy(c_buff, a_buff, at);
+        memcpy(c_buff + at, b_buff, b_len);
+        memcpy(c_buff + at + b_len, a_buff + at, a_len - at);
+    }else{
+        memcpy(c_buff, a_buff, a_len);
+        memcpy(c_buff + a_len, b_buff, b_len);
+    }
+
+    c_buff[c_len] = 0;
+
+    if(lzohtable_lookup(c_buff, c_len, vm->runtime_strs, (void **)(&c_str_obj))){
+        MEMORY_DEALLOC(char, c_len + 1, c_buff, ALLOCATOR);
+        return c_str_obj;
+    }
+
+    vmu_create_str(1, c_len, c_buff, vm, &c_str_obj);
+
+    return c_str_obj;
+}
+
+StrObj *vmu_str_remove(int64_t from, int64_t to, StrObj *str_obj, VM *vm){
+    if(from < 0){
+        vmu_error(vm, "Failed to remove string: 'from' index %" PRId64 " is negative", from);
+    }
+
+    if(from >= to){
+        vmu_error(vm, "Failed to remove string: 'from' index %" PRId64 " is equals or bigger than 'to' index %" PRId64, from, to);
+    }
+
+    size_t start = (size_t)from;
+    size_t end = (size_t)to;
+    size_t old_len = str_obj->len;
+    char *old_buff = str_obj->buff;
+
+    if(end > old_len){
+        vmu_error(vm, "Failed to remove string: 'to' index (%zu) pass string length (%zu)", end, old_len);
+    }
+
+    size_t new_len = old_len - (end - start);
+    char *new_buff = MEMORY_ALLOC(char, new_len + 1, ALLOCATOR);
+    size_t left_len = start;
+    size_t right_len = old_len - end;
+    StrObj *new_str_obj = NULL;
+
+    memcpy(new_buff, old_buff, left_len);
+    memcpy(new_buff + left_len, old_buff + end, right_len);
+    new_buff[new_len] = 0;
+
+    if(lzohtable_lookup(new_buff, new_len, vm->runtime_strs, (void **)(&str_obj))){
+        MEMORY_DEALLOC(char, new_len + 1, new_buff, ALLOCATOR);
+        return str_obj;
+    }
+
+    vmu_create_str(1, new_len, new_buff, vm, &new_str_obj);
+
+    return new_str_obj;
+}
+
+StrObj *vmu_str_sub_str(int64_t from, int64_t to, StrObj *str_obj, VM *vm){
+    if(from < 0){
+        vmu_error(vm, "Failed to sub-string string: 'from' index %" PRId64 " is negative", from);
+    }
+
+    if(from >= to){
+        vmu_error(vm, "Failed to sub-string string: 'from' index %" PRId64 " is equals or bigger than 'to' index %" PRId64, from, to);
+    }
+
+    size_t start = (size_t)from;
+    size_t end = (size_t)to;
+    size_t old_len = str_obj->len;
+    char *old_buff = str_obj->buff;
+
+    if(end > old_len){
+        vmu_error(vm, "Failed to sub-string string: 'to' index (%zu) pass string length (%zu)", end, old_len);
+    }
+
+    size_t new_len = end - start;
+    char *new_buff = MEMORY_ALLOC(char, new_len + 1, ALLOCATOR);
+    StrObj *new_str_obj = NULL;
+
+    memcpy(new_buff, old_buff + start, new_len);
+    new_buff[new_len] = 0;
+
+    if(lzohtable_lookup(new_buff, new_len, vm->runtime_strs, (void **)(&str_obj))){
+        MEMORY_DEALLOC(char, new_len + 1, new_buff, ALLOCATOR);
+        return str_obj;
+    }
+
+    vmu_create_str(1, new_len, new_buff, vm, &new_str_obj);
+
+    return new_str_obj;
+}
+
+ArrayObj *vmu_create_array(int64_t len, VM *vm){
+    Value *values = MEMORY_ALLOC(Value, (size_t)len, ALLOCATOR);
+    ArrayObj *array_obj = MEMORY_ALLOC(ArrayObj, 1, ALLOCATOR);
+    Obj *obj = (Obj *)array_obj;
+
+    memset(values, 0, VALUE_SIZE * (size_t)len);
+    init_obj(ARRAY_OTYPE, obj, vm);
     array_obj->len = len;
     array_obj->values = values;
 
-    return &array_obj->header;
+    return array_obj;
 }
 
-void vmu_destroy_array_obj(ArrayObj *array_obj, VM *vm){
+void vmu_destroy_array(ArrayObj *array_obj, VM *vm){
     if(!array_obj){
         return;
     }
 
-    MEMORY_DEALLOC(Value, (size_t)array_obj->values, array_obj->values, vm->fake_allocator);
-    MEMORY_DEALLOC(ArrayObj, 1, array_obj, vm->fake_allocator);
+    MEMORY_DEALLOC(Value, array_obj->len, array_obj->values, ALLOCATOR);
+    MEMORY_DEALLOC(ArrayObj, 1, array_obj, ALLOCATOR);
 }
 
-ObjHeader *vmu_create_list_obj(VM *vm){
-    DynArr *values = FACTORY_DYNARR_TYPE(Value, vm->fake_allocator);
-    ListObj *list_obj = MEMORY_ALLOC(ListObj, 1, vm->fake_allocator);
-
-    list_obj->header.type = LIST_OTYPE;
-    list_obj->list = values;
-
-    return &list_obj->header;
+inline int64_t vmu_array_len(ArrayObj *array_obj){
+    return (int64_t)array_obj->len;
 }
 
-void vmu_destroy_list_obj(ListObj *list_obj, VM *vm){
+Value vmu_array_get_at(int64_t idx, ArrayObj *array_obj, VM *vm){
+    size_t len = array_obj->len;
+    Value *values = array_obj->values;
+
+    if((uint64_t)idx >= len){
+        vmu_error(vm, "Index (%" PRId64 ") out of bounds (%zu)", idx, len);
+    }
+
+    return values[idx];
+}
+
+void vmu_array_set_at(int64_t idx, Value value, ArrayObj *array_obj, VM *vm){
+    if(idx < 0){
+        vmu_error(vm, "Failed to update array slot: index (%" PRId64 ") is negative");
+    }
+
+    size_t at = (size_t)idx;
+    size_t len = array_obj->len;
+    Value *values = array_obj->values;
+
+    if(at >= len){
+        vmu_error(vm, "Failed to update array slot: index (%zu) out of bounds", idx);
+    }
+
+    values[(size_t)idx] = value;
+}
+
+inline Value vmu_array_first(ArrayObj *array_obj, VM *vm){
+    size_t len = array_obj->len;
+    Value *values = array_obj->values;
+    return len == 0 ? EMPTY_VALUE : values[0];
+}
+
+Value vmu_array_last(ArrayObj *array_obj, VM *vm){
+    size_t len = array_obj->len;
+    Value *values = array_obj->values;
+    return len == 0 ? EMPTY_VALUE : values[len - 1];
+}
+
+ArrayObj *vmu_array_grow(int64_t by, ArrayObj *array_obj, VM *vm){
+    if(by <= 1){
+        vmu_error(vm, "Expect 'by' value greater than 1");
+    }
+
+    size_t len = array_obj->len;
+    Value *values = array_obj->values;
+
+    size_t new_len = len * by;
+    Value *new_values = MEMORY_ALLOC(Value, new_len, ALLOCATOR);
+    ArrayObj *new_array_obj = MEMORY_ALLOC(ArrayObj, 1, ALLOCATOR);
+    Obj *obj = (Obj *)new_array_obj;
+
+    memcpy(new_values, values, VALUE_SIZE * len);
+    memset(new_values + len, 0, VALUE_SIZE * len);
+    init_obj(ARRAY_OTYPE, obj, vm);
+    new_array_obj->len = new_len;
+    new_array_obj->values = new_values;
+
+    return new_array_obj;
+}
+
+ArrayObj *vmu_array_join(ArrayObj *a_array_obj, ArrayObj *b_array_obj, VM *vm){
+    size_t a_len = a_array_obj->len;
+    Value *a_values = a_array_obj->values;
+
+    size_t b_len = b_array_obj->len;
+    Value *b_values = b_array_obj->values;
+
+    size_t new_len = a_len + b_len;
+    Value *new_values = MEMORY_ALLOC(Value, new_len, ALLOCATOR);
+    ArrayObj *new_array_obj = MEMORY_ALLOC(ArrayObj, 1, ALLOCATOR);
+    Obj *obj = (Obj *)new_array_obj;
+
+    memmove(new_values, a_values, VALUE_SIZE * a_len);
+    memmove(new_values + a_len, b_values, VALUE_SIZE * b_len);
+    init_obj(ARRAY_OTYPE, obj, vm);
+    new_array_obj->len = new_len;
+    new_array_obj->values = new_values;
+
+    return new_array_obj;
+}
+
+ListObj *vmu_create_list(VM *vm){
+    DynArr *values = FACTORY_DYNARR_TYPE(Value, ALLOCATOR);
+    ListObj *list_obj = MEMORY_ALLOC(ListObj, 1, ALLOCATOR);
+    Obj *obj = (Obj *)list_obj;
+
+    init_obj(LIST_OTYPE, obj, vm);
+    list_obj->items = values;
+
+    return list_obj;
+}
+
+void vmu_destroy_list(ListObj *list_obj, VM *vm){
     if(!list_obj){
         return;
     }
 
-    dynarr_destroy(list_obj->list);
-    MEMORY_DEALLOC(ListObj, 1, list_obj, vm->fake_allocator);
+    dynarr_destroy(list_obj->items);
+    MEMORY_DEALLOC(ListObj, 1, list_obj, ALLOCATOR);
 }
 
-ObjHeader *vmu_create_dict_obj(VM *vm){
-    LZHTable *dict = FACTORY_LZHTABLE(vm->fake_allocator);
-    DictObj *dict_obj = MEMORY_ALLOC(DictObj, 1, vm->fake_allocator);
-
-    dict_obj->header.type = DICT_OTYPE;
-    dict_obj->dict = dict;
-
-    return &dict_obj->header;
+inline int64_t vmu_list_len(ListObj *list_obj){
+    return (int64_t)DYNARR_LEN(list_obj->items);
 }
 
-void vmu_destroy_dict_obj(DictObj *dict_obj, VM *vm){
+inline int64_t vmu_list_clear(ListObj *list_obj){
+    DynArr *items = list_obj->items;
+    int64_t len = (int64_t)DYNARR_LEN(items);
+
+    dynarr_remove_all(items);
+
+    return len;
+}
+
+Value vmu_list_get_at(int64_t idx, ListObj *list_obj, VM *vm){
+    if(idx < 0){
+        vmu_error(vm, "Failed to get item from list: 'at' index is negative");
+    }
+
+    size_t at = (size_t)idx;
+    DynArr *items = list_obj->items;
+    size_t len = DYNARR_LEN(items);
+
+    if(at >= len){
+        vmu_error(vm, "Failed to get item from list: 'at' index (%zu) out of bounds", at);
+    }
+
+    return DYNARR_GET_AS(Value, (size_t)idx, items);
+}
+
+inline void vmu_list_insert(Value value, ListObj *list_obj, VM *vm){
+    DynArr *items = list_obj->items;
+    dynarr_insert(&value, items);
+}
+
+inline Value vmu_list_set_at(int64_t idx, Value value, ListObj *list_obj, VM *vm){
+    if(idx < 0){
+        vmu_error(vm, "Failed to set item to list: 'at' index is negative");
+    }
+
+    size_t at = (size_t)idx;
+    DynArr *items = list_obj->items;
+    size_t len = DYNARR_LEN(items);
+
+    if(at >= len){
+        vmu_error(vm, "Failed to set item to list: 'at' index (%zu) out of bounds", at);
+    }
+
+    Value out_value = DYNARR_GET_AS(Value, at, items);
+
+    DYNARR_SET(&value, idx, items);
+
+    return out_value;
+}
+
+inline Value vmu_list_remove(int64_t idx, ListObj *list_obj, VM *vm){
+    if(idx < 0){
+        vmu_error(vm, "Failed to remove item from list: 'at' index is negative");
+    }
+
+    size_t at = (size_t)idx;
+    DynArr *items = list_obj->items;
+    size_t len = DYNARR_LEN(items);
+
+    if(at >= len){
+        vmu_error(vm, "Failed to remove item from list: 'at' index out of bounds");
+    }
+
+    Value value = DYNARR_GET_AS(Value, at, items);
+
+    dynarr_remove_index(at, items);
+
+    return value;
+}
+
+inline DictObj *vmu_create_dict(VM *vm){
+    LZOHTable *key_values = FACTORY_LZOHTABLE(ALLOCATOR);
+    DictObj *dict_obj = MEMORY_ALLOC(DictObj, 1, ALLOCATOR);
+    Obj *obj = (Obj *)dict_obj;
+
+    init_obj(DICT_OTYPE, obj, vm);
+    dict_obj->key_values = key_values;
+
+    return dict_obj;
+}
+
+inline void vmu_destroy_dict(DictObj *dict_obj, VM *vm){
     if(!dict_obj){
         return;
     }
 
-    lzhtable_destroy(vm, clean_up_dict, dict_obj->dict);
-    MEMORY_DEALLOC(Value, 1, dict_obj, vm->fake_allocator);
+    LZOHTABLE_DESTROY(dict_obj->key_values);
+    MEMORY_DEALLOC(Value, 1, dict_obj, ALLOCATOR);
 }
 
-ObjHeader *vmu_create_record_obj(uint8_t length, VM *vm){
-    LZHTable *attributes = length == 0 ? NULL : FACTORY_LZHTABLE_LEN(length, vm->fake_allocator);
-    RecordObj *record_obj = MEMORY_ALLOC(RecordObj, 1, vm->fake_allocator);
+inline void vmu_dict_put(Value key, Value value, DictObj *dict_obj, VM *vm){
+    if(IS_VALUE_EMPTY(&value)){
+        vmu_error(vm, "Failed to put value into dict: key cannot be 'empty'");
+    }
 
-    record_obj->header.type = RECORD_OTYPE;
+    LZOHTable *keys_values = dict_obj->key_values;
+
+    lzohtable_put_ckv(&key, VALUE_SIZE, &value, VALUE_SIZE, keys_values, NULL);
+}
+
+inline void vmu_dict_raw_put_str_value(char *str, Value value, DictObj *dict_obj, VM *vm){
+    size_t str_len = strlen(str);
+    LZOHTable *keys_values = dict_obj->key_values;
+    lzohtable_put_ckv(str, str_len, &value, VALUE_SIZE, keys_values, NULL);
+}
+
+inline Value vmu_dict_get(Value key, DictObj *dict_obj, VM *vm){
+    LZOHTable *keys_values = dict_obj->key_values;
+    Value *raw_value = NULL;
+
+    if(lzohtable_lookup(&key, VALUE_SIZE, keys_values, (void **)(&raw_value))){
+        return *raw_value;
+    }
+
+    return (Value){0};
+}
+
+RecordObj *vmu_create_record(uint16_t length, VM *vm){
+    LZOHTable *attrs = length == 0 ? NULL : FACTORY_LZOHTABLE(ALLOCATOR);
+    RecordObj *record_obj = MEMORY_ALLOC(RecordObj, 1, ALLOCATOR);
+    Obj *obj = (Obj*)record_obj;
+
+    init_obj(RECORD_OTYPE, obj, vm);
     record_obj->type = NONE_RTYPE;
-    record_obj->attributes = attributes;
+    record_obj->content = NULL;
+    record_obj->attrs = attrs;
 
-	return &record_obj->header;
+	return record_obj;
+}
+
+void vmu_destroy_record(RecordObj *record_obj, VM *vm){
+    if(!record_obj){
+        return;
+    }
+
+    LZOHTABLE_DESTROY(record_obj->attrs);
+    MEMORY_DEALLOC(RecordObj, 1, record_obj, ALLOCATOR);
+}
+
+void vmu_record_set_attr(size_t attr_len, char *attr, Value value, RecordObj *record_obj, VM *vm){
+    Value *attr_value = NULL;
+    LZOHTable *attrs = record_obj->attrs;
+
+    char junk = record_obj->type != NONE_RTYPE && vmu_error(vm, "Trying to set attribute to not record");
+    junk = !attrs && vmu_error(vm, "Trying to set attribute to empty record");
+
+    if(lzohtable_lookup(attr, attr_len, attrs, (void **)&attr_value)){
+        *attr_value = value;
+        return;
+    }
+
+    lzohtable_put_ckv(attr, attr_len, &value, VALUE_SIZE, attrs + junk, NULL);
+}
+
+NativeFnObj *vmu_create_native_fn(Value target, NativeFn *native_fn, VM *vm){
+    NativeFnObj *native_fn_obj = MEMORY_ALLOC(NativeFnObj, 1, ALLOCATOR);
+    Obj *obj = (Obj *)native_fn_obj;
+
+    init_obj(NATIVE_FN_OTYPE, obj, vm);
+    native_fn_obj->target = target;
+    native_fn_obj->native_fn = native_fn;
+
+    return native_fn_obj;
+}
+
+void vmu_destroy_native_fn(NativeFnObj *native_fn_obj, VM *vm){
+    //NativeFn *native_fn = native_fn_obj->native_fn;
+    MEMORY_DEALLOC(NativeFnObj, 1, native_fn_obj, ALLOCATOR);
 }
 
 RecordRandom *vmu_create_record_random(VM *vm){
-    RecordRandom *random = MEMORY_ALLOC(RecordRandom, 1, vm->fake_allocator);
+    RecordRandom *random = MEMORY_ALLOC(RecordRandom, 1, ALLOCATOR);
     return random;
 }
 
 RecordFile *vmu_create_record_file(char *raw_mode, char mode, char *pathname, VM *vm){
-    char *cloned_pathname = factory_clone_raw_str(pathname, vm->fake_allocator);
+    char *cloned_pathname = factory_clone_raw_str(pathname, ALLOCATOR, NULL);
     FILE *handler = fopen(pathname, raw_mode);
-    RecordFile *record_file = MEMORY_ALLOC(RecordFile, 1, vm->fake_allocator);
+    RecordFile *record_file = MEMORY_ALLOC(RecordFile, 1, ALLOCATOR);
 
     if(!handler){
-        factory_destroy_raw_str(cloned_pathname, vm->fake_allocator);
-        MEMORY_DEALLOC(RecordFile, 1, record_file, vm->fake_allocator);
+        factory_destroy_raw_str(cloned_pathname, ALLOCATOR);
+        MEMORY_DEALLOC(RecordFile, 1, record_file, ALLOCATOR);
         return NULL;
     }
 
@@ -871,8 +1454,8 @@ RecordFile *vmu_create_record_file(char *raw_mode, char mode, char *pathname, VM
     return record_file;
 }
 
-ObjHeader *vmu_create_record_random_obj(VM *vm){
-    RecordObj *record = OBJ_TO_RECORD(vmu_create_record_obj(0, vm));
+Obj *vmu_create_record_random_obj(VM *vm){
+    RecordObj *record = OBJ_TO_RECORD(vmu_create_record(0, vm));
     RecordRandom *record_random = vmu_create_record_random(vm);
 
     record->type = RANDOM_RTYPE;
@@ -881,8 +1464,8 @@ ObjHeader *vmu_create_record_random_obj(VM *vm){
     return &record->header;
 }
 
-ObjHeader *vmu_create_record_file_obj(char *raw_mode, char mode, char *pathname, VM *vm){
-    RecordObj *record = OBJ_TO_RECORD(vmu_create_record_obj(0, vm));
+Obj *vmu_create_record_file_obj(char *raw_mode, char mode, char *pathname, VM *vm){
+    RecordObj *record = OBJ_TO_RECORD(vmu_create_record(0, vm));
     RecordFile *record_file = vmu_create_record_file(raw_mode, mode, pathname, vm);
 
     if(!record_file){
@@ -895,28 +1478,12 @@ ObjHeader *vmu_create_record_file_obj(char *raw_mode, char mode, char *pathname,
     return &record->header;
 }
 
-void vmu_destroy_record_obj(RecordObj *record_obj, VM *vm){
-    if(!record_obj){
-        return;
-    }
-
-    if(record_obj->type == RANDOM_RTYPE){
-        vmu_destroy_record_random(RECORD_RANDOM(record_obj), vm);
-    }
-
-    if(record_obj->type == FILE_RTYPE){
-        vmu_destroy_record_file(RECORD_FILE(record_obj), vm);
-    }
-
-    lzhtable_destroy(vm, clean_up_record, record_obj->attributes);
-}
-
 void vmu_destroy_record_random(RecordRandom *record_random, VM *vm){
     if(!record_random){
         return;
     }
 
-    MEMORY_DEALLOC(RecordRandom, 1, record_random, vm->fake_allocator);
+    MEMORY_DEALLOC(RecordRandom, 1, record_random, ALLOCATOR);
 }
 
 void vmu_destroy_record_file(RecordFile *record_file, VM *vm){
@@ -924,12 +1491,12 @@ void vmu_destroy_record_file(RecordFile *record_file, VM *vm){
         return;
     }
 
-    factory_destroy_raw_str(record_file->pathname, vm->fake_allocator);
+    factory_destroy_raw_str(record_file->pathname, ALLOCATOR);
     fclose(record_file->handler);
-    MEMORY_DEALLOC(RecordFile, 1, record_file, vm->fake_allocator);
+    MEMORY_DEALLOC(RecordFile, 1, record_file, ALLOCATOR);
 }
 
-ObjHeader *vmu_create_raw_native_fn_obj(
+Obj *vmu_create_raw_native_fn_obj(
     int arity,
     char *name,
     Value *target,
@@ -942,8 +1509,8 @@ ObjHeader *vmu_create_raw_native_fn_obj(
         vmu_error(vm, "Native function name exceed the max length allowed");
     }
 
-    NativeFn *fn = factory_create_native_fn(0, name, arity, target, raw_native, vm->fake_allocator);
-    NativeFnObj *native_fn = MEMORY_ALLOC(NativeFnObj, 1, vm->fake_allocator);
+    NativeFn *fn = factory_create_native_fn(0, name, arity, target, raw_native, ALLOCATOR);
+    NativeFnObj *native_fn = MEMORY_ALLOC(NativeFnObj, 1, ALLOCATOR);
 
     native_fn->header.type = NATIVE_FN_OTYPE;
     native_fn->native_fn = fn;
@@ -951,8 +1518,8 @@ ObjHeader *vmu_create_raw_native_fn_obj(
     return &native_fn->header;
 }
 
-ObjHeader *vmu_create_native_fn_obj(NativeFn *native_fn, VM *vm){
-    NativeFnObj *native_fn_obj = MEMORY_ALLOC(NativeFnObj, 1, vm->fake_allocator);
+Obj *vmu_create_native_fn_obj(NativeFn *native_fn, VM *vm){
+    NativeFnObj *native_fn_obj = MEMORY_ALLOC(NativeFnObj, 1, ALLOCATOR);
 
     native_fn_obj->header.type = NATIVE_FN_OTYPE;
     native_fn_obj->native_fn = native_fn;
@@ -960,73 +1527,72 @@ ObjHeader *vmu_create_native_fn_obj(NativeFn *native_fn, VM *vm){
     return &native_fn_obj->header;
 }
 
-void vmu_destroy_native_fn_obj(NativeFnObj *native_fn_obj, VM *vm){
-    NativeFn *native_fn = native_fn_obj->native_fn;
+FnObj *vmu_create_fn(Fn *fn, VM *vm){
+    FnObj *fn_obj = MEMORY_ALLOC(FnObj, 1, ALLOCATOR);
+    Obj *obj = (Obj *)fn_obj;
 
-    if(!native_fn->core){
-        factory_destroy_native_fn(native_fn, vm->fake_allocator);
-    }
-
-    MEMORY_DEALLOC(NativeFnObj, 1, native_fn_obj, vm->fake_allocator);
-}
-
-ObjHeader *vmu_create_fn_obj(Fn *fn, VM *vm){
-    FnObj *fn_obj = MEMORY_ALLOC(FnObj, 1, vm->fake_allocator);
-
-    fn_obj->header.type = FN_OTYPE;
+    init_obj(FN_OTYPE, obj, vm);
     fn_obj->fn = fn;
 
-    return &fn_obj->header;
+    return fn_obj;
 }
 
-void vmu_destroy_fn_obj(FnObj *fn_obj, VM *vm){
+void vmu_destroy_fn(FnObj *fn_obj, VM *vm){
     if(!fn_obj){
         return;
     }
 
-    MEMORY_DEALLOC(FnObj, 1, fn_obj, vm->fake_allocator);
+    MEMORY_DEALLOC(FnObj, 1, fn_obj, ALLOCATOR);
 }
 
-ObjHeader *vmu_closure_obj(MetaClosure *meta, VM *vm){
-    OutValue *values = factory_out_values(meta->values_len, vm->fake_allocator);
-    Closure *closure = factory_closure(values, meta, vm->fake_allocator);
-    ClosureObj *closure_obj = MEMORY_ALLOC(ClosureObj, 1, vm->fake_allocator);
+ClosureObj *vmu_create_closure(MetaClosure *meta, VM *vm){
+    size_t meta_out_values_len = meta->meta_out_values_len;
+    OutValue *out_values = MEMORY_ALLOC(OutValue, meta_out_values_len, ALLOCATOR);
+    Closure *closure = MEMORY_ALLOC(Closure, 1, ALLOCATOR);
+    ClosureObj *closure_obj = MEMORY_ALLOC(ClosureObj, 1, ALLOCATOR);
+    Obj *obj = (Obj *)closure_obj;
 
-    for (int i = 0; i < meta->values_len; i++){
-        closure->out_values[i].closure = closure_obj;
+    for (size_t i = 0; i < meta_out_values_len; i++){
+        OutValue *out_value = &out_values[i];
+
+        out_value->linked = 0;
+        out_value->at = -1;
+        out_value->value = (Value){0};
+        out_value->prev = NULL;
+        out_value->next = NULL;
+        out_value->closure_obj = closure_obj;
     }
 
-    closure_obj->header.type = CLOSURE_OTYPE;
+    closure->meta = meta;
+    closure->out_values = out_values;
+    init_obj(CLOSURE_OTYPE, obj, vm);
     closure_obj->closure = closure;
 
-    return &closure_obj->header;
+    return closure_obj;
 }
 
-void vmu_destroy_closure_obj(ClosureObj *closure_obj, VM *vm){
-    Closure *closure = closure_obj->closure;
-    MetaClosure *meta_closure = closure->meta;
-
-    for (int i = 0; i < meta_closure->values_len; i++){
-        OutValue *out_value = &closure->out_values[i];
-
-        if(!out_value->linked){
-            vmu_destroy_value(out_value->value, vm);
-        }
+void vmu_destroy_closure(ClosureObj *closure_obj, VM *vm){
+    if(!closure_obj){
+        return;
     }
 
-    factory_destroy_out_values(meta_closure->values_len, closure->out_values, vm->fake_allocator);
-    factory_destroy_closure(closure, vm->fake_allocator);
+    Closure *closure = closure_obj->closure;
+    OutValue *out_values = closure->out_values;
+    MetaClosure *meta_closure = closure->meta;
 
-    MEMORY_DEALLOC(ClosureObj, 1, closure_obj, vm->fake_allocator);
+    MEMORY_DEALLOC(OutValue, meta_closure->meta_out_values_len, out_values, ALLOCATOR);
+    MEMORY_DEALLOC(Closure, 1, closure, ALLOCATOR);
+    MEMORY_DEALLOC(ClosureObj, 1, closure_obj, ALLOCATOR);
 }
 
-ObjHeader *vmu_create_native_module_obj(NativeModule *native_module, VM *vm){
-    NativeModuleObj *native_module_obj = MEMORY_ALLOC(NativeModuleObj, 1, vm->fake_allocator);
+NativeModuleObj *vmu_create_native_module(NativeModule *native_module, VM *vm){
+    NativeModuleObj *native_module_obj = MEMORY_ALLOC(NativeModuleObj, 1, ALLOCATOR);
+    Obj *obj = (Obj *)native_module_obj;
 
-    native_module_obj->header.type = NATIVE_MODULE_OTYPE;
+    init_obj(NATIVE_MODULE_OTYPE, obj, vm);
     native_module_obj->native_module = native_module;
 
-    return &native_module_obj->header;
+    return native_module_obj;
 }
 
 void vmu_destroy_native_module_obj(NativeModuleObj *native_module_obj, VM *vm){
@@ -1034,11 +1600,11 @@ void vmu_destroy_native_module_obj(NativeModuleObj *native_module_obj, VM *vm){
         return;
     }
 
-    MEMORY_DEALLOC(NativeModuleObj, 1, native_module_obj, vm->fake_allocator);
+    MEMORY_DEALLOC(NativeModuleObj, 1, native_module_obj, ALLOCATOR);
 }
 
-ObjHeader *vmu_create_module_obj(Module *module, VM *vm){
-    ModuleObj *module_obj = MEMORY_ALLOC(ModuleObj, 1, vm->fake_allocator);
+Obj *vmu_create_module_obj(Module *module, VM *vm){
+    ModuleObj *module_obj = MEMORY_ALLOC(ModuleObj, 1, ALLOCATOR);
 
     module_obj->header.type = MODULE_OTYPE;
     module_obj->module = module;
@@ -1051,40 +1617,5 @@ void vmu_destroy_module_obj(ModuleObj *module_obj, VM *vm){
         return;
     }
 
-    MEMORY_DEALLOC(ModuleObj, 1, module_obj, vm->fake_allocator);
+    MEMORY_DEALLOC(ModuleObj, 1, module_obj, ALLOCATOR);
 }
-
-void vmu_insert_obj(ObjHeader *obj, ObjHeader **raw_head, ObjHeader **raw_tail){
-    ObjHeader *tail = *raw_tail;
-
-    if(tail){
-        tail->next = obj;
-        obj->prev = tail;
-    }else{
-        *raw_head = obj;
-    }
-
-    *raw_tail = obj;
-}
-
-void vmu_remove_obj(ObjHeader *obj, ObjHeader **raw_head, ObjHeader **raw_tail){
-    ObjHeader *head = *raw_head;
-    ObjHeader *tail = *raw_tail;
-
-    if(head == obj){
-        *raw_head = obj->next;
-    }
-    if(tail == obj){
-        *raw_tail = obj->prev;
-    }
-    if(obj->prev){
-        obj->prev->next = obj->next;
-    }
-    if(obj->next){
-        obj->next->prev = obj->prev;
-    }
-
-    obj->prev = NULL;
-    obj->next = NULL;
-}
-//< PUBLIC IMPLEMENTATION

@@ -18,12 +18,12 @@ FLAGS := $(FLAGS.COMMON) $(FLAGS.$(BUILD)) $(FLAGS.$(BUILD).$(PLATFORM)) $(FLAGS
 
 OBJS := splitmix64.o xoshiro256.o \
 lzarena.o lzflist.o \
-bstr.o dynarr.o \
-lzhtable.o memory.o \
+bstr.o lzbstr.o dynarr.o \
+lzhtable.o lzohtable.o memory.o \
 factory.o utils.o lexer.o \
 parser.o compiler.o \
 dumpper.o vmu.o \
-vm.o
+vm.o obj.o
 
 LINKS.COMMON := -lm
 LINKS.WINDOWS := -lshlwapi
@@ -35,6 +35,8 @@ vm.o:
 	$(COMPILER) -c -o $(OUT_DIR)/vm.o $(FLAGS) $(SRC_DIR)/vm.c
 vmu.o:
 	$(COMPILER) -c -o $(OUT_DIR)/vmu.o $(FLAGS) $(SRC_DIR)/vmu.c
+obj.o:
+	$(COMPILER) -c -o $(OUT_DIR)/obj.o $(FLAGS) $(SRC_DIR)/obj.c
 dumpper.o:
 	$(COMPILER) -c -o $(OUT_DIR)/dumpper.o $(FLAGS) $(SRC_DIR)/dumpper.c
 compiler.o:
@@ -49,10 +51,14 @@ factory.o:
 	$(COMPILER) -c -o $(OUT_DIR)/factory.o $(FLAGS) $(SRC_DIR)/factory.c
 memory.o:
 	$(COMPILER) -c -o $(OUT_DIR)/memory.o $(FLAGS) $(SRC_DIR)/memory.c
+lzohtable.o:
+	$(COMPILER) -c -o $(OUT_DIR)/lzohtable.o $(FLAGS) $(SRC_DIR)/lzohtable.c
 lzhtable.o:
 	$(COMPILER) -c -o $(OUT_DIR)/lzhtable.o $(FLAGS) $(SRC_DIR)/lzhtable.c
 dynarr.o:
 	$(COMPILER) -c -o $(OUT_DIR)/dynarr.o $(FLAGS) $(SRC_DIR)/dynarr.c
+lzbstr.o:
+	$(COMPILER) -c -o $(OUT_DIR)/lzbstr.o $(FLAGS) $(SRC_DIR)/lzbstr.c
 bstr.o:
 	$(COMPILER) -c -o $(OUT_DIR)/bstr.o $(FLAGS) $(SRC_DIR)/bstr.c
 lzarena.o:

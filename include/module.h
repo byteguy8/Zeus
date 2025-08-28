@@ -1,8 +1,10 @@
 #ifndef MODULE_H
 #define MODULE_H
 
+#include "memory.h"
 #include "dynarr.h"
 #include "lzhtable.h"
+#include "lzohtable.h"
 
 typedef struct try_block{
     size_t try;
@@ -25,22 +27,23 @@ typedef struct submodule_symbol{
 
 typedef struct submodule{
     char resolved;
+    DynArr *symbols;
     LZHTable *tries;
-	DynArr *symbols;
-    LZHTable *strings;
-    LZHTable *globals;
+    LZOHTable *globals;
+    DynArr *static_strs;
 }SubModule;
 
 typedef struct module{
-    char shadow;
+    char original;
     char *name;
     char *pathname;
     SubModule *submodule;
+    Allocator *allocator;
 }Module;
 
-#define MODULE_TRIES(m)(m->submodule->tries)
-#define MODULE_SYMBOLS(m)(m->submodule->symbols)
-#define MODULE_STRINGS(m)(m->submodule->strings)
-#define MODULE_GLOBALS(m)(m->submodule->globals)
+#define MODULE_TRIES(_module)((_module)->submodule->tries)
+#define MODULE_SYMBOLS(_module)((_module)->submodule->symbols)
+#define MODULE_STRINGS(_module)((_module)->submodule->static_strs)
+#define MODULE_GLOBALS(_module)((_module)->submodule->globals)
 
 #endif

@@ -9,50 +9,60 @@
 #include <stdio.h>
 #include <math.h>
 
-// PRIVATE INTERFACE
+#define COMPILE_ALLOCATOR (&(lexer->fake_ctallocator))
+#define RUNTIME_ALLOCATOR (&(lexer->fake_rtallocator))
+//--------------------------------------------------------------------------//
+//                            PRIVATE INTERFACE                             //
+//--------------------------------------------------------------------------//
 static void error(Lexer *lexer, char *msg, ...);
-static int is_at_end(Lexer *lexer);
-static int is_decimal_digit(char c);
-static int is_alpha(char c);
-static int is_alpha_numeric(char c);
-static char peek(Lexer *lexer);
+static void fatal_error(Lexer *lexer, char *fmt, ...);
+
+static void *lzalloc(size_t size, void *ctx);
+static void *lzrealloc(void *ptr, size_t old_size, size_t new_size, void *ctx);
+static void lzdealloc(void *ptr, size_t size, void *ctx);
+
+static inline int is_at_end(Lexer *lexer);
+static inline int is_dec_digit(char c);
+static inline int is_hex_digit(char c);
+static inline int is_alpha(char c);
+static inline int is_alpha_numeric(char c);
+
+static inline char peek(Lexer *lexer);
 static int match(char c, Lexer *lexer);
 static char advance(Lexer *lexer);
-static char *lexeme_range(int start, int end, Lexer *lexer);
-static int lexeme_range_copy(
-    int start,
-    int end,
-    char *lexeme,
-    size_t lexeme_len,
-    Lexer *lexer
-);
-static size_t lexeme_current_len(Lexer *lexer);
-static char *lexeme_current(Lexer *lexer);
-static char *lexeme_current_copy(char *lexeme_copy, Lexer *lexer);
-static Token *create_token_raw(
+
+static char *copy_source_range(size_t start, size_t end, Lexer *lexer, size_t *out_len);
+static char *create_lexeme(char *lexeme, Lexer *lexer, size_t *out_len);
+static inline size_t current_lexeme_len(Lexer *lexer);
+static inline char *current_lexeme(Lexer *lexer, size_t *out_len);
+static inline void put_current_lexeme(char *buff, Lexer *lexer);
+
+static inline Token *create_token_raw(
 	int line,
-    char *lexeme,
-    void *literal,
-    size_t literal_size,
     TokType type,
+    size_t lexeme_len,
+    char *lexeme,
+    size_t literal_size,
+    void *literal,
     Lexer *lexer
 );
-static Token *create_token_literal(
-	void *literal,
-	size_t literal_size,
+static inline Token *create_token_literal(
 	TokType type,
+    size_t literal_size,
+    void *literal,
 	Lexer *lexer
 );
-static Token *create_token(TokType type, Lexer *lexer);
-#define ADD_TOKEN_RAW(token)(dynarr_insert_ptr((token), lexer->tokens))
+static inline Token *create_token(TokType type, Lexer *lexer);
+#define ADD_TOKEN_RAW(_token)(dynarr_insert_ptr((_token), lexer->tokens))
+
 static void comment(Lexer *lexer);
 static Token *decimal(Lexer *lexer);
 static Token *identifier(Lexer *lexer);
-static uint32_t *str_to_table(size_t len, char *str, Lexer *lexer);
 static Token *string(Lexer *lexer);
 static Token *scan_token(char c, Lexer *lexer);
-
-// PRIVATE IMPLEMENTATION
+//--------------------------------------------------------------------------//
+//                          PRIVATE IMPLEMENTATION                          //
+//--------------------------------------------------------------------------//
 void error(Lexer *lexer, char *msg, ...){
 	if(lexer->status == 0){
 		lexer->status = 1;
@@ -70,33 +80,79 @@ void error(Lexer *lexer, char *msg, ...){
 	va_end(args);
 }
 
-int is_at_end(Lexer *lexer){
-    RawStr *source = lexer->source;
-    return lexer->current >= ((int) source->size);
+static void fatal_error(Lexer *lexer, char *fmt, ...){
+    va_list args;
+	va_start(args, fmt);
+
+	fprintf(stderr, "LEXER FATAL ERROR:\n\t");
+	vfprintf(stderr, fmt, args);
+    fprintf(stderr, "\n");
+
+	va_end(args);
+
+    longjmp(lexer->err_buf, 1);
 }
 
-int is_decimal_digit(char c){
+static void *lzalloc(size_t size, void *ctx){
+    ComplexContext *complex_ctx = (ComplexContext *)ctx;
+    Lexer *lexer = (Lexer *)complex_ctx->arg0;
+    Allocator *allocator = (Allocator *)complex_ctx->arg1;
+    void *ptr = allocator->alloc(size, allocator->ctx);
+
+    if(!ptr){
+        fatal_error(lexer, "Failed to allocate %ld bytes", size);
+    }
+
+    return ptr;
+}
+
+static void *lzrealloc(void *ptr, size_t old_size, size_t new_size, void *ctx){
+    ComplexContext *complex_ctx = (ComplexContext *)ctx;
+    Lexer *lexer = (Lexer *)complex_ctx->arg0;
+    Allocator *allocator = (Allocator *)complex_ctx->arg1;
+    void *new_ptr = allocator->realloc(ptr, old_size, new_size, allocator->ctx);
+
+    if(!new_ptr){
+        fatal_error(lexer, "Failed to reallocate %ld bytes", new_size);
+    }
+
+    return new_ptr;
+}
+
+static void lzdealloc(void *ptr, size_t size, void *ctx){
+    ComplexContext *complex_ctx = (ComplexContext *)ctx;
+    Allocator *allocator = (Allocator *)complex_ctx->arg1;
+    allocator->dealloc(ptr, size, allocator->ctx);
+}
+
+static inline int is_at_end(Lexer *lexer){
+    RawStr *source = lexer->source;
+    return lexer->current >= ((int)source->len);
+}
+
+static inline int is_dec_digit(char c){
     return c >= '0' && c <= '9';
 }
 
-int is_hex_digit(char c){
-    return is_decimal_digit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+static inline int is_hex_digit(char c){
+    return is_dec_digit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 }
 
-int is_alpha(char c){
+static inline int is_alpha(char c){
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 }
 
-int is_alpha_numeric(char c){
-    return is_decimal_digit(c) || is_alpha(c);
+static inline int is_alpha_numeric(char c){
+    return is_dec_digit(c) || is_alpha(c);
 }
 
-char peek(Lexer *lexer){
+static inline char peek(Lexer *lexer){
     if(is_at_end(lexer)){
 		return '\0';
 	}
 
     RawStr *source = lexer->source;
+
     return source->buff[lexer->current];
 }
 
@@ -126,99 +182,101 @@ char advance(Lexer *lexer){
 }
 
 // the output str is valid only during compilation allocated
-char *lexeme_range(int start, int end, Lexer *lexer){
-    assert(end >= start);
-
+static char *copy_source_range(size_t start, size_t end, Lexer *lexer, size_t *out_len){
     RawStr *source = lexer->source;
-    size_t lexeme_size = end - start;
-    char *lexeme = (char *)MEMORY_ALLOC(char, lexeme_size + 1, lexer->rtallocator);
 
-    memcpy(lexeme, source->buff + (size_t)start, lexeme_size);
-    lexeme[lexeme_size] = '\0';
+    assert(end > start && (size_t)end <= source->len);
+
+    size_t lexeme_len = end - start;
+    char *lexeme = MEMORY_ALLOC(char, lexeme_len + 1, lexer->rtallocator);
+
+    memcpy(lexeme, source->buff + (size_t)start, lexeme_len);
+    lexeme[lexeme_len] = '\0';
+
+    if(out_len){
+        *out_len = lexeme_len;
+    }
 
     return lexeme;
 }
 
-int lexeme_range_copy(
-    int start,
-    int end,
-    char *lexeme,
-    size_t lexeme_len,
-    Lexer *lexer
-){
-    int len = end - start + 1;
+static char *create_lexeme(char *lexeme, Lexer *lexer, size_t *out_len){
+    size_t lexeme_len = strlen(lexeme);
+    char *new_lexeme = MEMORY_ALLOC(char, lexeme_len + 1, COMPILE_ALLOCATOR);
 
-	if(!lexeme){
-		return len;
-	}
-    if(lexeme_len == 0){
-		return 0;
-	}
+    memcpy(new_lexeme, lexeme, lexeme_len);
+    new_lexeme[lexeme_len] = 0;
 
-    RawStr *source = lexer->source;
-	memcpy(lexeme, source->buff + start, lexeme_len);
+    if(out_len){
+        *out_len = lexeme_len;
+    }
 
-	return 0;
+    return new_lexeme;
 }
 
-size_t lexeme_current_len(Lexer *lexer){
-    return lexer->current - lexer->start;
+static inline size_t current_lexeme_len(Lexer *lexer){
+    return (size_t)(lexer->current - lexer->start);
 }
 
-char *lexeme_current(Lexer *lexer){
-    return lexeme_range(lexer->start, lexer->current, lexer);
+static inline char *current_lexeme(Lexer *lexer, size_t *out_len){
+    return copy_source_range(lexer->start, lexer->current, lexer, out_len);
 }
 
-char *lexeme_current_copy(char *lexeme_copy, Lexer *lexer){
-    size_t len = lexeme_current_len(lexer);
+static inline void put_current_lexeme(char *buff, Lexer *lexer){
+    size_t start = lexer->start;
+    size_t current = lexer->current;
+    size_t len = current - start;
     RawStr *source = lexer->source;
 
-    memcpy(lexeme_copy, source->buff + lexer->start, len);
-    lexeme_copy[len] = '\0';
-
-    return lexeme_copy;
+    memcpy(buff, source->buff + start, len);
+    buff[len] = 0;
 }
 
-Token *create_token_raw(
+static inline Token *create_token_raw(
 	int line,
-    char *lexeme,
-    void *literal,
-    size_t literal_size,
     TokType type,
+    size_t lexeme_len,
+    char *lexeme,
+    size_t literal_size,
+    void *literal,
     Lexer *lexer
 ){
-    Token *token = (Token *)MEMORY_ALLOC(Token, 1, lexer->rtallocator);
+    Token *token = MEMORY_ALLOC(Token, 1, lexer->rtallocator);
 
     token->line = line;
-    token->lexeme = lexeme;
-    token->literal = literal;
-    token->literal_size = literal_size;
     token->type = type;
+    token->lexeme_len = lexeme_len;
+    token->lexeme = lexeme;
+    token->literal_size = literal_size;
+    token->literal = literal;
     token->pathname = lexer->pathname;
     token->extra = NULL;
 
     return token;
 }
 
-Token *create_token_literal(
-	void *literal,
-	size_t literal_size,
+static inline Token *create_token_literal(
 	TokType type,
+    size_t literal_size,
+    void *literal,
 	Lexer *lexer
 ){
-	char *lexeme = lexeme_current(lexer);
+    size_t lexeme_len;
+	char *lexeme = current_lexeme(lexer, &lexeme_len);
+
 	return create_token_raw(
-		lexer->line,
-        lexeme,
-        literal,
-        literal_size,
+        lexer->line,
         type,
+        lexeme_len,
+        lexeme,
+        literal_size,
+        literal,
         lexer
-	);
+    );
 }
 
-Token *create_token(TokType type, Lexer *lexer){
-	return create_token_literal(NULL, 0, type, lexer);
+static inline Token *create_token(TokType type, Lexer *lexer){
+	return create_token_literal(type, 0, NULL, lexer);
 }
 
 void comment(Lexer *lexer){
@@ -233,19 +291,20 @@ void comment(Lexer *lexer){
 Token *decimal(Lexer *lexer){
     TokType type = INT_TYPE_TOKTYPE;
 
-    while (!is_at_end(lexer) && is_decimal_digit(peek(lexer))){
+    while (!is_at_end(lexer) && is_dec_digit(peek(lexer))){
         advance(lexer);
     }
 
 	if(match('.', lexer)){
 		type = FLOAT_TYPE_TOKTYPE;
 
-		while (!is_at_end(lexer) && is_decimal_digit(peek(lexer))){
+		while (!is_at_end(lexer) && is_dec_digit(peek(lexer))){
             advance(lexer);
         }
 	}
 
-    char *lexeme = lexeme_current(lexer);
+    size_t lexeme_len;
+    char *lexeme = current_lexeme(lexer, &lexeme_len);
 
     if(type == INT_TYPE_TOKTYPE){
         int64_t *value = MEMORY_ALLOC(int64_t, 1, lexer->rtallocator);
@@ -253,10 +312,11 @@ Token *decimal(Lexer *lexer){
 
 		return create_token_raw(
 			lexer->line,
+            type,
+            lexeme_len,
 			lexeme,
+            sizeof(int64_t),
 			value,
-			sizeof(int64_t),
-			type,
 			lexer
 		);
 	}else{
@@ -265,10 +325,11 @@ Token *decimal(Lexer *lexer){
 
         return create_token_raw(
 			lexer->line,
+            type,
+            lexeme_len,
 			lexeme,
+            sizeof(double),
 			value,
-			sizeof(double),
-			type,
 			lexer
 		);
 	}
@@ -279,8 +340,8 @@ Token *hexadecimal(Lexer *lexer){
         advance(lexer);
     }
 
-    char *lexeme = lexeme_current(lexer);
-    size_t lexeme_len = strlen(lexeme);
+    size_t lexeme_len;
+    char *lexeme = current_lexeme(lexer, &lexeme_len);
 
     if(lexeme_len == 2){
         error(lexer, "Expect digit(s) after '%s' prefix", lexeme);
@@ -298,10 +359,11 @@ Token *hexadecimal(Lexer *lexer){
 
     return create_token_raw(
         lexer->line,
-        lexeme,
-        value,
-        sizeof(int64_t),
         INT_TYPE_TOKTYPE,
+        lexeme_len,
+        lexeme,
+        sizeof(int64_t),
+        value,
         lexer
     );
 }
@@ -311,183 +373,77 @@ Token *identifier(Lexer *lexer){
         advance(lexer);
     }
 
-    size_t lexeme_len = lexeme_current_len(lexer);
+    size_t lexeme_len = current_lexeme_len(lexer);
     char lexeme[lexeme_len + 1];
-    lexeme_current_copy(lexeme, lexer);
+    TokType *type = NULL;
 
-    TokType *type = (TokType *)lzhtable_get(
-        (uint8_t *)lexeme,
-        lexeme_len,
-        lexer->keywords
-    );
+    put_current_lexeme(lexeme, lexer);
+    lzohtable_lookup(lexeme, lexeme_len, lexer->keywords, (void **)(&type));
 
-    if(type == NULL){
-        return create_token(IDENTIFIER_TOKTYPE, lexer);
-    }else{
+    if(type){
         return create_token(*type, lexer);
     }
-}
 
-// str must be runtime allocated
-uint32_t *str_to_table(size_t len, char *str, Lexer *lexer){
-    uint32_t *hash = (uint32_t *)MEMORY_ALLOC(uint32_t, 1, lexer->rtallocator);
-	*hash = lzhtable_hash((uint8_t *)str, len);
-
-	if(!lzhtable_hash_contains(*hash, lexer->strings, NULL)){
-		lzhtable_hash_put(*hash, str, lexer->strings);
-	}
-
-    return hash;
+    return create_token(IDENTIFIER_TOKTYPE, lexer);
 }
 
 Token *string(Lexer *lexer){
-    int from = 0;
-	int lines = 0;
-    DynArr *tokens = NULL;
-    TokType type = STR_TYPE_TOKTYPE;
-    BStr *bstr = FACTORY_BSTR(lexer->rtallocator);
+    LZBStr *str_helper = lexer->str_helper;
 
-	while(!is_at_end(lexer) && peek(lexer) != '"'){
-		char c = advance(lexer);
-
-		if(c == '\n'){
-			lines++;
-		}else if(c == '\\'){
-            size_t escape_start = lexer->current - 1;
-            size_t escape_end = lexer->current;
-
-            char escape;
-
-            if(peek(lexer) == '3'){escape = '\3';}
-            else if(peek(lexer) == 'a'){escape = '\a';}
-            else if(peek(lexer) == 'b'){escape = '\b';}
-            else if(peek(lexer) == 'f'){escape = '\f';}
-            else if(peek(lexer) == 'n'){escape = '\n';}
-            else if(peek(lexer) == 'r'){escape = '\r';}
-            else if(peek(lexer) == 't'){escape = '\t';}
-            else if(peek(lexer) == 'v'){escape = '\v';}
-            else if(peek(lexer) == '\\'){escape = '\\';}
-            else if(peek(lexer) == '\"'){escape = '\"';}
-            else{
-                int len = escape_end - escape_start + 1;
-                char sequence[len + 1];
-
-                lexeme_range_copy(escape_start, escape_end, sequence, len, lexer);
-                sequence[len] = 0;
-
-                error(lexer, "unknown scape sequence %s", sequence);
-
-                advance(lexer);
-
-                continue;
-            }
-
-            bstr_append_range(&escape, 0, 0, bstr);
-
-            advance(lexer);
-        }else if(c == '$'){
-            size_t interpolation_start = lexer->current - 1;
-
-			if(match('{', lexer)){
-                if(type != TEMPLATE_TYPE_TOKTYPE) type = TEMPLATE_TYPE_TOKTYPE;
-                if(!tokens) tokens = FACTORY_DYNARR_PTR(lexer->rtallocator);
-
-                if(bstr->used > 0){
-                    size_t start = from;
-                    size_t len = bstr->used - start + 1;
-                    char *str = factory_clone_raw_str_range(start, len, (char *)bstr->buff, lexer->rtallocator);
-
-                    uint32_t *hash = str_to_table(len, str,lexer);
-                    Token *str_token = create_token_literal(
-                        hash,
-                        sizeof(uint32_t),
-                        STR_TYPE_TOKTYPE,
-                        lexer
-                    );
-
-                    dynarr_insert_ptr(str_token, tokens);
-                }
-
-                size_t prev_start = lexer->start;
-                lexer->start = lexer->current;
-
-				while(!is_at_end(lexer) && peek(lexer) != '}'){
-					c = advance(lexer);
-
-					Token *token = scan_token(c, lexer);
-
-                    if(token){
-                        dynarr_insert_ptr(token, tokens);
-					}
-
-                    lexer->start = lexer->current;
-				}
-
-                lexer->start = prev_start;
-
-				if(peek(lexer) != '}'){
-					error(lexer, "unterminated placeholder");
-					return NULL;
-				}
-
-                size_t interpolation_end = lexer->current;
-
-                bstr_append_range(lexer->source->buff, interpolation_start, interpolation_end, bstr);
-
-                advance(lexer);
-
-				from = bstr->used;
-			}
-		}else{
-            bstr_append_range(&c, 0, 0, bstr);
-        }
-	}
-
-    if(type == TEMPLATE_TYPE_TOKTYPE){
-        if(bstr->len - from + 1 > 0){
-            size_t start = from;
-            size_t len = bstr->used - start + 1;
-            char *str = factory_clone_raw_str_range(start, len, (char *)bstr->buff,lexer->rtallocator);
-
-            uint32_t *hash = str_to_table(len, str,lexer);
-            Token *str_token = create_token_literal(
-                hash,
-                sizeof(uint32_t),
-                STR_TYPE_TOKTYPE,
-                lexer
-            );
-
-            dynarr_insert_ptr(str_token, tokens);
-        }
-
-        Token *eof = create_token(EOF_TOKTYPE, lexer);
-
-        dynarr_insert_ptr(eof, tokens);
+    if(LZBSTR_LEN(str_helper) > 0){
+        lzbstr_reset(str_helper);
     }
 
-	if(peek(lexer) != '"'){
-		error(lexer, "Unterminated string");
-		return NULL;
-	}
+    while(!is_at_end(lexer) && peek(lexer) != '"'){
+        const char c = advance(lexer);
+
+        if(c != '\\'){
+            lzbstr_append((char[]){c, 0}, str_helper);
+            continue;
+        }
+
+        switch (advance(lexer)){
+            case 't':{
+                lzbstr_append((char[]){'\t', 0}, str_helper);
+                break;
+            }case 'n':{
+                lzbstr_append((char[]){'\n', 0}, str_helper);
+                break;
+            }case 'r':{
+                lzbstr_append((char[]){'\r', 0}, str_helper);
+                break;
+            }case '"':{
+                lzbstr_append((char[]){'"', 0}, str_helper);
+                break;
+            }case '\\':{
+                lzbstr_append((char[]){'\\', 0}, str_helper);
+                break;
+            }default:{
+                error(lexer, "Unknown espace sequence: \\%c", peek(lexer));
+                return NULL;
+            }
+        }
+    }
+
+    if(peek(lexer) != '"'){
+        error(lexer, "Unterminated string");
+        return NULL;
+    }
 
     advance(lexer);
 
-    size_t str_len = bstr->used;
-    char *str = str_len == 0 ? "\0" : (char *)bstr->buff;
-    char *cloned_str = factory_clone_raw_str_range(0, bstr->used, (char *)str, lexer->rtallocator);
+    size_t literal_size;
+    char *literal;
 
-	uint32_t *hash = str_to_table(str_len, cloned_str, lexer);
-    Token *str_token = create_token_literal(
-		hash,
-		sizeof(uint32_t),
-		type,
-		lexer
-	);
+    if(LZBSTR_LEN(str_helper) == 0){
+        literal_size = 0;
+        literal = MEMORY_ALLOC(char, 1, RUNTIME_ALLOCATOR);
+        literal[0] = 0;
+    }else{
+        literal = lzbstr_rclone_buff((LZBStrAllocator *)RUNTIME_ALLOCATOR, str_helper, &literal_size);
+    }
 
-	str_token->extra = tokens;
-	lexer->line += lines;
-
-	return str_token;
+    return create_token_literal(STR_TYPE_TOKTYPE, literal_size, literal, lexer);
 }
 
 Token *scan_token(char c, Lexer *lexer){
@@ -521,7 +477,11 @@ Token *scan_token(char c, Lexer *lexer){
         }case ',':{
 			return create_token(COMMA_TOKTYPE, lexer);
 		}case '.':{
-			return create_token(DOT_TOKTYPE, lexer);
+            if(match('.', lexer)){
+                return create_token(DOUBLE_DOT_TOKTYPE, lexer);
+            }else{
+                return create_token(DOT_TOKTYPE, lexer);
+            }
 		}case '+':{
 			if(match('=', lexer)){
 				return create_token(COMPOUND_ADD_TOKTYPE, lexer);
@@ -535,7 +495,9 @@ Token *scan_token(char c, Lexer *lexer){
 				return create_token(MINUS_TOKTYPE, lexer);
 			}
         }case '*':{
-			if(match('=', lexer)){
+			if(match('*', lexer)){
+                return create_token(DOUBLE_ASTERISK_TOKTYPE, lexer);
+            }else if(match('=', lexer)){
 				return create_token(COMPOUND_MUL_TOKTYPE, lexer);
 			}else{
 				return create_token(ASTERISK_TOKTYPE, lexer);
@@ -586,9 +548,9 @@ Token *scan_token(char c, Lexer *lexer){
          case '\0':{
             return NULL;
         }default:{
-            if(is_decimal_digit(c) && (match('x', lexer) || match('X', lexer))){
+            if(is_dec_digit(c) && (match('x', lexer) || match('X', lexer))){
                 return hexadecimal(lexer);
-            }else if(is_decimal_digit(c)){
+            }else if(is_dec_digit(c)){
 				return decimal(lexer);
 			}else if(is_alpha_numeric(c)){
 				return identifier(lexer);
@@ -603,45 +565,70 @@ Token *scan_token(char c, Lexer *lexer){
 
     return NULL;
 }
+//--------------------------------------------------------------------------//
+//                          PUBLIC IMPLEMENTATION                           //
+//--------------------------------------------------------------------------//
+Lexer *lexer_create(Allocator *ctallocator, Allocator *rtallocator){
+    Lexer *lexer = (Lexer *)MEMORY_ALLOC(Lexer, 1, ctallocator);
 
-// PUBLIC IMPLEMENTATION
-Lexer *lexer_create(Allocator *allocator){
-    Lexer *lexer = (Lexer *)MEMORY_ALLOC(Lexer, 1, allocator);
-    if(!lexer){return NULL;}
+    if(!lexer){
+        return NULL;
+    }
+
     memset(lexer, 0, sizeof(Lexer));
-    lexer->rtallocator = allocator;
+    lexer->ctallocator = ctallocator;
+    lexer->rtallocator = rtallocator;
+
     return lexer;
 }
 
 int lexer_scan(
 	RawStr *source,
 	DynArr *tokens,
-	LZHTable *strings,
-	LZHTable *keywords,
+	LZOHTable *keywords,
     char *pathname,
 	Lexer *lexer
 ){
-    lexer->line = 1;
-    lexer->start = 0;
-    lexer->current = 0;
-    lexer->source = source;
-    lexer->tokens = tokens;
-	lexer->strings = strings;
-    lexer->keywords = keywords;
-    lexer->pathname = pathname;
+    if(setjmp(lexer->err_buf) == 0){
+        lexer->line = 1;
+        lexer->start = 0;
+        lexer->current = 0;
+        lexer->source = source;
+        lexer->tokens = tokens;
+        lexer->keywords = keywords;
+        lexer->pathname = pathname;
 
-    while (!is_at_end(lexer)){
-		char c = advance(lexer);
-        Token *token = scan_token(c, lexer);
+        ComplexContext compile_ctx = (ComplexContext){
+            .arg0 = lexer,
+            .arg1 = lexer->ctallocator
+        };
+        ComplexContext runtime_ctx = (ComplexContext){
+            .arg0 = lexer,
+            .arg1 = lexer->rtallocator
+        };
 
-        if(token){
-			ADD_TOKEN_RAW(token);
-		}
+        MEMORY_INIT_ALLOCATOR(&compile_ctx, lzalloc, lzrealloc, lzdealloc, &lexer->fake_ctallocator);
+        MEMORY_INIT_ALLOCATOR(&runtime_ctx, lzalloc, lzrealloc, lzdealloc, &lexer->fake_rtallocator);
 
-        lexer->start = lexer->current;
+        lexer->str_helper = FACTORY_LZBSTR(COMPILE_ALLOCATOR);
+
+        while (!is_at_end(lexer)){
+            char c = advance(lexer);
+            Token *token = scan_token(c, lexer);
+
+            if(token){
+                ADD_TOKEN_RAW(token);
+            }
+
+            lexer->start = lexer->current;
+        }
+
+        size_t lexeme_len;
+        char *lexeme = create_lexeme("EOF", lexer, &lexeme_len);
+        ADD_TOKEN_RAW(create_token_raw(-1, EOF_TOKTYPE, lexeme_len, lexeme, 0, NULL, lexer));
+
+        return lexer->status;
+    }else{
+        return 1;
     }
-
-    ADD_TOKEN_RAW(create_token(EOF_TOKTYPE, lexer));
-
-    return lexer->status;
 }

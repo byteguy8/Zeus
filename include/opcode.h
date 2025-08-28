@@ -4,8 +4,8 @@
 typedef enum opcode{
     // PRIMITIVES
     EMPTY_OPCODE,    // push NULL value equivalent
-    TRUE_OPCODE,     // push TRUE value
     FALSE_OPCODE,    // push FALSE value
+    TRUE_OPCODE,     // push TRUE value
     CINT_OPCODE,     // push integer of 1 byte
     INT_OPCODE,      // push integer of 8 bytes
     FLOAT_OPCODE,    // push float
@@ -15,6 +15,13 @@ typedef enum opcode{
 	LIST_OPCODE,
     DICT_OPCODE,
 	RECORD_OPCODE,
+
+    IARRAY_OPCODE,
+    ILIST_OPCODE,
+    IDICT_OPCODE,
+
+    CONCAT_OPCODE,
+    MULSTR_OPCODE,
 
     // ARITHMETIC
     ADD_OPCODE, // add two integers or floats and push the result
@@ -50,9 +57,9 @@ typedef enum opcode{
     OSET_OPCODE,  // set out value symbol (for closures)
     OGET_OPCODE,  // get out value symbol (for closures)
     GDEF_OPCODE,  // define a global symbol
+    GASET_OPCODE, // set global symbol access
     GSET_OPCODE,  // get global symbol
     GGET_OPCODE,  // set global symbol
-    GASET_OPCODE, // set global symbol access
     NGET_OPCODE,  // get native symbol
     SGET_OPCODE,  // get symbol from list of symbols
 	ASET_OPCODE,  // set a value inside array

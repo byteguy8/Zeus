@@ -9,6 +9,11 @@
 #include "lzhtable.h"
 #include <stddef.h>
 
+typedef struct complex_context{
+    void *arg0;
+    void *arg1;
+}ComplexContext;
+
 #define MEMORY_KIBIBYTES(_count)((_count) * 1024)
 #define MEMORY_MIBIBYTES(_count)(MEMORY_KIBIBYTES((_count) * 1024))
 
@@ -31,16 +36,7 @@
 #define MEMORY_REALLOC(type, old_count, new_count, ptr, allocator)((type *)((allocator)->realloc(ptr, (sizeof(type) * old_count), (sizeof(type) * new_count), (allocator)->ctx)))
 #define MEMORY_DEALLOC(type, count, ptr, allocator) ((allocator)->dealloc((ptr), (sizeof(type) * count), (allocator)->ctx))
 
-int memory_init();
-void memory_deinit();
-
-Allocator *memory_allocator();
-
 Allocator *memory_create_arena_allocator(Allocator *allocator, LZArena **out_arena);
 void memory_destroy_arena_allocator(Allocator *allocator);
-
-void *memory_alloc(size_t size);
-void *memory_realloc(void *ptr, size_t size);
-void memory_dealloc(void *ptr);
 
 #endif

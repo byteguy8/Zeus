@@ -16,7 +16,7 @@ typedef struct value{
 
     union{
         uint8_t bool;
-        int64_t i64;
+        int64_t ivalue;
         double fvalue;
 		void *obj;
     }content;

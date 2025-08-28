@@ -5,87 +5,28 @@
 #include <stdlib.h>
 #include <assert.h>
 
-static LZFList *mallocator = NULL;
-static Allocator allocator = {0};
-
 void *lzarena_link_alloc(size_t size, void *ctx){
-	void *ptr = LZARENA_ALLOC(size, ctx);
-
-	if(!ptr){
-        fprintf(stderr, "out of memory\n");
-		memory_deinit();
-		exit(EXIT_FAILURE);
-	}
-
-	return ptr;
+    return LZARENA_ALLOC(size, ctx);
 }
 
 void *lzarena_link_realloc(void *ptr, size_t old_size, size_t new_size, void *ctx){
-    void *new_ptr = LZARENA_REALLOC(ptr, old_size, new_size, ctx);
-
-	if(!new_ptr){
-		fprintf(stderr, "out of memory\n");
-		memory_deinit();
-		exit(EXIT_FAILURE);
-	}
-
-	return new_ptr;
+    return LZARENA_REALLOC(ptr, old_size, new_size, ctx);
 }
 
 void lzarena_link_dealloc(void *ptr, size_t size, void *ctx){
-	// do nothing
-}
-
-void *lzflist_link_alloc(size_t size, void *ctx){
-    void *ptr = lzflist_calloc(size, ctx);
-
-    if(!ptr){
-        fprintf(stderr, "Out of memory\n");
-        memory_deinit();
-        exit(EXIT_FAILURE);
-    }
-
-    return ptr;
-}
-
-void *lzflist_link_realloc(void *ptr, size_t old_size, size_t new_size, void *ctx){
-    void *new_ptr = lzflist_realloc(ptr, new_size, ctx);
-
-    if(!new_ptr){
-        fprintf(stderr, "Out of memory\n");
-        memory_deinit();
-        exit(EXIT_FAILURE);
-    }
-
-    return new_ptr;
-}
-
-void lzflist_link_dealloc(void *ptr, size_t size, void *ctx){
-	lzflist_dealloc(ptr, ctx);
-}
-
-int memory_init(){
-    mallocator = lzflist_create();
-
-    allocator.ctx = mallocator;
-    allocator.alloc = lzflist_link_alloc;
-    allocator.realloc = lzflist_link_realloc;
-    allocator.dealloc = lzflist_link_dealloc;
-
-    return 0;
-}
-
-void memory_deinit(){
-    lzflist_destroy(mallocator);
-}
-
-Allocator *memory_allocator(){
-    return &allocator;
+	// nothing to be done
 }
 
 Allocator *memory_create_arena_allocator(Allocator *allocator, LZArena **out_arena){
     LZArena *arena = lzarena_create((LZArenaAllocator *)allocator);
     Allocator *arena_allocator = MEMORY_ALLOC(Allocator, 1, allocator);
+
+    if(!arena || !arena_allocator){
+        lzarena_destroy(arena);
+        MEMORY_DEALLOC(Allocator, 1, arena_allocator, allocator);
+
+        return NULL;
+    }
 
     MEMORY_INIT_ALLOCATOR(
         arena,
@@ -114,16 +55,4 @@ void memory_destroy_arena_allocator(Allocator *arena_allocator){
 
     lzarena_destroy(arena);
     MEMORY_DEALLOC(Allocator, 1, arena_allocator, origin_allocator);
-}
-
-void *memory_alloc(size_t size){
-    return lzflist_link_alloc(size, mallocator);
-}
-
-void *memory_realloc(void *ptr, size_t size){
-    return lzflist_link_realloc(ptr, 0, size, mallocator);
-}
-
-void memory_dealloc(void *ptr){
-    return lzflist_link_dealloc(ptr, 0, mallocator);
 }

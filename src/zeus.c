@@ -16,38 +16,115 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
+void *lzalloc_link_arena(size_t size, void *ctx){
+    return LZARENA_ALLOC(size, ctx);
+}
+
+void *lzrealloc_link_arena(void *ptr, size_t old_size, size_t new_size, void *ctx){
+    return LZARENA_REALLOC(ptr, old_size, new_size, ctx);
+}
+
+void lzdealloc_link_arena(void *ptr, size_t size, void *ctx){
+    // nothing to be done
+}
+
+void *lzalloc_link_flist(size_t size, void *ctx){
+    return lzflist_alloc(size, ctx);
+}
+
+void *lzrealloc_link_flist(void *ptr, size_t old_size, size_t new_size, void *ctx){
+    return lzflist_realloc(ptr, new_size, ctx);
+}
+
+void lzdealloc_link_flist(void *ptr, size_t size, void *ctx){
+    lzflist_dealloc(ptr, ctx);
+}
+
 typedef struct args{
 	unsigned char lex;
 	unsigned char parse;
 	unsigned char compile;
 	unsigned char dump;
-    char *source_path;
+    char *source_pathname;
 }Args;
+
+static void print_help(){
+    fprintf(stderr, "Usage: zeus /path/to/source/file.ze [-[l | p | c | d]]\n");
+
+    fprintf(stderr, "\n    The Zeus Programming Language\n");
+    fprintf(stderr, "        Zeus is a dynamic programming language made for learning purposes\n\n");
+
+    fprintf(stderr, "Options:\n");
+
+    fprintf(stderr, "    -l\n");
+    fprintf(stderr, "                      Just run the lexer\n");
+
+    fprintf(stderr, "    -p\n");
+    fprintf(stderr, "                      Just run the lexer and parser\n");
+
+    fprintf(stderr, "    -c\n");
+    fprintf(stderr, "                      Just run the lexer, parser and compiler\n");
+
+    fprintf(stderr, "    -d\n");
+    fprintf(stderr, "                      Run the disassembler (executing: lexer, parser and compiler)\n");
+
+    exit(EXIT_FAILURE);
+}
 
 static void get_args(int argc, char const *argv[], Args *args){
 	for(int i = 1; i < argc; i++){
 		const char *arg = argv[i];
-		if(strcmp("-l", arg) == 0) args->lex = 1;
-		else if(strcmp("-p", arg) == 0) args->parse = 1;
-		else if(strcmp("-c", arg) == 0) args->compile = 1;
-		else if(strcmp("-d", arg) == 0) args->dump = 1;
-        else args->source_path = (char *)arg;
+
+		if(strcmp("-l", arg) == 0){
+            if(args->lex){
+                fprintf(stderr, "-l flag already used");
+                exit(EXIT_FAILURE);
+            }
+
+            args->lex = 1;
+        }else if(strcmp("-p", arg) == 0){
+            if(args->parse){
+                fprintf(stderr, "-l flag already used");
+                exit(EXIT_FAILURE);
+            }
+
+            args->parse = 1;
+        }else if(strcmp("-c", arg) == 0){
+            if(args->compile){
+                fprintf(stderr, "-l flag already used");
+                exit(EXIT_FAILURE);
+            }
+
+            args->compile = 1;
+        }else if(strcmp("-d", arg) == 0){
+            if(args->dump){
+                fprintf(stderr, "-l flag already used");
+                exit(EXIT_FAILURE);
+            }
+
+            args->dump = 1;
+        }else{
+            if(args->source_pathname){
+                fprintf(stderr, "source pathname set");
+                exit(EXIT_FAILURE);
+            }
+
+            args->source_pathname = (char *)arg;
+        }
 	}
 }
 
-void add_native(char *name, int arity, RawNativeFn raw_native, LZHTable *natives, Allocator *allocator){
-    NativeFn *native = factory_create_native_fn(1, name, arity, NULL, raw_native, allocator);
-    lzhtable_put((uint8_t *)name, strlen(name), native, natives, NULL);
+void add_native(char *name, int arity, RawNativeFn raw_native, LZOHTable *natives, Allocator *allocator){
+    NativeFn *native_fn = factory_create_native_fn(1, name, arity, NULL, raw_native, allocator);
+    lzohtable_put_ck(name, strlen(name), native_fn, natives, NULL);
 }
 
-void add_keyword(char *name, TokType type, LZHTable *keywords, Allocator *allocator){
-    TokType *ctype = (TokType *)MEMORY_ALLOC(TokType, 1, allocator);
-    *ctype = type;
-    lzhtable_put((uint8_t *)name, strlen(name), ctype, keywords, NULL);
+void add_keyword(char *name, TokType type, LZOHTable *keywords, Allocator *allocator){
+    lzohtable_put_ckv(name, strlen(name), &type, sizeof(TokType), keywords, NULL);
 }
 
-LZHTable *create_keywords_table(Allocator *allocator){
-	LZHTable *keywords = FACTORY_LZHTABLE(allocator);
+LZOHTable *create_keywords_table(Allocator *allocator){
+	LZOHTable *keywords = FACTORY_LZOHTABLE_LEN(64, allocator);
 
 	add_keyword("mod", MOD_TOKTYPE, keywords, allocator);
 	add_keyword("empty", EMPTY_TOKTYPE, keywords, allocator);
@@ -90,17 +167,44 @@ LZHTable *create_keywords_table(Allocator *allocator){
     return keywords;
 }
 
+static void print_size(size_t size){
+    if(size < 1024){
+        printf("%zu B", size);
+        return;
+    }
+
+    size /= 1024;
+
+    if(size < 1024){
+        printf("%zu KiB", size);
+        return;
+    }
+
+    size /= 1024;
+
+    if(size < 1024){
+        printf("%zu MiB", size);
+        return;
+    }
+
+    size /= 1024;
+
+    if(size < 1024){
+        printf("%zu GiB", size);
+        return;
+    }
+}
+
 int main(int argc, char const *argv[]){
 	int result = 0;
-
     Args args = {0};
+
 	get_args(argc, argv, &args);
 
-	char *source_path = args.source_path;
+	char *source_path = args.source_pathname;
 
 	if(!source_path){
-		fprintf(stderr, "Expect path to input source file\n");
-		exit(EXIT_FAILURE);
+		print_help();
 	}
 
 	if(!UTILS_FILES_CAN_READ(source_path)){
@@ -113,70 +217,89 @@ int main(int argc, char const *argv[]){
 		exit(EXIT_FAILURE);
 	}
 
-	memory_init();
+    LZArena *ctarena = lzarena_create(NULL);
+    LZFList *rtflist = lzflist_create();
 
-    LZArena *compile_arena = NULL;
-    Allocator *rtallocator = memory_allocator();
-    Allocator *ctallocator = memory_create_arena_allocator(rtallocator, &compile_arena);
+    if(!ctarena || !rtflist){
+        lzarena_destroy(ctarena);
+        lzflist_destroy(rtflist);
+        exit(EXIT_FAILURE);
+    }
 
-    LZHTable *natives = FACTORY_LZHTABLE(rtallocator);
+    Allocator ctallocator = {0};
+    Allocator rtallocator = {0};
 
-    add_native("print_stack", 0, native_fn_print_stack, natives, rtallocator);
-    add_native("ls", 1, native_fn_ls, natives, rtallocator);
-    add_native("exit", 1, native_fn_exit, natives, rtallocator);
-	add_native("assert", 1, native_fn_assert, natives, rtallocator);
-    add_native("assertm", 2, native_fn_assertm, natives, rtallocator);
-    add_native("is_str_int", 1, native_fn_is_str_int, natives, rtallocator);
-    add_native("is_str_float", 1, native_fn_is_str_float, natives, rtallocator);
-	add_native("str_to_int", 1, native_fn_str_to_int, natives, rtallocator);
-    add_native("str_to_float", 1, native_fn_str_to_float, natives, rtallocator);
-    add_native("int_to_str", 1, native_fn_int_to_str, natives, rtallocator);
-    add_native("int_to_float", 1, native_fn_int_to_float, natives, rtallocator);
-    add_native("float_to_int", 1, native_fn_float_to_int, natives, rtallocator);
-    add_native("float_to_str", 1, native_fn_float_to_str, natives, rtallocator);
-    add_native("print", 1, native_fn_print, natives, rtallocator);
-    add_native("println", 1, native_fn_println, natives, rtallocator);
-    add_native("eprint", 1, native_fn_eprint, natives, rtallocator);
-    add_native("eprintln", 1, native_fn_eprintln, natives, rtallocator);
-    add_native("readln", 0, native_fn_readln, natives, rtallocator);
-    add_native("gc", 0, native_fn_gc, natives, rtallocator);
+    MEMORY_INIT_ALLOCATOR(
+        ctarena,
+        lzalloc_link_arena,
+        lzrealloc_link_arena,
+        lzdealloc_link_arena,
+        &ctallocator
+    );
 
-	RawStr *source = utils_read_source(source_path, rtallocator);
-    char *module_path = factory_clone_raw_str(source_path, rtallocator);
+    MEMORY_INIT_ALLOCATOR(
+        rtflist,
+        lzalloc_link_flist,
+        lzrealloc_link_flist,
+        lzdealloc_link_flist,
+        &rtallocator
+    );
 
-    Module *module = factory_module("main", module_path, rtallocator);
-    LZHTable *modules = FACTORY_LZHTABLE(ctallocator);
+    LZOHTable *natives_fns = FACTORY_LZOHTABLE_LEN(64, &rtallocator);
 
-    SubModule *submodule = module->submodule;
-    LZHTable *strings = submodule->strings;
+    add_native("print_stack", 0, native_fn_print_stack, natives_fns, &rtallocator);
+    add_native("exit", 1, native_fn_exit, natives_fns, &rtallocator);
+	add_native("assert", 1, native_fn_assert, natives_fns, &rtallocator);
+    add_native("assertm", 2, native_fn_assertm, natives_fns, &rtallocator);
 
-	DynArr *tokens = FACTORY_DYNARR_PTR(ctallocator);
-	DynArr *stmts = FACTORY_DYNARR_PTR(ctallocator);
+    add_native("is_str_int", 1, native_fn_is_str_int, natives_fns, &rtallocator);
+    add_native("is_str_float", 1, native_fn_is_str_float, natives_fns, &rtallocator);
+    add_native("to_str", 1, native_fn_to_str, natives_fns, &rtallocator);
+    add_native("to_int", 1, native_fn_to_int, natives_fns, &rtallocator);
+    add_native("to_float", 1, native_fn_to_float, natives_fns, &rtallocator);
 
-	LZHTable *keywords = create_keywords_table(rtallocator);
+    add_native("print", 1, native_fn_print, natives_fns, &rtallocator);
+    add_native("println", 1, native_fn_println, natives_fns, &rtallocator);
+    add_native("eprint", 1, native_fn_eprint, natives_fns, &rtallocator);
+    add_native("eprintln", 1, native_fn_eprintln, natives_fns, &rtallocator);
+    add_native("readln", 0, native_fn_readln, natives_fns, &rtallocator);
+    add_native("gc", 0, native_fn_gc, natives_fns, &rtallocator);
 
-	Lexer *lexer = lexer_create(rtallocator);
-	Parser *parser = parser_create(ctallocator);
-    Compiler *compiler = compiler_create(ctallocator, rtallocator);
-    Dumpper *dumpper = dumpper_create(ctallocator);
-    VM *vm = vm_create(rtallocator);
+    LZOHTable *keywords = create_keywords_table(&rtallocator);
+	RawStr *source = utils_read_source(source_path, &rtallocator);
+    char *module_path = factory_clone_raw_str(source_path, &rtallocator, NULL);
+    Module *module = factory_create_module("main", module_path, &rtallocator);
+
+    LZHTable *modules = FACTORY_LZHTABLE(&ctallocator);
+	DynArr *tokens = FACTORY_DYNARR_PTR(&ctallocator);
+	DynArr *stmts = FACTORY_DYNARR_PTR(&ctallocator);
+	Lexer *lexer = lexer_create(&rtallocator, &ctallocator);
+	Parser *parser = parser_create(&ctallocator);
+    Compiler *compiler = compiler_create(&ctallocator, &rtallocator);
+    Dumpper *dumpper = dumpper_create(&ctallocator);
+
+    VM *vm = vm_create(&rtallocator);
 
     if(module_path[0] == '/'){
-        char *cloned_module_path = factory_clone_raw_str(module_path, rtallocator);
+        char *cloned_module_path = factory_clone_raw_str(module_path, &rtallocator, NULL);
 		compiler->paths[compiler->paths_len++] = utils_files_parent_pathname(cloned_module_path);
 	}else{
-		compiler->paths[compiler->paths_len++] = utils_files_cwd(ctallocator);
+		compiler->paths[compiler->paths_len++] = utils_files_cwd(&ctallocator);
 	}
 
     if(args.lex){
-        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)){
+        if(lexer_scan(source, tokens, keywords, module_path, lexer)){
             result = 1;
 			goto CLEAN_UP;
 		}
 
-		printf("No errors during lexing\n");
+        printf("STATISTICS:\n");
+		printf("    %-20s%zu\n", "Tokens:", DYNARR_LEN(tokens));
+        printf("    %-20s", "Memory usage:");
+        print_size(ctarena->allocted_bytes);
+        printf("\n");
     }else if(args.parse){
-        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)){
+        if(lexer_scan(source, tokens, keywords, module_path, lexer)){
             result = 1;
 			goto CLEAN_UP;
 		}
@@ -185,9 +308,14 @@ int main(int argc, char const *argv[]){
 			goto CLEAN_UP;
 		}
 
-		printf("No errors during parsing\n");
+		printf("STATISTICS:\n");
+		printf("    %-20s%zu\n", "Tokens:", DYNARR_LEN(tokens));
+        printf("    %-20s%zu\n", "Statements:", DYNARR_LEN(stmts));
+        printf("    %-20s", "Memory usage:");
+        print_size(ctarena->allocted_bytes);
+        printf("\n");
     }else if(args.compile){
-        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)){
+        if(lexer_scan(source, tokens, keywords, module_path, lexer)){
             result = 1;
 			goto CLEAN_UP;
 		}
@@ -195,14 +323,20 @@ int main(int argc, char const *argv[]){
             result = 1;
 			goto CLEAN_UP;
 		}
-        if(compiler_compile(keywords, natives, stmts, module, modules, compiler)){
+        if(compiler_compile(keywords, natives_fns, stmts, module, modules, compiler)){
             result = 1;
 			goto CLEAN_UP;
 		}
 
-		printf("No errors during compilation\n");
+		printf("STATISTICS:\n");
+		printf("    %-20s%zu\n", "Tokens:", DYNARR_LEN(tokens));
+        printf("    %-20s%zu\n", "Statements:", DYNARR_LEN(stmts));
+        printf("    %-20s%zu\n", "Symbols:", DYNARR_LEN(MODULE_SYMBOLS(module)));
+        printf("    %-20s", "Memory usage:");
+        print_size(ctarena->allocted_bytes);
+        printf("\n");
     }else if(args.dump){
-        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)){
+        if(lexer_scan(source, tokens, keywords, module_path, lexer)){
             result = 1;
 			goto CLEAN_UP;
 		}
@@ -210,14 +344,22 @@ int main(int argc, char const *argv[]){
             result = 1;
 			goto CLEAN_UP;
 		}
-        if(compiler_compile(keywords, natives, stmts, module, modules, compiler)){
+        if(compiler_compile(keywords, natives_fns, stmts, module, modules, compiler)){
             result = 1;
 			goto CLEAN_UP;
 		}
 
         dumpper_dump(modules, module, dumpper);
+
+        printf("\nSTATISTICS:\n");
+		printf("    %-20s%zu\n", "Tokens:", DYNARR_LEN(tokens));
+        printf("    %-20s%zu\n", "Statements:", DYNARR_LEN(stmts));
+        printf("    %-20s%zu\n", "Symbols:", DYNARR_LEN(MODULE_SYMBOLS(module)));
+        printf("    %-20s", "Memory usage:");
+        print_size(ctarena->allocted_bytes);
+        printf("\n");
     }else{
-        if(lexer_scan(source, tokens, strings, keywords, module_path, lexer)){
+        if(lexer_scan(source, tokens, keywords, module_path, lexer)){
 			result = 1;
             goto CLEAN_UP;
 		}
@@ -225,20 +367,22 @@ int main(int argc, char const *argv[]){
             result = 1;
 			goto CLEAN_UP;
 		}
-        if(compiler_compile(keywords, natives, stmts, module, modules, compiler)){
+        if(compiler_compile(keywords, natives_fns, stmts, module, modules, compiler)){
             result = 1;
 			goto CLEAN_UP;
 		}
 
-        memory_destroy_arena_allocator(ctallocator);
+        vm_initialize(vm);
 
-        if((result = vm_execute(natives, module, vm))){
+        if((result = vm_execute(natives_fns, module, vm))){
             goto CLEAN_UP;
         }
     }
 
 CLEAN_UP:
-    memory_deinit();
+    vm_destroy(vm);
+    lzarena_destroy(ctarena);
+    lzflist_destroy(rtflist);
 
     return result;
 }

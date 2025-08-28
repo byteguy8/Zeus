@@ -7,6 +7,9 @@
 #include "tutils.h"
 #include <stdio.h>
 
+#define VMU_VM ((VM *)context)
+#define VMU_ALLOCATOR (&(((VM *)context)->fake_allocator))
+
 #define VALIDATE_VALUE_BOOL_ARG(_value, _param, _name, _vm){                                          \
     if(!IS_VALUE_BOOL((_value))){                                                                     \
         vmu_error(_vm, "Illegal type of argument %d: expect '%s' of type 'bool'", (_param), (_name)); \
@@ -112,8 +115,8 @@
     if(VALUE_TO_INT(_value) < 0){                                                                                             \
         vmu_error((_vm), "Illegal 'str' index value: cannot be less than 0");                                                 \
     }                                                                                                                         \
-    if(VALUE_TO_INT(_value) > STR_LENGTH_MAX){                                                                                \
-        vmu_error((_vm), "Illegal 'str' index value: cannot be greater than %d", STR_LENGTH_MAX);                             \
+    if(VALUE_TO_INT(_value) > SIDX_T_MAX){                                                                                \
+        vmu_error((_vm), "Illegal 'str' index value: cannot be greater than %d", SIDX_T_MAX);                             \
     }                                                                                                                         \
     if((STR_LENGTH_TYPE)VALUE_TO_INT(_value) >= (STR_LENGTH_TYPE)(_size)){                                                    \
         vmu_error((_vm), "Index %d out of bounds for %d", (STR_LENGTH_TYPE)(VALUE_TO_INT(_value)), (STR_LENGTH_TYPE)(_size)); \
@@ -163,78 +166,164 @@
 #define TO_ARRAY_INDEX(_value) ((ARRAY_LENGTH_TYPE)(VALUE_TO_INT((_value))))
 #define TO_LIST_INDEX(_value) ((LIST_LENGTH_TYPE)(VALUE_TO_INT((_value))))
 
-#define CURRENT_FRAME(vm)(&(vm)->frame_stack[(vm)->frame_ptr - 1])
-#define CURRENT_LOCALS(vm)(CURRENT_FRAME(vm)->locals)
-#define CURRENT_FN(vm)(CURRENT_FRAME(vm)->fn)
-#define CURRENT_CHUNKS(vm)(CURRENT_FN(vm)->chunks)
-#define CURRENT_CONSTANTS(vm)(CURRENT_FN(vm)->integers)
-#define CURRENT_FLOAT_VALUES(vm)(CURRENT_FN(vm)->floats)
-#define CURRENT_MODULE(vm)((vm)->modules[(vm)->module_ptr - 1])
+#define CURRENT_FRAME(_vm)(&(_vm)->frame_stack[(_vm)->frame_ptr - 1])
+#define CURRENT_LOCALS(_vm)(CURRENT_FRAME(_vm)->locals)
+#define CURRENT_FN(_vm)(CURRENT_FRAME(_vm)->fn)
+#define CURRENT_CHUNKS(_vm)(CURRENT_FN(_vm)->chunks)
+#define CURRENT_LOCATIONS(vm)(CURRENT_FN(vm)->locations)
+#define CURRENT_ICONSTS(_vm)(CURRENT_FN(_vm)->integers)
+#define CURRENT_FCONSTS(_vm)(CURRENT_FN(_vm)->floats)
 
-void vmu_error(VM *vm, char *msg, ...);
+#define SELECTED_MODULE(_vm)((_vm)->modules[(_vm)->module_ptr - 1])
 
-uint32_t vmu_hash_obj(ObjHeader *obj);
-uint32_t vmu_hash_value(Value *value);
+int vmu_error(VM *vm, char *msg, ...);
+int vmu_internal_error(VM *vm, char *msg, ...);
 
-int vmu_obj_to_str(ObjHeader *obj, BStr *bstr);
-int vmu_value_to_str(Value *value, BStr *bstr);
+static inline uint8_t validate_value_bool_arg(Value *value, uint8_t param, char *name, VM *vm){
+    if(!IS_VALUE_BOOL(value)){
+        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'bool'", param, name);
+    }
 
-void vmu_print_obj(FILE *stream, ObjHeader *obj);
-void vmu_print_value(FILE *stream, Value *value);
+    return VALUE_TO_BOOL(value);
+}
+
+static inline int64_t validate_value_int_arg(Value *value, uint8_t param, char *name, VM *vm){
+    if(!IS_VALUE_INT(value)){
+        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'int'", param, name);
+    }
+
+    return VALUE_TO_INT(value);
+}
+
+static inline double validate_value_float_arg(Value *value, uint8_t param, char *name, VM *vm){
+    if(!IS_VALUE_FLOAT(value)){
+        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'float'", param, name);
+    }
+
+    return VALUE_TO_FLOAT(value);
+}
+
+static inline double validate_value_ifloat_arg(Value *value, uint8_t param, char *name, VM *vm){
+    if(IS_VALUE_INT(value)){
+        return (double)VALUE_TO_INT(value);
+    }
+
+    if(IS_VALUE_FLOAT(value)){
+        return VALUE_TO_FLOAT(value);
+    }
+
+    vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'int' or 'float'", param, name);
+
+    return -1;
+}
+
+static inline int64_t validate_value_int_range_arg(Value *value, uint8_t param, char *name, int64_t from, int64_t to, VM *vm){
+    if(!IS_VALUE_INT(value)){
+        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'int'", param, name);
+    }
+
+    int64_t i64_value = VALUE_TO_INT(value);
+
+    if(i64_value < from){
+        vmu_error(vm, "Illegal value of argument %" PRIu8 ": expect '%s' be greater or equals to %" PRId64 ", but got %" PRId64, param, name, from, i64_value);
+    }
+
+    if(i64_value > to){
+        vmu_error(vm, "Illegal value of argument %" PRIu8 ": expect '%s' be less or equals to %" PRId64 ", but got %" PRId64, param, name, to, i64_value);
+    }
+
+    return i64_value;
+}
+
+static inline StrObj *validate_value_str_arg(Value *value, uint8_t param, char *name, VM *vm){
+    if(!IS_VALUE_STR(value)){
+        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'str'", param, name);
+    }                                                                                                \
+
+    return VALUE_TO_STR(value);
+}
 
 void vmu_clean_up(VM *vm);
 void vmu_gc(VM *vm);
 
-uint32_t vmu_raw_str_to_table(char **raw_str, VM *vm, char **out_raw_str);
+Frame *vmu_current_frame(VM *vm);
+#define VMU_CURRENT_FN(_vm)(vmu_current_frame(_vm)->fn)
+#define VMU_CURRENT_MODULE(_vm)(VMU_CURRENT_FN(_vm)->module)
 
-Value *vmu_clone_value(Value *value, VM *vm);
+uint32_t vmu_hash_obj(Obj *obj);
+uint32_t vmu_hash_value(Value *value);
+char *vmu_value_to_str(Value value, VM *vm, size_t *out_len);
+void vmu_print_value(FILE *stream, Value *value);
+
+Value *vmu_clone_value(Value value, VM *vm);
 void vmu_destroy_value(Value *value, VM *vm);
+//------------------    STRING    --------------------------//
+int vmu_create_str(char runtime, size_t raw_str_len, char *raw_str, VM *vm, StrObj **out_str_obj);
+void vmu_destroy_str(StrObj *str_obj, VM *vm);
+int vmu_str_is_int(StrObj *str_obj);
+int vmu_str_is_float(StrObj *str_obj);
+int64_t vmu_str_len(StrObj *str_obj);
+StrObj *vmu_str_char(int64_t idx, StrObj *str_obj, VM *vm);
+int64_t vmu_str_code(int64_t idx, StrObj *str_obj, VM *vm);
+StrObj *vmu_str_concat(StrObj *a_str_obj, StrObj *b_str_obj, VM *vm);
+StrObj *vmu_str_mul(int64_t by, StrObj *str_obj, VM *vm);
+StrObj *vmu_str_insert_at(int64_t idx, StrObj *a, StrObj *b, VM *vm);
+StrObj *vmu_str_remove(int64_t from, int64_t to, StrObj *str_obj, VM *vm);
+StrObj *vmu_str_sub_str(int64_t from, int64_t to, StrObj *str_obj, VM *vm);
+//------------------    ARRAY    ---------------------------//
+ArrayObj *vmu_create_array(int64_t len, VM *vm);
+void vmu_destroy_array(ArrayObj *array_obj, VM *vm);
+int64_t vmu_array_len(ArrayObj *array_obj);
+Value vmu_array_get_at(int64_t idx, ArrayObj *array_obj, VM *vm);
+void vmu_array_set_at(int64_t idx, Value value, ArrayObj *array_obj, VM *vm);
+Value vmu_array_first(ArrayObj *array_obj, VM *vm);
+Value vmu_array_last(ArrayObj *array_obj, VM *vm);
+ArrayObj *vmu_array_grow(int64_t by, ArrayObj *array_obj, VM *vm);
+ArrayObj *vmu_array_join(ArrayObj *a_array_obj, ArrayObj *b_array_obj, VM *vm);
+//-------------------    LIST    ---------------------------//
+ListObj *vmu_create_list(VM *vm);
+void vmu_destroy_list(ListObj *list_obj, VM *vm);
+int64_t vmu_list_len(ListObj *list_obj);
+int64_t vmu_list_clear(ListObj *list_obj);
+Value vmu_list_get_at(int64_t idx, ListObj *list_obj, VM *vm);
+void vmu_list_insert(Value value, ListObj *list_obj, VM *vm);
+Value vmu_list_set_at(int64_t idx, Value value, ListObj *list_obj, VM *vm);
+Value vmu_list_remove(int64_t idx, ListObj *list_obj, VM *vm);
+//-------------------    DICT    ---------------------------//
+DictObj *vmu_create_dict(VM *vm);
+void vmu_destroy_dict(DictObj *dict_obj, VM *vm);
+void vmu_dict_put(Value key, Value value, DictObj *dict_obj, VM *vm);
+void vmu_dict_raw_put_str_value(char *str, Value value, DictObj *dict_obj, VM *vm);
+Value vmu_dict_get(Value key, DictObj *dict_obj, VM *vm);
+//------------------    RECORD    --------------------------//
+RecordObj *vmu_create_record(uint16_t length, VM *vm);
+void vmu_destroy_record(RecordObj *record_obj, VM *vm);
+void vmu_record_set_attr(size_t attr_len, char *attr, Value value, RecordObj *record_obj, VM *vm);
 
-GlobalValue *vmu_global_value(VM *vm);
-void vmu_destroy_global_value(GlobalValue *global_value, VM *vm);
-
-ObjHeader *vmu_create_str_obj(char **raw_str_ptr, VM *vm);
-ObjHeader *vmu_create_str_cpy_obj(char *raw_str, VM *vm);
-ObjHeader *vmu_create_unchecked_str_obj(char *raw_str, VM *vm);
-void vmu_destroy_str_obj(StrObj *str_obj, VM *vm);
-
-ObjHeader *vmu_create_array_obj(aidx_t len, VM *vm);
-void vmu_destroy_array_obj(ArrayObj *array_obj, VM *vm);
-
-ObjHeader *vmu_create_list_obj(VM *vm);
-void vmu_destroy_list_obj(ListObj *list_obj, VM *vm);
-
-ObjHeader *vmu_create_dict_obj(VM *vm);
-void vmu_destroy_dict_obj(DictObj *dict_obj, VM *vm);
-
-ObjHeader *vmu_create_record_obj(uint8_t length, VM *vm);
 RecordRandom *vmu_create_record_random(VM *vm);
 RecordFile *vmu_create_record_file(char *raw_mode, char mode, char *pathname, VM *vm);
-ObjHeader *vmu_create_record_random_obj(VM *vm);
-ObjHeader *vmu_create_record_file_obj(char *raw_mode, char mode, char *pathname, VM *vm);
-void vmu_destroy_record_obj(RecordObj *record_obj, VM *vm);
+Obj *vmu_create_record_random_obj(VM *vm);
+Obj *vmu_create_record_file_obj(char *raw_mode, char mode, char *pathname, VM *vm);
+void vmu_destroy_record(RecordObj *record_obj, VM *vm);
 void vmu_destroy_record_random(RecordRandom *record_random, VM *vm);
 void vmu_destroy_record_file(RecordFile *record_file, VM *vm);
+//----------------    NATIVE FN    -------------------------//
+NativeFnObj *vmu_create_native_fn(Value target, NativeFn *native_fn, VM *vm);
+void vmu_destroy_native_fn(NativeFnObj *native_fn_obj, VM *vm);
 
-ObjHeader *vmu_create_raw_native_fn_obj(int arity, char *name, Value *target, RawNativeFn raw_native, VM *vm);
-ObjHeader *vmu_create_native_fn_obj(NativeFn *native_fn, VM *vm);
-void vmu_destroy_native_fn_obj(NativeFnObj *native_fn_obj, VM *vm);
-
-ObjHeader *vmu_create_fn_obj(Fn *fn, VM *vm);
-void vmu_destroy_fn_obj(FnObj *fn_obj, VM *vm);
-
-ObjHeader *vmu_closure_obj(MetaClosure *meta, VM *vm);
-void vmu_destroy_closure_obj(ClosureObj *closure_obj, VM *vm);
-
-ObjHeader *vmu_create_native_module_obj(NativeModule *native_module, VM *vm);
+Obj *vmu_create_raw_native_fn_obj(int arity, char *name, Value *target, RawNativeFn raw_native, VM *vm);
+Obj *vmu_create_native_fn_obj(NativeFn *native_fn, VM *vm);
+//--------------------    FN    ----------------------------//
+FnObj *vmu_create_fn(Fn *fn, VM *vm);
+void vmu_destroy_fn(FnObj *fn_obj, VM *vm);
+//-----------------    CLOSURE    --------------------------//
+ClosureObj *vmu_create_closure(MetaClosure *meta, VM *vm);
+void vmu_destroy_closure(ClosureObj *closure_obj, VM *vm);
+//--------------    NATIVE MODULE    -----------------------//
+NativeModuleObj *vmu_create_native_module(NativeModule *native_module, VM *vm);
 void vmu_destroy_native_module_obj(NativeModuleObj *native_module_obj, VM *vm);
-
-ObjHeader *vmu_create_module_obj(Module *module, VM *vm);
+//------------------    MODULE    --------------------------//
+Obj *vmu_create_module_obj(Module *module, VM *vm);
 void vmu_destroy_module_obj(ModuleObj *module_obj, VM *vm);
-
-void vmu_insert_obj(ObjHeader *obj, ObjHeader **raw_head, ObjHeader **raw_tail);
-void vmu_remove_obj(ObjHeader *obj, ObjHeader **raw_head, ObjHeader **raw_tail);
-
-#define ACKNOWLEDGE_OBJ(_obj, _vm)(vmu_insert_obj((_obj), (ObjHeader **)&(_vm)->red_head, (ObjHeader **)&(_vm)->red_tail))
 
 #endif

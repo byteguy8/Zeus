@@ -10,8 +10,14 @@
 #include <setjmp.h>
 #include <assert.h>
 
-//> PRIVATE INTERFACE
+#define COMPILE_ALLOCATOR (&(lexer->fake_ctallocator))
+#define RUNTIME_ALLOCATOR (&(lexer->fake_rtallocator))
+//--------------------------------------------------------------------------//
+//                            PRIVATE INTERFACE                             //
+//--------------------------------------------------------------------------//
+//--------------------------------  ERROR  ---------------------------------//
 static void error(Parser *parser, Token *token, char *msg, ...);
+//--------------------------------  OTHER  ---------------------------------//
 static Expr *create_expr(ExprType type, void *sub_expr, Parser *parser);
 static Stmt *create_stmt(StmtType type, void *sub_stmt, Parser *parser);
 static Token *peek(Parser *parser);
@@ -21,7 +27,7 @@ static int match(Parser *parser, int count, ...);
 static int check(Parser *parser, TokType type);
 Token *consume(Parser *parser, TokType type, char *err_msg, ...);
 DynArr *record_key_values(Token *record_token, Parser *parser);
-// EXPRESSIONS
+//------------------------------  EXPRESSION  ------------------------------//
 Expr *parse_expr(Parser *paser);
 Expr *parse_assign(Parser *parser);
 Expr *parse_is_expr(Parser *parser);
@@ -34,6 +40,8 @@ Expr *parse_bitwise_and(Parser *parser);
 Expr *parse_equality(Parser *parser);
 Expr *parse_relational(Parser *parser);
 Expr *parse_shift(Parser *parser);
+Expr *parse_concat(Parser *parser);
+Expr *parse_mulstr(Parser *parser);
 Expr *parse_term(Parser *parser);
 Expr *parse_factor(Parser *parser);
 Expr *parse_unary(Parser *parser);
@@ -43,7 +51,7 @@ Expr *parse_dict(Parser *parser);
 Expr *parse_list(Parser *parser);
 Expr *parse_array(Parser *parser);
 Expr *parse_literal(Parser *parser);
-// STATEMENTS
+//------------------------------  STATEMENT  -------------------------------//
 Stmt *parse_stmt(Parser *parser);
 Stmt *parse_expr_stmt(Parser *parser);
 DynArr *parse_block_stmt(Parser *parser);
@@ -58,8 +66,9 @@ Stmt *parse_function_stmt(Parser *parser);
 Stmt *parse_import_stmt(Parser *parser);
 Stmt *parse_load_stmt(Parser *parser);
 Stmt *parse_export_stmt(Parser *parser);
-//< PRIVATE INTERFACE
-
+//--------------------------------------------------------------------------//
+//                          PRIVATE IMPLEMENTATION                          //
+//--------------------------------------------------------------------------//
 void error(Parser *parser, Token *token, char *msg, ...){
     va_list args;
 	va_start(args, msg);
@@ -423,11 +432,11 @@ Expr *parse_relational(Parser *parser){
 }
 
 Expr *parse_shift(Parser *parser){
-    Expr *left = parse_term(parser);
+    Expr *left = parse_concat(parser);
 
 	while(match(parser, 2, LEFT_SHIFT_TOKTYPE, RIGHT_SHIFT_TOKTYPE)){
 		Token *operator = previous(parser);
-		Expr *right = parse_term(parser);
+		Expr *right = parse_concat(parser);
 
 		BitWiseExpr *bitwise_expr = MEMORY_ALLOC(BitWiseExpr, 1, parser->ctallocator);
 
@@ -436,6 +445,44 @@ Expr *parse_shift(Parser *parser){
 		bitwise_expr->right = right;
 
 		left = create_expr(BITWISE_EXPRTYPE, bitwise_expr, parser);
+	}
+
+	return left;
+}
+
+Expr *parse_concat(Parser *parser){
+    Expr *left = parse_mulstr(parser);
+
+	while(match(parser, 1, DOUBLE_DOT_TOKTYPE)){
+		Token *operator = previous(parser);
+		Expr *right = parse_mulstr(parser);
+
+		ConcatExpr *concat_expr = MEMORY_ALLOC(ConcatExpr, 1, parser->ctallocator);
+
+		concat_expr->left = left;
+		concat_expr->operator = operator;
+		concat_expr->right = right;
+
+		left = create_expr(CONCAT_EXPRTYPE, concat_expr, parser);
+	}
+
+	return left;
+}
+
+Expr *parse_mulstr(Parser *parser){
+    Expr *left = parse_term(parser);
+
+	while(match(parser, 1, DOUBLE_ASTERISK_TOKTYPE)){
+		Token *operator = previous(parser);
+		Expr *right = parse_term(parser);
+
+		MulStrExpr *mulstr_expr = MEMORY_ALLOC(MulStrExpr, 1, parser->ctallocator);
+
+		mulstr_expr->left = left;
+		mulstr_expr->operator = operator;
+		mulstr_expr->right = right;
+
+		left = create_expr(MULSTR_EXPRTYPE, mulstr_expr, parser);
 	}
 
 	return left;
@@ -767,12 +814,9 @@ Expr *parse_literal(Parser *parser){
 
 	if(match(parser, 1, STR_TYPE_TOKTYPE)){
 		Token *string_token = previous(parser);
-		size_t literal_size = string_token->literal_size;
+		StrExpr *string_expr = MEMORY_ALLOC(StrExpr, 1, parser->ctallocator);
 
-		StringExpr *string_expr = MEMORY_ALLOC(StringExpr, 1, parser->ctallocator);
-
-		string_expr->hash = literal_size > 0 ? *(uint32_t *)string_token->literal : 0;
-		string_expr->string_token = string_token;
+		string_expr->str_token = string_token;
 
 		return create_expr(STRING_EXPRTYPE, string_expr, parser);
 	}
@@ -841,10 +885,9 @@ Expr *parse_literal(Parser *parser){
 
     if(match(parser, 1, IDENTIFIER_TOKTYPE)){
         Token *identifier_token = previous(parser);
-
         IdentifierExpr *identifier_expr = MEMORY_ALLOC(IdentifierExpr, 1, parser->ctallocator);
 
-        identifier_expr->identifier_token= identifier_token;
+        identifier_expr->identifier_token = identifier_token;
 
         return create_expr(IDENTIFIER_EXPRTYPE, identifier_expr,parser);
     }
@@ -1297,12 +1340,19 @@ Stmt *parse_export_stmt(Parser *parser){
 
     return create_stmt(EXPORT_STMTTYPE, export_stmt, parser);
 }
-
+//--------------------------------------------------------------------------//
+//                          PUBLIC IMPLEMENTATION                           //
+//--------------------------------------------------------------------------//
 Parser *parser_create(Allocator *allocator){
     Parser *parser = MEMORY_ALLOC(Parser, 1, allocator);
-    if(!parser){return NULL;}
+
+    if(!parser){
+        return NULL;
+    }
+
 	memset(parser, 0, sizeof(Parser));
     parser->ctallocator = allocator;
+
 	return parser;
 }
 

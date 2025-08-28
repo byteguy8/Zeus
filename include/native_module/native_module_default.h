@@ -3,45 +3,10 @@
 
 #include "tutils.h"
 
-static void ls_native_module(NativeModule *native_module, ArrayObj *symbols, Allocator *allocator){
-    LZHTable *raw_symbols = native_module->symbols;
-    aidx_t i = 0;
-
-    for (LZHTableNode *current = raw_symbols->head; current; current = current->next_table_node){
-        NativeModuleSymbol *symbol = (NativeModuleSymbol *)current->value;
-
-        if(symbol->type == NATIVE_FUNCTION_NMSYMTYPE){
-            NativeFn *native_fn = symbol->value.native_fn;
-            NativeFnObj *native_fn_obj = MEMORY_ALLOC(NativeFnObj, 1, allocator);
-
-            native_fn_obj->header.type = NATIVE_FN_OTYPE;
-            native_fn_obj->native_fn = native_fn;
-
-            symbols->values[i++] = OBJ_VALUE(&native_fn_obj->header);
-        }
-    }
-}
-
-static void ls_module(Module *module, DynArr *symbols, Allocator *allocator){
-    LZHTable *globals = module->submodule->globals;
-
-    for (LZHTableNode *current = globals->head; current; current = current->next_table_node){
-        GlobalValue *global_value = (GlobalValue *)current->value;
-
-        if(global_value->access == PRIVATE_GVATYPE || !IS_VALUE_FN(global_value->value)){
-            continue;
-        }
-
-        FnObj *fn_obj = VALUE_TO_FN(global_value->value);
-
-        dynarr_insert(&OBJ_VALUE(fn_obj), symbols);
-    }
-}
-
 Value native_fn_print_stack(uint8_t argsc, Value *values, Value *target, void *context){
     VM *vm = (VM *)context;
 
-    for (Value *current = vm->stack; current < vm->stack_top; current++){
+    for(Value *current = vm->stack; current < vm->stack_top; current++){
         vmu_print_value(stdout, current);
         fprintf(stdout, "\n");
     }
@@ -49,56 +14,9 @@ Value native_fn_print_stack(uint8_t argsc, Value *values, Value *target, void *c
     return EMPTY_VALUE;
 }
 
-Value native_fn_ls(uint8_t argsc, Value *values, Value *target, void *context){
-    Value *module_value = &values[0];
-
-    VM *vm = (VM *)context;
-    ObjHeader *array_obj_header = NULL;
-
-    if(IS_VALUE_NATIVE_MODULE(module_value)){
-        NativeModuleObj *native_module_obj = VALUE_TO_NATIVE_MODULE(module_value);
-        NativeModule *native_module = native_module_obj->native_module;
-        LZHTable *raw_symbols = native_module->symbols;
-        size_t symbols_len = raw_symbols->n;
-
-        VALIDATE_ARRAY_SIZE(symbols_len, vm)
-
-        array_obj_header = vmu_create_array_obj((aidx_t)symbols_len, vm);
-        ArrayObj *array_obj = OBJ_TO_ARRAY(array_obj_header);
-
-        ls_native_module(native_module, array_obj, vm->fake_allocator);
-    }
-
-    if(IS_VALUE_MODULE(module_value)){
-        ModuleObj *module_obj = VALUE_TO_MODULE(module_value);
-        Module *module = module_obj->module;
-        DynArr *raw_symbols = MODULE_SYMBOLS(module);
-        size_t symbols_len = DYNARR_LEN(raw_symbols);
-
-        VALIDATE_ARRAY_SIZE(symbols_len, vm)
-
-        DynArr *temp_symbols = FACTORY_DYNARR_TYPE(Value, vm->allocator);
-
-        ls_module(module, temp_symbols, vm->fake_allocator);
-
-        array_obj_header = vmu_create_array_obj((aidx_t)DYNARR_LEN(temp_symbols), vm);
-        ArrayObj *array_obj = OBJ_TO_ARRAY(array_obj_header);
-
-        memcpy(array_obj->values, temp_symbols->items, VALUE_SIZE * DYNARR_LEN(temp_symbols));
-
-        dynarr_destroy(temp_symbols);
-    }
-
-	return OBJ_VALUE(array_obj_header);
-}
-
 Value native_fn_exit(uint8_t argsc, Value *values, Value *target, void *context){
-	Value *exit_code_value = &values[0];
-
-    VALIDATE_VALUE_INT_ARG(exit_code_value, 1, "exit code", context);
-
-    int64_t exit_code = VALUE_TO_INT(exit_code_value);
     VM *vm = (VM *)context;
+    int64_t exit_code = validate_value_int_range_arg(&values[0], 1, "exit code", 0, 255, vm);
 
     vm->halt = 1;
     vm->exit_code = (unsigned char)exit_code;
@@ -107,128 +25,108 @@ Value native_fn_exit(uint8_t argsc, Value *values, Value *target, void *context)
 }
 
 Value native_fn_assert(uint8_t argsc, Value *values, Value *target, void *context){
-	Value *raw_value = &values[0];
-
-    VALIDATE_VALUE_BOOL_ARG(raw_value, 1, "value", context)
-    uint8_t value = VALUE_TO_BOOL(raw_value);
+    uint8_t value = validate_value_bool_arg(&values[0], 1, "assertion", VMU_VM);
 
     if(!value){
-        vmu_error(context, "Assertion failed");
+        vmu_error(VMU_VM, "ASSERTION FAILED");
     }
 
 	return EMPTY_VALUE;
 }
 
 Value native_fn_assertm(uint8_t argsc, Value *values, Value *target, void *context){
-	Value *raw_value = &values[0];
-    Value *msg_value = &values[1];
-
-    VALIDATE_VALUE_BOOL_ARG(raw_value, 1, "value", context)
-    VALIDATE_VALUE_STR_ARG(msg_value, 2, "message", context)
-
-    uint8_t value = VALUE_TO_BOOL(raw_value);
-    StrObj *msg = VALUE_TO_STR(msg_value);
+    uint8_t value = validate_value_bool_arg(&values[0], 1, "assertion", VMU_VM);
+    StrObj *str_obj = validate_value_str_arg(&values[1], 2, "message", VMU_VM);
 
     if(!value){
-        vmu_error(context, "Assertion failed: %s", msg->buff);
+        vmu_error(VMU_VM, "%s", str_obj->buff);
     }
 
 	return EMPTY_VALUE;
 }
 
 Value native_fn_is_str_int(uint8_t argsc, Value *values, Value *target, void *context){
-	Value *raw_value = &values[0];
-	StrObj *str = NULL;
-
-    VALIDATE_VALUE_STR_ARG(raw_value, 1, "value", context)
-	str = VALUE_TO_STR(raw_value);
-
-	return BOOL_VALUE((uint8_t)utils_is_integer(str->buff));
+    StrObj *str_obj = validate_value_str_arg(&values[0], 1, "string", VMU_VM);
+    return BOOL_VALUE((uint8_t)vmu_str_is_int(str_obj));
 }
 
 Value native_fn_is_str_float(uint8_t argsc, Value *values, Value *target, void *context){
-	Value *raw_value = &values[0];
-	StrObj *str = NULL;
-
-    VALIDATE_VALUE_STR_ARG(raw_value, 1, "value", context)
-	str = VALUE_TO_STR(raw_value);
-
-	return BOOL_VALUE((uint8_t)utils_is_float(str->buff));
+    StrObj *str_obj = validate_value_str_arg(&values[0], 1, "string", VMU_VM);
+    return BOOL_VALUE((uint8_t)vmu_str_is_float(str_obj));
 }
 
-Value native_fn_str_to_int(uint8_t argsc, Value *values, Value *target, void *context){
-	Value *raw_value = &values[0];
-	StrObj *str = NULL;
-    int64_t value;
+Value native_fn_to_str(uint8_t argsc, Value *values, Value *target, void *context){
+    size_t len;
+    char *raw_str = vmu_value_to_str(values[0], VMU_VM, &len);
+    StrObj *str_obj = NULL;
 
-    VALIDATE_VALUE_STR_ARG(raw_value, 1, "value", context)
-	str = VALUE_TO_STR(raw_value);
-
-	if(utils_decimal_str_to_i64(str->buff, &value)){
-        vmu_error(context, "String do not contains a valid integer");
+    if(vmu_create_str(1, len, raw_str, VMU_VM, &str_obj)){
+        MEMORY_DEALLOC(char, len + 1, raw_str, &(VMU_VM->fake_allocator));
     }
 
-	return INT_VALUE(value);
+    return OBJ_VALUE(str_obj);
 }
 
-Value native_fn_int_to_str(uint8_t argsc, Value *values, Value *target, void *context){
-    Value *number_value = &values[0];
-    char buff[21] = {0};
-
-    VALIDATE_VALUE_INT_ARG(number_value, 1, "value", context)
-
-	int64_t number = VALUE_TO_INT(number_value);
-    int len = utils_i64_to_str(number, buff);
-    char *raw_number_str = factory_clone_raw_str_range(0, len, buff, ((VM *)context)->fake_allocator);
-    ObjHeader *number_str_obj = vmu_create_str_obj(&raw_number_str, context);
-
-    return OBJ_VALUE(number_str_obj);
-}
-
-Value native_fn_str_to_float(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_to_int(uint8_t argsc, Value *values, Value *target, void *context){
     Value *raw_value = &values[0];
-    StrObj *str = NULL;
-    double value;
 
-    VALIDATE_VALUE_STR_ARG(raw_value, 1, "value", context)
-    str = VALUE_TO_STR(raw_value);
-
-    if(utils_str_to_double(str->buff, &value)){
-        vmu_error(context, "String do not contains a valid float");
+    if(IS_VALUE_BOOL(raw_value)){
+        return INT_VALUE((int64_t)VALUE_TO_BOOL(raw_value));
     }
 
-	return FLOAT_VALUE(value);
+    if(IS_VALUE_INT(raw_value)){
+        return *raw_value;
+    }
+
+    if(IS_VALUE_FLOAT(raw_value)){
+        return INT_VALUE((int64_t)VALUE_TO_FLOAT(raw_value));
+    }
+
+    if(IS_VALUE_STR(raw_value)){
+        int64_t value;
+        StrObj *str_obj = VALUE_TO_STR(raw_value);
+
+        if(!vmu_str_is_int(str_obj)){
+            vmu_error(VMU_VM, "Failed to parse 'str' to 'int': contains not valid digits");
+        }
+
+        utils_decimal_str_to_i64(str_obj->buff, &value);
+
+        return INT_VALUE(value);
+    }
+
+    vmu_error(VMU_VM, "Failed to parse to 'int': unsupported type");
+
+    return EMPTY_VALUE;
 }
 
-Value native_fn_float_to_str(uint8_t argsc, Value *values, Value *target, void *context){
-    Value *number_value = &values[0];
-    size_t buff_len = 1024;
-    char buff[buff_len];
-
-    VALIDATE_VALUE_FLOAT_ARG(number_value, 1, "value", context)
-
-	double number = VALUE_TO_FLOAT(number_value);
-    int len = utils_double_to_str(buff_len, number, buff);
-    char *raw_number_str = factory_clone_raw_str_range(0, len, buff, ((VM *)context)->fake_allocator);
-    ObjHeader *number_str_obj = vmu_create_str_obj(&raw_number_str, context);
-
-    return OBJ_VALUE(number_str_obj);
-}
-
-Value native_fn_int_to_float(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_to_float(uint8_t argsc, Value *values, Value *target, void *context){
     Value *raw_value = &values[0];
 
-    VALIDATE_VALUE_INT_ARG(raw_value, 1, "value", context)
+    if(IS_VALUE_INT(raw_value)){
+        return FLOAT_VALUE((double)VALUE_TO_INT(raw_value));
+    }
 
-    return FLOAT_VALUE((double)VALUE_TO_INT(raw_value));
-}
+    if(IS_VALUE_FLOAT(raw_value)){
+        return *raw_value;
+    }
 
-Value native_fn_float_to_int(uint8_t argsc, Value *values, Value *target, void *context){
-    Value *raw_value = &values[0];
+    if(IS_VALUE_STR(raw_value)){
+        double value;
+        StrObj *str_obj = VALUE_TO_STR(raw_value);
 
-    VALIDATE_VALUE_FLOAT_ARG(raw_value, 1, "value", context)
+        if(!vmu_str_is_float(str_obj)){
+            vmu_error(VMU_VM, "Failed to parse 'str' to 'float': malformed float string");
+        }
 
-    return INT_VALUE((uint64_t)VALUE_TO_FLOAT(raw_value));
+        utils_str_to_double(str_obj->buff, &value);
+
+        return FLOAT_VALUE(value);
+    }
+
+    vmu_error(VMU_VM, "Failed to parse to 'int': unsupported type");
+
+    return EMPTY_VALUE;
 }
 
 Value native_fn_print(uint8_t argsc, Value *values, Value *target, void *context){
@@ -258,30 +156,7 @@ Value native_fn_eprintln(uint8_t argsc, Value *values, Value *target, void *cont
 }
 
 Value native_fn_readln(uint8_t argsc, Value *values, Value *target, void *context){
-    VM *vm = (VM *)context;
-    BStr *bstr = FACTORY_BSTR(vm->allocator);
-
-    while (1){
-        int character = fgetc(stdin);
-
-        if(character == EOF){
-            break;
-        }
-
-        char value[] = {character, 0};
-
-        bstr_append(value, bstr);
-
-        if(character == '\n'){
-            break;
-        }
-    }
-
-    ObjHeader *str_obj_header = vmu_create_str_cpy_obj((char *)bstr->buff, vm);
-
-    bstr_destroy(bstr);
-
-	return OBJ_VALUE(str_obj_header);
+    return EMPTY_VALUE;
 }
 
 Value native_fn_gc(uint8_t argsc, Value *values, Value *target, void *context){

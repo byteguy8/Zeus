@@ -1,6 +1,7 @@
 #ifndef FN_H
 #define FN_H
 
+#include "memory.h"
 #include "module.h"
 #include "dynarr.h"
 
@@ -14,12 +15,13 @@ typedef struct opcode_location{
 
 typedef struct fn{
     char *name;
-    DynArr *chunks;
     DynArr *params;
+    DynArr *chunks;
 	DynArr *locations;
-    DynArr *integers;
-    DynArr *floats;
+    DynArr *iconsts;
+    DynArr *fconsts;
     Module *module;
+    Allocator *allocator;
 }Fn;
 
 #endif

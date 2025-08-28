@@ -8,7 +8,7 @@
 
 #define EMPTY_VALUE ((Value){.type = EMPTY_VTYPE})
 #define BOOL_VALUE(_value)((Value){.type = BOOL_VTYPE, .content.bool = (_value)})
-#define INT_VALUE(_value)((Value){.type = INT_VTYPE, .content.i64 = (_value)})
+#define INT_VALUE(_value)((Value){.type = INT_VTYPE, .content.ivalue = (_value)})
 #define FLOAT_VALUE(_value)((Value){.type = FLOAT_VTYPE, .content.fvalue = (_value)})
 #define OBJ_VALUE(_value)((Value){.type = OBJ_VTYPE, .content.obj = (_value)})
 
@@ -24,9 +24,9 @@
 #define OBJ_TO_MODULE(_obj)((ModuleObj *)(_obj))
 
 #define VALUE_TO_BOOL(_value)((_value)->content.bool)
-#define VALUE_TO_INT(_value)((_value)->content.i64)
+#define VALUE_TO_INT(_value)((_value)->content.ivalue)
 #define VALUE_TO_FLOAT(_value)((_value)->content.fvalue)
-#define VALUE_TO_OBJ(_value)((ObjHeader *)((_value)->content.obj))
+#define VALUE_TO_OBJ(_value)((Obj *)((_value)->content.obj))
 #define VALUE_TO_STR(_value)(OBJ_TO_STR(VALUE_TO_OBJ(_value)))
 #define VALUE_TO_ARRAY(_value)(OBJ_TO_ARRAY(VALUE_TO_OBJ(_value)))
 #define VALUE_TO_LIST(_value)(OBJ_TO_LIST(VALUE_TO_OBJ(_value)))
