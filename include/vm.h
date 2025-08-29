@@ -48,7 +48,7 @@ typedef struct frame{
 
 typedef struct vm{
     char halt;
-    jmp_buf err_jmp;
+    jmp_buf exit_jmp;
     unsigned char exit_code;
 
     Value *stack_top;

@@ -459,13 +459,9 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             size_t end = dumpper->ip;
             printf("%8.8s %.7zu\n", "THROW", end - start);
             break;
-        }case LOAD_OPCODE:{
-            char *path = read_str(dumpper, NULL);
+        }case HLT_OPCODE:{
             size_t end = dumpper->ip;
-
-            printf("%8.8s %.7zu", "LOAD", end - start);
-            printf(" | path: %s\n", path);
-
+            printf("%8.8s %.7zu\n", "HLT", end - start);
             break;
         }default:{
             assert("Illegal opcode\n");

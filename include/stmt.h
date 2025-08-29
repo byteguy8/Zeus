@@ -20,7 +20,6 @@ typedef enum stmt_type{
     VAR_DECL_STMTTYPE,
     FUNCTION_STMTTYPE,
     IMPORT_STMTTYPE,
-    LOAD_STMTTYPE,
     EXPORT_STMTTYPE,
 }StmtType;
 
@@ -108,12 +107,6 @@ typedef struct import_stmt{
     DynArr *names;
     Token *alt_name;
 }ImportStmt;
-
-typedef struct load_stmt{
-    Token *load_token;
-    Token *pathname;
-    Token *name;
-}LoadStmt;
 
 typedef struct export_stmt{
     Token *export_token;

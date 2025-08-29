@@ -505,7 +505,7 @@ int vmu_error(VM *vm, char *msg, ...){
 
     vm->exit_code = ERR_VMRESULT;
 
-    longjmp(vm->err_jmp, 1);
+    longjmp(vm->exit_jmp, 1);
 
     return 0;
 }
@@ -622,7 +622,7 @@ int vmu_internal_error(VM *vm, char *msg, ...){
 
     vm->exit_code = ERR_VMRESULT;
 
-    longjmp(vm->err_jmp, 1);
+    longjmp(vm->exit_jmp, 1);
 
     return 0;
 }

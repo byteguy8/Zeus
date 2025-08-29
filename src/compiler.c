@@ -1184,13 +1184,15 @@ void compile_expr(Expr *expr, Compiler *compiler){
             compile_expr(left, compiler);
 
             if(args){
-                for (size_t i = 0; i < DYNARR_LEN(args); i++){
+                size_t len = DYNARR_LEN(args);
+
+                for (size_t i = 0; i < len; i++){
                     compile_expr((Expr *)dynarr_get_ptr(i, args), compiler);
                 }
             }
 
             write_chunk(CALL_OPCODE, compiler);
-			write_location(call_expr->left_paren, compiler);
+            write_location(call_expr->left_paren, compiler);
 
             uint8_t args_count = args ? (uint8_t)DYNARR_LEN(args) : 0;
             write_chunk(args_count, compiler);
@@ -2447,26 +2449,6 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 			}
 
             dynarr_insert_ptr(try_block, tries);
-
-            break;
-        }case LOAD_STMTTYPE:{
-            LoadStmt *load_stmt = (LoadStmt *)stmt->sub_stmt;
-            Token *load_token = load_stmt->load_token;
-            Token *path_token = load_stmt->pathname;
-            Token *name_token = load_stmt->name;
-
-            declare(NATIVE_MODULE_SYMTYPE, name_token, compiler);
-
-            write_chunk(LOAD_OPCODE, compiler);
-            write_location(load_token, compiler);
-            write_i32(*(int32_t*)path_token->literal, compiler);
-
-            write_chunk(GSET_OPCODE, compiler);
-            write_location(load_token, compiler);
-            write_str(name_token->literal_size, name_token->lexeme, compiler);
-
-            write_chunk(POP_OPCODE, compiler);
-            write_location(load_token, compiler);
 
             break;
         }case EXPORT_STMTTYPE:{

@@ -164,4 +164,9 @@ Value native_fn_gc(uint8_t argsc, Value *values, Value *target, void *context){
     return EMPTY_VALUE;
 }
 
+Value native_fn_halt(uint8_t argsc, Value *values, Value *target, void *context){
+    VM *vm = VMU_VM;
+    longjmp(vm->exit_jmp, 1);
+}
+
 #endif

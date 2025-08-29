@@ -3,6 +3,8 @@
 !include/**
 !src
 !src/**
+!examples
+!examples/**
 !makefile
 !.gitignore
 !README.md

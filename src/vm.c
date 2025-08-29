@@ -392,13 +392,8 @@ static int execute(VM *vm){
     frame->fn = main_fn;
 
     for (;;){
-        if(vm->halt){
-            break;
-        }
-
         uint8_t chunk = advance(vm);
         Frame *frame = current_frame(vm);
-
         frame->last_offset = frame->ip - 1;
 
         switch (chunk){
@@ -1662,8 +1657,8 @@ static int execute(VM *vm){
                 }
 
                 break;
-            }case LOAD_OPCODE:{
-                break;
+            }case HLT_OPCODE:{
+                return 0;
             }default:{
                 assert("Illegal opcode");
             }
@@ -1723,12 +1718,11 @@ void vm_initialize(VM *vm){
 }
 
 int vm_execute(LZOHTable *native_fns, Module *module, VM *vm){
-    if(setjmp(vm->err_jmp) == 1){
+    if(setjmp(vm->exit_jmp) == 1){
         return vm->exit_code;
     }else{
         module->submodule->resolved = 1;
 
-        vm->halt = 0;
         vm->exit_code = OK_VMRESULT;
         vm->stack_top = vm->stack;
         vm->frame_ptr = vm->frame_stack;

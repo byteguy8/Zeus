@@ -77,7 +77,7 @@ typedef enum opcode{
     RET_OPCODE,
 	IS_OPCODE,
     THROW_OPCODE,
-    LOAD_OPCODE,
+    HLT_OPCODE,
 }OPCode;
 
 #endif

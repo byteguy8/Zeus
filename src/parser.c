@@ -64,7 +64,6 @@ Stmt *parse_return_stmt(Parser *parser);
 Stmt *parse_var_decl_stmt(Parser *parser);
 Stmt *parse_function_stmt(Parser *parser);
 Stmt *parse_import_stmt(Parser *parser);
-Stmt *parse_load_stmt(Parser *parser);
 Stmt *parse_export_stmt(Parser *parser);
 //--------------------------------------------------------------------------//
 //                          PRIVATE IMPLEMENTATION                          //
@@ -917,11 +916,13 @@ Stmt *parse_stmt(Parser *parser){
         return create_stmt(BLOCK_STMTTYPE, block_stmt, parser);
     }
 
-	if(match(parser, 1, IF_TOKTYPE))
-		return parse_if_stmt(parser);
+	if(match(parser, 1, IF_TOKTYPE)){
+        return parse_if_stmt(parser);
+    }
 
-	if(match(parser, 1, WHILE_TOKTYPE))
-		return parse_while_stmt(parser);
+	if(match(parser, 1, WHILE_TOKTYPE)){
+        return parse_while_stmt(parser);
+    }
 
     if(match(parser, 1, FOR_TOKTYPE)){
         return parse_for_stmt(parser);
@@ -949,26 +950,29 @@ Stmt *parse_stmt(Parser *parser){
         return create_stmt(CONTINUE_STMTTYPE, continue_stmt, parser);
     }
 
-    if(match(parser, 1, RET_TOKTYPE))
+    if(match(parser, 1, RET_TOKTYPE)){
         return parse_return_stmt(parser);
+    }
 
-    if(match(parser, 1, PROC_TOKTYPE))
+    if(match(parser, 1, PROC_TOKTYPE)){
         return parse_function_stmt(parser);
+    }
 
-    if(match(parser, 1, IMPORT_TOKTYPE))
+    if(match(parser, 1, IMPORT_TOKTYPE)){
         return parse_import_stmt(parser);
+    }
 
-    if(match(parser, 1, LOAD_TOKTYPE))
-        return parse_load_stmt(parser);
-
-    if(match(parser, 1, EXPORT_TOKTYPE))
+    if(match(parser, 1, EXPORT_TOKTYPE)){
         return parse_export_stmt(parser);
+    }
 
-    if(match(parser, 1, THROW_TOKTYPE))
+    if(match(parser, 1, THROW_TOKTYPE)){
         return parse_throw_stmt(parser);
+    }
 
-    if(match(parser, 1, TRY_TOKTYPE))
+    if(match(parser, 1, TRY_TOKTYPE)){
         return parse_try_stmt(parser);
+    }
 
     return parse_expr_stmt(parser);
 }
@@ -1292,29 +1296,6 @@ Stmt *parse_import_stmt(Parser *parser){
     import_stmt->alt_name = alt_name;
 
     return create_stmt(IMPORT_STMTTYPE, import_stmt, parser);
-}
-
-Stmt *parse_load_stmt(Parser *parser){
-    Token *load_token = NULL;
-    Token *path_token = NULL;
-    Token *name_token = NULL;
-
-    load_token = previous(parser);
-    path_token = consume(parser, STR_TYPE_TOKTYPE, "Expect path after 'load' keyword");
-
-    consume(parser, AS_TOKTYPE, "Expect 'as' after native library path");
-
-    name_token = consume(parser, IDENTIFIER_TOKTYPE, "Expect name for native library");
-
-    consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of load statement");
-
-    LoadStmt *load_stmt = MEMORY_ALLOC(LoadStmt, 1, parser->ctallocator);
-
-    load_stmt->load_token = load_token;
-    load_stmt->pathname = path_token;
-    load_stmt->name = name_token;
-
-    return create_stmt(LOAD_STMTTYPE, load_stmt, parser);
 }
 
 Stmt *parse_export_stmt(Parser *parser){

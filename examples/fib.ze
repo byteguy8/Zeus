@@ -1,0 +1,11 @@
+proc fib(n){
+    if (n < 2){
+        ret n;
+    }
+
+    ret fib(n - 1) + fib(n - 2);
+}
+
+imut result = fib(40);
+
+println(result);

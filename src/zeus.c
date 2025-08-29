@@ -161,7 +161,6 @@ LZOHTable *create_keywords_table(Allocator *allocator){
     add_keyword("try", TRY_TOKTYPE, keywords, allocator);
     add_keyword("catch", CATCH_TOKTYPE, keywords, allocator);
     add_keyword("throw", THROW_TOKTYPE, keywords, allocator);
-    add_keyword("load", LOAD_TOKTYPE, keywords, allocator);
     add_keyword("export", EXPORT_TOKTYPE, keywords, allocator);
 
     return keywords;
@@ -264,6 +263,7 @@ int main(int argc, char const *argv[]){
     add_native("eprintln", 1, native_fn_eprintln, natives_fns, &rtallocator);
     add_native("readln", 0, native_fn_readln, natives_fns, &rtallocator);
     add_native("gc", 0, native_fn_gc, natives_fns, &rtallocator);
+    add_native("halt", 0, native_fn_halt, natives_fns, &rtallocator);
 
     LZOHTable *keywords = create_keywords_table(&rtallocator);
 	RawStr *source = utils_read_source(source_path, &rtallocator);
