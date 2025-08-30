@@ -166,3 +166,101 @@ try{
     // some code...
 }
 ```
+
+### Conditional
+
+```
+mut sum0 = 0;
+mut sum1 = 0;
+mut sum2 = 0;
+
+for(i = 1 upto 101){
+    if(i <= 25){
+        sum0 += i;
+    }elif(i <= 50){
+        sum1 += i;
+    }else{
+        sum2 += i;
+    }
+}
+
+println("sum #1 (from 1 to 25): " .. to_str(sum0));
+println("sum #2 (from 26 to 50): " .. to_str(sum1));
+println("sum #3 (from 51 to 100): " .. to_str(sum2));
+println("Gauss: " .. to_str(sum0 + sum1 + sum2));
+```
+
+### Loops
+#### While
+
+```
+// PRINTING THE ALPHABET
+
+imut alphabet = "abcdefghijklmnopqrstuvwxyz";
+mut i = 0;
+
+while(i < alphabet.len()){
+    imut letter = alphabet[i];
+    println(letter);
+
+    i += 1;
+}
+
+// PRINTING EVEN NUMBERS IN INTERVAL [1, 100]
+
+mut o = 1;
+
+while(o <= 100){
+    if(o mod 2 != 0){
+        o += 1;
+        continue;
+    }
+
+    println(o);
+
+    io += 1;
+}
+```
+
+#### For
+
+```
+// PRINTING THE ALPHABET
+
+imut alphabet = "abcdefghijklmnopqrstuvwxyz";
+
+// in normal order
+for(i = 0 upto alphabet.len()){
+    imut letter = alphabet[i];
+    println(letter);
+}
+
+// in reverse order
+for(i = 0 downto alphabet.len()){
+    imut letter = alphabet[i];
+    println(letter);
+}
+
+// PRINTING EVEN NUMBERS IN INTERVAL [1, 100]
+
+for(num = 1 upto 101){
+    if(num mod 2 == 0){
+        println(num);
+    }
+}
+
+// PRINTING THE FIRST 10 EVEN NUMBERS IN INTERVAL [1, 100]
+
+mut even_count = 0;
+
+for(num = 1 upto 101){
+    if(num mod 2 == 0){
+        even_count += 1;
+        println(num);
+    }
+
+    if(even_count == 10){
+        stop;
+    }
+}
+```
