@@ -191,7 +191,6 @@ void factory_destroy_native_module(NativeModule *native_module){
 
 Module *factory_create_module(char *name, char *filepath, Allocator *allocator){
 	DynArr *symbols = FACTORY_DYNARR_TYPE(SubModuleSymbol, allocator);
-    LZHTable *tries = FACTORY_LZHTABLE(allocator);
     LZOHTable *globals = FACTORY_LZOHTABLE_LEN(64, allocator);
     DynArr *static_strs = FACTORY_DYNARR_TYPE(RawStr, allocator);
     SubModule *submodule = MEMORY_ALLOC(SubModule, 1, allocator);
@@ -200,9 +199,8 @@ Module *factory_create_module(char *name, char *filepath, Allocator *allocator){
     char *module_pathname = factory_clone_raw_str(filepath, allocator, NULL);
     Module *module = MEMORY_ALLOC(Module, 1, allocator);
 
-    if(!symbols || !tries || !globals || !static_strs || !submodule || !module_name || !module_pathname || !module){
+    if(!symbols || !globals || !static_strs || !submodule || !module_name || !module_pathname || !module){
         dynarr_destroy(symbols);
-        lzhtable_destroy(NULL, NULL, tries);
         LZOHTABLE_DESTROY(globals);
         dynarr_destroy(static_strs);
         MEMORY_DEALLOC(SubModule, 1, submodule, allocator);
@@ -216,7 +214,6 @@ Module *factory_create_module(char *name, char *filepath, Allocator *allocator){
 
     submodule->resolved = 0;
     submodule->symbols = symbols;
-    submodule->tries = tries;
     submodule->globals = globals;
     submodule->static_strs = static_strs;
 
@@ -253,7 +250,6 @@ void factory_destroy_module(Module *module){
         SubModule *submodule = module->submodule;
 
         dynarr_destroy(submodule->symbols);
-        lzhtable_destroy(NULL, NULL, submodule->tries);
         LZOHTABLE_DESTROY(submodule->globals);
         dynarr_destroy(submodule->static_strs);
         MEMORY_DEALLOC(SubModule, 1, submodule, allocator);
