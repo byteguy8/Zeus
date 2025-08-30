@@ -1140,8 +1140,9 @@ Stmt *parse_throw_stmt(Parser *parser){
 
     throw_token = previous(parser);
 
-	if(!check(parser, SEMICOLON_TOKTYPE))
-		value = parse_expr(parser);
+	if(!check(parser, SEMICOLON_TOKTYPE)){
+        value = parse_expr(parser);
+    }
 
     consume(parser, SEMICOLON_TOKTYPE, "Expect ';' at end of throw statement.");
 
@@ -1166,7 +1167,11 @@ Stmt *parse_try_stmt(Parser *parser){
 
 	if(match(parser, 1, CATCH_TOKTYPE)){
 		catch_token = previous(parser);
-		err_identifier = consume(parser, IDENTIFIER_TOKTYPE, "Expect error identifier after 'catch' keyword");
+
+        if(!check(parser, LEFT_BRACKET_TOKTYPE)){
+            err_identifier = consume(parser, IDENTIFIER_TOKTYPE, "Expect error identifier after 'catch' keyword");
+        }
+
 		consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' after 'catch' keyword.");
 		catch_stmts = parse_block_stmt(parser);
 	}

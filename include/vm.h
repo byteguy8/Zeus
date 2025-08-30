@@ -46,6 +46,14 @@ typedef struct frame{
     OutValue *outs_tail;
 }Frame;
 
+typedef struct exception{
+    size_t catch_ip;
+    Value throw_value;
+    Value *stack_top;
+    Frame *frame;
+    struct exception *prev;
+}Exception;
+
 typedef struct vm{
     char halt;
     jmp_buf exit_jmp;
@@ -76,6 +84,7 @@ typedef struct vm{
     Allocator *allocator;
     Allocator fake_allocator;
 //< MEMORY HANDLERS
+    Exception *exception_stack;
 }VM;
 
 VM *vm_create(Allocator *allocator);

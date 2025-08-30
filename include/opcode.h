@@ -76,6 +76,8 @@ typedef enum opcode{
     INDEX_OPCODE,
     RET_OPCODE,
 	IS_OPCODE,
+    TRYO_OPCODE,
+    TRYC_OPCODE,
     THROW_OPCODE,
     HLT_OPCODE,
 }OPCode;

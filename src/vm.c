@@ -385,12 +385,6 @@ static inline Value *frame_local(uint8_t which, VM *vm){
 }
 
 static int execute(VM *vm){
-    Fn *main_fn = (Fn *)get_symbol(0, FUNCTION_MSYMTYPE, vm->modules[0], vm);
-    push_fn(main_fn, vm);
-
-    Frame *frame = push_frame(0, vm);
-    frame->fn = main_fn;
-
     for (;;){
         uint8_t chunk = advance(vm);
         Frame *frame = current_frame(vm);
@@ -1584,77 +1578,68 @@ static int execute(VM *vm){
                 }
 
                 break;
+            }case TRYO_OPCODE:{
+                size_t catch_ip = (size_t)read_i16(vm);
+                Exception *ex = MEMORY_ALLOC(Exception, 1, vm->allocator);
+
+                ex->catch_ip = catch_ip;
+                ex->stack_top = vm->stack_top;
+                ex->frame = current_frame(vm);
+                ex->prev = vm->exception_stack;
+                vm->exception_stack = ex;
+
+                break;
+            }case TRYC_OPCODE:{
+                Exception *ex = vm->exception_stack;
+
+                if(ex){
+                    vm->exception_stack = ex->prev;
+                    MEMORY_DEALLOC(Exception, 1, ex, vm->allocator);
+                    break;
+                }
+
+                vmu_internal_error(vm, "Exception stack is empty");
+
+                break;
             }case THROW_OPCODE:{
-                Value *value = pop(vm);
-                StrObj *throw_message = NULL;
+                uint8_t has_value = advance(vm);
+                Value *raw_value = NULL;
+                StrObj *throw_msg = NULL;
 
-                if(IS_VALUE_STR(value)){
-                    throw_message = VALUE_TO_STR(value);
-                }else if(IS_VALUE_RECORD(value)){
-                    RecordObj *record = VALUE_TO_RECORD(value);
+                if(has_value){
+                    raw_value = pop(vm);
 
-                    if(record->attrs){
-                        char *raw_key = "message";
-                        size_t key_size = strlen(raw_key);
-                        Value *msg_value = NULL;
+                    if(IS_VALUE_STR(raw_value)){
+                        throw_msg = VALUE_TO_STR(raw_value);
+                    }else if(IS_VALUE_RECORD(raw_value)){
+                        RecordObj *record = VALUE_TO_RECORD(raw_value);
 
-                        if(lzohtable_lookup(raw_key, key_size, record->attrs, (void **)(&msg_value))){
-                            if(!IS_VALUE_STR(msg_value)){
-                                vmu_error(vm, "Expect record attribute 'message' to be of type string");
+                        if(record->attrs){
+                            char *raw_key = "msg";
+                            size_t key_size = 3;
+                            Value *msg_value = NULL;
+
+                            if(lzohtable_lookup(raw_key, key_size, record->attrs, (void **)(&msg_value))){
+                                if(!IS_VALUE_STR(msg_value)){
+                                    vmu_error(vm, "Expect record attribute 'msg' to be of type 'str'");
+                                }
+
+                                throw_msg = VALUE_TO_STR(msg_value);
                             }
-
-                            throw_message = VALUE_TO_STR(msg_value);
                         }
                     }
                 }
 
-                char throw = 1;
+                Exception *ex = vm->exception_stack;
 
-                for(Frame *frame = vm->frame_ptr - 1; frame >= vm->frame_stack; frame--){
-                    Fn *fn = frame->fn;
-                    Module *module = fn->module;
-                    LZHTable *tries = MODULE_TRIES(module);
-                    uint8_t *key = (uint8_t *)fn;
-                    size_t key_size = sizeof(Fn);
-                    LZHTableNode *tries_node = NULL;
-
-                    if(lzhtable_contains(key, key_size, tries, &tries_node)){
-                        TryBlock *selected_try_block = NULL;
-                        DynArr *tries = (DynArr *)tries_node->value;
-
-                        for(size_t i = 0; i < tries->used; i++){
-                            TryBlock *try_block = (TryBlock *)dynarr_get_ptr(i, tries);
-                            size_t start = try_block->try;
-                            size_t end = try_block->catch;
-                            size_t ip = frame->ip;
-
-                            if(ip < start || ip > end){
-                                continue;
-                            }
-
-                            selected_try_block = try_block;
-
-                            break;
-                        }
-
-                        if(selected_try_block){
-                            throw = 0;
-                            frame->ip = selected_try_block->catch;
-                            vm->frame_ptr = frame;
-                            *frame_local(selected_try_block->local, vm) = *value;
-
-                            break;
-                        }
-                    }
+                if(ex){
+                    ex->throw_value = raw_value ? *raw_value : (Value){0};
+                    longjmp(vm->exit_jmp, 2);
                 }
 
-                if(throw){
-                    if(throw_message){
-                        vmu_error(vm, throw_message->buff);
-                    }else{
-                        vmu_error(vm, "");
-                    }
-                }
+                char *raw_throw_msg = throw_msg ? throw_msg->buff : "";
+
+                vmu_error(vm, raw_throw_msg);
 
                 break;
             }case HLT_OPCODE:{
@@ -1718,22 +1703,48 @@ void vm_initialize(VM *vm){
 }
 
 int vm_execute(LZOHTable *native_fns, Module *module, VM *vm){
-    if(setjmp(vm->exit_jmp) == 1){
-        return vm->exit_code;
-    }else{
-        module->submodule->resolved = 1;
+    switch (setjmp(vm->exit_jmp)){
+        case 0:{
+            module->submodule->resolved = 1;
 
-        vm->exit_code = OK_VMRESULT;
-        vm->stack_top = vm->stack;
-        vm->frame_ptr = vm->frame_stack;
+            vm->exit_code = OK_VMRESULT;
+            vm->stack_top = vm->stack;
+            vm->frame_ptr = vm->frame_stack;
 
-        vm->native_fns = native_fns;
+            vm->native_fns = native_fns;
 
-        vm->module_ptr = 0;
-        vm->main_module = module;
-        vm->modules[vm->module_ptr++] = module;
+            vm->module_ptr = 0;
+            vm->main_module = module;
+            vm->modules[vm->module_ptr++] = module;
 
-        return execute(vm);
+            Fn *main_fn = (Fn *)get_symbol(0, FUNCTION_MSYMTYPE, vm->modules[0], vm);
+            push_fn(main_fn, vm);
+
+            Frame *frame = push_frame(0, vm);
+            frame->fn = main_fn;
+
+            return execute(vm);
+        }case 1:{
+            // In case of error
+            return vm->exit_code;
+        }case 2:{
+            // In case of throws
+            Exception *ex = vm->exception_stack;
+            Value throw_value = ex->throw_value;
+            Frame *frame = ex->frame;
+
+            frame->ip = ex->catch_ip;
+            vm->stack_top = ex->stack_top;
+            vm->frame_ptr = frame + 1;
+            vm->exception_stack = ex->prev;
+
+            MEMORY_DEALLOC(Exception, 1, ex, vm->allocator);
+            push(throw_value, vm);
+
+            return execute(vm);
+        }default:{
+            assert(0 && "Illegal jump value");
+        }
     }
 }
 //< PUBLIC IMPLEMENTATION

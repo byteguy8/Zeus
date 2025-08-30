@@ -94,6 +94,7 @@ typedef struct scope{
 
 typedef struct compiler{
     int32_t counter_id;
+    uint32_t trycatch_counter;
 
 	char is_err;
     jmp_buf err_jmp;

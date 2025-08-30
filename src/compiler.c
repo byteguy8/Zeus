@@ -83,6 +83,7 @@ void update_i16(size_t index, int16_t i16, Compiler *compiler);
 void update_i32(size_t index, int32_t i32, Compiler *compiler);
 //--------------------------------  OTHER  ---------------------------------//
 int32_t generate_id(Compiler *compiler);
+uint32_t generate_trycatch_id(Compiler *compiler);
 char *names_to_name(DynArr *names, Token **out_name, Compiler *compiler);
 NativeModule *resolve_native_module(char *module_name, Compiler *compiler);
 char *resolve_module_location(
@@ -893,6 +894,10 @@ inline int32_t generate_id(Compiler *compiler){
     return ++compiler->counter_id;
 }
 
+inline uint32_t generate_trycatch_id(Compiler *compiler){
+    return ++(compiler->trycatch_counter);
+}
+
 char *names_to_name(DynArr *names, Token **out_name, Compiler *compiler){
     if(DYNARR_LEN(names) == 1){
         Token *name = (Token *)DYNARR_GET(0, names);
@@ -1502,7 +1507,6 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
                 	write_chunk(opcode, compiler);
 					write_location(equals_token, compiler);
-
                 	write_chunk(symbol->local, compiler);
             	}
 
@@ -2369,86 +2373,69 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
 			if(value){
                 compile_expr(value, compiler);
-            }else{
-                write_chunk(EMPTY_OPCODE, compiler);
-                write_location(throw_token, compiler);
             }
 
             write_chunk(THROW_OPCODE, compiler);
             write_location(throw_token, compiler);
+            write_chunk(value ? 1 : 0, compiler);
 
             break;
         }case TRY_STMTTYPE:{
+            uint32_t trycatch_id = generate_trycatch_id(compiler);
+
             TryStmt *try_stmt = (TryStmt *)stmt->sub_stmt;
             DynArr *try_stmts = try_stmt->try_stmts;
 			Token *err_identifier = try_stmt->err_identifier;
 			DynArr *catch_stmts = try_stmt->catch_stmts;
 
-            size_t try_jmp_index = 0;
-            TryBlock *try_block = MEMORY_ALLOC(TryBlock, 1, RTALLOCATOR);
+            Token *try_token = try_stmt->try_token;
 
-			memset(try_block, 0, sizeof(TryBlock));
+            write_chunk(TRYO_OPCODE, compiler);
+            write_location(try_token, compiler);
+            size_t catch_ip_idx = write_i16(0, compiler);
 
             if(try_stmts){
-                size_t start = chunks_len(compiler);
-                try_block->try = start;
+                scope_in_soft(TRY_SCOPE, compiler);
+                size_t stmts_len = DYNARR_LEN(try_stmts);
 
-                Scope *scope = scope_in(TRY_SCOPE, compiler);
-                scope->try = try_block;
-
-                Scope *previous = previous_scope(scope, compiler);
-
-                if(previous && previous->try)
-                    try_block->outer = previous->try;
-
-                for (size_t i = 0; i < DYNARR_LEN(try_stmts); i++){
+                for (size_t i = 0; i < stmts_len; i++){
                     compile_stmt((Stmt *)dynarr_get_ptr(i, try_stmts), compiler);
                 }
 
                 scope_out(compiler);
-
-				write_chunk(JMP_OPCODE, compiler);
-                write_location(try_stmt->try_token, compiler);
-				try_jmp_index = write_i16(0, compiler);
             }
 
+            write_chunk(TRYC_OPCODE, compiler);
+            write_location(try_token, compiler);
+
 			if(catch_stmts){
-				size_t start = chunks_len(compiler);
-                try_block->catch = start;
+                size_t stmts_len = DYNARR_LEN(catch_stmts);
 
-                scope_in(CATCH_SCOPE, compiler);
-				Symbol *symbol = declare(IMUT_SYMTYPE, err_identifier, compiler);
+                scope_in_soft(CATCH_SCOPE, compiler);
+                jmp(compiler, try_token, "CATCH_END_%" PRIu32, trycatch_id);
 
-				try_block->local = symbol->local;
+                size_t current_ip = chunks_len(compiler);
+                update_i16(catch_ip_idx, (int16_t)current_ip, compiler);
 
-				for (size_t i = 0; i < DYNARR_LEN(catch_stmts); i++){
-                    compile_stmt((Stmt *)dynarr_get_ptr(i, catch_stmts), compiler);
+                if(err_identifier){
+                    Symbol *symbol = declare(IMUT_SYMTYPE, err_identifier, compiler);
+
+                    write_chunk(LSET_OPCODE, compiler);
+                    write_chunk(symbol->local, compiler);
+                    write_location(err_identifier, compiler);
+                }else{
+                    write_chunk(POP_OPCODE, compiler);
+                    write_location(try_token, compiler);
                 }
 
+				for (size_t i = 0; i < DYNARR_LEN(catch_stmts); i++){
+                    Stmt *stmt = (Stmt *)dynarr_get_ptr(i, catch_stmts);
+                    compile_stmt(stmt, compiler);
+                }
+
+                label(compiler, "CATCH_END_%" PRIu32, trycatch_id);
                 scope_out(compiler);
-
-				size_t end = chunks_len(compiler);
-				update_i16(try_jmp_index, end - start + 1, compiler);
 			}
-
-            Module *module = compiler->current_module;
-            SubModule *submodule = module->submodule;
-            LZHTable *fn_tries = submodule->tries;
-            Fn *fn = compiler->fn_stack[compiler->fn_ptr - 1];
-
-			uint8_t *key = (uint8_t *)fn;
-			size_t key_size = sizeof(Fn);
-			LZHTableNode *node = NULL;
-			DynArr *tries = NULL;
-
-			if(lzhtable_contains(key, key_size, fn_tries, &node)){
-				tries = (DynArr *)node->value;
-			}else{
-				tries = (DynArr *)FACTORY_DYNARR_PTR(RTALLOCATOR);
-				lzhtable_put(key, key_size, tries, fn_tries, NULL);
-			}
-
-            dynarr_insert_ptr(try_block, tries);
 
             break;
         }case EXPORT_STMTTYPE:{

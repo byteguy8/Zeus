@@ -455,7 +455,17 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | type: %d\n", type);
 
             break;
-		}case THROW_OPCODE:{
+		}case TRYO_OPCODE:{
+            size_t catch_ip = (size_t)read_i16(dumpper);
+            size_t end = dumpper->ip;
+            printf("%8.8s %.7zu", "TRYO", end - start);
+            printf(" | catch_ip: %zu\n", catch_ip);
+            break;
+        }case TRYC_OPCODE:{
+            size_t end = dumpper->ip;
+            printf("%8.8s %.7zu\n", "TRYC", end - start);
+            break;
+        }case THROW_OPCODE:{
             size_t end = dumpper->ip;
             printf("%8.8s %.7zu\n", "THROW", end - start);
             break;
