@@ -396,15 +396,11 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 			printf("%8.8s %.7zu\n", "DICT", end - start);
             break;
         }case RECORD_OPCODE:{
-			uint8_t len = advance(dumpper);
-
-            for (uint8_t i = 0; i < len; i++)
-                read_str(dumpper, NULL);
-
+			uint16_t len = (uint16_t)read_i16(dumpper);
             size_t end = dumpper->ip;
 
 			printf("%8.8s %.7zu", "RECORD", end - start);
-            printf(" | length: %d\n", len);
+            printf(" | length: %" PRIu16 "\n", len);
 
             break;
 		}case IARRAY_OPCODE:{
@@ -422,6 +418,14 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
         }case IDICT_OPCODE:{
             size_t end = dumpper->ip;
             printf("%8.8s %.7zu\n", "IDICT", end - start);
+            break;
+        }case IRECORD_OPCODE:{
+            char *key = read_str(dumpper, NULL);
+            size_t end = dumpper->ip;
+
+            printf("%8.8s %.7zu", "IRECORD", end - start);
+            printf(" | key: '%s'\n", key);
+
             break;
         }case CALL_OPCODE:{
             uint8_t args_count = advance(dumpper);
@@ -511,12 +515,12 @@ static void dump_module(Module *module, Dumpper *dumpper){
     for (size_t i = 0; i < DYNARR_LEN(symbols); i++){
         SubModuleSymbol symbol = DYNARR_GET_AS(SubModuleSymbol, i, symbols);
 
-        if(symbol.type == FUNCTION_MSYMTYPE){
+        if(symbol.type == FUNCTION_SUBMODULE_SYM_TYPE){
             Fn *fn = symbol.value;
             dump_function(fn, dumpper);
         }
 
-        if(symbol.type == CLOSURE_MSYMTYPE){
+        if(symbol.type == CLOSURE_SUBMODULE_SYM_TYPE){
             MetaClosure *meta_closure = symbol.value;
             Fn *fn = meta_closure->fn;
             dump_function(fn, dumpper);

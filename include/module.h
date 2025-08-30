@@ -14,10 +14,10 @@ typedef struct try_block{
 }TryBlock;
 
 typedef enum submodule_symbol_type{
-    FUNCTION_MSYMTYPE,
-    CLOSURE_MSYMTYPE,
-	NATIVE_MODULE_MSYMTYPE,
-    MODULE_MSYMTYPE
+    FUNCTION_SUBMODULE_SYM_TYPE,
+    CLOSURE_SUBMODULE_SYM_TYPE,
+	NATIVE_MODULE_SUBMODULE_SYM_TYPE,
+    MODULE_SUBMODULE_SYM_TYPE
 }SubModuleSymbolType;
 
 typedef struct submodule_symbol{

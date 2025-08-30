@@ -19,16 +19,16 @@ typedef struct obj Obj;
 typedef struct obj_list ObjList;
 
 enum obj_type{
-	STR_OTYPE,
-    ARRAY_OTYPE,
-	LIST_OTYPE,
-    DICT_OTYPE,
-	RECORD_OTYPE,
-    NATIVE_FN_OTYPE,
-    FN_OTYPE,
-    CLOSURE_OTYPE,
-    NATIVE_MODULE_OTYPE,
-    MODULE_OTYPE,
+	STR_OBJ_TYPE,
+    ARRAY_OBJ_TYPE,
+	LIST_OBJ_TYPE,
+    DICT_OBJ_TYPE,
+	RECORD_OBJ_TYPE,
+    NATIVE_FN_OBJ_TYPE,
+    FN_OBJ_TYPE,
+    CLOSURE_OBJ_TYPE,
+    NATIVE_MODULE_OBJ_TYPE,
+    MODULE_OBJ_TYPE,
 };
 
 enum obj_color{
@@ -75,12 +75,6 @@ typedef struct dict_obj{
     LZOHTable *key_values;
 }DictObj;
 
-typedef enum record_type{
-    NONE_RTYPE,
-    RANDOM_RTYPE,
-    FILE_RTYPE,
-}RecordType;
-
 typedef XOShiro256 RecordRandom;
 
 typedef struct record_file{
@@ -91,8 +85,6 @@ typedef struct record_file{
 
 typedef struct record_obj{
     Obj header;
-    RecordType type;
-    void *content;
 	LZOHTable *attrs;
 }RecordObj;
 

@@ -1500,7 +1500,6 @@ void compile_expr(Expr *expr, Compiler *compiler){
 	            if(symbol->depth == 1){
                 	write_chunk(GSET_OPCODE, compiler);
    					write_location(equals_token, compiler);
-
                 	write_str(identifier->lexeme_len, identifier->lexeme, compiler);
             	}else{
                     uint8_t opcode = is_out ? OSET_OPCODE : LSET_OPCODE;
@@ -1685,25 +1684,25 @@ void compile_expr(Expr *expr, Compiler *compiler){
             break;
         }case RECORD_EXPRTYPE:{
 			RecordExpr *record_expr = (RecordExpr *)expr->sub_expr;
+            Token *record_token = record_expr->record_token;
 			DynArr *key_values = record_expr->key_values;
+            size_t key_values_len = key_values ? DYNARR_LEN(key_values) : 0;
 
-			if(key_values){
-				for(int i = (int)(DYNARR_LEN(key_values) - 1); i >= 0; i--){
-					RecordExprValue *key_value = (RecordExprValue *)dynarr_get_ptr(i, key_values);
-					compile_expr(key_value->value, compiler);
-				}
-			}
+            write_chunk(RECORD_OPCODE, compiler);
+			write_location(record_token, compiler);
+            write_i16((int16_t)key_values_len, compiler);
 
-			write_chunk(RECORD_OPCODE, compiler);
-			write_location(record_expr->record_token, compiler);
-			write_chunk((uint8_t)(key_values ? DYNARR_LEN(key_values) : 0), compiler);
+			for(size_t i = 0; i < key_values_len; i++){
+                RecordExprValue *key_value = (RecordExprValue *)dynarr_get_ptr(i, key_values);
+                Token *key = key_value->key;
+                Expr *value = key_value->value;
 
-			if(key_values){
-				for(size_t i = 0; i < DYNARR_LEN(key_values); i++){
-					RecordExprValue *key_value = (RecordExprValue *)dynarr_get_ptr(i, key_values);
-					write_str(key_value->key->literal_size, key_value->key->lexeme, compiler);
-				}
-			}
+                compile_expr(value, compiler);
+
+                write_chunk(IRECORD_OPCODE, compiler);
+                write_location(record_token, compiler);
+                write_str_alloc(key->lexeme_len, key->lexeme, compiler);
+            }
 
 			break;
 		}case IS_EXPRTYPE:{
@@ -1745,9 +1744,9 @@ void compile_expr(Expr *expr, Compiler *compiler){
 				}case RECORD_TOKTYPE:{
                     write_chunk(8, compiler);
 					break;
-                }case FN_OTYPE:
-                 case CLOSURE_OTYPE:
-                 case NATIVE_FN_OTYPE:{
+                }case FN_OBJ_TYPE:
+                 case CLOSURE_OBJ_TYPE:
+                 case NATIVE_FN_OBJ_TYPE:{
                     write_chunk(9, compiler);
                     break;
                 }default:{
@@ -1798,7 +1797,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
 size_t add_native_module_symbol(NativeModule *module, DynArr *symbols){
     SubModuleSymbol module_symbol = (SubModuleSymbol ){
-        .type = NATIVE_MODULE_MSYMTYPE,
+        .type = NATIVE_MODULE_SUBMODULE_SYM_TYPE,
         .value = module
     };
 
@@ -1809,7 +1808,7 @@ size_t add_native_module_symbol(NativeModule *module, DynArr *symbols){
 
 size_t add_module_symbol(Module *module, DynArr *symbols){
 	SubModuleSymbol module_symbol = (SubModuleSymbol ){
-        .type = MODULE_MSYMTYPE,
+        .type = MODULE_SUBMODULE_SYM_TYPE,
         .value = module
     };
 
@@ -2495,7 +2494,7 @@ void set_fn(size_t index, Fn *fn, Compiler *compiler){
     Module *module = compiler->current_module;
 	DynArr *symbols = MODULE_SYMBOLS(module);
 	SubModuleSymbol symbol = (SubModuleSymbol){
-        .type = FUNCTION_MSYMTYPE,
+        .type = FUNCTION_SUBMODULE_SYM_TYPE,
         .value = fn
     };
 
@@ -2506,7 +2505,7 @@ void set_closure(size_t index, MetaClosure *closure, Compiler *compiler){
     Module *module = compiler->current_module;
 	DynArr *symbols = MODULE_SYMBOLS(module);
 	SubModuleSymbol symbol = (SubModuleSymbol){
-        .type = CLOSURE_MSYMTYPE,
+        .type = CLOSURE_SUBMODULE_SYM_TYPE,
         .value = closure
     };
 

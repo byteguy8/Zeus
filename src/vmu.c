@@ -28,7 +28,7 @@ static inline void init_obj(ObjType type, Obj *obj, VM *vm){
 //--------------------------------------------------
 //               PRIVATE INTERFACE                //
 //--------------------------------------------------
-//----------      GARBAGE COLLECTOR       --------//`
+//----------      GARBAGE COLLECTOR       --------//
 void prepare_module_globals(Module *module, VM *vm);
 void prepare_worklist(VM *vm);
 void mark_objs(VM *vm);
@@ -63,7 +63,7 @@ void prepare_module_globals(Module *module, VM *vm){
             obj_list_remove(obj);
             obj_list_insert(obj, &vm->gray_objs);
 
-            if(obj->type == MODULE_OTYPE){
+            if(obj->type == MODULE_OBJ_TYPE){
                 Module *module = OBJ_TO_MODULE(obj)->module;
                 prepare_module_globals(module, vm);
             }
@@ -83,7 +83,7 @@ void prepare_worklist(VM *vm){
             obj_list_remove(obj);
             obj_list_insert(obj, &vm->gray_objs);
 
-            if(obj->type == MODULE_OTYPE){
+            if(obj->type == MODULE_OBJ_TYPE){
                 Module *module = OBJ_TO_MODULE(obj)->module;
                 prepare_module_globals(module, vm);
             }
@@ -100,9 +100,9 @@ void mark_objs(VM *vm){
         next = current->next;
 
         switch (current->type){
-            case STR_OTYPE:{
+            case STR_OBJ_TYPE:{
                 break;
-            }case ARRAY_OTYPE:{
+            }case ARRAY_OBJ_TYPE:{
                 ArrayObj *array_obj = OBJ_TO_ARRAY(current);
                 size_t len = array_obj->len;
                 Value *values = array_obj->values;
@@ -119,7 +119,7 @@ void mark_objs(VM *vm){
                 }
 
                 break;
-            }case LIST_OTYPE:{
+            }case LIST_OBJ_TYPE:{
                 ListObj *list_obj = OBJ_TO_LIST(current);
                 DynArr *items = list_obj->items;
                 size_t len = DYNARR_LEN(items);
@@ -136,9 +136,9 @@ void mark_objs(VM *vm){
                 }
 
                 break;
-            }case DICT_OTYPE:{
+            }case DICT_OBJ_TYPE:{
                 break;
-            }case RECORD_OTYPE:{
+            }case RECORD_OBJ_TYPE:{
                 RecordObj *record_obj = OBJ_TO_RECORD(current);
                 LZOHTable *attrs = record_obj->attrs;
                 LZOHTableSlot *slots = attrs->slots;
@@ -162,7 +162,7 @@ void mark_objs(VM *vm){
                 }
 
                 break;
-            }case NATIVE_FN_OTYPE:{
+            }case NATIVE_FN_OBJ_TYPE:{
                 NativeFnObj *native_fn_obj = OBJ_TO_NATIVE_FN(current);
                 Value target = native_fn_obj->target;
 
@@ -174,13 +174,13 @@ void mark_objs(VM *vm){
                 }
 
                 break;
-            }case FN_OTYPE:{
+            }case FN_OBJ_TYPE:{
                 break;
-            }case CLOSURE_OTYPE:{
+            }case CLOSURE_OBJ_TYPE:{
                 break;
-            }case NATIVE_MODULE_OTYPE:{
+            }case NATIVE_MODULE_OBJ_TYPE:{
                 break;
-            }case MODULE_OTYPE:{
+            }case MODULE_OBJ_TYPE:{
                 break;
             }default:{
                 break;
@@ -203,34 +203,34 @@ void sweep_objs(VM *vm){
         next = current->next;
 
         switch(current->type){
-            case STR_OTYPE:{
+            case STR_OBJ_TYPE:{
                 vmu_destroy_str(OBJ_TO_STR(current), vm);
                 break;
-            }case ARRAY_OTYPE:{
+            }case ARRAY_OBJ_TYPE:{
                 vmu_destroy_array(OBJ_TO_ARRAY(current), vm);
                 break;
-            }case LIST_OTYPE:{
+            }case LIST_OBJ_TYPE:{
                 vmu_destroy_list(OBJ_TO_LIST(current), vm);
                 break;
-            }case DICT_OTYPE:{
+            }case DICT_OBJ_TYPE:{
                 vmu_destroy_dict(OBJ_TO_DICT(current), vm);
                 break;
-            }case RECORD_OTYPE:{
+            }case RECORD_OBJ_TYPE:{
                 vmu_destroy_record(OBJ_TO_RECORD(current), vm);
                 break;
-            }case NATIVE_FN_OTYPE:{
+            }case NATIVE_FN_OBJ_TYPE:{
                 vmu_destroy_native_fn(OBJ_TO_NATIVE_FN(current), vm);
                 break;
-            }case FN_OTYPE:{
+            }case FN_OBJ_TYPE:{
                 vmu_destroy_fn(OBJ_TO_FN(current), vm);
                 break;
-            }case CLOSURE_OTYPE:{
+            }case CLOSURE_OBJ_TYPE:{
                 vmu_destroy_closure(OBJ_TO_CLOSURE(current), vm);
                 break;
-            }case NATIVE_MODULE_OTYPE:{
+            }case NATIVE_MODULE_OBJ_TYPE:{
                 vmu_destroy_native_module_obj(OBJ_TO_NATIVE_MODULE(current), vm);
                 break;
-            }case MODULE_OTYPE:{
+            }case MODULE_OBJ_TYPE:{
                 vmu_destroy_module_obj(OBJ_TO_MODULE(current), vm);
                 break;
             }default:{
@@ -339,11 +339,11 @@ static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
     }
 
     switch (obj->type){
-        case STR_OTYPE:{
+        case STR_OBJ_TYPE:{
             StrObj *str_obj = OBJ_TO_STR(obj);
             lzbstr_append(str_obj->buff, str);
             break;
-        }case ARRAY_OTYPE:{
+        }case ARRAY_OBJ_TYPE:{
             ArrayObj *array_obj = OBJ_TO_ARRAY(obj);
             size_t len = array_obj->len;
             Value *values = array_obj->values;
@@ -353,7 +353,13 @@ static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
             for (size_t i = 0; i < len; i++){
                 Value *value = &values[i];
 
-                value_to_str(*value, obj, str);
+                if(IS_VALUE_STR(value)){
+                    lzbstr_append("'", str);
+                    value_to_str(*value, obj, str);
+                    lzbstr_append("'", str);
+                }else{
+                    value_to_str(*value, obj, str);
+                }
 
                 if(i + 1 < len){
                     lzbstr_append(", ", str);
@@ -363,7 +369,7 @@ static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
             lzbstr_append("]", str);
 
             break;
-        }case LIST_OTYPE:{
+        }case LIST_OBJ_TYPE:{
             ListObj *list_obj = OBJ_TO_LIST(obj);
             DynArr *items = list_obj->items;
             size_t len = DYNARR_LEN(items);
@@ -373,7 +379,13 @@ static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
             for (size_t i = 0; i < len; i++){
                 Value *value = (Value *)DYNARR_GET(i, items);
 
-                value_to_str(*value, obj, str);
+                if(IS_VALUE_STR(value)){
+                    lzbstr_append("'", str);
+                    value_to_str(*value, obj, str);
+                    lzbstr_append("'", str);
+                }else{
+                    value_to_str(*value, obj, str);
+                }
 
                 if(i + 1 < len){
                     lzbstr_append(", ", str);
@@ -383,12 +395,13 @@ static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
             lzbstr_append(")", str);
 
             break;
-        }case DICT_OTYPE:{
+        }case DICT_OBJ_TYPE:{
             DictObj *dict_obj = OBJ_TO_DICT(obj);
             LZOHTable *key_values = dict_obj->key_values;
+
+            size_t count = 0;
             size_t m = key_values->m;
             size_t n = key_values->n;
-            size_t count = 0;
 
             lzbstr_append("{", str);
 
@@ -402,9 +415,23 @@ static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
                 Value *key = (Value *)slot.key;
                 Value *value = (Value *)slot.value;
 
-                value_to_str(*key, obj, str);
+                if(IS_VALUE_STR(key)){
+                    lzbstr_append("'", str);
+                    value_to_str(*key, obj, str);
+                    lzbstr_append("'", str);
+                }else{
+                    value_to_str(*key, obj, str);
+                }
+
                 lzbstr_append(": ", str);
-                value_to_str(*value, obj, str);
+
+                if(IS_VALUE_STR(value)){
+                    lzbstr_append("'", str);
+                    value_to_str(*value, obj, str);
+                    lzbstr_append("'", str);
+                }else{
+                    value_to_str(*value, obj, str);
+                }
 
                 if(count + 1 < n){
                     lzbstr_append(", ", str);
@@ -416,36 +443,70 @@ static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
             lzbstr_append("}", str);
 
             break;
-        }case RECORD_OTYPE:{
+        }case RECORD_OBJ_TYPE:{
             RecordObj *record_obj = OBJ_TO_RECORD(obj);
             LZOHTable *attrs = record_obj->attrs;
 
-            lzbstr_append_args(str, "<record %zu %p>", attrs->n, record_obj);
+            size_t count = 0;
+            size_t n = attrs->n;
+            size_t m = attrs->m;
+            LZOHTableSlot *slots = attrs->slots;
+
+            lzbstr_append("{", str);
+
+            for (size_t i = 0; i < m; i++){
+                LZOHTableSlot slot = slots[i];
+
+                if(!slot.used){
+                    continue;
+                }
+
+                char *key = (char *)slot.key;
+                Value *value = (Value *)slot.value;
+
+                lzbstr_append_args(str, "%s: ", key);
+
+                if(IS_VALUE_STR(value)){
+                    lzbstr_append("'", str);
+                    value_to_str(*value, obj, str);
+                    lzbstr_append("'", str);
+                }else{
+                    value_to_str(*value, obj, str);
+                }
+
+                if(count + 1 < n){
+                    lzbstr_append(", ", str);
+                }
+
+                count++;
+            }
+
+            lzbstr_append("}", str);
 
             break;
-        }case NATIVE_FN_OTYPE:{
+        }case NATIVE_FN_OBJ_TYPE:{
             NativeFnObj *native_fn_obj = OBJ_TO_NATIVE_FN(obj);
             NativeFn *native_fn = native_fn_obj->native_fn;
 
             lzbstr_append_args(str, "<native function " PRIu8 " %p>", native_fn->arity, native_fn_obj);
 
             break;
-        }case FN_OTYPE:{
+        }case FN_OBJ_TYPE:{
             FnObj *fn_obj = OBJ_TO_FN(obj);
             Fn *fn = fn_obj->fn;
 
             lzbstr_append_args(str, "<function %zu %p>", DYNARR_LEN(fn->params), fn_obj);
 
             break;
-        }case CLOSURE_OTYPE:{
+        }case CLOSURE_OBJ_TYPE:{
             ClosureObj *closure_obj = OBJ_TO_CLOSURE(obj);
             lzbstr_append_args(str, "<closure %p>", closure_obj);
             break;
-        }case NATIVE_MODULE_OTYPE:{
+        }case NATIVE_MODULE_OBJ_TYPE:{
             NativeModuleObj *native_module_obj = OBJ_TO_NATIVE_MODULE(obj);
             lzbstr_append_args(str, "<native module %p>", native_module_obj);
             break;
-        }case MODULE_OTYPE:{
+        }case MODULE_OBJ_TYPE:{
             ModuleObj *module_obj = OBJ_TO_MODULE(obj);
             lzbstr_append_args(str, "<module %p>", module_obj);
             break;
@@ -637,34 +698,34 @@ void vmu_clean_up(VM *vm){
         obj_list_remove(current);
 
         switch(current->type){
-            case STR_OTYPE:{
+            case STR_OBJ_TYPE:{
                 vmu_destroy_str(OBJ_TO_STR(current), vm);
                 break;
-            }case ARRAY_OTYPE:{
+            }case ARRAY_OBJ_TYPE:{
                 vmu_destroy_array(OBJ_TO_ARRAY(current), vm);
                 break;
-            }case LIST_OTYPE:{
+            }case LIST_OBJ_TYPE:{
                 vmu_destroy_list(OBJ_TO_LIST(current), vm);
                 break;
-            }case DICT_OTYPE:{
+            }case DICT_OBJ_TYPE:{
                 vmu_destroy_dict(OBJ_TO_DICT(current), vm);
                 break;
-            }case RECORD_OTYPE:{
+            }case RECORD_OBJ_TYPE:{
                 vmu_destroy_record(OBJ_TO_RECORD(current), vm);
                 break;
-            }case NATIVE_FN_OTYPE:{
+            }case NATIVE_FN_OBJ_TYPE:{
                 vmu_destroy_native_fn(OBJ_TO_NATIVE_FN(current), vm);
                 break;
-            }case FN_OTYPE:{
+            }case FN_OBJ_TYPE:{
                 vmu_destroy_fn(OBJ_TO_FN(current), vm);
                 break;
-            }case CLOSURE_OTYPE:{
+            }case CLOSURE_OBJ_TYPE:{
                 vmu_destroy_closure(OBJ_TO_CLOSURE(current), vm);
                 break;
-            }case NATIVE_MODULE_OTYPE:{
+            }case NATIVE_MODULE_OBJ_TYPE:{
                 vmu_destroy_native_module_obj(OBJ_TO_NATIVE_MODULE(current), vm);
                 break;
-            }case MODULE_OTYPE:{
+            }case MODULE_OBJ_TYPE:{
                 vmu_destroy_module_obj(OBJ_TO_MODULE(current), vm);
                 break;
             }default:{
@@ -689,7 +750,7 @@ inline Frame *vmu_current_frame(VM *vm){
 
 uint32_t vmu_hash_obj(Obj *obj){
     switch (obj->type){
-        case STR_OTYPE :{
+        case STR_OBJ_TYPE :{
             return 0;
         }default:{
             uintptr_t iaddr = (uintptr_t)obj;
@@ -730,63 +791,50 @@ char *vmu_value_to_str(Value value, VM *vm, size_t *out_len){
 
 void vmu_print_obj(FILE *stream, Obj *object){
     switch (object->type){
-        case STR_OTYPE:{
+        case STR_OBJ_TYPE:{
             StrObj *str = OBJ_TO_STR(object);
             fprintf(stream, "%s", str->buff);
             break;
-        }case ARRAY_OTYPE:{
+        }case ARRAY_OBJ_TYPE:{
 			ArrayObj *array = OBJ_TO_ARRAY(object);
             fprintf(stream, "<array %zu at %p>", array->len, array);
 			break;
-		}case LIST_OTYPE:{
+		}case LIST_OBJ_TYPE:{
 			ListObj *list_obj = OBJ_TO_LIST(object);
             DynArr *list = list_obj->items;
             fprintf(stream, "<list %zu at %p>", list->used, list);
 			break;
-		}case DICT_OTYPE:{
+		}case DICT_OBJ_TYPE:{
             DictObj *dict_obj = OBJ_TO_DICT(object);
             LZOHTable *dict = dict_obj->key_values;
             fprintf(stream, "<dict %zu at %p>", dict->n, dict);
             break;
-        }case RECORD_OTYPE:{
+        }case RECORD_OBJ_TYPE:{
 			RecordObj *record_obj = OBJ_TO_RECORD(object);
-
-            switch (record_obj->type) {
-                case RANDOM_RTYPE:{
-                    fprintf(stream, "<random context %p>", record_obj);
-                    break;
-                }case FILE_RTYPE:{
-                    fprintf(stream, "<file %p>", record_obj);
-                    break;
-                }default:{
-                    fprintf(stream, "<record %zu at %p>", record_obj->attrs ? record_obj->attrs->n : 0, record_obj);
-                    break;
-                }
-            }
-
+            fprintf(stream, "<record %zu at %p>", record_obj->attrs ? record_obj->attrs->n : 0, record_obj);
 			break;
-		}case NATIVE_FN_OTYPE:{
+		}case NATIVE_FN_OBJ_TYPE:{
             NativeFnObj *native_fn_obj = OBJ_TO_NATIVE_FN(object);
             NativeFn *native_fn = native_fn_obj->native_fn;
             fprintf(stream, "<native function '%s' - %d at %p>", native_fn->name, native_fn->arity, native_fn);
             break;
-        }case FN_OTYPE:{
+        }case FN_OBJ_TYPE:{
             FnObj *fn_obj = OBJ_TO_FN(object);
             Fn *fn = fn_obj->fn;
             fprintf(stream, "<function '%s' - %d at %p>", fn->name, (uint8_t)(fn->params ? DYNARR_LEN(fn->params) : 0), fn);
             break;
-        }case CLOSURE_OTYPE:{
+        }case CLOSURE_OBJ_TYPE:{
             ClosureObj *closure_obj = OBJ_TO_CLOSURE(object);
             Closure *closure = closure_obj->closure;
             Fn *fn = closure->meta->fn;
             fprintf(stream, "<closure '%s' - %d at %p>", fn->name, (uint8_t)(fn->params ? DYNARR_LEN(fn->params) : 0), fn);
             break;
-        }case NATIVE_MODULE_OTYPE:{
+        }case NATIVE_MODULE_OBJ_TYPE:{
             NativeModuleObj *native_module_obj = OBJ_TO_NATIVE_MODULE(object);
             NativeModule *module = native_module_obj->native_module;
             fprintf(stream, "<native module '%s' at %p>", module->name, module);
             break;
-        }case MODULE_OTYPE:{
+        }case MODULE_OBJ_TYPE:{
             ModuleObj *module_obj = OBJ_TO_MODULE(object);
             Module *module = module_obj->module;
             fprintf(stream, "<module '%s' '%s' at %p>", module->name, module->pathname, module);
@@ -847,7 +895,7 @@ int vmu_create_str(char runtime, size_t raw_str_len, char *raw_str, VM *vm, StrO
     str_obj = MEMORY_ALLOC(StrObj, 1, ALLOCATOR);
     Obj *obj = (Obj *)str_obj;
 
-    init_obj(STR_OTYPE, obj, vm);
+    init_obj(STR_OBJ_TYPE, obj, vm);
     str_obj->runtime = runtime;
     str_obj->len = raw_str_len;
     str_obj->buff = raw_str;
@@ -1135,7 +1183,7 @@ ArrayObj *vmu_create_array(int64_t len, VM *vm){
     Obj *obj = (Obj *)array_obj;
 
     memset(values, 0, VALUE_SIZE * (size_t)len);
-    init_obj(ARRAY_OTYPE, obj, vm);
+    init_obj(ARRAY_OBJ_TYPE, obj, vm);
     array_obj->len = len;
     array_obj->values = values;
 
@@ -1209,7 +1257,7 @@ ArrayObj *vmu_array_grow(int64_t by, ArrayObj *array_obj, VM *vm){
 
     memcpy(new_values, values, VALUE_SIZE * len);
     memset(new_values + len, 0, VALUE_SIZE * len);
-    init_obj(ARRAY_OTYPE, obj, vm);
+    init_obj(ARRAY_OBJ_TYPE, obj, vm);
     new_array_obj->len = new_len;
     new_array_obj->values = new_values;
 
@@ -1230,7 +1278,7 @@ ArrayObj *vmu_array_join(ArrayObj *a_array_obj, ArrayObj *b_array_obj, VM *vm){
 
     memmove(new_values, a_values, VALUE_SIZE * a_len);
     memmove(new_values + a_len, b_values, VALUE_SIZE * b_len);
-    init_obj(ARRAY_OTYPE, obj, vm);
+    init_obj(ARRAY_OBJ_TYPE, obj, vm);
     new_array_obj->len = new_len;
     new_array_obj->values = new_values;
 
@@ -1242,7 +1290,7 @@ ListObj *vmu_create_list(VM *vm){
     ListObj *list_obj = MEMORY_ALLOC(ListObj, 1, ALLOCATOR);
     Obj *obj = (Obj *)list_obj;
 
-    init_obj(LIST_OTYPE, obj, vm);
+    init_obj(LIST_OBJ_TYPE, obj, vm);
     list_obj->items = values;
 
     return list_obj;
@@ -1336,7 +1384,7 @@ inline DictObj *vmu_create_dict(VM *vm){
     DictObj *dict_obj = MEMORY_ALLOC(DictObj, 1, ALLOCATOR);
     Obj *obj = (Obj *)dict_obj;
 
-    init_obj(DICT_OTYPE, obj, vm);
+    init_obj(DICT_OBJ_TYPE, obj, vm);
     dict_obj->key_values = key_values;
 
     return dict_obj;
@@ -1383,9 +1431,7 @@ RecordObj *vmu_create_record(uint16_t length, VM *vm){
     RecordObj *record_obj = MEMORY_ALLOC(RecordObj, 1, ALLOCATOR);
     Obj *obj = (Obj*)record_obj;
 
-    init_obj(RECORD_OTYPE, obj, vm);
-    record_obj->type = NONE_RTYPE;
-    record_obj->content = NULL;
+    init_obj(RECORD_OBJ_TYPE, obj, vm);
     record_obj->attrs = attrs;
 
 	return record_obj;
@@ -1404,22 +1450,36 @@ void vmu_record_set_attr(size_t attr_len, char *attr, Value value, RecordObj *re
     Value *attr_value = NULL;
     LZOHTable *attrs = record_obj->attrs;
 
-    char junk = record_obj->type != NONE_RTYPE && vmu_error(vm, "Trying to set attribute to not record");
-    junk = !attrs && vmu_error(vm, "Trying to set attribute to empty record");
+    if(!attrs){
+        vmu_internal_error(vm, "Cannot set attributes on an empty record");
+    }
 
-    if(lzohtable_lookup(attr, attr_len, attrs, (void **)&attr_value)){
+    if(lzohtable_lookup(attr, attr_len, attrs, (void **)(&attr_value))){
         *attr_value = value;
         return;
     }
 
-    lzohtable_put_ckv(attr, attr_len, &value, VALUE_SIZE, attrs + junk, NULL);
+    lzohtable_put_ckv(attr, attr_len, &value, VALUE_SIZE, attrs, NULL);
+}
+
+Value vmu_record_get_attr(size_t key_size, char *key, RecordObj *record_obj, VM *vm){
+    LZOHTable *attrs = record_obj->attrs;
+    Value *out_value = NULL;
+
+    if(attrs && lzohtable_lookup(key, key_size, attrs, (void **)(&out_value))){
+        return *out_value;
+    }
+
+    vmu_error(vm, "Failed to get attribute: record does not contain attribute '%s'", key);
+
+    return (Value){0};
 }
 
 NativeFnObj *vmu_create_native_fn(Value target, NativeFn *native_fn, VM *vm){
     NativeFnObj *native_fn_obj = MEMORY_ALLOC(NativeFnObj, 1, ALLOCATOR);
     Obj *obj = (Obj *)native_fn_obj;
 
-    init_obj(NATIVE_FN_OTYPE, obj, vm);
+    init_obj(NATIVE_FN_OBJ_TYPE, obj, vm);
     native_fn_obj->target = target;
     native_fn_obj->native_fn = native_fn;
 
@@ -1431,107 +1491,11 @@ void vmu_destroy_native_fn(NativeFnObj *native_fn_obj, VM *vm){
     MEMORY_DEALLOC(NativeFnObj, 1, native_fn_obj, ALLOCATOR);
 }
 
-RecordRandom *vmu_create_record_random(VM *vm){
-    RecordRandom *random = MEMORY_ALLOC(RecordRandom, 1, ALLOCATOR);
-    return random;
-}
-
-RecordFile *vmu_create_record_file(char *raw_mode, char mode, char *pathname, VM *vm){
-    char *cloned_pathname = factory_clone_raw_str(pathname, ALLOCATOR, NULL);
-    FILE *handler = fopen(pathname, raw_mode);
-    RecordFile *record_file = MEMORY_ALLOC(RecordFile, 1, ALLOCATOR);
-
-    if(!handler){
-        factory_destroy_raw_str(cloned_pathname, ALLOCATOR);
-        MEMORY_DEALLOC(RecordFile, 1, record_file, ALLOCATOR);
-        return NULL;
-    }
-
-    record_file->mode = mode;
-    record_file->handler = handler;
-    record_file->pathname = cloned_pathname;
-
-    return record_file;
-}
-
-Obj *vmu_create_record_random_obj(VM *vm){
-    RecordObj *record = OBJ_TO_RECORD(vmu_create_record(0, vm));
-    RecordRandom *record_random = vmu_create_record_random(vm);
-
-    record->type = RANDOM_RTYPE;
-    record->content = record_random;
-
-    return &record->header;
-}
-
-Obj *vmu_create_record_file_obj(char *raw_mode, char mode, char *pathname, VM *vm){
-    RecordObj *record = OBJ_TO_RECORD(vmu_create_record(0, vm));
-    RecordFile *record_file = vmu_create_record_file(raw_mode, mode, pathname, vm);
-
-    if(!record_file){
-        return NULL;
-    }
-
-    record->type = FILE_RTYPE;
-    record->content = record_file;
-
-    return &record->header;
-}
-
-void vmu_destroy_record_random(RecordRandom *record_random, VM *vm){
-    if(!record_random){
-        return;
-    }
-
-    MEMORY_DEALLOC(RecordRandom, 1, record_random, ALLOCATOR);
-}
-
-void vmu_destroy_record_file(RecordFile *record_file, VM *vm){
-    if(!record_file){
-        return;
-    }
-
-    factory_destroy_raw_str(record_file->pathname, ALLOCATOR);
-    fclose(record_file->handler);
-    MEMORY_DEALLOC(RecordFile, 1, record_file, ALLOCATOR);
-}
-
-Obj *vmu_create_raw_native_fn_obj(
-    int arity,
-    char *name,
-    Value *target,
-    RawNativeFn raw_native,
-    VM *vm
-){
-    size_t name_len = strlen(name);
-
-    if(name_len + 1 >= NAME_LEN){
-        vmu_error(vm, "Native function name exceed the max length allowed");
-    }
-
-    NativeFn *fn = factory_create_native_fn(0, name, arity, target, raw_native, ALLOCATOR);
-    NativeFnObj *native_fn = MEMORY_ALLOC(NativeFnObj, 1, ALLOCATOR);
-
-    native_fn->header.type = NATIVE_FN_OTYPE;
-    native_fn->native_fn = fn;
-
-    return &native_fn->header;
-}
-
-Obj *vmu_create_native_fn_obj(NativeFn *native_fn, VM *vm){
-    NativeFnObj *native_fn_obj = MEMORY_ALLOC(NativeFnObj, 1, ALLOCATOR);
-
-    native_fn_obj->header.type = NATIVE_FN_OTYPE;
-    native_fn_obj->native_fn = native_fn;
-
-    return &native_fn_obj->header;
-}
-
 FnObj *vmu_create_fn(Fn *fn, VM *vm){
     FnObj *fn_obj = MEMORY_ALLOC(FnObj, 1, ALLOCATOR);
     Obj *obj = (Obj *)fn_obj;
 
-    init_obj(FN_OTYPE, obj, vm);
+    init_obj(FN_OBJ_TYPE, obj, vm);
     fn_obj->fn = fn;
 
     return fn_obj;
@@ -1565,7 +1529,7 @@ ClosureObj *vmu_create_closure(MetaClosure *meta, VM *vm){
 
     closure->meta = meta;
     closure->out_values = out_values;
-    init_obj(CLOSURE_OTYPE, obj, vm);
+    init_obj(CLOSURE_OBJ_TYPE, obj, vm);
     closure_obj->closure = closure;
 
     return closure_obj;
@@ -1589,7 +1553,7 @@ NativeModuleObj *vmu_create_native_module(NativeModule *native_module, VM *vm){
     NativeModuleObj *native_module_obj = MEMORY_ALLOC(NativeModuleObj, 1, ALLOCATOR);
     Obj *obj = (Obj *)native_module_obj;
 
-    init_obj(NATIVE_MODULE_OTYPE, obj, vm);
+    init_obj(NATIVE_MODULE_OBJ_TYPE, obj, vm);
     native_module_obj->native_module = native_module;
 
     return native_module_obj;
@@ -1606,7 +1570,7 @@ void vmu_destroy_native_module_obj(NativeModuleObj *native_module_obj, VM *vm){
 Obj *vmu_create_module_obj(Module *module, VM *vm){
     ModuleObj *module_obj = MEMORY_ALLOC(ModuleObj, 1, ALLOCATOR);
 
-    module_obj->header.type = MODULE_OTYPE;
+    module_obj->header.type = MODULE_OBJ_TYPE;
     module_obj->module = module;
 
     return &module_obj->header;

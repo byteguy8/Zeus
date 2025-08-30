@@ -19,6 +19,7 @@ typedef enum opcode{
     IARRAY_OPCODE,
     ILIST_OPCODE,
     IDICT_OPCODE,
+    IRECORD_OPCODE,
 
     CONCAT_OPCODE,
     MULSTR_OPCODE,

@@ -178,7 +178,7 @@ int lzbstr_append_args(LZBStr *str, char *fmt, ...){
     size_t min_value = min(rstr_len, available);
     size_t required = max_value - min_value;
 
-    if(rstr_len > available && grow(2, max(required, 16), str)){
+    if(rstr_len >= available && grow(2, max(required, 16), str)){
         return 1;
     }
 

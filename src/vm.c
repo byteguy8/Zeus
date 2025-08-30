@@ -115,7 +115,7 @@ static inline void push(Value value, VM *vm);
 #define PUSH_FLOAT(_value, _vm) (push(FLOAT_VALUE(_value), (_vm)))
 #define PUSH_OBJ(_obj, _vm)(push(OBJ_VALUE((Obj *)(_obj)), (_vm)))
 static inline FnObj *push_fn(Fn *fn, VM *vm);
-static ClosureObj *push_closure(MetaClosure *meta, VM *vm);
+static ClosureObj *init_closure(MetaClosure *meta, VM *vm);
 static Obj *push_native_module(NativeModule *native_module, VM *vm);
 static Obj *push_module(Module *module, VM *vm);
 static Value *pop(VM *vm);
@@ -245,7 +245,7 @@ static inline FnObj *push_fn(Fn *fn, VM *vm){
     return fn_obj;
 }
 
-ClosureObj *push_closure(MetaClosure *meta, VM *vm){
+ClosureObj *init_closure(MetaClosure *meta, VM *vm){
     ClosureObj *closure_obj = vmu_create_closure(meta, vm);
     Closure *closure = closure_obj->closure;
     OutValue *out_values = closure->out_values;
@@ -264,8 +264,6 @@ ClosureObj *push_closure(MetaClosure *meta, VM *vm){
 
         add_out_value_to_current_frame(out_value, vm);
     }
-
-    PUSH_OBJ(closure_obj, vm);
 
     return closure_obj;
 }
@@ -447,9 +445,7 @@ static int execute(VM *vm){
             }case RECORD_OPCODE:{
                 uint16_t len = (uint16_t)read_i16(vm);
                 RecordObj *record_obj = vmu_create_record(len, vm);
-
                 PUSH_OBJ(record_obj, vm);
-
                 break;
             }case IARRAY_OPCODE:{
                 int64_t idx = (int64_t)read_i16(vm);
@@ -483,6 +479,20 @@ static int execute(VM *vm){
 
                 vmu_dict_put(*key_value, *raw_value, VALUE_TO_DICT(dict_value), vm);
                 pop(vm);
+                pop(vm);
+
+                break;
+            }case IRECORD_OPCODE:{
+                size_t key_size;
+                char *key = read_str(vm, &key_size);
+                Value *raw_value = peek_at(0, vm);
+                Value *record_value = peek_at(1, vm);
+
+                if(!IS_VALUE_RECORD(record_value)){
+                    vmu_internal_error(vm, "Expect value of type 'record', but got something else");
+                }
+
+                vmu_record_set_attr(key_size, key, *raw_value, VALUE_TO_RECORD(record_value), vm);
                 pop(vm);
 
                 break;
@@ -1179,25 +1189,32 @@ static int execute(VM *vm){
 
                 SubModuleSymbol symbol = DYNARR_GET_AS(SubModuleSymbol, index, symbols);
 
-                if(symbol.type == FUNCTION_MSYMTYPE){
-                    Fn *fn = (Fn *)symbol.value;
-                    FnObj *fn_obj = vmu_create_fn(fn, vm);
+                switch (symbol.type){
+                    case FUNCTION_SUBMODULE_SYM_TYPE:{
+                        Fn *fn = (Fn *)symbol.value;
+                        FnObj *fn_obj = vmu_create_fn(fn, vm);
 
-                    PUSH_OBJ(fn_obj, vm);
+                        PUSH_OBJ(fn_obj, vm);
 
-                    break;
+                        break;
+                    }case CLOSURE_SUBMODULE_SYM_TYPE:{
+                        MetaClosure *meta_closure = (MetaClosure *)symbol.value;
+                        ClosureObj *closure_obj = init_closure(meta_closure, vm);
+
+                        PUSH_OBJ(closure_obj, vm);
+
+                        break;
+                    }case NATIVE_MODULE_SUBMODULE_SYM_TYPE:{
+                        NativeModule *native_module = (NativeModule *)symbol.value;
+                        NativeModuleObj *native_module_obj = vmu_create_native_module(native_module, vm);
+
+                        PUSH_OBJ(native_module_obj, vm);
+
+                        break;
+                    }default:{
+                        vmu_internal_error(vm, "Unknown native symbol");
+                    }
                 }
-
-                if(symbol.type == NATIVE_MODULE_MSYMTYPE){
-                    NativeModule *native_module = (NativeModule *)symbol.value;
-                    NativeModuleObj *native_module_obj = vmu_create_native_module(native_module, vm);
-
-                    PUSH_OBJ(native_module_obj, vm);
-
-                    break;
-                }
-
-                vmu_internal_error(vm, "Unknown native symbol");
 
                 break;
             }case ASET_OPCODE:{
@@ -1372,7 +1389,7 @@ static int execute(VM *vm){
                 Obj *target_obj = VALUE_TO_OBJ(target_value);
 
                 switch (target_obj->type){
-                    case STR_OTYPE:{
+                    case STR_OBJ_TYPE:{
                         NativeFn *native_fn = native_str_get(key_size, key, vm);
 
                         if(native_fn){
@@ -1387,7 +1404,7 @@ static int execute(VM *vm){
                         vmu_error(vm, "Target does not contain symbol '%s'", key);
 
                         break;
-                    }case ARRAY_OTYPE:{
+                    }case ARRAY_OBJ_TYPE:{
                         NativeFn *native_fn = native_array_get(key_size, key, vm);
 
                         if(native_fn){
@@ -1402,7 +1419,7 @@ static int execute(VM *vm){
                         vmu_error(vm, "Target does not contain symbol '%s'", key);
 
                         break;
-                    }case LIST_OTYPE:{
+                    }case LIST_OBJ_TYPE:{
                         NativeFn *native_fn = native_list_get(key_size, key, vm);
 
                         if(native_fn){
@@ -1417,7 +1434,7 @@ static int execute(VM *vm){
                         vmu_error(vm, "Target does not contain symbol '%s'", key);
 
                         break;
-                    }case DICT_OTYPE:{
+                    }case DICT_OBJ_TYPE:{
                         NativeFn *native_fn = native_dict_get(key_size, key, vm);
 
                         if(native_fn){
@@ -1432,7 +1449,15 @@ static int execute(VM *vm){
                         vmu_error(vm, "Target does not contain symbol '%s'", key);
 
                         break;
-                    }case NATIVE_MODULE_OTYPE:{
+                    }case RECORD_OBJ_TYPE:{
+                        RecordObj *record_obj = OBJ_TO_RECORD(target_obj);
+                        Value out_value = vmu_record_get_attr(key_size, key, record_obj, vm);
+
+                        pop(vm);
+                        push(out_value, vm);
+
+                        break;
+                    }case NATIVE_MODULE_OBJ_TYPE:{
                         NativeModuleObj *native_module_obj = OBJ_TO_NATIVE_MODULE(target_obj);
                         NativeModule *native_module = native_module_obj->native_module;
                         NativeModuleSymbol *native_module_symbol = NULL;
@@ -1531,24 +1556,24 @@ static int execute(VM *vm){
                     Obj *obj = VALUE_TO_OBJ(value);
 
                     switch(obj->type){
-                        case STR_OTYPE:{
+                        case STR_OBJ_TYPE:{
                             push(BOOL_VALUE(type == 4), vm);
                             break;
-                        }case ARRAY_OTYPE:{
+                        }case ARRAY_OBJ_TYPE:{
                             push(BOOL_VALUE(type == 5), vm);
                             break;
-                        }case LIST_OTYPE:{
+                        }case LIST_OBJ_TYPE:{
                             push(BOOL_VALUE(type == 6), vm);
                             break;
-                        }case DICT_OTYPE:{
+                        }case DICT_OBJ_TYPE:{
                             push(BOOL_VALUE(type == 7), vm);
                             break;
-                        }case RECORD_OTYPE:{
+                        }case RECORD_OBJ_TYPE:{
                             push(BOOL_VALUE(type == 8), vm);
                             break;
-                        }case FN_OTYPE:
-                        case CLOSURE_OTYPE:
-                        case NATIVE_FN_OTYPE:{
+                        }case FN_OBJ_TYPE:
+                        case CLOSURE_OBJ_TYPE:
+                        case NATIVE_FN_OBJ_TYPE:{
                             push(BOOL_VALUE(type == 9), vm);
                             break;
                         }default:{
@@ -1717,7 +1742,7 @@ int vm_execute(LZOHTable *native_fns, Module *module, VM *vm){
             vm->main_module = module;
             vm->modules[vm->module_ptr++] = module;
 
-            Fn *main_fn = (Fn *)get_symbol(0, FUNCTION_MSYMTYPE, vm->modules[0], vm);
+            Fn *main_fn = (Fn *)get_symbol(0, FUNCTION_SUBMODULE_SYM_TYPE, vm->modules[0], vm);
             push_fn(main_fn, vm);
 
             Frame *frame = push_frame(0, vm);
