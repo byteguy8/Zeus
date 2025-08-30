@@ -492,7 +492,7 @@ static int execute(VM *vm){
                     vmu_internal_error(vm, "Expect value of type 'record', but got something else");
                 }
 
-                vmu_record_set_attr(key_size, key, *raw_value, VALUE_TO_RECORD(record_value), vm);
+                vmu_record_insert_attr(key_size, key, *raw_value, VALUE_TO_RECORD(record_value), vm);
                 pop(vm);
 
                 break;
@@ -1174,7 +1174,7 @@ static int execute(VM *vm){
                     break;
                 }
 
-                vmu_error(vm, "Unknown native '%s'", (char *)key);
+                vmu_internal_error(vm, "Unknown native symbol '%s'", key);
 
                 break;
             }case SGET_OPCODE:{
@@ -1212,41 +1212,71 @@ static int execute(VM *vm){
 
                         break;
                     }default:{
-                        vmu_internal_error(vm, "Unknown native symbol");
+                        vmu_internal_error(vm, "Unknown submodule symbol type");
                     }
                 }
 
                 break;
             }case ASET_OPCODE:{
-                Value *indexable_value = pop(vm);
-                Value *idx_value = pop(vm);
-                Value *value = peek(vm);
+                Value *indexable_value = peek_at(0, vm);
+                Value *idx_value = peek_at(1, vm);
+                Value *value = peek_at(2, vm);
 
-                if(IS_VALUE_ARRAY(indexable_value)){
-                    if(!IS_VALUE_INT(idx_value)){
-                        vmu_error(vm, "Expect index value of type 'int'");
-                    }
-
-                    int64_t idx = VALUE_TO_INT(idx_value);
-                    ArrayObj *array_obj = VALUE_TO_ARRAY(indexable_value);
-                    vmu_array_set_at(idx, *value, array_obj, vm);
-                }else if(IS_VALUE_LIST(indexable_value)){
-                    if(!IS_VALUE_INT(idx_value)){
-                        vmu_error(vm, "Expect index value of type 'int'");
-                    }
-
-                    int64_t idx = VALUE_TO_INT(idx_value);
-                    ListObj *list_obj = VALUE_TO_LIST(indexable_value);
-                    vmu_list_set_at(idx, *value, list_obj, vm);
-                }else if(IS_VALUE_DICT(indexable_value)){
-                    DictObj *dict_obj = VALUE_TO_DICT(indexable_value);
-                    vmu_dict_put(*idx_value, *value, dict_obj, vm);
-                }else{
-                    vmu_error(vm, "Illegal indexable target");
+                if(!IS_VALUE_OBJ(indexable_value)){
+                    vmu_error(vm, "Illegal assignment target");
                 }
+
+                Obj *obj = VALUE_TO_OBJ(indexable_value);
+
+                switch (obj->type){
+                    case ARRAY_OBJ_TYPE:{
+                        if(!IS_VALUE_INT(idx_value)){
+                            vmu_error(vm, "Expect index value of type 'int'");
+                        }
+
+                        int64_t idx = VALUE_TO_INT(idx_value);
+                        ArrayObj *array_obj = VALUE_TO_ARRAY(indexable_value);
+                        vmu_array_set_at(idx, *value, array_obj, vm);
+
+                        break;
+                    }case LIST_OBJ_TYPE:{
+                        if(!IS_VALUE_INT(idx_value)){
+                            vmu_error(vm, "Expect index value of type 'int'");
+                        }
+
+                        int64_t idx = VALUE_TO_INT(idx_value);
+                        ListObj *list_obj = VALUE_TO_LIST(indexable_value);
+                        vmu_list_set_at(idx, *value, list_obj, vm);
+
+                        break;
+                    }case DICT_OBJ_TYPE:{
+                        DictObj *dict_obj = VALUE_TO_DICT(indexable_value);
+                        vmu_dict_put(*idx_value, *value, dict_obj, vm);
+
+                        break;
+                    }default:{
+                        vmu_error(vm, "Illegal assignment target");
+                    }
+                }
+
+                pop(vm);
+                pop(vm);
 
                 break;
             }case PUT_OPCODE:{
+                size_t key_size;
+                char *key = read_str(vm, &key_size);
+                Value *target_value = pop(vm);
+                Value *raw_value = peek(vm);
+
+                if(!IS_VALUE_RECORD(target_value)){
+                    vmu_error(vm, "Expect record in assignment");
+                }
+
+                RecordObj *record_obj = VALUE_TO_RECORD(target_value);
+
+                vmu_record_set_attr(key_size, key, *raw_value, record_obj, vm);
+
                 break;
             }case POP_OPCODE:{
                 pop(vm);

@@ -298,7 +298,8 @@ Value vmu_dict_get(Value key, DictObj *dict_obj, VM *vm);
 //------------------    RECORD    --------------------------//
 RecordObj *vmu_create_record(uint16_t length, VM *vm);
 void vmu_destroy_record(RecordObj *record_obj, VM *vm);
-void vmu_record_set_attr(size_t attr_len, char *attr, Value value, RecordObj *record_obj, VM *vm);
+void vmu_record_insert_attr(size_t key_size, char *key, Value value, RecordObj *record_obj, VM *vm);
+void vmu_record_set_attr(size_t key_size, char *key, Value value, RecordObj *record_obj, VM *vm);
 Value vmu_record_get_attr(size_t key_size, char *key, RecordObj *record_obj, VM *vm);
 //----------------    NATIVE FN    -------------------------//
 NativeFnObj *vmu_create_native_fn(Value target, NativeFn *native_fn, VM *vm);

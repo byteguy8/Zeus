@@ -1446,7 +1446,7 @@ void vmu_destroy_record(RecordObj *record_obj, VM *vm){
     MEMORY_DEALLOC(RecordObj, 1, record_obj, ALLOCATOR);
 }
 
-void vmu_record_set_attr(size_t attr_len, char *attr, Value value, RecordObj *record_obj, VM *vm){
+void vmu_record_insert_attr(size_t key_size, char *key, Value value, RecordObj *record_obj, VM *vm){
     Value *attr_value = NULL;
     LZOHTable *attrs = record_obj->attrs;
 
@@ -1454,12 +1454,24 @@ void vmu_record_set_attr(size_t attr_len, char *attr, Value value, RecordObj *re
         vmu_internal_error(vm, "Cannot set attributes on an empty record");
     }
 
-    if(lzohtable_lookup(attr, attr_len, attrs, (void **)(&attr_value))){
+    if(lzohtable_lookup(key, key_size, attrs, (void **)(&attr_value))){
         *attr_value = value;
         return;
     }
 
-    lzohtable_put_ckv(attr, attr_len, &value, VALUE_SIZE, attrs, NULL);
+    lzohtable_put_ckv(key, key_size, &value, VALUE_SIZE, attrs, NULL);
+}
+
+void vmu_record_set_attr(size_t key_size, char *key, Value value, RecordObj *record_obj, VM *vm){
+    Value *attr_value = NULL;
+    LZOHTable *attrs = record_obj->attrs;
+
+    if(attrs && lzohtable_lookup(key, key_size, attrs, (void **)(&attr_value))){
+        *attr_value = value;
+        return;
+    }
+
+    vmu_error(vm, "Failed to update record: attribute '%s' does not exist", key);
 }
 
 Value vmu_record_get_attr(size_t key_size, char *key, RecordObj *record_obj, VM *vm){
