@@ -512,6 +512,72 @@ static int execute(VM *vm){
                     break;
                 }
 
+                if(IS_VALUE_ARRAY(left_value) && IS_VALUE_ARRAY(right_value)){
+                    ArrayObj *left_array_obj = VALUE_TO_ARRAY(left_value);
+                    ArrayObj *right_array_obj = VALUE_TO_ARRAY(right_value);
+                    ArrayObj *new_array_obj = vmu_array_join(left_array_obj, right_array_obj, vm);
+
+                    pop(vm);
+                    pop(vm);
+                    PUSH_OBJ(new_array_obj, vm);
+
+                    break;
+                }
+
+                if(IS_VALUE_LIST(left_value) && IS_VALUE_LIST(right_value)){
+                    ListObj *left_list_obj = VALUE_TO_LIST(left_value);
+                    ListObj *right_list_obj = VALUE_TO_LIST(right_value);
+                    ListObj *new_list_obj = vmu_list_join(left_list_obj, right_list_obj, vm);
+
+                    pop(vm);
+                    pop(vm);
+                    PUSH_OBJ(new_list_obj, vm);
+
+                    break;
+                }
+
+                if(IS_VALUE_ARRAY(left_value) || IS_VALUE_ARRAY(right_value)){
+                    ArrayObj *array_obj = NULL;
+                    Value *raw_value = NULL;
+
+                    if(IS_VALUE_ARRAY(left_value)){
+                        array_obj = VALUE_TO_ARRAY(left_value);
+                        raw_value = right_value;
+                    }else{
+                        array_obj = VALUE_TO_ARRAY(right_value);
+                        raw_value = left_value;
+                    }
+
+                    ArrayObj *new_array_obj = vmu_array_join_value(*raw_value, array_obj, vm);
+
+                    pop(vm);
+                    pop(vm);
+                    PUSH_OBJ(new_array_obj, vm);
+
+                    break;
+                }
+
+                if(IS_VALUE_LIST(left_value) || IS_VALUE_LIST(right_value)){
+                    ListObj *list_obj = NULL;
+                    Value *raw_value = NULL;
+
+                    if(IS_VALUE_LIST(left_value)){
+                        list_obj = VALUE_TO_LIST(left_value);
+                        raw_value = right_value;
+                    }else{
+                        list_obj = VALUE_TO_LIST(right_value);
+                        raw_value = left_value;
+                    }
+
+                    ListObj *new_list_obj = vmu_list_insert_new(*raw_value, list_obj, vm);
+
+                    pop(vm);
+                    pop(vm);
+                    PUSH_OBJ(new_list_obj, vm);
+
+                    break;
+                }
+
                 vmu_error(vm, "Illegal operands for concatenation");
 
                 break;

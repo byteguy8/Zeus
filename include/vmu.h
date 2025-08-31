@@ -280,15 +280,19 @@ Value vmu_array_first(ArrayObj *array_obj, VM *vm);
 Value vmu_array_last(ArrayObj *array_obj, VM *vm);
 ArrayObj *vmu_array_grow(int64_t by, ArrayObj *array_obj, VM *vm);
 ArrayObj *vmu_array_join(ArrayObj *a_array_obj, ArrayObj *b_array_obj, VM *vm);
+ArrayObj *vmu_array_join_value(Value value, ArrayObj *array_obj, VM *vm);
 //-------------------    LIST    ---------------------------//
 ListObj *vmu_create_list(VM *vm);
 void vmu_destroy_list(ListObj *list_obj, VM *vm);
 int64_t vmu_list_len(ListObj *list_obj);
 int64_t vmu_list_clear(ListObj *list_obj);
+ListObj *vmu_list_join(ListObj *a_list_obj, ListObj *b_list_obj, VM *vm);
 Value vmu_list_get_at(int64_t idx, ListObj *list_obj, VM *vm);
 void vmu_list_insert(Value value, ListObj *list_obj, VM *vm);
+ListObj *vmu_list_insert_new(Value value, ListObj *list_obj, VM *vm);
+void vmu_list_insert_at(int64_t idx, Value value, ListObj *list_obj, VM *vm);
 Value vmu_list_set_at(int64_t idx, Value value, ListObj *list_obj, VM *vm);
-Value vmu_list_remove(int64_t idx, ListObj *list_obj, VM *vm);
+Value vmu_list_remove_at(int64_t idx, ListObj *list_obj, VM *vm);
 //-------------------    DICT    ---------------------------//
 DictObj *vmu_create_dict(VM *vm);
 void vmu_destroy_dict(DictObj *dict_obj, VM *vm);

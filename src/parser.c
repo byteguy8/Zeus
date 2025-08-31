@@ -20,9 +20,9 @@ static void error(Parser *parser, Token *token, char *msg, ...);
 //--------------------------------  OTHER  ---------------------------------//
 static Expr *create_expr(ExprType type, void *sub_expr, Parser *parser);
 static Stmt *create_stmt(StmtType type, void *sub_stmt, Parser *parser);
-static Token *peek(Parser *parser);
-static Token *previous(Parser *parser);
-static int is_at_end(Parser *parser);
+static inline Token *peek(Parser *parser);
+static inline Token *previous(Parser *parser);
+static inline int is_at_end(Parser *parser);
 static int match(Parser *parser, int count, ...);
 static int check(Parser *parser, TokType type);
 Token *consume(Parser *parser, TokType type, char *err_msg, ...);
@@ -97,17 +97,17 @@ Stmt *create_stmt(StmtType type, void *sub_stmt, Parser *parser){
     return stmt;
 }
 
-Token *peek(Parser *parser){
+static inline Token *peek(Parser *parser){
 	DynArr *tokens = parser->tokens;
-	return (Token *)dynarr_get_ptr(parser->current, tokens);
+	return DYNARR_GET_PTR_AS(Token, parser->current, tokens);
 }
 
-Token *previous(Parser *parser){
+static inline Token *previous(Parser *parser){
 	DynArr *tokens = parser->tokens;
-	return (Token *)dynarr_get_ptr(parser->current - 1, tokens);
+	return DYNARR_GET_PTR_AS(Token, parser->current - 1, tokens);
 }
 
-int is_at_end(Parser *parser){
+static inline int is_at_end(Parser *parser){
     Token *token = peek(parser);
 	return token->type == EOF_TOKTYPE;
 }
@@ -1343,8 +1343,7 @@ Parser *parser_create(Allocator *allocator){
 }
 
 int parser_parse(DynArr *tokens, DynArr *stmts, Parser *parser){
-	if(setjmp(parser->err_jmp) == 1) return 1;
-    else {
+	if(setjmp(parser->err_jmp) == 0){
         parser->current = 0;
         parser->tokens = tokens;
 
@@ -1354,6 +1353,8 @@ int parser_parse(DynArr *tokens, DynArr *stmts, Parser *parser){
         }
 
         return 0;
+    }else {
+        return 1;
     }
 }
 

@@ -783,7 +783,7 @@ void write_location(Token *token, Compiler *compiler){
 
 void update_chunk(size_t index, uint8_t chunk, Compiler *compiler){
 	DynArr *chunks = current_chunks(compiler);
-    DYNARR_SET(&chunk, index, chunks);
+    dynarr_set_at(index, &chunk, chunks);
 }
 
 size_t write_i16(int16_t i16, Compiler *compiler){
@@ -876,8 +876,9 @@ void update_i16(size_t index, int16_t i16, Compiler *compiler){
 
 	descompose_i16(i16, bytes);
 
-	for(size_t i = 0; i < 2; i++)
-        DYNARR_SET(bytes + i, index + i, chunks);
+	for(size_t i = 0; i < 2; i++){
+        dynarr_set_at(index + i, bytes + i, chunks);
+    }
 }
 
 void update_i32(size_t index, int32_t i32, Compiler *compiler){
@@ -886,8 +887,9 @@ void update_i32(size_t index, int32_t i32, Compiler *compiler){
 
 	descompose_i32(i32, bytes);
 
-	for(size_t i = 0; i < 4; i++)
-        DYNARR_SET(bytes + i, index + i, chunks);
+	for(size_t i = 0; i < 4; i++){
+        dynarr_set_at(index + i, bytes + i, chunks);
+    }
 }
 
 inline int32_t generate_id(Compiler *compiler){
@@ -900,7 +902,7 @@ inline uint32_t generate_trycatch_id(Compiler *compiler){
 
 char *names_to_name(DynArr *names, Token **out_name, Compiler *compiler){
     if(DYNARR_LEN(names) == 1){
-        Token *name = (Token *)DYNARR_GET(0, names);
+        Token *name = (Token *)dynarr_get_raw(0, names);
         *out_name = name;
         return name->lexeme;
     }
@@ -909,7 +911,7 @@ char *names_to_name(DynArr *names, Token **out_name, Compiler *compiler){
     BStr *bstr = FACTORY_BSTR(CTALLOCATOR);
 
     for (size_t i = 0; i < DYNARR_LEN(names); i++){
-        name = (Token *)DYNARR_GET(i, names);
+        name = (Token *)dynarr_get_raw(i, names);
         bstr_append(name->lexeme, bstr);
         if(i + 1 < DYNARR_LEN(names)) bstr_append("/", bstr);
     }
@@ -2426,7 +2428,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                     write_location(try_token, compiler);
                 }
 
-				for (size_t i = 0; i < DYNARR_LEN(catch_stmts); i++){
+				for (size_t i = 0; i < stmts_len; i++){
                     Stmt *stmt = (Stmt *)dynarr_get_ptr(i, catch_stmts);
                     compile_stmt(stmt, compiler);
                 }
@@ -2497,7 +2499,7 @@ void set_fn(size_t index, Fn *fn, Compiler *compiler){
         .value = fn
     };
 
-    DYNARR_SET(&symbol, index, symbols);
+    dynarr_set_at(index, &symbol, symbols);
 }
 
 void set_closure(size_t index, MetaClosure *closure, Compiler *compiler){
@@ -2508,7 +2510,7 @@ void set_closure(size_t index, MetaClosure *closure, Compiler *compiler){
         .value = closure
     };
 
-    DYNARR_SET(&symbol, index, symbols);
+    dynarr_set_at(index, &symbol, symbols);
 }
 //--------------------------------------------------------------------------//
 //                          PUBLIC IMPLEMENTATION                           //

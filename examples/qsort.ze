@@ -1,0 +1,66 @@
+proc filter_values(filter, values){
+    imut new_values = list();
+
+    for(i = 0 upto values.len()){
+        imut value = values[i];
+
+        if(filter(i, value)){
+            new_values.insert(value);
+        }
+    }
+
+    ret new_values;
+}
+
+proc qsort(comparator, values){
+    imut len = values.len();
+
+    if(len <= 2){
+        if(len == 2){
+            imut a = values[0];
+            imut b = values[1];
+
+            if(a > b){
+                values[1] = a;
+                values[0] = b;
+            }
+        }
+
+        ret values;
+    }
+
+    imut pivot_idx = 0;
+    imut pivot = values[pivot_idx];
+    imut less = filter_values(anon(idx, value){
+        if(idx == pivot_idx){
+            ret false;
+        }
+
+        ret comparator(value, pivot) <= 0;
+    }, values);
+    imut greater = filter_values(anon(idx, value){
+        if(idx == pivot_idx){
+            ret false;
+        }
+
+        ret comparator(value, pivot) == 1;
+    }, values);
+
+    ret qsort(comparator, less) .. pivot .. qsort(comparator, greater);
+}
+
+imut a_values = list(0,1,2,3,4);
+imut b_values = list(5,6,7,8,9);
+imut c_values = b_values .. a_values;
+imut sorted = qsort(anon(a, b){
+    if(a < b){
+        ret -1;
+    }elif(a > b){
+        ret 1;
+    }else{
+        ret 0;
+    }
+}, c_values);
+
+println(to_str(b_values) .. " + " .. to_str(a_values) .. " = " .. to_str(c_values));
+println("sorted: " .. to_str(sorted));

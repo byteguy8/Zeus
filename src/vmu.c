@@ -35,7 +35,7 @@ void mark_objs(VM *vm);
 void sweep_objs(VM *vm);
 void normalize_objs(VM *vm);
 //----------            OTHERS            --------//
-static int compare_locations(void *a, void *b);
+static int compare_locations(const void *a, const void *b);
 static BStr *prepare_stacktrace(unsigned int spaces, VM *vm);
 static int prepare_stacktrace_new(unsigned int spaces, LZBStr *str, VM *vm);
 
@@ -263,7 +263,7 @@ void normalize_objs(VM *vm){
     }
 }
 
-static int compare_locations(void *a, void *b){
+static int compare_locations(const void *a, const void *b){
 	OPCodeLocation *location_a = (OPCodeLocation *)a;
 	OPCodeLocation *location_b = (OPCodeLocation *)b;
 
@@ -283,7 +283,7 @@ static BStr *prepare_stacktrace(unsigned int spaces, VM *vm){
         Fn *fn = frame->fn;
 		DynArr *locations = fn->locations;
 		int index = FIND_LOCATION(frame->last_offset, locations);
-		OPCodeLocation *location = index == -1 ? NULL : (OPCodeLocation *)DYNARR_GET(index, locations);
+		OPCodeLocation *location = index == -1 ? NULL : (OPCodeLocation *)dynarr_get_raw(index, locations);
 
 		if(location){
 			bstr_append_args(
@@ -308,7 +308,7 @@ static int prepare_stacktrace_new(unsigned int spaces, LZBStr *str, VM *vm){
         Fn *fn = frame->fn;
 		DynArr *locations = fn->locations;
 		int idx = FIND_LOCATION(frame->last_offset, locations);
-		OPCodeLocation *location = idx == -1 ? NULL : (OPCodeLocation *)DYNARR_GET(idx, locations);
+		OPCodeLocation *location = idx == -1 ? NULL : (OPCodeLocation *)dynarr_get_raw(idx, locations);
 
 		if(location){
             if(lzbstr_append_args(
@@ -377,7 +377,7 @@ static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
             lzbstr_append("(", str);
 
             for (size_t i = 0; i < len; i++){
-                Value *value = (Value *)DYNARR_GET(i, items);
+                Value *value = (Value *)dynarr_get_raw(i, items);
 
                 if(IS_VALUE_STR(value)){
                     lzbstr_append("'", str);
@@ -1285,6 +1285,18 @@ ArrayObj *vmu_array_join(ArrayObj *a_array_obj, ArrayObj *b_array_obj, VM *vm){
     return new_array_obj;
 }
 
+ArrayObj *vmu_array_join_value(Value value, ArrayObj *array_obj, VM *vm){
+    size_t len = array_obj->len;
+    Value *values = array_obj->values;
+    ArrayObj *new_array_obj = vmu_create_array(len + 1, vm);
+    Value *new_values = new_array_obj->values;
+
+    memcpy(new_values, values, VALUE_SIZE * len);
+    new_values[len] = value;
+
+    return new_array_obj;
+}
+
 ListObj *vmu_create_list(VM *vm){
     DynArr *values = FACTORY_DYNARR_TYPE(Value, ALLOCATOR);
     ListObj *list_obj = MEMORY_ALLOC(ListObj, 1, ALLOCATOR);
@@ -1318,6 +1330,19 @@ inline int64_t vmu_list_clear(ListObj *list_obj){
     return len;
 }
 
+ListObj *vmu_list_join(ListObj *a_list_obj, ListObj *b_list_obj, VM *vm){
+    DynArr *a_list = a_list_obj->items;
+    DynArr *b_list = b_list_obj->items;
+    DynArr *c_list = dynarr_append_new(a_list, b_list, (DynArrAllocator *)ALLOCATOR);
+    ListObj *list_obj = MEMORY_ALLOC(ListObj, 1, ALLOCATOR);
+    Obj *obj = (Obj *)list_obj;
+
+    init_obj(LIST_OBJ_TYPE, obj, vm);
+    list_obj->items = c_list;
+
+    return list_obj;
+}
+
 Value vmu_list_get_at(int64_t idx, ListObj *list_obj, VM *vm){
     if(idx < 0){
         vmu_error(vm, "Failed to get item from list: 'at' index is negative");
@@ -1339,6 +1364,38 @@ inline void vmu_list_insert(Value value, ListObj *list_obj, VM *vm){
     dynarr_insert(&value, items);
 }
 
+ListObj *vmu_list_insert_new(Value value, ListObj *list_obj, VM *vm){
+    DynArr *items = list_obj->items;
+    size_t items_len = DYNARR_LEN(items);
+    DynArr *new_items = dynarr_create_by(items->rsize, items_len + 1, (DynArrAllocator *)ALLOCATOR);
+    ListObj *new_list_obj = MEMORY_ALLOC(ListObj, 1, ALLOCATOR);
+    Obj *obj = (Obj *)new_list_obj;
+
+    dynarr_append(items, new_items);
+    dynarr_insert(&value, new_items);
+
+    init_obj(LIST_OBJ_TYPE, obj, vm);
+    new_list_obj->items = new_items;
+
+    return new_list_obj;
+}
+
+void vmu_list_insert_at(int64_t idx, Value value, ListObj *list_obj, VM *vm){
+    if(idx < 0){
+        vmu_error(vm, "Failed to insert item to list: 'at' index is negative");
+    }
+
+    size_t at = (size_t)idx;
+    DynArr *items = list_obj->items;
+    size_t len = DYNARR_LEN(items);
+
+    if(at > len){
+        vmu_error(vm, "Failed to insert item to list: 'at' index (%zu) out of bounds", at);
+    }
+
+    dynarr_insert_at(at, &value, items);
+}
+
 inline Value vmu_list_set_at(int64_t idx, Value value, ListObj *list_obj, VM *vm){
     if(idx < 0){
         vmu_error(vm, "Failed to set item to list: 'at' index is negative");
@@ -1354,12 +1411,12 @@ inline Value vmu_list_set_at(int64_t idx, Value value, ListObj *list_obj, VM *vm
 
     Value out_value = DYNARR_GET_AS(Value, at, items);
 
-    DYNARR_SET(&value, idx, items);
+    dynarr_set_at(idx, &value, items);
 
     return out_value;
 }
 
-inline Value vmu_list_remove(int64_t idx, ListObj *list_obj, VM *vm){
+inline Value vmu_list_remove_at(int64_t idx, ListObj *list_obj, VM *vm){
     if(idx < 0){
         vmu_error(vm, "Failed to remove item from list: 'at' index is negative");
     }
@@ -1375,6 +1432,7 @@ inline Value vmu_list_remove(int64_t idx, ListObj *list_obj, VM *vm){
     Value value = DYNARR_GET_AS(Value, at, items);
 
     dynarr_remove_index(at, items);
+    dynarr_reduce(items);
 
     return value;
 }
