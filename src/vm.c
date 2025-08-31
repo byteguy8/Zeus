@@ -735,6 +735,10 @@ static int execute(VM *vm){
                     int64_t left = VALUE_TO_INT(left_value);
                     int64_t right = VALUE_TO_INT(right_value);
 
+                    if(right == 0){
+                        vmu_error(vm, "Division by zero is undefined");
+                    }
+
                     push(INT_VALUE(left / right), vm);
 
                     break;
@@ -754,6 +758,10 @@ static int execute(VM *vm){
 
                     if(IS_VALUE_INT(right_value)){
                         right = (double)VALUE_TO_INT(right_value);
+                    }
+
+                    if(right == 0.0){
+                        vmu_error(vm, "Division by zero is undefined");
                     }
 
                     push(FLOAT_VALUE(left / right), vm);
