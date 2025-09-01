@@ -12,7 +12,7 @@ proc filter_values(filter, values){
     ret new_values;
 }
 
-proc qsort(comparator, values){
+proc quick_sort(comparator, values){
     imut len = values.len();
 
     if(len <= 2){
@@ -46,13 +46,13 @@ proc qsort(comparator, values){
         ret comparator(value, pivot) == 1;
     }, values);
 
-    ret qsort(comparator, less) .. pivot .. qsort(comparator, greater);
+    ret quick_sort(comparator, less) .. pivot .. quick_sort(comparator, greater);
 }
 
 imut a_values = list(0,1,2,3,4);
 imut b_values = list(5,6,7,8,9);
 imut c_values = b_values .. a_values;
-imut sorted = qsort(anon(a, b){
+imut sorted = quick_sort(anon(a, b){
     if(a < b){
         ret -1;
     }elif(a > b){
