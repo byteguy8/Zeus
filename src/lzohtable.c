@@ -3,15 +3,15 @@
 #include <assert.h>
 #include <string.h>
 
-static void *lzalloc(size_t size, LZOHTableAllocator *allocator){
+static inline void *lzalloc(size_t size, LZOHTableAllocator *allocator){
     return allocator ? allocator->alloc(size, allocator->ctx) : malloc(size);
 }
 
-static void *lzrealloc(void *ptr, size_t old_size, size_t new_size, LZOHTableAllocator *allocator){
+static inline void *lzrealloc(void *ptr, size_t old_size, size_t new_size, LZOHTableAllocator *allocator){
     return allocator ? allocator->realloc(ptr, old_size, new_size, allocator->ctx) : realloc(ptr, new_size);
 }
 
-static void lzdealloc(void *ptr, size_t size, LZOHTableAllocator *allocator){
+static inline void lzdealloc(void *ptr, size_t size, LZOHTableAllocator *allocator){
     allocator ? allocator->dealloc(ptr, size, allocator->ctx) : free(ptr);
 }
 
@@ -25,7 +25,7 @@ static inline int is_power_of_two(uintptr_t x){
     return (x & (x - 1)) == 0;
 }
 
-static uint64_t fnv_1a_hash(const uint8_t *key, size_t key_size){
+static inline uint64_t fnv_1a_hash(const uint8_t *key, size_t key_size){
     const uint64_t prime = 0x00000100000001b3;
     const uint64_t basis = 0xcbf29ce484222325;
     uint64_t hash = basis;
@@ -38,33 +38,33 @@ static uint64_t fnv_1a_hash(const uint8_t *key, size_t key_size){
     return hash;
 }
 
-static LZOHTableSlot* robin_hood_lookup(void *key, size_t size, LZOHTable *table, size_t *out_index){
-    uint64_t hash = fnv_1a_hash(key, size);
-    size_t index = hash & (table->m - 1);
-
-    size_t i = index;
+static LZOHTableSlot* robin_hood_lookup(void *key, size_t key_size, LZOHTable *table, size_t *out_idx){
+    size_t m = table->m;
+    LZOHTableSlot *slots = table->slots;
+    uint64_t hash = fnv_1a_hash(key, key_size);
+    size_t i = hash & (m - 1);
     size_t probe = 0;
 
     while (1){
-        LZOHTableSlot *slot = &table->slots[i];
+        LZOHTableSlot slot = slots[i];
 
-        if(!slot->used){
+        if(!slot.used){
             break;
         }
 
-        if(slot->probe < probe){
+        if(slot.probe < probe){
             break;
         }
 
-        if(size == slot->key_size && strncmp(key, slot->key, size) == 0){
-            if(out_index){
-                *out_index = i;
+        if(key_size == slot.key_size && strncmp(key, slot.key, key_size) == 0){
+            if(out_idx){
+                *out_idx = i;
             }
 
-            return slot;
+            return slots + i;
         }
 
-        i = (i + 1) & (table->m - 1);
+        i = (i + 1) & (m - 1);
         probe++;
     }
 
@@ -72,94 +72,58 @@ static LZOHTableSlot* robin_hood_lookup(void *key, size_t size, LZOHTable *table
 }
 
 static int robin_hood_insert(
-    uint64_t hash,
-    size_t index,
-    void *key,
-    size_t key_size,
-    void *value,
     size_t m,
+    LZOHTableSlot moving_slot,
     LZOHTableSlot *slots,
-    LZOHTableSlot **out_slot
+    char *out_vcpy,
+    void **out_old_value,
+    size_t *out_old_value_size
 ){
-    char fixed = 0;
-
-    size_t probe = 0;
-    char kcpy = 0;
-    char vcpy = 0;
-
-    size_t i = index;
     size_t count = 0;
+    size_t i = moving_slot.hash & (m - 1);;
 
     while(count < m){
-        LZOHTableSlot *slot = slots + i;
+        LZOHTableSlot current_slot = slots[i];
 
-        if(slot->used){
-            if(key_size == slot->key_size && strncmp(key, slot->key, key_size) == 0){
-                slot->value = value;
-
-                if(out_slot){
-                    *out_slot = slot;
+        if(current_slot.used){
+            if(moving_slot.key_size == current_slot.key_size && strncmp(moving_slot.key, current_slot.key, moving_slot.key_size) == 0){
+                if(out_vcpy){
+                    *out_vcpy = current_slot.vcpy;
                 }
+
+                if(out_old_value){
+                    *out_old_value = current_slot.value;
+                }
+
+                if(out_old_value_size){
+                    *out_old_value_size = current_slot.value_size;
+                }
+
+                LZOHTableSlot *final_slot = slots + i;
+
+                final_slot->value_size = moving_slot.value_size;
+                final_slot->value = moving_slot.value;
 
                 return 2;
             }
 
-            if(probe > slot->probe){
-                if(!fixed){
-                    fixed = 1;
+            if(moving_slot.probe > current_slot.probe){
+                LZOHTableSlot rich_slot = current_slot;
 
-                    if(out_slot){
-                        *out_slot = slot;
-                    }
-                }
-
-                size_t rich_probe = slot->probe;
-                uint64_t rich_hash = slot->hash;
-                char rich_kcpy = slot->kcpy;
-                char rich_vcpy = slot->vcpy;
-                size_t rich_key_size = slot->key_size;
-                void *rich_key = slot->key;
-                void *rich_value = slot->value;
-
-                slot->probe = probe;
-                slot->hash = hash;
-                slot->kcpy = kcpy;
-                slot->vcpy = vcpy;
-                slot->key_size = key_size;
-                slot->key = key;
-                slot->value = value;
-
-                probe = rich_probe;
-                hash = rich_hash;
-                kcpy = rich_kcpy;
-                vcpy = rich_vcpy;
-                key_size = rich_key_size;
-                key = rich_key;
-                value = rich_value;
-            }
-        }else{
-            slot->used = 1;
-
-            slot->probe = probe;
-            slot->hash = hash;
-
-            slot->kcpy = kcpy;
-            slot->vcpy = vcpy;
-            slot->key_size = key_size;
-
-            slot->key = key;
-            slot->value = value;
-
-            if(!fixed && out_slot){
-                *out_slot = slot;
+                *(slots + i) = moving_slot;
+                moving_slot = rich_slot;
             }
 
-            return 3;
+            count++;
+            moving_slot.probe++;
+            i = (i + 1) & (m - 1);
+
+            continue;
         }
 
-        i = (i + 1) & (m - 1);
-        count++;
-        probe++;
+        *(slots + i) = moving_slot;
+
+        return 3;
     }
 
     return 1;
@@ -179,27 +143,75 @@ static LZOHTableSlot *create_slots(size_t m, LZOHTableAllocator *allocator){
     return slots;
 }
 
-static LZOHTableSlot *resize_slots(size_t m, LZOHTableAllocator *allocator, size_t *out_m){
-    assert(is_power_of_two(m));
+static inline void destroy_slots(size_t m, LZOHTableSlot *slots, LZOHTableAllocator *allocator){
+    MEMORY_DEALLOC(slots, LZOHTableSlot, m, allocator);
+}
 
-    size_t count = m * 2;
-    LZOHTableSlot *slots = MEMORY_ALLOC(LZOHTableSlot, count, allocator);
+static LZOHTableSlot *grow_slots(size_t old_m, LZOHTableAllocator *allocator, size_t *out_new_m){
+    assert(is_power_of_two(old_m));
 
-    if(!slots){
+    size_t new_m = old_m * 2;
+    LZOHTableSlot *new_slots = MEMORY_ALLOC(LZOHTableSlot, new_m, allocator);
+
+    if(!new_slots){
         return NULL;
     }
 
-    memset(slots, 0, SLOT_SIZE * count);
+    memset(new_slots, 0, SLOT_SIZE * new_m);
 
-    if(out_m){
-        *out_m = count;
+    if(out_new_m){
+        *out_new_m = new_m;
     }
 
-    return slots;
+    return new_slots;
 }
 
-static inline void free_slots(size_t m, LZOHTableSlot *slots, LZOHTableAllocator *allocator){
-    MEMORY_DEALLOC(slots, LZOHTableSlot, m, allocator);
+int copy_paste_slots(LZOHTable *table){
+    size_t new_m;
+    size_t old_m = table->m;
+    LZOHTableSlot *old_slots = table->slots;
+    LZOHTableAllocator *allocator = table->allocator;
+    LZOHTableSlot *new_slots = grow_slots(old_m, allocator, &new_m);
+
+    if(!new_slots){
+        return 1;
+    }
+
+    for (size_t i = 0; i < old_m; i++){
+        LZOHTableSlot old_slot = old_slots[i];
+
+        if(!old_slot.used){
+            continue;
+        }
+
+        LZOHTableSlot moving_slot = (LZOHTableSlot){
+            .used = 1,
+            .hash = old_slot.hash,
+            .probe = 0,
+            .kcpy = old_slot.kcpy,
+            .vcpy = old_slot.vcpy,
+            .key_size = old_slot.key_size,
+            .value_size = old_slot.value_size,
+            .key = old_slot.key,
+            .value = old_slot.value
+        };
+
+        robin_hood_insert(
+            new_m,
+            moving_slot,
+            new_slots,
+            NULL,
+            NULL,
+            NULL
+        );
+    }
+
+    destroy_slots(old_m, old_slots, allocator);
+
+    table->m = new_m;
+    table->slots = new_slots;
+
+    return 0;
 }
 
 LZOHTable *lzohtable_create(size_t m, float lfth, LZOHTableAllocator *allocator){
@@ -207,7 +219,7 @@ LZOHTable *lzohtable_create(size_t m, float lfth, LZOHTableAllocator *allocator)
     LZOHTable *table = MEMORY_ALLOC(LZOHTable, 1, allocator);
 
     if(!slots || !table){
-        free_slots(m, slots, allocator);
+        destroy_slots(m, slots, allocator);
         MEMORY_DEALLOC(table, LZOHTable, 1, allocator);
 
         return NULL;
@@ -246,89 +258,50 @@ void lzohtable_destroy_help(void *extra, void (*destroy)(void *key, void *value,
         }
     }
 
-    free_slots(table->m, table->slots, allocator);
+    destroy_slots(table->m, table->slots, allocator);
     MEMORY_DEALLOC(table, LZOHTable, 1, allocator);
 }
 
-void lzohtable_print(void (*print)(size_t index, size_t probe, void *key, size_t key_len, void *value), LZOHTable *table){
-    for (size_t i = 0; i < table->m; i++){
-        LZOHTableSlot *slot = &table->slots[i];
+void lzohtable_print(void (*print_helper)(size_t count, size_t len, size_t idx, size_t probe, size_t key_size, size_t value_size, void *key, void *value), LZOHTable *table){
+    size_t count = 1;
+    size_t n = table->n;
+    size_t m = table->m;
 
-        if(slot->used){
-            print(i, slot->probe, slot->key, slot->key_size, slot->value);
+    for (size_t i = 0; i < m; i++){
+        LZOHTableSlot slot = table->slots[i];
+
+        if(slot.used){
+            print_helper(count++, n, i, slot.probe, slot.key_size, slot.value_size, slot.key, slot.value);
         }
     }
 }
 
-int copy_paste_slots(LZOHTable *table){
-    size_t new_m = table->m;
-    LZOHTableSlot *new_slots = resize_slots(new_m, table->allocator, &new_m);
-
-    if(!new_slots){
-        return 1;
-    }
-
-    for (size_t i = 0; i < table->m; i++){
-        LZOHTableSlot *old_slot = &table->slots[i];
-
-        if(!old_slot->used){
-            continue;
-        }
-
-        uint64_t hash = old_slot->hash;
-        size_t index = hash & (new_m - 1);
-        LZOHTableSlot *new_slot = NULL;
-
-        robin_hood_insert(
-            hash,
-            index,
-            old_slot->key,
-            old_slot->key_size,
-            old_slot->value,
-            new_m,
-            new_slots,
-            &new_slot
-        );
-
-        new_slot->kcpy = old_slot->kcpy;
-        new_slot->vcpy = old_slot->vcpy;
-    }
-
-    free_slots(table->m, table->slots, table->allocator);
-
-    table->m = new_m;
-    table->slots = new_slots;
-
-    return 0;
-}
-
-int lzohtable_lookup(void *key, size_t size, LZOHTable *table, void **out_value){
-    uint64_t hash = fnv_1a_hash(key, size);
-    size_t index = hash & (table->m - 1);
-
-    size_t i = index;
+int lzohtable_lookup(void *key, size_t key_size, LZOHTable *table, void **out_value){
+    uint64_t hash = fnv_1a_hash(key, key_size);
+    size_t i = hash & (table->m - 1);
+    size_t m = table->m;
     size_t probe = 0;
 
     while (1){
-        LZOHTableSlot *slot = &table->slots[i];
+        LZOHTableSlot slot = table->slots[i];
 
-        if(!slot->used){
+        if(!slot.used){
             break;
         }
 
-        if(slot->probe < probe){
+        if(slot.probe < probe){
             break;
         }
 
-        if(size == slot->key_size && strncmp(key, slot->key, size) == 0){
+        if(key_size == slot.key_size && strncmp(key, slot.key, key_size) == 0){
             if(out_value){
-                *out_value = slot->value;
+                *out_value = slot.value;
             }
 
             return 1;
         }
 
-        i = (i + 1) & (table->m - 1);
+        i = (i + 1) & (m - 1);
         probe++;
     }
 
@@ -336,18 +309,39 @@ int lzohtable_lookup(void *key, size_t size, LZOHTable *table, void **out_value)
 }
 
 void lzohtable_clear_help(void *extra, void (*destroy)(void *key, void *value, void *extra), LZOHTable *table){
-    for (size_t i = 0; i < table->m; i++){
-        LZOHTableSlot *slot = &table->slots[i];
+    size_t m = table->m;
+    LZOHTableSlot *slots = table->slots;
+    LZOHTableAllocator *allocator = table->allocator;
+
+    for (size_t i = 0; i < m; i++){
+        LZOHTableSlot *slot = &slots[i];
 
         if(slot->used){
-            table->n--;
-            slot->used = 0;
+            char kcpy = slot->kcpy;
+            char vcpy = slot->vcpy;
+            void *slot_key = slot->key;
+            void *slot_value = slot->value;
+
+            void *external_key = kcpy ? NULL : slot_key;
+            void *external_value = vcpy ? NULL : slot_value;
 
             if(destroy){
-                destroy(slot->key, slot->value, extra);
+                destroy(external_key, external_value, extra);
             }
+
+            if(kcpy){
+                MEMORY_DEALLOC(slot_key, char, slot->key_size, allocator);
+            }
+
+            if(vcpy){
+                MEMORY_DEALLOC(slot_value, char, slot->value_size, allocator);
+            }
+
+            memset(slot, 0, SLOT_SIZE);
         }
     }
+
+    table->n = 0;
 }
 
 int lzohtable_put(void *key, size_t size, void *value, LZOHTable *table, uint64_t *out_hash){
@@ -356,9 +350,19 @@ int lzohtable_put(void *key, size_t size, void *value, LZOHTable *table, uint64_
     }
 
     uint64_t hash = fnv_1a_hash(key, size);
-    size_t index = hash & (table->m - 1);
+    LZOHTableSlot moving_slot = (LZOHTableSlot){
+        .used = 1,
+        .hash = hash,
+        .probe = 0,
+        .kcpy = 0,
+        .vcpy = 0,
+        .key_size = size,
+        .value_size = 0,
+        .key = key,
+        .value = value
+    };
 
-    if(robin_hood_insert(hash, index, key, size, value, table->m, table->slots, NULL) == 3){
+    if(robin_hood_insert(table->m, moving_slot, table->slots, NULL, NULL, NULL) == 3){
         table->n++;
     }
 
@@ -369,28 +373,46 @@ int lzohtable_put(void *key, size_t size, void *value, LZOHTable *table, uint64_
     return 0;
 }
 
-int lzohtable_put_ck(void *key, size_t size, void *value, LZOHTable *table, uint64_t *out_hash){
-    if(LZOHTABLE_LOAD_FACTOR(table) >= table->lfth && copy_paste_slots(table)){
+int lzohtable_put_ck(void *key, size_t key_size, void *value, LZOHTable *table, uint64_t *out_hash){
+    LZOHTableAllocator *allocator = table->allocator;
+    void *copied_key = MEMORY_ALLOC(char, key_size, allocator);
+
+    if(!copied_key){
         return 1;
     }
 
-    uint64_t hash = fnv_1a_hash(key, size);
-    size_t index = hash & (table->m - 1);
-    LZOHTableSlot *slot = NULL;
+    if(LZOHTABLE_LOAD_FACTOR(table) >= table->lfth && copy_paste_slots(table)){
+        MEMORY_DEALLOC(copied_key, char, key_size, allocator);
+        return 1;
+    }
 
-    if(robin_hood_insert(hash, index, key, size, value, table->m, table->slots, &slot) == 3){
-        char *ckey = MEMORY_ALLOC(char, size, table->allocator);
+    memcpy(copied_key, key, key_size);
 
-        if(!ckey){
-            return 1;
+    uint64_t hash = fnv_1a_hash(copied_key, key_size);
+    LZOHTableSlot moving_slot = (LZOHTableSlot){
+        .used = 1,
+        .hash = hash,
+        .probe = 0,
+        .kcpy = 1,
+        .vcpy = 0,
+        .key_size = key_size,
+        .value_size = 0,
+        .key = copied_key,
+        .value = value
+    };
+
+    switch (robin_hood_insert(table->m, moving_slot, table->slots, NULL, NULL, NULL)){
+        case 2:{
+            // The 'key' already exist
+            MEMORY_DEALLOC(copied_key, char, key_size, allocator);
+            break;
+        }case 3:{
+            // The 'key' did not exist (new 'register')
+            table->n++;
+            break;
+        }default:{
+            break;
         }
-
-        memcpy(ckey, key, size);
-
-        slot->kcpy = 1;
-        slot->key = ckey;
-
-        table->n++;
     }
 
     if(out_hash){
@@ -401,93 +423,125 @@ int lzohtable_put_ck(void *key, size_t size, void *value, LZOHTable *table, uint
 }
 
 int lzohtable_put_ckv(void *key, size_t key_size, void *value, size_t value_size, LZOHTable *table, uint64_t *out_hash){
-    if(LZOHTABLE_LOAD_FACTOR(table) >= table->lfth && copy_paste_slots(table)){
+    LZOHTableAllocator *allocator = table->allocator;
+    void *copied_key = MEMORY_ALLOC(char, key_size, allocator);
+    void *copied_value = MEMORY_ALLOC(char, value_size, allocator);
+
+    if(!copied_key || !copied_value){
+        MEMORY_DEALLOC(copied_key, char, key_size, allocator);
+        MEMORY_DEALLOC(copied_value, char, value_size, allocator);
         return 1;
     }
 
-    uint64_t hash = fnv_1a_hash(key, key_size);
-    size_t index = hash & (table->m - 1);
-    LZOHTableSlot *slot = NULL;
-
-    if(robin_hood_insert(hash, index, key, key_size, value, table->m, table->slots, &slot) == 3){
-        char *ckey = MEMORY_ALLOC(char, key_size, table->allocator);
-        char *cvalue = MEMORY_ALLOC(char, value_size, table->allocator);
-
-        if(!ckey || !cvalue){
-            MEMORY_DEALLOC(ckey, char, key_size, table->allocator);
-            MEMORY_DEALLOC(cvalue, char, value_size, table->allocator);
-
-            return 1;
-        }
-
-        memcpy(ckey, key, key_size);
-        memcpy(cvalue, value, value_size);
-
-        slot->kcpy = 1;
-        slot->vcpy = 1;
-        slot->key = ckey;
-        slot->value = cvalue;
-
-        table->n++;
+    if(LZOHTABLE_LOAD_FACTOR(table) >= table->lfth && copy_paste_slots(table)){
+        MEMORY_DEALLOC(copied_key, char, key_size, allocator);
+        MEMORY_DEALLOC(copied_value, char, value_size, allocator);
+        return 1;
     }
 
-    if(out_hash){
-        *out_hash = hash;
+    memcpy(copied_key, key, key_size);
+    memcpy(copied_value, value, value_size);
+
+    uint64_t hash = fnv_1a_hash(copied_key, key_size);
+    LZOHTableSlot moving_slot = (LZOHTableSlot){
+        .used = 1,
+        .hash = hash,
+        .probe = 0,
+        .kcpy = 1,
+        .vcpy = 1,
+        .key_size = key_size,
+        .value_size = value_size,
+        .key = copied_key,
+        .value = copied_value
+    };
+    char old_vcpy;
+    size_t old_value_size;
+    void *old_value = NULL;
+
+    switch (robin_hood_insert(table->m, moving_slot, table->slots, &old_vcpy, &old_value, &old_value_size)){
+        case 2:{
+            // The 'key' already exist
+            MEMORY_DEALLOC(copied_key, char, key_size, allocator);
+
+            if(old_vcpy){
+                MEMORY_DEALLOC(old_value, char, old_value_size, allocator);
+            }
+
+            break;
+        }case 3:{
+            // The 'key' did not exist (new 'register')
+            table->n++;
+            break;
+        }default:{
+            break;
+        }
     }
 
     return 0;
 }
 
-void lzohtable_remove_help(void *key, size_t size, void *extra, void (*destroy)(void *key, void *value, void *extra), LZOHTable *table){
-    size_t index;
-    LZOHTableSlot *slot = robin_hood_lookup(key, size, table, &index);
+void lzohtable_remove_help(void *key, size_t key_size, void *extra, void (*destroy)(void *key, void *value, void *extra), LZOHTable *table){
+    size_t idx;
+    LZOHTableSlot *slot = robin_hood_lookup(key, key_size, table, &idx);
 
     if(!slot){
         return;
     }
 
-    void *k = slot->kcpy ? NULL : slot->key;
-    void *v = slot->vcpy ? NULL : slot->value;
+    size_t m = table->m;
+    LZOHTableAllocator *allocator = table->allocator;
+
+    char kcpy = slot->kcpy;
+    char vcpy = slot->vcpy;
+    void *slot_key = slot->key;
+    void *slot_value = slot->value;
+
+    void *external_key = kcpy ? NULL : slot_key;
+    void *external_value = vcpy ? NULL : slot_value;
 
     if(destroy){
-        destroy(k, v, extra);
+        destroy(external_key, external_value, extra);
     }
-    if(slot->kcpy){
-        MEMORY_DEALLOC(slot->key, char, slot->key_size, table->allocator);
+
+    if(kcpy){
+        MEMORY_DEALLOC(slot_key, char, slot->key_size, allocator);
     }
-    if(slot->vcpy){
-        MEMORY_DEALLOC(slot->value, char, slot->value_size, table->allocator);
+
+    if(vcpy){
+        MEMORY_DEALLOC(slot_value, char, slot->value_size, allocator);
     }
 
     memset(slot, 0, SLOT_SIZE);
 
-    size_t i = (index + 1) & (table->m - 1);
+    size_t i = (idx + 1) & (m - 1);
 
     while(1){
-        LZOHTableSlot *current = &table->slots[i];
+        LZOHTableSlot *current_slot = &table->slots[i];
 
-        if(current->used){
-            if(current->probe == 0){
+        if(current_slot->used){
+            if(current_slot->probe == 0){
                 break;
             }
 
-            LZOHTableSlot *previous = &table->slots[(i - 1) & (table->m - 1)];
+            LZOHTableSlot *previous_slot = &table->slots[(i - 1) & (m - 1)];
 
-            previous->used = 1;
-            previous->probe = current->probe - 1;
-            previous->hash = current->hash;
-            previous->kcpy = current->kcpy;
-            previous->vcpy = current->vcpy;
-            previous->key_size = current->key_size;
-            previous->value_size = current->value_size;
-            previous->key = current->key;
-            previous->value = current->value;
+            previous_slot->used = 1;
+            previous_slot->probe = current_slot->probe - 1;
+            previous_slot->hash = current_slot->hash;
+            previous_slot->kcpy = current_slot->kcpy;
+            previous_slot->vcpy = current_slot->vcpy;
+            previous_slot->key_size = current_slot->key_size;
+            previous_slot->value_size = current_slot->value_size;
+            previous_slot->key = current_slot->key;
+            previous_slot->value = current_slot->value;
 
-            memset(current, 0, SLOT_SIZE);
+            memset(current_slot, 0, SLOT_SIZE);
         }else{
             break;
         }
 
-        i = (i + 1) & (table->m - 1);
+        i = (i + 1) & (m - 1);
     }
+
+    table->n--;
 }

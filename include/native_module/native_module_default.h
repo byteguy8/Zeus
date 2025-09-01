@@ -156,7 +156,35 @@ Value native_fn_eprintln(uint8_t argsc, Value *values, Value *target, void *cont
 }
 
 Value native_fn_readln(uint8_t argsc, Value *values, Value *target, void *context){
-    return EMPTY_VALUE;
+    VM *vm = VMU_VM;
+    size_t raw_buff_len = 1024;
+    char raw_buff[raw_buff_len];
+    LZBStr *backup_buff = FACTORY_LZBSTR(vm->allocator);
+
+    while(fgets(raw_buff, raw_buff_len, stdin)){
+        size_t len = strlen(raw_buff);
+        char last = raw_buff[len - 1];
+
+        lzbstr_append(raw_buff, backup_buff);
+
+        if(last == '\n' || last == EOF){
+            break;
+        }
+    }
+
+    StrObj *str_obj = NULL;
+    size_t backup_raw_buff_len;
+    char *cloned_backup_raw_buff = lzbstr_rclone_buff((LZBStrAllocator *)&vm->fake_allocator, backup_buff, &backup_raw_buff_len);
+
+    if(vmu_create_str(1, backup_raw_buff_len, cloned_backup_raw_buff, vm, &str_obj)){
+        lzbstr_destroy(backup_buff);
+        MEMORY_DEALLOC(char, backup_raw_buff_len + 1, cloned_backup_raw_buff, &vm->fake_allocator);
+        return OBJ_VALUE(str_obj);
+    }
+
+    lzbstr_destroy(backup_buff);
+
+    return OBJ_VALUE(str_obj);
 }
 
 Value native_fn_gc(uint8_t argsc, Value *values, Value *target, void *context){

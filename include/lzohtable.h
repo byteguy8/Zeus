@@ -42,21 +42,21 @@ void lzohtable_destroy_help(void *extra, void (*destroy)(void *key, void *value,
 
 #define LZOHTABLE_DESTROY(_table)(lzohtable_destroy_help(NULL, NULL, (_table)))
 
-void lzohtable_print(void (*print)(size_t index, size_t probe, void *key, size_t key_len, void *value), LZOHTable *table);
+void lzohtable_print(void (*print_helper)(size_t count, size_t len, size_t idx, size_t probe, size_t key_size, size_t value_size, void *key, void *value), LZOHTable *table);
 
-int lzohtable_lookup(void *key, size_t size, LZOHTable *table, void **out_value);
+int lzohtable_lookup(void *key, size_t key_size, LZOHTable *table, void **out_value);
 
 void lzohtable_clear_help(void *extra, void (*destroy)(void *key, void *value, void *extra), LZOHTable *table);
 
 #define LZOHTABLE_CLEAR(_table)(lzohtable_clear_help(NULL, NULL, (_table)))
 
-int lzohtable_put(void *key, size_t size, void *value, LZOHTable *table, uint64_t *out_hash);
+int lzohtable_put(void *key, size_t key_size, void *value, LZOHTable *table, uint64_t *out_hash);
 
-int lzohtable_put_ck(void *key, size_t size, void *value, LZOHTable *table, uint64_t *out_hash);
+int lzohtable_put_ck(void *key, size_t key_size, void *value, LZOHTable *table, uint64_t *out_hash);
 
 int lzohtable_put_ckv(void *key, size_t key_size, void *value, size_t value_size, LZOHTable *table, uint64_t *out_hash);
 
-void lzohtable_remove_help(void *key, size_t size, void *extra, void (*destroy)(void *key, void *value, void *extra), LZOHTable *table);
+void lzohtable_remove_help(void *key, size_t key_size, void *extra, void (*destroy)(void *key, void *value, void *extra), LZOHTable *table);
 
 #define LZOHTABLE_REMOVE(_key, _size, _table)(lzohtable_remove_help((_key), (_size), NULL, NULL, _table))
 

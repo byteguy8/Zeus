@@ -1633,15 +1633,22 @@ static int execute(VM *vm){
 
                 break;
             }case RET_OPCODE:{
-                Value *result_value = pop(vm);
-                Frame *current = current_frame(vm);
+                OutValue *current_out = NULL;
+                OutValue *next_out = NULL;
 
-                for (OutValue *out_value = current->outs_head; out_value; out_value = out_value->next){
-                    out_value->linked = 0;
-                    remove_value_from_current_frame(out_value, vm);
+                while(current_out){
+                    next_out = current_out->next;
+
+                    current_out->linked = 0;
+                    remove_value_from_current_frame(current_out, vm);
+
+                    current_out = next_out;
                 }
 
-                vm->stack_top = current->locals;
+                Value *result_value = pop(vm);
+                Frame *frame = current_frame(vm);
+
+                vm->stack_top = frame->locals;
 
                 pop_frame(vm);
 
