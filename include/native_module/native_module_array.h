@@ -48,7 +48,7 @@ Value native_fn_array_last(uint8_t argsc, Value *values, Value *target, void *co
     return vmu_array_last(array_obj, VMU_VM);
 }
 
-NativeFn *native_array_get(size_t len, char *symbol, VM *vm){
+NativeFn *native_array_get(size_t key_size, const char *key, VM *vm){
     if(!array_symbols){
         Allocator *allocator = &vm->fake_allocator;
         array_symbols = FACTORY_LZOHTABLE(allocator);
@@ -63,7 +63,7 @@ NativeFn *native_array_get(size_t len, char *symbol, VM *vm){
     }
 
     NativeFn *native_fn = NULL;
-    lzohtable_lookup(symbol, len, array_symbols, (void **)(&native_fn));
+    lzohtable_lookup(key_size, key, array_symbols, (void **)(&native_fn));
 
     return native_fn;
 }

@@ -7,7 +7,7 @@ typedef struct factory_str{
     Allocator *allocator;
 }FactoryStr;
 
-char *factory_clone_raw_str(char *raw_str, Allocator *allocator, size_t *out_len){
+char *factory_clone_raw_str(const char *raw_str, const Allocator *allocator, size_t *out_len){
     size_t len = strlen(raw_str);
     char *cloned_raw_str = MEMORY_ALLOC(char, len + 1, allocator);
 
@@ -25,7 +25,7 @@ char *factory_clone_raw_str(char *raw_str, Allocator *allocator, size_t *out_len
     return cloned_raw_str;
 }
 
-void factory_destroy_raw_str(char *raw_str, Allocator *allocator){
+void factory_destroy_raw_str(char *raw_str, const Allocator *allocator){
     if(!raw_str){
         return;
     }
@@ -34,7 +34,7 @@ void factory_destroy_raw_str(char *raw_str, Allocator *allocator){
     MEMORY_DEALLOC(char, raw_str_len + 1, raw_str, allocator);
 }
 
-NativeFn *factory_create_native_fn(uint8_t core, char *name, uint8_t arity, Value *target, RawNativeFn raw_native, Allocator *allocator){
+NativeFn *factory_create_native_fn(uint8_t core, const char *name, uint8_t arity, RawNativeFn raw_native, const Allocator *allocator){
     char *cloned_name = factory_clone_raw_str(name, allocator, NULL);
     NativeFn *native_fn = MEMORY_ALLOC(NativeFn, 1, allocator);
 
@@ -59,14 +59,14 @@ void factory_destroy_native_fn(NativeFn *native_fn){
         return;
     }
 
-    Allocator *allocator = native_fn->allocator;
+    const Allocator *allocator = native_fn->allocator;
 
     factory_destroy_raw_str(native_fn->name, allocator);
     MEMORY_DEALLOC(NativeFn, 1, native_fn, allocator);
 }
 
-int factory_add_native_fn(char *name, uint8_t arity, RawNativeFn raw_native, NativeModule *module, Allocator *allocator){
-	NativeFn *native_fn = factory_create_native_fn(1, name, arity, NULL, raw_native, allocator);
+int factory_add_native_fn(const char *name, uint8_t arity, RawNativeFn raw_native, NativeModule *module, const Allocator *allocator){
+	NativeFn *native_fn = factory_create_native_fn(1, name, arity, raw_native, allocator);
 
     if(!native_fn){
         factory_destroy_native_fn(native_fn);
@@ -78,7 +78,7 @@ int factory_add_native_fn(char *name, uint8_t arity, RawNativeFn raw_native, Nat
         .content.native_fn = native_fn
     };
 
-    if(lzohtable_put_ckv(name, strlen(name), &symbol, sizeof(NativeModuleSymbol), module->symbols, NULL)){
+    if(lzohtable_put_ckv(strlen(name), name, sizeof(NativeModuleSymbol), (const void *)&symbol, module->symbols, NULL)){
         factory_destroy_native_fn(native_fn);
         return 1;
     }
@@ -103,7 +103,7 @@ int factory_add_native_fn_info_n(char *name, uint8_t arity, RawNativeFn raw_nati
     native_fn->name = cloned_name;
     native_fn->raw_fn = raw_native;
 
-    return lzohtable_put_ckv(name, name_len, native_fn, sizeof(NativeFn), natives, NULL);
+    return lzohtable_put_ckv(name_len, name, sizeof(NativeFn), native_fn, natives, NULL);
 }
 
 Fn *factory_create_fn(char *name, Module *module, Allocator *allocator){

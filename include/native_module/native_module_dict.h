@@ -21,7 +21,7 @@ Value native_dict_fn_clear(uint8_t argsc, Value *values, Value *target, void *co
     return INT_VALUE((int64_t)len);
 }
 
-NativeFn *native_dict_get(size_t len, char *symbol, VM *vm){
+NativeFn *native_dict_get(size_t key_size, const char *key, VM *vm){
     if(!dict_symbols){
         Allocator *allocator = &vm->fake_allocator;
         dict_symbols = FACTORY_LZOHTABLE(allocator);
@@ -33,7 +33,7 @@ NativeFn *native_dict_get(size_t len, char *symbol, VM *vm){
     }
 
     NativeFn *native_fn = NULL;
-    lzohtable_lookup(symbol, len, dict_symbols, (void **)(&native_fn));
+    lzohtable_lookup(key_size, key, dict_symbols, (void **)(&native_fn));
 
     return native_fn;
 }

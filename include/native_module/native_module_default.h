@@ -1,6 +1,7 @@
 #ifndef NATIVE_H
 #define NATIVE_H
 
+#include "vmu.h"
 #include "tutils.h"
 
 Value native_fn_print_stack(uint8_t argsc, Value *values, Value *target, void *context){

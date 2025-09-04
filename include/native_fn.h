@@ -17,7 +17,7 @@ typedef struct native_fn{
     uint8_t arity;
     char *name;
     RawNativeFn raw_fn;
-    Allocator *allocator;
+    const Allocator *allocator;
 }NativeFn;
 
 #endif

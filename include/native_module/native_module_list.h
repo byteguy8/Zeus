@@ -78,7 +78,7 @@ Value native_fn_list_remove(uint8_t argsc, Value *values, Value *target, void *c
     return vmu_list_remove_at(at, target_list_obj, VMU_VM);
 }
 
-NativeFn *native_list_get(size_t key_size, char *key, VM *vm){
+NativeFn *native_list_get(size_t key_size, const char *key, VM *vm){
     if(!list_symbols){
         Allocator *allocator = &vm->fake_allocator;
         list_symbols = FACTORY_LZOHTABLE(allocator);
@@ -96,7 +96,7 @@ NativeFn *native_list_get(size_t key_size, char *key, VM *vm){
     }
 
     NativeFn *native_fn = NULL;
-    lzohtable_lookup(key, key_size, list_symbols, (void **)(&native_fn));
+    lzohtable_lookup(key_size, key, list_symbols, (void **)(&native_fn));
 
     return native_fn;
 }

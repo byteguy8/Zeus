@@ -887,7 +887,7 @@ int vmu_create_str(char runtime, size_t raw_str_len, char *raw_str, VM *vm, StrO
     LZOHTable *runtime_strs = vm->runtime_strs;
     StrObj *str_obj = NULL;
 
-    if(lzohtable_lookup(raw_str, raw_str_len, runtime_strs, (void **)&str_obj)){
+    if(lzohtable_lookup(raw_str_len, raw_str, runtime_strs, (void **)&str_obj)){
         *out_str_obj = str_obj;
         return 1;
     }
@@ -900,7 +900,7 @@ int vmu_create_str(char runtime, size_t raw_str_len, char *raw_str, VM *vm, StrO
     str_obj->len = raw_str_len;
     str_obj->buff = raw_str;
 
-    lzohtable_put_ck(raw_str, raw_str_len, str_obj, runtime_strs, NULL);
+    lzohtable_put_ck(raw_str_len, raw_str, str_obj, runtime_strs, NULL);
     *out_str_obj = str_obj;
 
     return 0;
@@ -915,7 +915,7 @@ void vmu_destroy_str(StrObj *str_obj, VM *vm){
     size_t key_len = str_obj->len;
     LZOHTable *runtime_strs = vm->runtime_strs;
 
-    LZOHTABLE_REMOVE(key, key_len, runtime_strs);
+    LZOHTABLE_REMOVE(key_len, key, runtime_strs);
 
     if(str_obj->runtime){
         MEMORY_DEALLOC(char, key_len + 1, key, ALLOCATOR);
@@ -997,7 +997,7 @@ StrObj *vmu_str_char(int64_t idx, StrObj *str_obj, VM *vm){
     new_buff[0] = buff[idx];
     new_buff[1] = 0;
 
-    if(lzohtable_lookup(new_buff, 1, vm->runtime_strs, (void **)(&char_str_obj))){
+    if(lzohtable_lookup(1, new_buff, vm->runtime_strs, (void **)(&char_str_obj))){
         MEMORY_DEALLOC(char, 2, new_buff, ALLOCATOR);
         return char_str_obj;
     }
@@ -1094,7 +1094,7 @@ StrObj *vmu_str_insert_at(int64_t idx, StrObj *a_str_obj, StrObj *b_str_obj, VM 
 
     c_buff[c_len] = 0;
 
-    if(lzohtable_lookup(c_buff, c_len, vm->runtime_strs, (void **)(&c_str_obj))){
+    if(lzohtable_lookup(c_len, c_buff, vm->runtime_strs, (void **)(&c_str_obj))){
         MEMORY_DEALLOC(char, c_len + 1, c_buff, ALLOCATOR);
         return c_str_obj;
     }
@@ -1132,7 +1132,7 @@ StrObj *vmu_str_remove(int64_t from, int64_t to, StrObj *str_obj, VM *vm){
     memcpy(new_buff + left_len, old_buff + end, right_len);
     new_buff[new_len] = 0;
 
-    if(lzohtable_lookup(new_buff, new_len, vm->runtime_strs, (void **)(&str_obj))){
+    if(lzohtable_lookup(new_len, new_buff, vm->runtime_strs, (void **)(&str_obj))){
         MEMORY_DEALLOC(char, new_len + 1, new_buff, ALLOCATOR);
         return str_obj;
     }
@@ -1167,7 +1167,7 @@ StrObj *vmu_str_sub_str(int64_t from, int64_t to, StrObj *str_obj, VM *vm){
     memcpy(new_buff, old_buff + start, new_len);
     new_buff[new_len] = 0;
 
-    if(lzohtable_lookup(new_buff, new_len, vm->runtime_strs, (void **)(&str_obj))){
+    if(lzohtable_lookup(new_len, new_buff, vm->runtime_strs, (void **)(&str_obj))){
         MEMORY_DEALLOC(char, new_len + 1, new_buff, ALLOCATOR);
         return str_obj;
     }
@@ -1464,20 +1464,20 @@ inline void vmu_dict_put(Value key, Value value, DictObj *dict_obj, VM *vm){
 
     LZOHTable *keys_values = dict_obj->key_values;
 
-    lzohtable_put_ckv(&key, VALUE_SIZE, &value, VALUE_SIZE, keys_values, NULL);
+    lzohtable_put_ckv(VALUE_SIZE, &key, VALUE_SIZE, &value, keys_values, NULL);
 }
 
 inline void vmu_dict_raw_put_str_value(char *str, Value value, DictObj *dict_obj, VM *vm){
     size_t str_len = strlen(str);
     LZOHTable *keys_values = dict_obj->key_values;
-    lzohtable_put_ckv(str, str_len, &value, VALUE_SIZE, keys_values, NULL);
+    lzohtable_put_ckv(str_len, str, VALUE_SIZE, &value, keys_values, NULL);
 }
 
 inline Value vmu_dict_get(Value key, DictObj *dict_obj, VM *vm){
     LZOHTable *keys_values = dict_obj->key_values;
     Value *raw_value = NULL;
 
-    if(lzohtable_lookup(&key, VALUE_SIZE, keys_values, (void **)(&raw_value))){
+    if(lzohtable_lookup(VALUE_SIZE, &key, keys_values, (void **)(&raw_value))){
         return *raw_value;
     }
 
@@ -1512,19 +1512,19 @@ void vmu_record_insert_attr(size_t key_size, char *key, Value value, RecordObj *
         vmu_internal_error(vm, "Cannot set attributes on an empty record");
     }
 
-    if(lzohtable_lookup(key, key_size, attrs, (void **)(&attr_value))){
+    if(lzohtable_lookup(key_size, key, attrs, (void **)(&attr_value))){
         *attr_value = value;
         return;
     }
 
-    lzohtable_put_ckv(key, key_size, &value, VALUE_SIZE, attrs, NULL);
+    lzohtable_put_ckv(key_size, key, VALUE_SIZE, &value, attrs, NULL);
 }
 
 void vmu_record_set_attr(size_t key_size, char *key, Value value, RecordObj *record_obj, VM *vm){
     Value *attr_value = NULL;
     LZOHTable *attrs = record_obj->attrs;
 
-    if(attrs && lzohtable_lookup(key, key_size, attrs, (void **)(&attr_value))){
+    if(attrs && lzohtable_lookup(key_size, key, attrs, (void **)(&attr_value))){
         *attr_value = value;
         return;
     }
@@ -1536,7 +1536,7 @@ Value vmu_record_get_attr(size_t key_size, char *key, RecordObj *record_obj, VM 
     LZOHTable *attrs = record_obj->attrs;
     Value *out_value = NULL;
 
-    if(attrs && lzohtable_lookup(key, key_size, attrs, (void **)(&out_value))){
+    if(attrs && lzohtable_lookup(key_size, key, attrs, (void **)(&out_value))){
         return *out_value;
     }
 

@@ -378,7 +378,7 @@ Token *identifier(Lexer *lexer){
     TokType *type = NULL;
 
     put_current_lexeme(lexeme, lexer);
-    lzohtable_lookup(lexeme, lexeme_len, lexer->keywords, (void **)(&type));
+    lzohtable_lookup(lexeme_len, lexeme, lexer->keywords, (void **)(&type));
 
     if(type){
         return create_token(*type, lexer);

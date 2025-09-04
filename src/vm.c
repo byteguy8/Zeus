@@ -1167,7 +1167,7 @@ static int execute(VM *vm){
                 Value *value = pop(vm);
                 LZOHTable *globals = MODULE_GLOBALS(VM_CURRENT_FN(vm)->module);
 
-                if(lzohtable_lookup(key, key_size, globals, NULL)){
+                if(lzohtable_lookup(key_size, key, globals, NULL)){
                     vmu_error(vm, "Cannot define global '%s': already exists", key);
                 }
 
@@ -1176,7 +1176,7 @@ static int execute(VM *vm){
                 global_value.access = PRIVATE_GLOVAL_VALUE_TYPE;
                 global_value.value = *value;
 
-                lzohtable_put_ckv(key, key_size, &global_value, sizeof(GlobalValue), globals, NULL);
+                lzohtable_put_ckv(key_size, key, sizeof(GlobalValue), &global_value, globals, NULL);
 
                 break;
             }case GASET_OPCODE:{
@@ -1188,7 +1188,7 @@ static int execute(VM *vm){
 
                 GlobalValue *global_value = NULL;
 
-                if(!lzohtable_lookup(key, key_size, globals, (void **)(&global_value))){
+                if(!lzohtable_lookup(key_size, key, globals, (void **)(&global_value))){
                     vmu_error(vm, "Global symbol '%s' does not exists", key);
                     break;
                 }
@@ -1216,7 +1216,7 @@ static int execute(VM *vm){
                 GlobalValue *global_value = NULL;
                 LZOHTable *globals = MODULE_GLOBALS(VM_CURRENT_FN(vm)->module);
 
-                if(lzohtable_lookup(key, key_size, globals, (void **)(&global_value))){
+                if(lzohtable_lookup(key_size, key, globals, (void **)(&global_value))){
                     global_value->value = *value;
                     break;
                 }
@@ -1230,7 +1230,7 @@ static int execute(VM *vm){
                 GlobalValue *global_value = NULL;
                 LZOHTable *globals = MODULE_GLOBALS(VM_CURRENT_FN(vm)->module);
 
-                if(!lzohtable_lookup(key, key_size, globals, (void **)(&global_value))){
+                if(!lzohtable_lookup(key_size, key, globals, (void **)(&global_value))){
                     vmu_error(vm, "Global symbol '%s' does not exists", key);
                 }
 
@@ -1242,7 +1242,7 @@ static int execute(VM *vm){
                 char *key = read_str(vm, &key_size);
                 NativeFn *native_fn = NULL;
 
-                if(lzohtable_lookup(key, key_size, vm->native_fns, (void **)(&native_fn))){
+                if(lzohtable_lookup(key_size, key, vm->native_fns, (void **)(&native_fn))){
                     NativeFnObj *native_fn_obj = vmu_create_native_fn((Value){0}, native_fn, vm);
                     PUSH_OBJ(native_fn_obj, vm);
                     break;
@@ -1566,7 +1566,7 @@ static int execute(VM *vm){
                         NativeModule *native_module = native_module_obj->native_module;
                         NativeModuleSymbol *native_module_symbol = NULL;
 
-                        if(!lzohtable_lookup(key, key_size, native_module->symbols, (void **)(&native_module_symbol))){
+                        if(!lzohtable_lookup(key_size, key, native_module->symbols, (void **)(&native_module_symbol))){
                             vmu_error(vm, "Native module '%s' does not contain symbol '%s'", native_module->name, key);
                         }
 
@@ -1755,7 +1755,7 @@ static int execute(VM *vm){
                             size_t key_size = 3;
                             Value *msg_value = NULL;
 
-                            if(lzohtable_lookup(raw_key, key_size, record->attrs, (void **)(&msg_value))){
+                            if(lzohtable_lookup(key_size, raw_key, record->attrs, (void **)(&msg_value))){
                                 if(!IS_VALUE_STR(msg_value)){
                                     vmu_error(vm, "Expect record attribute 'msg' to be of type 'str'");
                                 }
@@ -1791,8 +1791,8 @@ static int execute(VM *vm){
 //> PRIVATE IMPLEMENTATION
 //> PUBLIC IMPLEMENTATION
 VM *vm_create(Allocator *allocator){
-    LZOHTable *runtime_strs = FACTORY_LZOHTABLE(NULL);
-    DynArr *native_symbols = FACTORY_DYNARR_PTR(NULL);
+    LZOHTable *runtime_strs = FACTORY_LZOHTABLE(allocator);
+    DynArr *native_symbols = FACTORY_DYNARR_PTR(allocator);
     VM *vm = MEMORY_ALLOC(VM, 1, allocator);
 
     if(!runtime_strs || !native_symbols || !vm){

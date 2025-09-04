@@ -615,7 +615,7 @@ void from_symbols_to_global(
 
     write_chunk(GDEF_OPCODE, compiler);
     write_location(location_token, compiler);
-    write_str(strlen(name), name, compiler);
+    write_str_alloc(strlen(name), name, compiler);
 }
 
 Symbol *declare_native_fn(char *identifier, Compiler *compiler){
@@ -1158,7 +1158,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             if(symbol->type == NATIVE_FN_SYMTYPE){
                 write_chunk(NGET_OPCODE, compiler);
                 write_location(identifier, compiler);
-                write_str(identifier->lexeme_len, identifier->lexeme, compiler);
+                write_str_alloc(identifier->lexeme_len, identifier->lexeme, compiler);
 
                 break;
             }
@@ -1214,7 +1214,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             write_chunk(ACCESS_OPCODE, compiler);
 			write_location(access_expr->dot_token, compiler);
-            write_str(symbol_token->lexeme_len, symbol_token->lexeme, compiler);
+            write_str_alloc(symbol_token->lexeme_len, symbol_token->lexeme, compiler);
 
             break;
         }case INDEX_EXPRTYPE:{
@@ -1502,7 +1502,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 	            if(symbol->depth == 1){
                 	write_chunk(GSET_OPCODE, compiler);
    					write_location(equals_token, compiler);
-                	write_str(identifier->lexeme_len, identifier->lexeme, compiler);
+                	write_str_alloc(identifier->lexeme_len, identifier->lexeme, compiler);
             	}else{
                     uint8_t opcode = is_out ? OSET_OPCODE : LSET_OPCODE;
 
@@ -1560,7 +1560,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
 			if(symbol->depth == 1){
                 write_chunk(GGET_OPCODE, compiler);
-			    write_str(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
+			    write_str_alloc(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
             }else{
                 write_chunk(LGET_OPCODE, compiler);
 			    write_chunk(symbol->local, compiler);
@@ -1596,7 +1596,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
                 write_chunk(GSET_OPCODE, compiler);
 				write_location(identifier_token, compiler);
 
-			    write_str(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
+			    write_str_alloc(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
             }else{
                 write_chunk(LSET_OPCODE, compiler);
 				write_location(identifier_token, compiler);
@@ -1850,7 +1850,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             if(symbol->depth == 1){
                 write_chunk(GDEF_OPCODE, compiler);
 				write_location(identifier_token, compiler);
-                write_str(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
+                write_str_alloc(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
             }
 
             break;
@@ -2229,7 +2229,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             if(is_normal){
                 write_chunk(GDEF_OPCODE, compiler);
                 write_location(identifier_token, compiler);
-                write_str(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
+                write_str_alloc(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
             }
 
             break;
@@ -2447,7 +2447,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
                 write_chunk(GASET_OPCODE, compiler);
                 write_location(symbol_identifier, compiler);
-                write_str(symbol_identifier->literal_size, symbol_identifier->lexeme, compiler);
+                write_str_alloc(symbol_identifier->literal_size, symbol_identifier->lexeme, compiler);
                 write_chunk(1, compiler);
             }
 

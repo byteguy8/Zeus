@@ -71,7 +71,7 @@ Value native_fn_str_substr(uint8_t argsc, Value *values, Value *target, void *co
     return OBJ_VALUE(new_str_obj);
 }
 
-NativeFn *native_str_get(size_t key_size, char *key, VM *vm){
+NativeFn *native_str_get(size_t key_size, const char *key, VM *vm){
     if(!str_symbols){
         Allocator *allocator = &vm->fake_allocator;
         str_symbols = FACTORY_LZOHTABLE(allocator);
@@ -88,7 +88,7 @@ NativeFn *native_str_get(size_t key_size, char *key, VM *vm){
     }
 
     NativeFn *native_fn = NULL;
-    lzohtable_lookup(key, key_size, str_symbols, (void **)(&native_fn));
+    lzohtable_lookup(key_size, key, str_symbols, (void **)(&native_fn));
 
     return native_fn;
 }
