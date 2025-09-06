@@ -1075,15 +1075,23 @@ void compile_expr(Expr *expr, Compiler *compiler){
             Token *template_token = template_expr->template_token;
             DynArr *exprs = template_expr->exprs;
 
-            for (int16_t i = DYNARR_LEN(exprs) - 1; i >= 0; i--){
-                Expr *expr = (Expr *)dynarr_get_ptr(i, exprs);
-                compile_expr(expr, compiler);
-            }
-
-            write_chunk(TEMPLATE_OPCODE, compiler);
+            write_chunk(STTE_OPCODE, compiler);
             write_location(template_token, compiler);
 
-            write_i16((int16_t)DYNARR_LEN(exprs), compiler);
+            if(exprs){
+                size_t len = DYNARR_LEN(exprs);
+
+                for (size_t i = 0; i < len; i++){
+                    Expr *expr = (Expr *)dynarr_get_ptr(i, exprs);
+                    compile_expr(expr, compiler);
+
+                    write_chunk(WTTE_OPCODE, compiler);
+                    write_location(template_token, compiler);
+                }
+            }
+
+            write_chunk(ETTE_OPCODE, compiler);
+            write_location(template_token, compiler);
 
             break;
         }case ANON_EXPRTYPE:{

@@ -69,17 +69,13 @@ typedef struct token{
 }Token;
 
 typedef enum template_item_type{
-    STR_TITEMTYPE,
-    TOKENS_TITEMTYPE,
+    STR_TEMPLATE_ITEM_TYPE,
+    TOKENS_TEMPLATE_ITEM_TYPE,
 }TemplateItemType;
 
 typedef struct template_item{
     TemplateItemType type;
-    union{
-        Token *str;
-        void *tokens; //can be NULL
-    }value;
-
+    void *value;
 }TemplateItem;
 
 #endif

@@ -778,6 +778,10 @@ uint32_t vmu_hash_value(Value *value){
     }
 }
 
+inline void vmu_value_to_str_w(Value value, LZBStr *str){
+    value_to_str(value, NULL, str);
+}
+
 char *vmu_value_to_str(Value value, VM *vm, size_t *out_len){
     char *str_value = NULL;
     LZBStr *str = FACTORY_LZBSTR(ALLOCATOR);

@@ -216,7 +216,7 @@ int main(int argc, const char *argv[]){
 	}
 
     LZArena *ctarena = lzarena_create(NULL);
-    LZFList *rtflist = lzflist_create();
+    LZFList *rtflist = lzflist_create(NULL);
 
     if(!ctarena || !rtflist){
         lzarena_destroy(ctarena);

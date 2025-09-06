@@ -10,12 +10,14 @@ typedef enum opcode{
     INT_OPCODE,      // push integer of 8 bytes
     FLOAT_OPCODE,    // push float
     STRING_OPCODE,   // push string
-    TEMPLATE_OPCODE, // construct template and push it
+    STTE_OPCODE, // construct template and push it
+    ETTE_OPCODE,
     ARRAY_OPCODE,
 	LIST_OPCODE,
     DICT_OPCODE,
 	RECORD_OPCODE,
 
+    WTTE_OPCODE,
     IARRAY_OPCODE,
     ILIST_OPCODE,
     IDICT_OPCODE,

@@ -147,13 +147,13 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf("'\n");
 
             break;
-        }case TEMPLATE_OPCODE:{
-            int16_t len = read_i16(dumpper);
+        }case STTE_OPCODE:{
             size_t end = dumpper->ip;
-
-            printf("%8.8s %.7zu", "TEMPLATE", end - start);
-            printf(" | length: %d\n", len);
-
+            printf("%8.8s %.7zu\n", "STTE", end - start);
+            break;
+        }case ETTE_OPCODE:{
+            size_t end = dumpper->ip;
+            printf("%8.8s %.7zu\n", "ETTE", end - start);
             break;
         }case CONCAT_OPCODE:{
             size_t end = dumpper->ip;
@@ -403,7 +403,11 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             printf(" | length: %" PRIu16 "\n", len);
 
             break;
-		}case IARRAY_OPCODE:{
+		}case WTTE_OPCODE:{
+            size_t end = dumpper->ip;
+            printf("%8.8s %.7zu\n", "WTTE", end - start);
+            break;
+        }case IARRAY_OPCODE:{
             int16_t idx = read_i16(dumpper);
             size_t end = dumpper->ip;
 

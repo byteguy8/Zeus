@@ -3,6 +3,7 @@
 
 #include "vm.h"
 #include "bstr.h"
+#include "lzbstr.h"
 #include "native_fn.h"
 #include "tutils.h"
 #include <stdio.h>
@@ -252,6 +253,7 @@ Frame *vmu_current_frame(VM *vm);
 
 uint32_t vmu_hash_obj(Obj *obj);
 uint32_t vmu_hash_value(Value *value);
+void vmu_value_to_str_w(Value value, LZBStr *str);
 char *vmu_value_to_str(Value value, VM *vm, size_t *out_len);
 void vmu_print_value(FILE *stream, Value *value);
 

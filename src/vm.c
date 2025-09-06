@@ -385,8 +385,6 @@ static inline Value *frame_local(uint8_t which, VM *vm){
 static int execute(VM *vm){
     for (;;){
         uint8_t chunk = advance(vm);
-        Frame *frame = current_frame(vm);
-        frame->last_offset = frame->ip - 1;
 
         switch (chunk){
             case EMPTY_OPCODE:{
@@ -419,7 +417,44 @@ static int execute(VM *vm){
                 PUSH_OBJ(str_obj, vm);
 
                 break;
-            }case TEMPLATE_OPCODE:{
+            }case STTE_OPCODE:{
+                LZBStr *str = FACTORY_LZBSTR(vm->allocator);
+                Template *template = MEMORY_ALLOC(Template, 1, vm->allocator);
+
+                template->str = str;
+                template->prev = vm->templates;
+                vm->templates = template;
+
+                break;
+            }case ETTE_OPCODE:{
+                Template *template = vm->templates;
+
+                if(template){
+                    LZBStr *str = template->str;
+                    size_t buff_len;
+                    char *buff = lzbstr_rclone_buff(
+                        (LZBStrAllocator *)&vm->fake_allocator,
+                        str,
+                        &buff_len
+                    );
+                    StrObj *str_obj = NULL;
+
+                    if(vmu_create_str(1, buff_len, buff, vm, &str_obj)){
+                        MEMORY_DEALLOC(char, buff_len + 1, buff, &vm->fake_allocator);
+                    }
+
+                    PUSH_OBJ(str_obj, vm);
+
+                    vm->templates = template->prev;
+
+                    lzbstr_destroy(str);
+                    MEMORY_DEALLOC(Template, 1, template, vm->allocator);
+
+                    break;
+                }
+
+                vmu_internal_error(vm, "Template stack is empty");
+
                 break;
             }case ARRAY_OPCODE:{
                 Value *len_value = pop(vm);
@@ -446,6 +481,19 @@ static int execute(VM *vm){
                 uint16_t len = (uint16_t)read_i16(vm);
                 RecordObj *record_obj = vmu_create_record(len, vm);
                 PUSH_OBJ(record_obj, vm);
+                break;
+            }case WTTE_OPCODE:{
+                Template *template = vm->templates;
+                Value *raw_value = pop(vm);
+
+                if(template){
+                    LZBStr *str = template->str;
+                    vmu_value_to_str_w(*raw_value, str);
+                    break;
+                }
+
+                vmu_internal_error(vm, "Template stack is empty");
+
                 break;
             }case IARRAY_OPCODE:{
                 int64_t idx = (int64_t)read_i16(vm);
@@ -1835,6 +1883,8 @@ void vm_initialize(VM *vm){
     vm->while_objs = (ObjList){0};
     vm->gray_objs = (ObjList){0};
     vm->black_objs = (ObjList){0};
+    vm->templates = NULL;
+    vm->exception_stack = NULL;
     MEMORY_INIT_ALLOCATOR(vm, vm_alloc, vm_realloc, vm_dealloc, &vm->fake_allocator);
 }
 

@@ -14,18 +14,6 @@
     #include <sys/mman.h>
 #endif
 
-// comment this out to enable logs
-// #define DEBUG_LOG
-
-#ifdef DEBUG_LOG
-    #define LOG(fmt, ...) do {                                                   \
-        fprintf(stdout, "%s(%d): " fmt "\n", __FILE__, __LINE__, ##__VA_ARGS__); \
-        fflush(stdout);                                                          \
-    }while(0)
-#else
-    #define LOG(fmt, ...)
-#endif
-
 #ifdef _WIN32
     static DWORD windows_page_size(){
         SYSTEM_INFO sysinfo;
@@ -37,13 +25,69 @@
 #elif __linux__
     #define PAGE_SIZE sysconf(_SC_PAGESIZE)
 #endif
-
+//--------------------------------------------------------------------------//
+//                            PRIVATE INTERFACE                             //
+//--------------------------------------------------------------------------//
 #define HEADER_SIZE (sizeof(LZFLHeader))
-#define FOOT_SIZE (sizeof(uint32_t))
 #define REGION_SIZE (sizeof(LZFLRegion))
 #define LIST_SIZE (sizeof(LZFList))
 
 #define MAGIC_NUMBER 0xDEADBEEF
+//--------------------------------  MEMORY  --------------------------------//
+static inline void *lzalloc(size_t size, LZFListAllocator *allocator);
+static inline void *lzrealloc(void *ptr, size_t old_size, size_t new_size, LZFListAllocator *allocator);
+static inline void lzdealloc(void *ptr, size_t size, LZFListAllocator *allocator);
+
+#define MEMORY_ALLOC(_type, _count, _allocator)((_type *)lzalloc(sizeof(_type) * (_count), (_allocator)))
+#define MEMORY_REALLOC(_ptr, _type, _old_count, _new_count, _allocator)((_type *)(lzrealloc((_ptr), sizeof(_type) * (_old_count), sizeof(_type) * (_new_count), (_allocator))))
+#define MEMORY_DEALLOC(_ptr, _type, _count, _allocator)(lzdealloc((_ptr), sizeof(_type) * (_count), (_allocator)))
+
+static void *alloc_backend(size_t size);
+static void dealloc_backend(void *ptr, size_t size);
+//--------------------------------  UTILS  ---------------------------------//
+static inline size_t round_size(size_t to, size_t size);
+static inline uintptr_t align_addr(size_t alignment, uintptr_t addr);
+//--------------------------------  REGION  --------------------------------//
+static LZFLRegion *create_region(size_t size);
+static void destroy_region(LZFLRegion *region);
+static int insert_region(LZFLRegion *region, LZFLRegionList *list);
+static void remove_region(LZFLRegion *region, LZFLRegionList *list);
+//---------------------------------  AREA  ---------------------------------//
+static LZFLHeader *create_area(size_t size, LZFLRegion *region, size_t *out_consume_bytes, void **out_chunk);
+static inline void *area_chunk(LZFLHeader *area);
+static inline void *area_chunk_end(LZFLHeader *area);
+static inline LZFLHeader *chunk_area(void *ptr);
+static inline size_t calc_area_size(LZFLHeader *header);
+static inline LZFLHeader *area_next_to(LZFLHeader *area);
+static inline LZFLHeader *is_next_area_free(LZFLHeader *area, LZFLHeader **out_next);
+static inline void *alloc_area(LZFLHeader *area, LZFLAreaList *list);
+static inline void dealloc_area(LZFLHeader *area, LZFLAreaList *list);
+static void insert_area_at_end(LZFLHeader *area, LZFLAreaList *list);
+static void remove_area(LZFLHeader *area, LZFLAreaList *list);
+//-----------------------------  REGION UTILS  -----------------------------//
+static void replace_current_region(LZFLRegion *region, LZFList *list);
+static int create_and_insert_region(size_t size, LZFList *list);
+static void *alloc_from_region(size_t size, LZFLRegion *region, LZFLHeader **out_area);
+//--------------------------------  OTHERS  --------------------------------//
+static void *look_first_fit(size_t size, LZFList *list, LZFLHeader **out_area);
+//--------------------------------------------------------------------------//
+//                          PRIVATE IMPLEMENTATION                          //
+//--------------------------------------------------------------------------//
+static inline void *lzalloc(size_t size, LZFListAllocator *allocator){
+    return allocator ? allocator->alloc(size, allocator->ctx) : malloc(size);
+}
+
+static inline void *lzrealloc(void *ptr, size_t old_size, size_t new_size, LZFListAllocator *allocator){
+    return allocator ? allocator->realloc(ptr, old_size, new_size, allocator->ctx) : realloc(ptr, new_size);
+}
+
+static inline void lzdealloc(void *ptr, size_t size, LZFListAllocator *allocator){
+    if(allocator){
+        allocator->dealloc(ptr, size, allocator->ctx);
+    }else{
+        free(ptr);
+    }
+}
 
 static void *alloc_backend(size_t size){
 #ifndef LZFLIST_BACKEND
@@ -51,11 +95,8 @@ static void *alloc_backend(size_t size){
 #endif
 
 #if LZFLIST_BACKEND == LZFLIST_BACKEND_MALLOC
-    LOG("'malloc' backend used to allocate %ld bytes", size);
     return malloc(size);
 #elif LZFLIST_BACKEND == LZFLIST_BACKEND_MMAP
-    LOG("'mmap' backend used to allocate %ld bytes", size);
-
     void *ptr = (char *)mmap(
 		NULL,
 		size,
@@ -67,8 +108,6 @@ static void *alloc_backend(size_t size){
 
     return ptr == MAP_FAILED ? NULL : ptr;
 #elif LZFLIST_BACKEND == LZFLIST_BACKEND_VIRTUALALLOC
-    LOG("'virtualalloc' backend used to allocate %ld bytes", size);
-
     return VirtualAlloc(
         NULL,
         size,
@@ -77,7 +116,6 @@ static void *alloc_backend(size_t size){
     );
 #else
     #error "Unknown backend"
-    return NULL;
 #endif
 }
 
@@ -103,122 +141,86 @@ static void dealloc_backend(void *ptr, size_t size){
 #endif
 }
 
-static size_t round_size(size_t to, size_t size){
+static inline size_t round_size(size_t to, size_t size){
     size_t mod = size % to;
     size_t padding = mod == 0 ? 0 : to - mod;
     return padding + size;
 }
 
-static uintptr_t align_addr(size_t alignment, uintptr_t addr){
+static inline uintptr_t align_addr(size_t alignment, uintptr_t addr){
     size_t mod = addr % alignment;
     size_t padding = mod == 0 ? 0 : alignment - mod;
     return padding + addr;
 }
 
-static void *header_chunk(LZFLHeader *header){
-    uintptr_t offset = (uintptr_t)header;
+static LZFLRegion *create_region(size_t requested_size){
+    requested_size +=
+        round_size(LZFLIST_DEFAULT_ALIGNMENT, REGION_SIZE) +
+        round_size(LZFLIST_DEFAULT_ALIGNMENT, HEADER_SIZE);
 
-    offset += HEADER_SIZE;
-    offset = align_addr(LZFLIST_DETAULT_ALIGNMENT, offset);
+    size_t page_size = (size_t)PAGE_SIZE;
+    size_t needed_pages = requested_size / page_size;
 
-    return (void *)offset;
-}
+    size_t needed_size =
+        ((((size_t) 0) - ((needed_pages * page_size) >= requested_size)) & (needed_pages * page_size)) |
+        ((((size_t) 0) - ((needed_pages * page_size) < requested_size)) & ((needed_pages + 1) * page_size));
 
-static size_t *header_foot(LZFLHeader *header){
-    uintptr_t offset = (uintptr_t)header_chunk(header);
-
-    offset += header->size;
-    offset = align_addr(LZFLIST_DETAULT_ALIGNMENT, offset);
-
-    return (size_t *)offset;
-}
-
-static LZFLHeader *ptr_header(void *ptr){
-    uintptr_t offset = (uintptr_t)ptr;
-
-    offset -= HEADER_SIZE;
-    size_t mod = offset % LZFLIST_DETAULT_ALIGNMENT;
-    offset -= mod;
-
-    return (LZFLHeader *)offset;
-}
-
-static void validate_subregion(LZFLHeader *header){
-    size_t *foot = header_foot(header);
-    assert(header->magic == MAGIC_NUMBER);
-    assert(*foot == MAGIC_NUMBER);
-}
-
-static size_t calc_required_size(size_t size){
-    uintptr_t header_start = 0;
-    uintptr_t header_end = header_start + HEADER_SIZE;
-
-    uintptr_t chunk_start = align_addr(LZFLIST_DETAULT_ALIGNMENT, header_end);
-    uintptr_t chunk_end = chunk_start + size;
-
-    uintptr_t foot_start = align_addr(LZFLIST_DETAULT_ALIGNMENT, chunk_end);
-    uintptr_t foot_end = foot_start + FOOT_SIZE;
-
-    return foot_end;
-}
-
-static LZFLRegion *create_region(size_t size){
-    size += REGION_SIZE;
-
-    size_t raw_buff_len = PAGE_SIZE;
-    size = calc_required_size(size);
-
-    if(size >= raw_buff_len){
-        size_t factor = size / PAGE_SIZE;
-
-        if((PAGE_SIZE * factor) < size){
-            factor += 1;
-        }
-
-        raw_buff_len = PAGE_SIZE * factor;
-    }
-
-    char *raw_buff = alloc_backend(raw_buff_len);
+    void *raw_buff = alloc_backend(needed_size);
 
     if (!raw_buff){
         return NULL;
     }
 
-    LZFLRegion *region = (LZFLRegion *)raw_buff;
-    char *buff = raw_buff + REGION_SIZE;
+    uintptr_t region_uiptr = (uintptr_t)raw_buff;
+    uintptr_t subregion_uiptr = align_addr(LZFLIST_DEFAULT_ALIGNMENT, region_uiptr + REGION_SIZE);
+    uintptr_t subregion_end_uiptr = region_uiptr + needed_size;
 
-    region->buff_len = raw_buff_len - REGION_SIZE;
-    region->buff = buff;
-    region->offset = buff;
+    LZFLRegion *region = (LZFLRegion *)region_uiptr;
+    size_t subregion_size = subregion_end_uiptr - subregion_uiptr;
+    void *subregion = (void *)subregion_uiptr;
+
+    region->used_bytes = 0;
+    region->consumed_bytes = 0;
+    region->subregion_size = subregion_size;
+    region->offset = subregion;
+    region->subregion = subregion;
     region->prev = NULL;
     region->next = NULL;
 
     return region;
 }
 
-static int insert_region(LZFLRegion *region, LZFList *list){
+static inline void destroy_region(LZFLRegion *region){
+    if(!region){
+        return;
+    }
+
+    dealloc_backend(region, ((uintptr_t)region->subregion) - ((uintptr_t)region) + region->subregion_size);
+}
+
+static int insert_region(LZFLRegion *region, LZFLRegionList *list){
     region->prev = NULL;
     region->next = NULL;
 
-    if(list->regions_tail){
-        region->prev = list->regions_tail;
-        list->regions_tail->next = region;
+    if(list->tail){
+        region->prev = list->tail;
+        list->tail->next = region;
     }else{
-        list->regions_head = region;
+        list->head = region;
     }
 
-    list->regions_len++;
-    list->regions_tail = region;
+    list->len++;
+    list->tail = region;
 
     return 0;
 }
 
-static void remove_region(LZFLRegion *region, LZFList *list){
-    if(region == list->regions_head){
-        list->regions_head = region->next;
+static void remove_region(LZFLRegion *region, LZFLRegionList *list){
+    if(region == list->head){
+        list->head = region->next;
     }
-    if(region == list->regions_tail){
-        list->regions_tail = region->prev;
+    if(region == list->tail){
+        list->tail = region->prev;
     }
 
     if(region->prev){
@@ -228,157 +230,237 @@ static void remove_region(LZFLRegion *region, LZFList *list){
         region->next->prev = region->prev;
     }
 
-    list->regions_len--;
+    list->len--;
 
     region->prev = NULL;
     region->next = NULL;
 }
 
-static int create_and_insert_region(size_t size, LZFList *list){
-    LZFLRegion *region = create_region(size);
-
-    if(!region){
-        return 1;
-    }
-
-    insert_region(region, list);
-
-    return 0;
-}
-
-static void *alloc_from_region(size_t size, LZFLRegion *region){
-    uintptr_t buff_start = (uintptr_t)region->buff;
-    uintptr_t buff_end = buff_start + region->buff_len;
+// A 'area' represents a portion of memory from the subregion of
+// the specified region, which is subdivided in: header and chunk.
+// May exists some padding between end of header and start of chunk
+static LZFLHeader *create_area(size_t size, LZFLRegion *region, size_t *out_consumed_bytes, void **out_chunk){
+    uintptr_t subregion_start = (uintptr_t)region->subregion;
+    uintptr_t subregion_end = subregion_start + region->subregion_size;
     uintptr_t offset = (uintptr_t)region->offset;
 
-    if(offset >= buff_end){
+    if(offset >= subregion_end){
         return NULL;
     }
 
-    uintptr_t header_start = align_addr(LZFLIST_DETAULT_ALIGNMENT, offset);
-    uintptr_t header_end = header_start + HEADER_SIZE;
-    uintptr_t chunk_start = align_addr(LZFLIST_DETAULT_ALIGNMENT, header_end);
+    uintptr_t area_start = align_addr(LZFLIST_DEFAULT_ALIGNMENT, offset);
+    uintptr_t chunk_start = align_addr(LZFLIST_DEFAULT_ALIGNMENT, area_start + HEADER_SIZE);
     uintptr_t chunk_end = chunk_start + size;
-    uintptr_t foot_start = align_addr(LZFLIST_DETAULT_ALIGNMENT, chunk_end);
-    uintptr_t foot_end = foot_start + FOOT_SIZE;
+    size_t consumed_bytes = chunk_end - area_start;
 
-    // there is no room to allocate
-    if(foot_end > buff_end){
+    if(chunk_end > subregion_end){
         return NULL;
     }
 
-    LZFLHeader *header = (LZFLHeader *)header_start;
+    LZFLHeader *area = (LZFLHeader *)area_start;
 
-    header->magic = MAGIC_NUMBER;
-    header->used = 1;
-    header->size = size;
-    header->prev = NULL;
-    header->next = NULL;
+    area->magic = MAGIC_NUMBER;
+    area->used = 0;
+    area->size = size;
+    area->prev = NULL;
+    area->next = NULL;
+    area->region = region;
 
-    uint32_t *foot = (uint32_t *)foot_start;
+    region->consumed_bytes += consumed_bytes;
+    region->offset = (void *)chunk_end;
 
-    *foot = MAGIC_NUMBER;
-    // UPDATING REGION OFFSET
-    region->offset = (char *)foot_end;
+    if(out_consumed_bytes){
+        *out_consumed_bytes = consumed_bytes;
+    }
 
-    return (void *)chunk_start;
+    if(out_chunk){
+        *out_chunk = (void *)chunk_start;
+    }
+
+    return area;
 }
 
-static void insert_to_free_list(LZFLHeader *header, LZFList *list){
-    validate_subregion(header);
-
-    header->used = 0;
-    header->prev = list->frees_tail;
-    header->next = NULL;
-
-    if(list->frees_tail){
-        list->frees_tail->next = header;
-    }else{
-        list->frees_head = header;
-    }
-
-    list->frees_len++;
-    list->bytes += header->size;
-    list->frees_tail = header;
-
-    if(!list->auxiliar || header->size > list->auxiliar->size){
-        list->auxiliar = header;
-    }
+static inline void *area_chunk(LZFLHeader *area){
+    uintptr_t offset = (uintptr_t)area;
+    return (void *)(align_addr(LZFLIST_DEFAULT_ALIGNMENT, offset + HEADER_SIZE));
 }
 
-static void remove_from_free_list(LZFLHeader *header, LZFList *list){
-    validate_subregion(header);
-
-    if(header->prev){
-        header->prev->next = header->next;
-    }
-    if(header->next){
-        header->next->prev = header->prev;
-    }
-    if(header == list->frees_head){
-        list->frees_head = header->next;
-    }
-    if(header == list->frees_tail){
-        list->frees_tail = header->prev;
-    }
-
-    header->used = 1;
-    header->prev = NULL;
-    header->next = NULL;
-
-    assert(list->bytes >= header->size && "ups!");
-
-    list->frees_len--;
-    list->bytes -= header->size;
+static inline void *area_chunk_end(LZFLHeader *area){
+    return (void *)(((uintptr_t)area_chunk(area)) + area->size);
 }
 
-static void *look_first_find(size_t size, LZFList *list, LZFLHeader **out_header){
-    if(!list->frees_head){
-        return NULL;
-    }
+static inline LZFLHeader *chunk_area(void *ptr){
+    uintptr_t offset = ((uintptr_t)ptr) - HEADER_SIZE;
+    size_t alignment = offset % LZFLIST_DEFAULT_ALIGNMENT;
+    LZFLHeader *header = (LZFLHeader *)(offset - alignment);
 
-    LZFLHeader *selected = NULL;
+    assert(header->magic == MAGIC_NUMBER && "Corrupted area");
 
-    for(LZFLHeader *header = list->frees_head; header; header = header->next){
-        if(header->size >= size){
-            selected = header;
-            break;
-        }
-    }
+    return header;
+}
 
-    if(selected){
-        if(out_header){
-            *out_header = selected;
-        }
+static inline size_t calc_area_size(LZFLHeader *area){
+    uintptr_t area_start = (uintptr_t)area;
+    uintptr_t chunk_start = align_addr(LZFLIST_DEFAULT_ALIGNMENT, area_start + HEADER_SIZE);
+    uintptr_t chunk_end = chunk_start + area->size;
 
-        remove_from_free_list(selected, list);
+    return chunk_end - area_start;
+}
 
-        return header_chunk(selected);
+static inline LZFLHeader *area_next_to(LZFLHeader *area){
+    LZFLRegion *region = area->region;
+    uintptr_t offset = (uintptr_t)region->offset;
+
+    uintptr_t area_start = (uintptr_t)area;
+    uintptr_t chunk_start = align_addr(LZFLIST_DEFAULT_ALIGNMENT, area_start + HEADER_SIZE);
+    uintptr_t chunk_end = chunk_start + area->size;
+
+    if(chunk_end < offset){
+        LZFLHeader *next_area = (LZFLHeader *)align_addr(LZFLIST_DEFAULT_ALIGNMENT, chunk_end);
+        assert(next_area->magic == MAGIC_NUMBER && "Currupted area");
+        return next_area;
     }
 
     return NULL;
 }
 
-LZFList *lzflist_create(){
-    LZFList *list = (LZFList *)malloc(LIST_SIZE);
+static inline LZFLHeader *is_next_area_free(LZFLHeader *header, LZFLHeader **out_next){
+    LZFLHeader *next = area_next_to(header);
 
-    if(!list){
-        free(list);
+    if(next){
+        if(out_next){
+            *out_next = next;
+        }
+
+        return next->used ? NULL : next;
+    }
+
+    return NULL;
+}
+
+static inline void *alloc_area(LZFLHeader *area, LZFLAreaList *list){
+    assert(!area->used && "Trying to alloc used memory");
+
+    if(list){
+        remove_area(area, list);
+    }
+
+    area->used = 1;
+    area->region->used_bytes += calc_area_size(area);
+
+    return area_chunk(area);
+}
+
+static inline void dealloc_area(LZFLHeader *area, LZFLAreaList *list){
+    assert(area->used && "Trying to free unused memory");
+
+    LZFLRegion *region = area->region;
+
+    area->used = 0;
+    region->used_bytes -= calc_area_size(area);
+
+    insert_area_at_end(area, list);
+}
+
+static void insert_area_at_end(LZFLHeader *header, LZFLAreaList *list){
+    header->prev = NULL;
+    header->next = NULL;
+
+    if(list->tail){
+        list->tail->next = header;
+        header->prev = list->tail;
+    }else{
+        list->head = header;
+    }
+
+    list->len++;
+    list->tail = header;
+}
+
+static void remove_area(LZFLHeader *area, LZFLAreaList *list){
+    if(area == list->head){
+        list->head = area->next;
+    }
+    if(area == list->tail){
+        list->tail = area->prev;
+    }
+
+    list->len--;
+
+    if(area->prev){
+        area->prev->next = area->next;
+    }
+    if(area->next){
+        area->next->prev = area->prev;
+    }
+
+    area->prev = NULL;
+    area->next = NULL;
+}
+
+static void replace_current_region(LZFLRegion *region, LZFList *list){
+    list->current_region = region;
+}
+
+static int create_and_insert_region(size_t size, LZFList *list){
+    LZFLRegion *region = create_region(size);
+
+    if(region){
+        insert_region(region, &list->regions);
+        replace_current_region(region, list);
+
+        return 0;
+    }
+
+    return 1;
+}
+
+static void *alloc_from_region(size_t size, LZFLRegion *region, LZFLHeader **out_area){
+    LZFLHeader *area = create_area(size, region, NULL, NULL);
+
+    if(!area){
         return NULL;
     }
 
-    //> REGION LIST
-    list->regions_len = 0;
-    list->regions_head = NULL;
-    list->regions_tail = NULL;
-    //< REGION LIST
-    //> FREE LIST
-    list->bytes = 0;
-    list->frees_len = 0;
-    list->frees_head = NULL;
-    list->frees_tail = NULL;
-    list->auxiliar = NULL;
-    //> FREE LIST
+    if(out_area){
+        *out_area = area;
+    }
+
+    return alloc_area(area, NULL);
+}
+
+static void *look_first_fit(size_t size, LZFList *list, LZFLHeader **out_area){
+    LZFLAreaList *free_areas = &list->free_areas;
+    LZFLHeader *current_area = free_areas->head;
+    LZFLHeader *next_area = NULL;
+
+    while (current_area){
+        next_area = current_area->next;
+
+        if(current_area->size >= size){
+            if(out_area){
+                *out_area = current_area;
+            }
+
+            return alloc_area(current_area, free_areas);
+        }
+
+        current_area = next_area;
+    }
+
+    return NULL;
+}
+//--------------------------------------------------------------------------//
+//                          PUBLIC IMPLEMENTATION                           //
+//--------------------------------------------------------------------------//
+LZFList *lzflist_create(LZFListAllocator *allocator){
+    LZFList *list = MEMORY_ALLOC(LZFList, 1, allocator);
+
+    if(!list){
+        return NULL;
+    }
+
+    memset(list, 0, LIST_SIZE);
 
     return list;
 }
@@ -388,168 +470,118 @@ void lzflist_destroy(LZFList *list){
         return;
     }
 
-    LZFLRegion *current = NULL;
+    LZFLRegion *current = list->regions.head;
+    LZFLRegion *next = NULL;
 
     while (current){
-        current = current->next;
-        dealloc_backend(current, REGION_SIZE + current->buff_len);
+        next = current->next;
+        destroy_region(current);
+        current = next;
     }
 
-    free(list);
+    MEMORY_DEALLOC(list, LZFList, 1, list->allocator);
 }
 
-size_t lzflist_ptr_size(void *ptr){
-    LZFLHeader *header = ptr_header(ptr);
-    validate_subregion(header);
-    return header->size;
+inline size_t lzflist_ptr_size(void *ptr){
+    return chunk_area(ptr)->size;
 }
 
-size_t has_region_space(size_t size, LZFLRegion *region){
-    size_t required_size = calc_required_size(size);
+int lzflist_prealloc(size_t size, LZFList *list){
+    assert(size % PAGE_SIZE == 0);
 
-    uintptr_t start = (uintptr_t)region->buff;
-    uintptr_t end = start + region->buff_len;
-    uintptr_t offset = (uintptr_t)region->offset;
+    LZFLRegion *region = create_region(size);
 
-    assert(offset <= end && "ups!");
+    if(region){
+        insert_region(region, &list->regions);
+        replace_current_region(region, list);
 
-    offset = align_addr(LZFLIST_DETAULT_ALIGNMENT, offset);
-
-    if(offset > end){
         return 0;
     }
 
-    return ((end - offset) >= required_size);
+    return 1;
 }
 
 void *lzflist_alloc(size_t size, LZFList *list){
-    LOG("----------------ALLOC REQUEST OF %ld BYTES----------------", size);
+    void *ptr = look_first_fit(size, list, NULL);
 
-    size = round_size(LZFLIST_MIN_CHUNK_SIZE, size);
-
-    LOG("requested allocation rounded to %ld bytes", size);
-    LOG("looking chunk in frees list");
-
-    LZFLHeader *header = NULL;
-    void *ptr = look_first_find(size, list, &header);
-
-    if(!ptr){
-        LOG("no chunk found in frees list to satifies the request");
-
-        if(list->regions_len == 0){
-            LOG("appending new region");
-
-            if(create_and_insert_region(size, list)){
-                LOG("region not appended");
-                LOG("alloc request failed");
-                return NULL;
-            }
-
-            LOG("new region appended");
-        }else{
-            LZFLRegion *region = list->regions_tail;
-
-            if(!has_region_space(size, region)){
-                LOG("current region has not space for %ld bytes", size);
-                LOG("appending new region");
-
-                if(create_and_insert_region(size, list)){
-                    LOG("failed to append new region");
-                    LOG("alloc request failed");
-                    return NULL;
-                }
-
-                LOG("new region appended");
-            }
-        }
-
-        LZFLRegion *region = list->regions_tail;
-        void *ptr = alloc_from_region(size, region);
-
-        LOG("alloc request succeed");
-
+    if(ptr){
         return ptr;
     }
 
-    LOG("chunk of %ld found", header->size);
-    LOG("alloc request succeed");
+    LZFLRegion *current_region = list->current_region;
 
-    return ptr;
+    if(current_region && (ptr = alloc_from_region(size, current_region, NULL))){
+        return ptr;
+    }
+
+    if(create_and_insert_region(size, list)){
+        return NULL;
+    }
+
+    return alloc_from_region(size, list->current_region, NULL);
 }
 
-void *lzflist_calloc(size_t size, LZFList *list){
-    LOG("---------------CALLOC REQUEST OF %ld BYTES----------------", size);
-
+inline void *lzflist_calloc(size_t size, LZFList *list){
     void *ptr = lzflist_alloc(size, list);
 
     if(ptr){
         memset(ptr, 0, size);
-
-        LOG("allocated chunk %p zeroed", ptr);
-        LOG("calloc request succeed");
-    }else{
-        LOG("calloc request failed");
     }
 
     return ptr;
 }
 
 void *lzflist_realloc(void *ptr, size_t new_size, LZFList *list){
-    LOG("---------------REALLOC REQUEST OF %ld BYTES----------------", new_size);
-
     if(!ptr){
-        LOG("pointer is NULL. normal allocation to be realized");
+        return new_size == 0 ? NULL : lzflist_alloc(new_size, list);
+    }
 
-        void *ptr = lzflist_alloc(new_size, list);
+    if(new_size == 0){
+        lzflist_dealloc(ptr, list);
+        return NULL;
+    }
 
-        if(ptr){
-            LOG("realloc request succeed");
-        }else{
-            LOG("realloc request failed");
-        }
+    LZFLHeader *old_area = chunk_area(ptr);
+    size_t old_size = old_area->size;
 
+    if(new_size <= old_size){
         return ptr;
     }
 
-    LZFLHeader *header = ptr_header(ptr);
-
-    LOG("chunk %p to be reallocated is of %ld bytes", ptr, header->size);
-
-    size_t old_size = header->size;
     void *new_ptr = lzflist_alloc(new_size, list);
 
     if(new_ptr){
-        LOG("new chunk %p of requested size %ld allocated", new_ptr, new_size);
-
-        size_t cpy_size = new_size < old_size ? new_size : old_size;
-        memcpy(new_ptr, ptr, cpy_size);
-
-        LOG("content of previous chunk %p copied to new one %p", ptr, new_ptr);
-
-        lzflist_dealloc(ptr, list);
-
-        LOG("old chunk deallocated");
-        LOG("realloc request succeed");
-    }else{
-        LOG("realloc request failed");
+        memcpy(new_ptr, ptr, old_size);
+        dealloc_area(old_area, &list->free_areas);
     }
 
     return new_ptr;
 }
 
 void lzflist_dealloc(void *ptr, LZFList *list){
-    LOG("---------------DEALLOC REQUEST----------------");
-
     if(!ptr){
-        LOG("pointer is NULL. deallocation skipped");
         return;
     }
 
-    LZFLHeader *header = ptr_header(ptr);
+    LZFLHeader *area = chunk_area(ptr);
+    LZFLRegion *region = area->region;
 
-    LOG("chunk %p to deallocate is of %ld bytes", ptr, header->size);
+    dealloc_area(area, &list->free_areas);
 
-    insert_to_free_list(header, list);
+    if(region->used_bytes == 0){
+        uintptr_t subregion = (uintptr_t)region->subregion;
+        LZFLHeader *current_area = (LZFLHeader *)align_addr(LZFLIST_DEFAULT_ALIGNMENT, subregion);
 
-    LOG("dealloc request succeed");
+        while(current_area){
+            remove_area(current_area, &list->free_areas);
+            current_area = area_next_to(current_area);
+        }
+
+        if(region == list->current_region){
+            list->current_region = NULL;
+        }
+
+        remove_region(region, &list->regions);
+        destroy_region(region);
+    }
 }

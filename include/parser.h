@@ -7,14 +7,15 @@
 #include <setjmp.h>
 
 typedef struct parser{
-    jmp_buf err_jmp;
+    jmp_buf err_buf;
 	size_t current;
 	DynArr *tokens;
     Allocator *ctallocator;
+    Allocator fake_ctallocator;
 }Parser;
 
 Parser *parser_create(Allocator *allocator);
 int parser_parse(DynArr *tokens, DynArr *stmt, Parser *parser);
-int parser_parse_template(DynArr *tokens, DynArr *exprs, Parser *parser);
+int parser_parse_str_interpolation(DynArr *tokens, DynArr *exprs, Parser *parser);
 
 #endif

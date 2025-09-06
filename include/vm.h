@@ -1,6 +1,7 @@
 #ifndef VM_H
 #define VM_H
 
+#include "lzbstr.h"
 #include "value.h"
 #include "obj.h"
 #include "memory.h"
@@ -46,6 +47,12 @@ typedef struct frame{
     OutValue *outs_tail;
 }Frame;
 
+
+typedef struct template{
+    LZBStr *str;
+    struct template *prev;
+}Template;
+
 typedef struct exception{
     size_t catch_ip;
     Value throw_value;
@@ -84,6 +91,7 @@ typedef struct vm{
     Allocator *allocator;
     Allocator fake_allocator;
 //< MEMORY HANDLERS
+    Template *templates;
     Exception *exception_stack;
 }VM;
 

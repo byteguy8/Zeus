@@ -3,10 +3,9 @@
 
 #include <stddef.h>
 
-#define LZFLIST_MIN_CHUNK_SIZE 32
-#define LZFLIST_MIN_SPLIT_SIZE 512
-#define LZFLIST_MIN_SPLIT_PERCENTAGE 50
-#define LZFLIST_DETAULT_ALIGNMENT 16
+#define LZFLIST_KIBIBYTES(_qty)((size_t)((_qty) * 1024))
+#define LZFLIST_MEBIBYTES(_qty)((size_t)(LZFLIST_KIBIBYTES(_qty) * 1024))
+#define LZFLIST_GIBIBYTES(_qty)((size_t)(LZFLIST_MEBIBYTES(_qty) * 1024))
 
 #define LZFLIST_BACKEND_MALLOC 0
 #define LZFLIST_BACKEND_MMAP 1
@@ -22,45 +21,58 @@
     #endif
 #endif
 
-typedef struct lzflheader LZFLHeader;
-typedef struct lzflregion LZFLRegion;
-typedef struct lzflist LZFList;
+#define LZFLIST_DEFAULT_ALIGNMENT 16
 
-struct lzflheader{
+typedef struct lzflist_allocator{
+    void *ctx;
+    void *(*alloc)(size_t size, void *ctx);
+    void *(*realloc)(void *ptr, size_t old_size, size_t new_size, void *ctx);
+    void (*dealloc)(void *ptr, size_t size, void *ctx);
+}LZFListAllocator;
+
+typedef struct lzflregion{
+    size_t used_bytes;
+    size_t consumed_bytes;
+    size_t subregion_size;
+    void *offset;
+    void *subregion;
+    struct lzflregion *prev;
+    struct lzflregion *next;
+}LZFLRegion;
+
+typedef struct lzflregion_list{
+    size_t len;
+    struct lzflregion *head;
+    struct lzflregion *tail;
+}LZFLRegionList;
+
+typedef struct lzflheader{
     size_t magic;
-    char used;
     size_t size;
-    LZFLHeader *prev;
-    LZFLHeader *next;
-};
+    char used;
+    struct lzflheader *prev;
+    struct lzflheader *next;
+    struct lzflregion *region;
+}LZFLHeader;
 
-struct lzflregion{
-    size_t buff_len;
-    char *buff;
-	char *offset;
-    LZFLRegion *prev;
-    LZFLRegion *next;
-};
+typedef struct lzflarea_list{
+    size_t len;
+    struct lzflheader *head;
+    struct lzflheader *tail;
+}LZFLAreaList;
 
-struct lzflist{
-//> REGION LIST
-    size_t regions_len;
-    LZFLRegion *regions_head;
-    LZFLRegion *regions_tail;
-//< REGION LIST
-//> FREE LIST
-    size_t bytes;
-    size_t frees_len;
-	LZFLHeader *frees_head;
-    LZFLHeader *frees_tail;
-    LZFLHeader *auxiliar;
-//< FREE LIST
-};
+typedef struct lzflist{
+    LZFLRegionList regions;
+    LZFLAreaList free_areas;
+    LZFLRegion *current_region;
+    LZFListAllocator *allocator;
+}LZFList;
 
-LZFList *lzflist_create();
+LZFList *lzflist_create(LZFListAllocator *allocator);
 void lzflist_destroy(LZFList *list);
 
 size_t lzflist_ptr_size(void *ptr);
+int lzflist_prealloc(size_t size, LZFList *list);
 
 void *lzflist_alloc(size_t size, LZFList *list);
 void *lzflist_calloc(size_t size, LZFList *list);
