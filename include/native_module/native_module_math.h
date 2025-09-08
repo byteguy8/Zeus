@@ -9,6 +9,72 @@
 
 NativeModule *math_module = NULL;
 
+static inline int64_t min(uint64_t x, uint64_t y){
+    return y ^ ((x ^ y) & -(x < y));
+}
+
+static inline int64_t max(uint64_t x, uint64_t y){
+    return x ^ ((x ^ y) & -(x < y));
+}
+
+Value native_fn_min(uint8_t argsc, Value *values, Value *target, void *context){
+    Value *left_value = &values[0];
+    Value *right_value = &values[1];
+
+    if(!is_value_numeric(left_value) || !is_value_numeric(right_value)){
+        vmu_error(VMU_VM, "Expect both arguments of type of type 'int' and/or 'float'");
+    }
+
+    if(IS_VALUE_FLOAT(left_value) || IS_VALUE_FLOAT(right_value)){
+        double left;
+        double right;
+
+        if(IS_VALUE_FLOAT(left_value)){
+            left = VALUE_TO_FLOAT(left_value);
+            right = (double)VALUE_TO_INT(right_value);
+        }else{
+            left = (double)VALUE_TO_INT(left_value);
+            right = VALUE_TO_FLOAT(right_value);
+        }
+
+        return FLOAT_VALUE(fmin(left, right));
+    }
+
+    int64_t left = VALUE_TO_INT(left_value);
+    int64_t right = VALUE_TO_INT(right_value);
+
+    return INT_VALUE(min(left, right));
+}
+
+Value native_fn_max(uint8_t argsc, Value *values, Value *target, void *context){
+    Value *left_value = &values[0];
+    Value *right_value = &values[1];
+
+    if(!is_value_numeric(left_value) || !is_value_numeric(right_value)){
+        vmu_error(VMU_VM, "Expect both arguments of type of type 'int' and/or 'float'");
+    }
+
+    if(IS_VALUE_FLOAT(left_value) || IS_VALUE_FLOAT(right_value)){
+        double left;
+        double right;
+
+        if(IS_VALUE_FLOAT(left_value)){
+            left = VALUE_TO_FLOAT(left_value);
+            right = (double)VALUE_TO_INT(right_value);
+        }else{
+            left = (double)VALUE_TO_INT(left_value);
+            right = VALUE_TO_FLOAT(right_value);
+        }
+
+        return FLOAT_VALUE(fmax(left, right));
+    }
+
+    int64_t left = VALUE_TO_INT(left_value);
+    int64_t right = VALUE_TO_INT(right_value);
+
+    return INT_VALUE(max(left, right));
+}
+
 Value native_fn_sqrt(uint8_t argsc, Value *values, Value *target, void *context){
     double value = validate_value_ifloat_arg(&values[0], 1, "value", VMU_VM);
     return FLOAT_VALUE(sqrt(value));
@@ -80,6 +146,8 @@ Value native_fn_deg2rad(uint8_t argsc, Value *values, Value *target, void *conte
 void math_module_init(Allocator *allocator){
 	math_module = factory_create_native_module("math", allocator);
 
+    factory_add_native_fn("min", 2, native_fn_min, math_module, allocator);
+    factory_add_native_fn("max", 2, native_fn_max, math_module, allocator);
 	factory_add_native_fn("sqrt", 1, native_fn_sqrt, math_module, allocator);
     factory_add_native_fn("pow", 2, native_fn_pow, math_module, allocator);
     factory_add_native_fn("cos", 1, native_fn_cos, math_module, allocator);

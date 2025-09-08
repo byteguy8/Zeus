@@ -18,7 +18,7 @@ Value native_fn_array_make_room(uint8_t argsc, Value *values, Value *target, voi
     ArrayObj *target_array_obj = VALUE_TO_ARRAY(target);
     Value *by_value = &values[0];
 
-    VALIDATE_VALUE_INT_ARG(by_value, 1, "by", VMU_VM);
+    validate_value_int_arg(by_value, 1, "by", VMU_VM);
     int64_t by = VALUE_TO_INT(by_value);
     ArrayObj *new_array_obj = vmu_array_grow(by, target_array_obj, context);
 
@@ -50,7 +50,7 @@ Value native_fn_array_last(uint8_t argsc, Value *values, Value *target, void *co
 
 NativeFn *native_array_get(size_t key_size, const char *key, VM *vm){
     if(!array_symbols){
-        Allocator *allocator = &vm->fake_allocator;
+        Allocator *allocator = &vm->front_allocator;
         array_symbols = FACTORY_LZOHTABLE(allocator);
 
         dynarr_insert_ptr(array_symbols, vm->native_symbols);

@@ -23,7 +23,7 @@ Value native_dict_fn_clear(uint8_t argsc, Value *values, Value *target, void *co
 
 NativeFn *native_dict_get(size_t key_size, const char *key, VM *vm){
     if(!dict_symbols){
-        Allocator *allocator = &vm->fake_allocator;
+        Allocator *allocator = &vm->front_allocator;
         dict_symbols = FACTORY_LZOHTABLE(allocator);
 
         dynarr_insert_ptr(dict_symbols, vm->native_symbols);

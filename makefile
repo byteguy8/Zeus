@@ -17,7 +17,7 @@ FLAGS.WINDOWS := --std=c99
 FLAGS := $(FLAGS.COMMON) $(FLAGS.$(BUILD)) $(FLAGS.$(BUILD).$(PLATFORM)) $(FLAGS.$(PLATFORM))
 
 OBJS := splitmix64.o xoshiro256.o \
-lzarena.o lzflist.o \
+lzarena.o lzpool.o lzflist.o \
 bstr.o lzbstr.o dynarr.o \
 lzhtable.o lzohtable.o memory.o \
 factory.o utils.o lexer.o \
@@ -63,6 +63,8 @@ bstr.o:
 	$(COMPILER) -c -o $(OUT_DIR)/bstr.o $(FLAGS) $(SRC_DIR)/bstr.c
 lzarena.o:
 	$(COMPILER) -c -o $(OUT_DIR)/lzarena.o $(FLAGS) $(SRC_DIR)/lzarena.c
+lzpool.o:
+	$(COMPILER) -c -o $(OUT_DIR)/lzpool.o $(FLAGS) $(SRC_DIR)/lzpool.c
 lzflist.o:
 	$(COMPILER) -c -o $(OUT_DIR)/lzflist.o $(FLAGS) $(SRC_DIR)/lzflist.c
 xoshiro256.o:

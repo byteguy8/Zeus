@@ -2,7 +2,7 @@
 #define LZARENA_H
 
 #include <stddef.h>
-#include <time.h>
+#include <stdint.h>
 
 #define LZARENA_OK 0
 #define LZARENA_ERR_ALLOC 1
@@ -24,7 +24,7 @@
     #endif
 #endif
 
-typedef time_t reset_t;
+typedef uint64_t reset_t;
 typedef struct lzarena_allocator LZArenaAllocator;
 typedef struct lzregion LZRegion;
 typedef struct lzarena LZArena;
@@ -73,11 +73,14 @@ void lzarena_destroy(LZArena *arena);
 
 #define LZARENA_OFFSET(_lzarena)((_lzarena)->current->offset)
 void lzarena_report(size_t *used, size_t *size, LZArena *arena);
+int lzarena_append_region(size_t size, LZArena *arena);
 void lzarena_free_all(LZArena *arena);
+
 void *lzarena_alloc_align(size_t size, size_t alignment, LZArena *arena);
 void *lzarena_calloc_align(size_t size, size_t alignment, LZArena *arena);
 void *lzarena_realloc_align(void *ptr, size_t old_size, size_t new_size, size_t alignment, LZArena *arena);
-#define LZARENA_ALLOC(size, arena)(lzarena_alloc_align(size, LZARENA_DEFAULT_ALIGNMENT, arena))
-#define LZARENA_REALLOC(ptr, old_size, new_size, arena)(lzarena_realloc_align(ptr, old_size, new_size, LZARENA_DEFAULT_ALIGNMENT, arena))
+
+#define LZARENA_ALLOC(_size, _arena)(lzarena_alloc_align(_size, LZARENA_DEFAULT_ALIGNMENT, _arena))
+#define LZARENA_REALLOC(_ptr, _old_size, _new_size, _arena)(lzarena_realloc_align(_ptr, _old_size, _new_size, LZARENA_DEFAULT_ALIGNMENT, _arena))
 
 #endif

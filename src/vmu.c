@@ -9,9 +9,43 @@
 #include <inttypes.h>
 #include <assert.h>
 
+#define POOL_DEFAULT_ALLOC_LEN 1024
+
+#define ALLOC_STR_OBJ()(lzpool_alloc_x(POOL_DEFAULT_ALLOC_LEN, VMU_STR_OBJS_POOL))
+#define DEALLOC_STR_OBJ(_ptr)(lzpool_dealloc(_ptr))
+
+#define ALLOC_ARRAY_OBJ()(lzpool_alloc_x(POOL_DEFAULT_ALLOC_LEN, VMU_ARRAY_OBJS_POOL))
+#define DEALLOC_ARRAY_OBJ(_ptr)(lzpool_dealloc(_ptr))
+
+#define ALLOC_LIST_OBJ()(lzpool_alloc_x(POOL_DEFAULT_ALLOC_LEN, VMU_LIST_OBJS_POOL))
+#define DEALLOC_LIST_OBJ(_ptr)(lzpool_dealloc(_ptr))
+
+#define ALLOC_DICT_OBJ()(lzpool_alloc_x(POOL_DEFAULT_ALLOC_LEN, VMU_DICT_OBJS_POOL))
+#define DEALLOC_DICT_OBJ(_ptr)(lzpool_dealloc(_ptr))
+
+#define ALLOC_RECORD_OBJ()(lzpool_alloc_x(POOL_DEFAULT_ALLOC_LEN, VMU_RECORD_OBJS_POOL))
+#define DEALLOC_RECORD_OBJ(_ptr)(lzpool_dealloc(_ptr))
+
+#define ALLOC_FN_OBJ()(lzpool_alloc_x(POOL_DEFAULT_ALLOC_LEN, VMU_FN_OBJS_POOL))
+#define DEALLOC_FN_OBJ(_ptr)(lzpool_dealloc(_ptr))
+
+#define ALLOC_NATIVE_FN_OBJ()(lzpool_alloc_x(POOL_DEFAULT_ALLOC_LEN, VMU_NATIVE_FN_OBJS_POOL))
+#define DEALLOC_NATIVE_FN_OBJ(_ptr)(lzpool_dealloc(_ptr))
+
+#define ALLOC_CLOSURE()(lzpool_alloc_x(POOL_DEFAULT_ALLOC_LEN, VMU_CLOSURES_POOL))
+#define DEALLOC_CLOSURE(_ptr)(lzpool_dealloc(_ptr))
+
+#define ALLOC_CLOSURE_OBJ()(lzpool_alloc_x(POOL_DEFAULT_ALLOC_LEN, VMU_CLOSURE_OBJS_POOL))
+#define DEALLOC_CLOSURE_OBJ(_ptr)(lzpool_dealloc(_ptr))
+
+#define ALLOC_NATIVE_MODULE_OBJ()(lzpool_alloc_x(POOL_DEFAULT_ALLOC_LEN, VMU_NATIVE_MODULE_OBJS_POOL))
+#define DEALLOC_NATIVE_MODULE_OBJ(_ptr)(lzpool_dealloc(_ptr))
+
+#define ALLOC_MODULE_OBJ()(lzpool_alloc_x(POOL_DEFAULT_ALLOC_LEN, VMU_MODULE_OBJS_POOL))
+#define DEALLOC_MODULE_OBJ(_ptr)(lzpool_dealloc(_ptr))
+
 #define FIND_LOCATION(index, arr)(dynarr_find(&((OPCodeLocation){.offset = index, .line = -1}), compare_locations, arr))
 #define FRAME_AT(at, vm)(&vm->frame_stack[at])
-#define ALLOCATOR (&(vm->fake_allocator))
 
 #define VMU_IS_VALUE_IN(_value)((_value).type == INT_VTYPE)
 #define VMU_IS_VALUE_OBJ(_value)((_value).type == OBJ_VTYPE)
@@ -23,7 +57,7 @@ static inline void init_obj(ObjType type, Obj *obj, VM *vm){
     obj->color = WHITE_OBJ_COLOR;
     obj->prev = NULL;
     obj->next = NULL;
-    obj_list_insert(obj, &vm->while_objs);
+    obj_list_insert(obj, &vm->white_objs);
 }
 //--------------------------------------------------
 //               PRIVATE INTERFACE                //
@@ -93,11 +127,9 @@ void prepare_worklist(VM *vm){
 
 void mark_objs(VM *vm){
     ObjList *gray_objs = &vm->gray_objs;
-    Obj *current = gray_objs->head;
-    Obj *next = NULL;
 
-    while (current){
-        next = current->next;
+    while (gray_objs->head){
+        Obj *current = gray_objs->head;
 
         switch (current->type){
             case STR_OBJ_TYPE:{
@@ -108,10 +140,10 @@ void mark_objs(VM *vm){
                 Value *values = array_obj->values;
 
                 for (size_t i = 0; i < len; i++){
-                    Value value = values[i];
+                    Value raw_value = values[i];
 
-                    if(VMU_IS_VALUE_OBJ(value) && VMU_VALUE_TO_OBJ(value)->color == WHITE_OBJ_COLOR){
-                        Obj *obj = VMU_VALUE_TO_OBJ(value);
+                    if(VMU_IS_VALUE_OBJ(raw_value) && VMU_VALUE_TO_OBJ(raw_value)->color == WHITE_OBJ_COLOR){
+                        Obj *obj = VMU_VALUE_TO_OBJ(raw_value);
                         obj->color = GRAY_OBJ_COLOR;
                         obj_list_remove(obj);
                         obj_list_insert(obj, &vm->gray_objs);
@@ -125,10 +157,10 @@ void mark_objs(VM *vm){
                 size_t len = DYNARR_LEN(items);
 
                 for (size_t i = 0; i < len; i++){
-                    Value value = DYNARR_GET_AS(Value, i, items);
+                    Value raw_value = DYNARR_GET_AS(Value, i, items);
 
-                    if(VMU_IS_VALUE_OBJ(value) && VMU_VALUE_TO_OBJ(value)->color == WHITE_OBJ_COLOR){
-                        Obj *obj = VMU_VALUE_TO_OBJ(value);
+                    if(VMU_IS_VALUE_OBJ(raw_value) && VMU_VALUE_TO_OBJ(raw_value)->color == WHITE_OBJ_COLOR){
+                        Obj *obj = VMU_VALUE_TO_OBJ(raw_value);
                         obj->color = GRAY_OBJ_COLOR;
                         obj_list_remove(obj);
                         obj_list_insert(obj, &vm->gray_objs);
@@ -137,6 +169,35 @@ void mark_objs(VM *vm){
 
                 break;
             }case DICT_OBJ_TYPE:{
+                DictObj *dict_obj = OBJ_TO_DICT(current);
+                LZOHTable *key_values = dict_obj->key_values;
+                size_t m = key_values->m;
+
+                for (size_t i = 0; i < m; i++){
+                    LZOHTableSlot slot = key_values->slots[i];
+
+                    if(slot.used){
+                        continue;
+                    }
+
+                    Value raw_key = *(Value *)(slot.key);
+                    Value raw_value = *(Value *)(slot.value);
+
+                    if(VMU_IS_VALUE_OBJ(raw_key) && VMU_VALUE_TO_OBJ(raw_key)->color == WHITE_OBJ_COLOR){
+                        Obj *obj = VMU_VALUE_TO_OBJ(raw_key);
+                        obj->color = GRAY_OBJ_COLOR;
+                        obj_list_remove(obj);
+                        obj_list_insert(obj, &vm->gray_objs);
+                    }
+
+                    if(VMU_IS_VALUE_OBJ(raw_value) && VMU_VALUE_TO_OBJ(raw_value)->color == WHITE_OBJ_COLOR){
+                        Obj *obj = VMU_VALUE_TO_OBJ(raw_value);
+                        obj->color = GRAY_OBJ_COLOR;
+                        obj_list_remove(obj);
+                        obj_list_insert(obj, &vm->gray_objs);
+                    }
+                }
+
                 break;
             }case RECORD_OBJ_TYPE:{
                 RecordObj *record_obj = OBJ_TO_RECORD(current);
@@ -151,10 +212,10 @@ void mark_objs(VM *vm){
                         continue;
                     }
 
-                    Value value = *(Value *)slot.value;
+                    Value raw_value = *(Value *)(slot.value);
 
-                    if(VMU_IS_VALUE_OBJ(value) && VMU_VALUE_TO_OBJ(value)->color == WHITE_OBJ_COLOR){
-                        Obj *obj = VMU_VALUE_TO_OBJ(value);
+                    if(VMU_IS_VALUE_OBJ(raw_value) && VMU_VALUE_TO_OBJ(raw_value)->color == WHITE_OBJ_COLOR){
+                        Obj *obj = VMU_VALUE_TO_OBJ(raw_value);
                         obj->color = GRAY_OBJ_COLOR;
                         obj_list_remove(obj);
                         obj_list_insert(obj, &vm->gray_objs);
@@ -188,14 +249,14 @@ void mark_objs(VM *vm){
         }
 
         current->color = BLACK_OBJ_COLOR;
+
         obj_list_remove(current);
         obj_list_insert(current, &vm->black_objs);
-        current = next;
     }
 }
 
 void sweep_objs(VM *vm){
-    ObjList *white_objs = &vm->while_objs;
+    ObjList *white_objs = &vm->white_objs;
     Obj *current = white_objs->head;
     Obj *next = NULL;
 
@@ -247,7 +308,7 @@ void sweep_objs(VM *vm){
 }
 
 void normalize_objs(VM *vm){
-    ObjList *white_objs = &vm->while_objs;
+    ObjList *white_objs = &vm->white_objs;
     ObjList *black_objs = &vm->black_objs;
     Obj *current = black_objs->head;
     Obj *next = NULL;
@@ -277,7 +338,7 @@ static int compare_locations(const void *a, const void *b){
 }
 
 static BStr *prepare_stacktrace(unsigned int spaces, VM *vm){
-	BStr *st = FACTORY_BSTR(ALLOCATOR);
+	BStr *st = FACTORY_BSTR(vm->allocator);
 
     for(Frame *frame = vm->frame_stack; frame < vm->frame_ptr; frame++){
         Fn *fn = frame->fn;
@@ -688,8 +749,72 @@ int vmu_internal_error(VM *vm, char *msg, ...){
     return 0;
 }
 
+inline uint8_t validate_value_bool_arg(Value *value, uint8_t param, char *name, VM *vm){
+    if(!IS_VALUE_BOOL(value)){
+        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'bool'", param, name);
+    }
+
+    return VALUE_TO_BOOL(value);
+}
+
+inline int64_t validate_value_int_arg(Value *value, uint8_t param, char *name, VM *vm){
+    if(!IS_VALUE_INT(value)){
+        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'int'", param, name);
+    }
+
+    return VALUE_TO_INT(value);
+}
+
+inline double validate_value_float_arg(Value *value, uint8_t param, char *name, VM *vm){
+    if(!IS_VALUE_FLOAT(value)){
+        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'float'", param, name);
+    }
+
+    return VALUE_TO_FLOAT(value);
+}
+
+inline double validate_value_ifloat_arg(Value *value, uint8_t param, char *name, VM *vm){
+    if(IS_VALUE_INT(value)){
+        return (double)VALUE_TO_INT(value);
+    }
+
+    if(IS_VALUE_FLOAT(value)){
+        return VALUE_TO_FLOAT(value);
+    }
+
+    vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'int' or 'float'", param, name);
+
+    return -1;
+}
+
+inline int64_t validate_value_int_range_arg(Value *value, uint8_t param, char *name, int64_t from, int64_t to, VM *vm){
+    if(!IS_VALUE_INT(value)){
+        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'int'", param, name);
+    }
+
+    int64_t i64_value = VALUE_TO_INT(value);
+
+    if(i64_value < from){
+        vmu_error(vm, "Illegal value of argument %" PRIu8 ": expect '%s' be greater or equals to %" PRId64 ", but got %" PRId64, param, name, from, i64_value);
+    }
+
+    if(i64_value > to){
+        vmu_error(vm, "Illegal value of argument %" PRIu8 ": expect '%s' be less or equals to %" PRId64 ", but got %" PRId64, param, name, to, i64_value);
+    }
+
+    return i64_value;
+}
+
+inline StrObj *validate_value_str_arg(Value *value, uint8_t param, char *name, VM *vm){
+    if(!IS_VALUE_STR(value)){
+        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'str'", param, name);
+    }
+
+    return VALUE_TO_STR(value);
+}
+
 void vmu_clean_up(VM *vm){
-    ObjList *white_objs = &vm->while_objs;
+    ObjList *white_objs = &vm->white_objs;
     Obj *current = white_objs->head;
     Obj *next = NULL;
 
@@ -784,10 +909,10 @@ inline void vmu_value_to_str_w(Value value, LZBStr *str){
 
 char *vmu_value_to_str(Value value, VM *vm, size_t *out_len){
     char *str_value = NULL;
-    LZBStr *str = FACTORY_LZBSTR(ALLOCATOR);
+    LZBStr *str = FACTORY_LZBSTR(vm->allocator);
 
     value_to_str(value, NULL, str);
-    str_value = lzbstr_rclone_buff((LZBStrAllocator *)ALLOCATOR, str, out_len);
+    str_value = lzbstr_rclone_buff((LZBStrAllocator *)VMU_FRONT_ALLOCATOR, str, out_len);
     lzbstr_destroy(str);
 
     return str_value;
@@ -874,7 +999,7 @@ void vmu_print_value(FILE *stream, Value *value){
 }
 
 inline Value *vmu_clone_value(Value value, VM *vm){
-    Value *cloned_value = MEMORY_ALLOC(Value, 1, ALLOCATOR);
+    Value *cloned_value = MEMORY_ALLOC(Value, 1, VMU_FRONT_ALLOCATOR);
     *cloned_value = value;
     return cloned_value;
 }
@@ -884,19 +1009,20 @@ inline void vmu_destroy_value(Value *value, VM *vm){
         return;
     }
 
-    MEMORY_DEALLOC(Value, 1, value, ALLOCATOR);
+    MEMORY_DEALLOC(Value, 1, value, VMU_FRONT_ALLOCATOR);
 }
 
-int vmu_create_str(char runtime, size_t raw_str_len, char *raw_str, VM *vm, StrObj **out_str_obj){
+inline int vmu_create_str(char runtime, size_t raw_str_len, char *raw_str, VM *vm, StrObj **out_str_obj){
+    size_t len = ((((size_t)0) - (raw_str_len == 0)) & 1) | ((((size_t)0) - (raw_str_len > 0)) & raw_str_len);
     LZOHTable *runtime_strs = vm->runtime_strs;
     StrObj *str_obj = NULL;
 
-    if(lzohtable_lookup(raw_str_len, raw_str, runtime_strs, (void **)&str_obj)){
+    if(lzohtable_lookup(len, raw_str, runtime_strs, (void **)&str_obj)){
         *out_str_obj = str_obj;
         return 1;
     }
 
-    str_obj = MEMORY_ALLOC(StrObj, 1, ALLOCATOR);
+    str_obj = ALLOC_STR_OBJ();
     Obj *obj = (Obj *)str_obj;
 
     init_obj(STR_OBJ_TYPE, obj, vm);
@@ -904,13 +1030,13 @@ int vmu_create_str(char runtime, size_t raw_str_len, char *raw_str, VM *vm, StrO
     str_obj->len = raw_str_len;
     str_obj->buff = raw_str;
 
-    lzohtable_put_ck(raw_str_len, raw_str, str_obj, runtime_strs, NULL);
+    lzohtable_put_ck(len, raw_str, str_obj, runtime_strs, NULL);
     *out_str_obj = str_obj;
 
     return 0;
 }
 
-void vmu_destroy_str(StrObj *str_obj, VM *vm){
+inline void vmu_destroy_str(StrObj *str_obj, VM *vm){
     if(!str_obj){
         return;
     }
@@ -922,10 +1048,10 @@ void vmu_destroy_str(StrObj *str_obj, VM *vm){
     LZOHTABLE_REMOVE(key_len, key, runtime_strs);
 
     if(str_obj->runtime){
-        MEMORY_DEALLOC(char, key_len + 1, key, ALLOCATOR);
+        MEMORY_DEALLOC(char, key_len + 1, key, VMU_FRONT_ALLOCATOR);
     }
 
-    MEMORY_DEALLOC(StrObj, 1, str_obj, ALLOCATOR);
+    lzpool_dealloc(str_obj);
 }
 
 int vmu_str_is_int(StrObj *str_obj){
@@ -987,7 +1113,7 @@ inline int64_t vmu_str_len(StrObj *str_obj){
     return (int64_t)(str_obj->len);
 }
 
-StrObj *vmu_str_char(int64_t idx, StrObj *str_obj, VM *vm){
+inline StrObj *vmu_str_char(int64_t idx, StrObj *str_obj, VM *vm){
     size_t len = str_obj->len;
     char *buff = str_obj->buff;
 
@@ -996,13 +1122,13 @@ StrObj *vmu_str_char(int64_t idx, StrObj *str_obj, VM *vm){
     }
 
     StrObj *char_str_obj = NULL;
-    char *new_buff = MEMORY_ALLOC(char, 2, ALLOCATOR);
+    char *new_buff = MEMORY_ALLOC(char, 2, VMU_FRONT_ALLOCATOR);
 
     new_buff[0] = buff[idx];
     new_buff[1] = 0;
 
     if(lzohtable_lookup(1, new_buff, vm->runtime_strs, (void **)(&char_str_obj))){
-        MEMORY_DEALLOC(char, 2, new_buff, ALLOCATOR);
+        MEMORY_DEALLOC(char, 2, new_buff, VMU_FRONT_ALLOCATOR);
         return char_str_obj;
     }
 
@@ -1011,7 +1137,7 @@ StrObj *vmu_str_char(int64_t idx, StrObj *str_obj, VM *vm){
     return char_str_obj;
 }
 
-int64_t vmu_str_code(int64_t idx, StrObj *str_obj, VM *vm){
+inline int64_t vmu_str_code(int64_t idx, StrObj *str_obj, VM *vm){
     if(idx < 0){
         vmu_error(vm, "Failed to get string's character code: 'at' index (%" PRId64 ") less than 0", idx);
     }
@@ -1027,11 +1153,11 @@ int64_t vmu_str_code(int64_t idx, StrObj *str_obj, VM *vm){
     return (int64_t)buff[at];
 }
 
-StrObj *vmu_str_concat(StrObj *a_str_obj, StrObj *b_str_obj, VM *vm){
+inline StrObj *vmu_str_concat(StrObj *a_str_obj, StrObj *b_str_obj, VM *vm){
     size_t a_len = a_str_obj->len;
     size_t b_len = b_str_obj->len;
     size_t new_len = a_len + b_len;
-    char *new_buff = MEMORY_ALLOC(char, new_len + 1, ALLOCATOR);
+    char *new_buff = MEMORY_ALLOC(char, new_len + 1, VMU_FRONT_ALLOCATOR);
     StrObj *new_str_obj = NULL;
 
     memcpy(new_buff, a_str_obj->buff, a_len);
@@ -1039,20 +1165,20 @@ StrObj *vmu_str_concat(StrObj *a_str_obj, StrObj *b_str_obj, VM *vm){
     new_buff[new_len] = 0;
 
     if(vmu_create_str(1, new_len, new_buff, vm, &new_str_obj)){
-        MEMORY_DEALLOC(char, new_len + 1, new_buff, ALLOCATOR);
+        MEMORY_DEALLOC(char, new_len + 1, new_buff, VMU_FRONT_ALLOCATOR);
         return new_str_obj;
     }
 
     return new_str_obj;
 }
 
-StrObj *vmu_str_mul(int64_t by, StrObj *str_obj, VM *vm){
+inline StrObj *vmu_str_mul(int64_t by, StrObj *str_obj, VM *vm){
     size_t old_len = str_obj->len;
 
     char junk = (old_len * by + 1 > SIZE_MAX) && vmu_error(vm, "Failed to multiply string: resulting length exceed max capacity");
 
     size_t new_len = old_len * by;
-    char *new_buff = MEMORY_ALLOC(char, new_len + 1, ALLOCATOR);
+    char *new_buff = MEMORY_ALLOC(char, new_len + 1, VMU_FRONT_ALLOCATOR);
     StrObj *new_str_obj = NULL;
 
     for (size_t i = 0; i < new_len; i += old_len){
@@ -1062,7 +1188,7 @@ StrObj *vmu_str_mul(int64_t by, StrObj *str_obj, VM *vm){
     new_buff[new_len] = 0;
 
     if(vmu_create_str(1, new_len, new_buff, vm, &new_str_obj)){
-        MEMORY_DEALLOC(char, new_len + 1, new_buff, ALLOCATOR);
+        MEMORY_DEALLOC(char, new_len + 1, new_buff, VMU_FRONT_ALLOCATOR);
     }
 
     return new_str_obj + junk;
@@ -1084,7 +1210,7 @@ StrObj *vmu_str_insert_at(int64_t idx, StrObj *a_str_obj, StrObj *b_str_obj, VM 
     }
 
     size_t c_len = a_len + b_len;
-    char *c_buff = MEMORY_ALLOC(char, c_len + 1, ALLOCATOR);
+    char *c_buff = MEMORY_ALLOC(char, c_len + 1, VMU_FRONT_ALLOCATOR);
     StrObj *c_str_obj = NULL;
 
     if(at < a_len){
@@ -1099,7 +1225,7 @@ StrObj *vmu_str_insert_at(int64_t idx, StrObj *a_str_obj, StrObj *b_str_obj, VM 
     c_buff[c_len] = 0;
 
     if(lzohtable_lookup(c_len, c_buff, vm->runtime_strs, (void **)(&c_str_obj))){
-        MEMORY_DEALLOC(char, c_len + 1, c_buff, ALLOCATOR);
+        MEMORY_DEALLOC(char, c_len + 1, c_buff, VMU_FRONT_ALLOCATOR);
         return c_str_obj;
     }
 
@@ -1127,7 +1253,7 @@ StrObj *vmu_str_remove(int64_t from, int64_t to, StrObj *str_obj, VM *vm){
     }
 
     size_t new_len = old_len - (end - start);
-    char *new_buff = MEMORY_ALLOC(char, new_len + 1, ALLOCATOR);
+    char *new_buff = MEMORY_ALLOC(char, new_len + 1, VMU_FRONT_ALLOCATOR);
     size_t left_len = start;
     size_t right_len = old_len - end;
     StrObj *new_str_obj = NULL;
@@ -1137,7 +1263,7 @@ StrObj *vmu_str_remove(int64_t from, int64_t to, StrObj *str_obj, VM *vm){
     new_buff[new_len] = 0;
 
     if(lzohtable_lookup(new_len, new_buff, vm->runtime_strs, (void **)(&str_obj))){
-        MEMORY_DEALLOC(char, new_len + 1, new_buff, ALLOCATOR);
+        MEMORY_DEALLOC(char, new_len + 1, new_buff, VMU_FRONT_ALLOCATOR);
         return str_obj;
     }
 
@@ -1165,14 +1291,14 @@ StrObj *vmu_str_sub_str(int64_t from, int64_t to, StrObj *str_obj, VM *vm){
     }
 
     size_t new_len = end - start;
-    char *new_buff = MEMORY_ALLOC(char, new_len + 1, ALLOCATOR);
+    char *new_buff = MEMORY_ALLOC(char, new_len + 1, VMU_FRONT_ALLOCATOR);
     StrObj *new_str_obj = NULL;
 
     memcpy(new_buff, old_buff + start, new_len);
     new_buff[new_len] = 0;
 
     if(lzohtable_lookup(new_len, new_buff, vm->runtime_strs, (void **)(&str_obj))){
-        MEMORY_DEALLOC(char, new_len + 1, new_buff, ALLOCATOR);
+        MEMORY_DEALLOC(char, new_len + 1, new_buff, VMU_FRONT_ALLOCATOR);
         return str_obj;
     }
 
@@ -1181,9 +1307,9 @@ StrObj *vmu_str_sub_str(int64_t from, int64_t to, StrObj *str_obj, VM *vm){
     return new_str_obj;
 }
 
-ArrayObj *vmu_create_array(int64_t len, VM *vm){
-    Value *values = MEMORY_ALLOC(Value, (size_t)len, ALLOCATOR);
-    ArrayObj *array_obj = MEMORY_ALLOC(ArrayObj, 1, ALLOCATOR);
+inline ArrayObj *vmu_create_array(int64_t len, VM *vm){
+    Value *values = MEMORY_ALLOC(Value, (size_t)len, VMU_FRONT_ALLOCATOR);
+    ArrayObj *array_obj = ALLOC_ARRAY_OBJ();
     Obj *obj = (Obj *)array_obj;
 
     memset(values, 0, VALUE_SIZE * (size_t)len);
@@ -1194,20 +1320,20 @@ ArrayObj *vmu_create_array(int64_t len, VM *vm){
     return array_obj;
 }
 
-void vmu_destroy_array(ArrayObj *array_obj, VM *vm){
+inline void vmu_destroy_array(ArrayObj *array_obj, VM *vm){
     if(!array_obj){
         return;
     }
 
-    MEMORY_DEALLOC(Value, array_obj->len, array_obj->values, ALLOCATOR);
-    MEMORY_DEALLOC(ArrayObj, 1, array_obj, ALLOCATOR);
+    MEMORY_DEALLOC(Value, array_obj->len, array_obj->values, VMU_FRONT_ALLOCATOR);
+    DEALLOC_ARRAY_OBJ(array_obj);
 }
 
 inline int64_t vmu_array_len(ArrayObj *array_obj){
     return (int64_t)array_obj->len;
 }
 
-Value vmu_array_get_at(int64_t idx, ArrayObj *array_obj, VM *vm){
+inline Value vmu_array_get_at(int64_t idx, ArrayObj *array_obj, VM *vm){
     size_t len = array_obj->len;
     Value *values = array_obj->values;
 
@@ -1218,7 +1344,7 @@ Value vmu_array_get_at(int64_t idx, ArrayObj *array_obj, VM *vm){
     return values[idx];
 }
 
-void vmu_array_set_at(int64_t idx, Value value, ArrayObj *array_obj, VM *vm){
+inline void vmu_array_set_at(int64_t idx, Value value, ArrayObj *array_obj, VM *vm){
     if(idx < 0){
         vmu_error(vm, "Failed to update array slot: index (%" PRId64 ") is negative");
     }
@@ -1240,13 +1366,13 @@ inline Value vmu_array_first(ArrayObj *array_obj, VM *vm){
     return len == 0 ? EMPTY_VALUE : values[0];
 }
 
-Value vmu_array_last(ArrayObj *array_obj, VM *vm){
+inline Value vmu_array_last(ArrayObj *array_obj, VM *vm){
     size_t len = array_obj->len;
     Value *values = array_obj->values;
     return len == 0 ? EMPTY_VALUE : values[len - 1];
 }
 
-ArrayObj *vmu_array_grow(int64_t by, ArrayObj *array_obj, VM *vm){
+inline ArrayObj *vmu_array_grow(int64_t by, ArrayObj *array_obj, VM *vm){
     if(by <= 1){
         vmu_error(vm, "Expect 'by' value greater than 1");
     }
@@ -1255,8 +1381,8 @@ ArrayObj *vmu_array_grow(int64_t by, ArrayObj *array_obj, VM *vm){
     Value *values = array_obj->values;
 
     size_t new_len = len * by;
-    Value *new_values = MEMORY_ALLOC(Value, new_len, ALLOCATOR);
-    ArrayObj *new_array_obj = MEMORY_ALLOC(ArrayObj, 1, ALLOCATOR);
+    Value *new_values = MEMORY_ALLOC(Value, new_len, VMU_FRONT_ALLOCATOR);
+    ArrayObj *new_array_obj = ALLOC_ARRAY_OBJ();
     Obj *obj = (Obj *)new_array_obj;
 
     memcpy(new_values, values, VALUE_SIZE * len);
@@ -1268,7 +1394,7 @@ ArrayObj *vmu_array_grow(int64_t by, ArrayObj *array_obj, VM *vm){
     return new_array_obj;
 }
 
-ArrayObj *vmu_array_join(ArrayObj *a_array_obj, ArrayObj *b_array_obj, VM *vm){
+inline ArrayObj *vmu_array_join(ArrayObj *a_array_obj, ArrayObj *b_array_obj, VM *vm){
     size_t a_len = a_array_obj->len;
     Value *a_values = a_array_obj->values;
 
@@ -1276,8 +1402,8 @@ ArrayObj *vmu_array_join(ArrayObj *a_array_obj, ArrayObj *b_array_obj, VM *vm){
     Value *b_values = b_array_obj->values;
 
     size_t new_len = a_len + b_len;
-    Value *new_values = MEMORY_ALLOC(Value, new_len, ALLOCATOR);
-    ArrayObj *new_array_obj = MEMORY_ALLOC(ArrayObj, 1, ALLOCATOR);
+    Value *new_values = MEMORY_ALLOC(Value, new_len, VMU_FRONT_ALLOCATOR);
+    ArrayObj *new_array_obj = ALLOC_ARRAY_OBJ();
     Obj *obj = (Obj *)new_array_obj;
 
     memmove(new_values, a_values, VALUE_SIZE * a_len);
@@ -1289,10 +1415,10 @@ ArrayObj *vmu_array_join(ArrayObj *a_array_obj, ArrayObj *b_array_obj, VM *vm){
     return new_array_obj;
 }
 
-ArrayObj *vmu_array_join_value(Value value, ArrayObj *array_obj, VM *vm){
+inline ArrayObj *vmu_array_join_value(Value value, ArrayObj *array_obj, VM *vm){
     size_t len = array_obj->len;
     Value *values = array_obj->values;
-    ArrayObj *new_array_obj = vmu_create_array(len + 1, vm);
+    ArrayObj *new_array_obj = ALLOC_ARRAY_OBJ();
     Value *new_values = new_array_obj->values;
 
     memcpy(new_values, values, VALUE_SIZE * len);
@@ -1301,9 +1427,9 @@ ArrayObj *vmu_array_join_value(Value value, ArrayObj *array_obj, VM *vm){
     return new_array_obj;
 }
 
-ListObj *vmu_create_list(VM *vm){
-    DynArr *values = FACTORY_DYNARR_TYPE(Value, ALLOCATOR);
-    ListObj *list_obj = MEMORY_ALLOC(ListObj, 1, ALLOCATOR);
+inline ListObj *vmu_create_list(VM *vm){
+    DynArr *values = FACTORY_DYNARR_TYPE(Value, VMU_FRONT_ALLOCATOR);
+    ListObj *list_obj = ALLOC_LIST_OBJ();
     Obj *obj = (Obj *)list_obj;
 
     init_obj(LIST_OBJ_TYPE, obj, vm);
@@ -1312,13 +1438,13 @@ ListObj *vmu_create_list(VM *vm){
     return list_obj;
 }
 
-void vmu_destroy_list(ListObj *list_obj, VM *vm){
+inline void vmu_destroy_list(ListObj *list_obj, VM *vm){
     if(!list_obj){
         return;
     }
 
     dynarr_destroy(list_obj->items);
-    MEMORY_DEALLOC(ListObj, 1, list_obj, ALLOCATOR);
+    DEALLOC_LIST_OBJ(list_obj);
 }
 
 inline int64_t vmu_list_len(ListObj *list_obj){
@@ -1334,11 +1460,11 @@ inline int64_t vmu_list_clear(ListObj *list_obj){
     return len;
 }
 
-ListObj *vmu_list_join(ListObj *a_list_obj, ListObj *b_list_obj, VM *vm){
+inline ListObj *vmu_list_join(ListObj *a_list_obj, ListObj *b_list_obj, VM *vm){
     DynArr *a_list = a_list_obj->items;
     DynArr *b_list = b_list_obj->items;
-    DynArr *c_list = dynarr_append_new(a_list, b_list, (DynArrAllocator *)ALLOCATOR);
-    ListObj *list_obj = MEMORY_ALLOC(ListObj, 1, ALLOCATOR);
+    DynArr *c_list = dynarr_append_new(a_list, b_list, (DynArrAllocator *)VMU_FRONT_ALLOCATOR);
+    ListObj *list_obj = ALLOC_LIST_OBJ();
     Obj *obj = (Obj *)list_obj;
 
     init_obj(LIST_OBJ_TYPE, obj, vm);
@@ -1347,7 +1473,7 @@ ListObj *vmu_list_join(ListObj *a_list_obj, ListObj *b_list_obj, VM *vm){
     return list_obj;
 }
 
-Value vmu_list_get_at(int64_t idx, ListObj *list_obj, VM *vm){
+inline Value vmu_list_get_at(int64_t idx, ListObj *list_obj, VM *vm){
     if(idx < 0){
         vmu_error(vm, "Failed to get item from list: 'at' index is negative");
     }
@@ -1368,11 +1494,11 @@ inline void vmu_list_insert(Value value, ListObj *list_obj, VM *vm){
     dynarr_insert(&value, items);
 }
 
-ListObj *vmu_list_insert_new(Value value, ListObj *list_obj, VM *vm){
+inline ListObj *vmu_list_insert_new(Value value, ListObj *list_obj, VM *vm){
     DynArr *items = list_obj->items;
     size_t items_len = DYNARR_LEN(items);
-    DynArr *new_items = dynarr_create_by(items->rsize, items_len + 1, (DynArrAllocator *)ALLOCATOR);
-    ListObj *new_list_obj = MEMORY_ALLOC(ListObj, 1, ALLOCATOR);
+    DynArr *new_items = dynarr_create_by(items->rsize, items_len + 1, (DynArrAllocator *)VMU_FRONT_ALLOCATOR);
+    ListObj *new_list_obj = ALLOC_LIST_OBJ();
     Obj *obj = (Obj *)new_list_obj;
 
     dynarr_append(items, new_items);
@@ -1442,8 +1568,8 @@ inline Value vmu_list_remove_at(int64_t idx, ListObj *list_obj, VM *vm){
 }
 
 inline DictObj *vmu_create_dict(VM *vm){
-    LZOHTable *key_values = FACTORY_LZOHTABLE(ALLOCATOR);
-    DictObj *dict_obj = MEMORY_ALLOC(DictObj, 1, ALLOCATOR);
+    LZOHTable *key_values = FACTORY_LZOHTABLE(VMU_FRONT_ALLOCATOR);
+    DictObj *dict_obj = ALLOC_DICT_OBJ();
     Obj *obj = (Obj *)dict_obj;
 
     init_obj(DICT_OBJ_TYPE, obj, vm);
@@ -1458,7 +1584,7 @@ inline void vmu_destroy_dict(DictObj *dict_obj, VM *vm){
     }
 
     LZOHTABLE_DESTROY(dict_obj->key_values);
-    MEMORY_DEALLOC(Value, 1, dict_obj, ALLOCATOR);
+    DEALLOC_DICT_OBJ(dict_obj);
 }
 
 inline void vmu_dict_put(Value key, Value value, DictObj *dict_obj, VM *vm){
@@ -1488,9 +1614,9 @@ inline Value vmu_dict_get(Value key, DictObj *dict_obj, VM *vm){
     return (Value){0};
 }
 
-RecordObj *vmu_create_record(uint16_t length, VM *vm){
-    LZOHTable *attrs = length == 0 ? NULL : FACTORY_LZOHTABLE(ALLOCATOR);
-    RecordObj *record_obj = MEMORY_ALLOC(RecordObj, 1, ALLOCATOR);
+inline RecordObj *vmu_create_record(uint16_t length, VM *vm){
+    LZOHTable *attrs = length == 0 ? NULL : FACTORY_LZOHTABLE(VMU_FRONT_ALLOCATOR);
+    RecordObj *record_obj = ALLOC_RECORD_OBJ();
     Obj *obj = (Obj*)record_obj;
 
     init_obj(RECORD_OBJ_TYPE, obj, vm);
@@ -1499,16 +1625,16 @@ RecordObj *vmu_create_record(uint16_t length, VM *vm){
 	return record_obj;
 }
 
-void vmu_destroy_record(RecordObj *record_obj, VM *vm){
+inline void vmu_destroy_record(RecordObj *record_obj, VM *vm){
     if(!record_obj){
         return;
     }
 
     LZOHTABLE_DESTROY(record_obj->attrs);
-    MEMORY_DEALLOC(RecordObj, 1, record_obj, ALLOCATOR);
+    DEALLOC_RECORD_OBJ(record_obj);
 }
 
-void vmu_record_insert_attr(size_t key_size, char *key, Value value, RecordObj *record_obj, VM *vm){
+inline void vmu_record_insert_attr(size_t key_size, char *key, Value value, RecordObj *record_obj, VM *vm){
     Value *attr_value = NULL;
     LZOHTable *attrs = record_obj->attrs;
 
@@ -1524,7 +1650,7 @@ void vmu_record_insert_attr(size_t key_size, char *key, Value value, RecordObj *
     lzohtable_put_ckv(key_size, key, VALUE_SIZE, &value, attrs, NULL);
 }
 
-void vmu_record_set_attr(size_t key_size, char *key, Value value, RecordObj *record_obj, VM *vm){
+inline void vmu_record_set_attr(size_t key_size, char *key, Value value, RecordObj *record_obj, VM *vm){
     Value *attr_value = NULL;
     LZOHTable *attrs = record_obj->attrs;
 
@@ -1536,7 +1662,7 @@ void vmu_record_set_attr(size_t key_size, char *key, Value value, RecordObj *rec
     vmu_error(vm, "Failed to update record: attribute '%s' does not exist", key);
 }
 
-Value vmu_record_get_attr(size_t key_size, char *key, RecordObj *record_obj, VM *vm){
+inline Value vmu_record_get_attr(size_t key_size, char *key, RecordObj *record_obj, VM *vm){
     LZOHTable *attrs = record_obj->attrs;
     Value *out_value = NULL;
 
@@ -1549,8 +1675,8 @@ Value vmu_record_get_attr(size_t key_size, char *key, RecordObj *record_obj, VM 
     return (Value){0};
 }
 
-NativeFnObj *vmu_create_native_fn(Value target, NativeFn *native_fn, VM *vm){
-    NativeFnObj *native_fn_obj = MEMORY_ALLOC(NativeFnObj, 1, ALLOCATOR);
+inline NativeFnObj *vmu_create_native_fn(Value target, NativeFn *native_fn, VM *vm){
+    NativeFnObj *native_fn_obj = ALLOC_NATIVE_FN_OBJ();
     Obj *obj = (Obj *)native_fn_obj;
 
     init_obj(NATIVE_FN_OBJ_TYPE, obj, vm);
@@ -1560,13 +1686,12 @@ NativeFnObj *vmu_create_native_fn(Value target, NativeFn *native_fn, VM *vm){
     return native_fn_obj;
 }
 
-void vmu_destroy_native_fn(NativeFnObj *native_fn_obj, VM *vm){
-    //NativeFn *native_fn = native_fn_obj->native_fn;
-    MEMORY_DEALLOC(NativeFnObj, 1, native_fn_obj, ALLOCATOR);
+inline void vmu_destroy_native_fn(NativeFnObj *native_fn_obj, VM *vm){
+    DEALLOC_NATIVE_FN_OBJ(native_fn_obj);
 }
 
-FnObj *vmu_create_fn(Fn *fn, VM *vm){
-    FnObj *fn_obj = MEMORY_ALLOC(FnObj, 1, ALLOCATOR);
+inline FnObj *vmu_create_fn(Fn *fn, VM *vm){
+    FnObj *fn_obj = ALLOC_FN_OBJ();
     Obj *obj = (Obj *)fn_obj;
 
     init_obj(FN_OBJ_TYPE, obj, vm);
@@ -1575,19 +1700,19 @@ FnObj *vmu_create_fn(Fn *fn, VM *vm){
     return fn_obj;
 }
 
-void vmu_destroy_fn(FnObj *fn_obj, VM *vm){
+inline void vmu_destroy_fn(FnObj *fn_obj, VM *vm){
     if(!fn_obj){
         return;
     }
 
-    MEMORY_DEALLOC(FnObj, 1, fn_obj, ALLOCATOR);
+    DEALLOC_FN_OBJ(fn_obj);
 }
 
 ClosureObj *vmu_create_closure(MetaClosure *meta, VM *vm){
     size_t meta_out_values_len = meta->meta_out_values_len;
-    OutValue *out_values = MEMORY_ALLOC(OutValue, meta_out_values_len, ALLOCATOR);
-    Closure *closure = MEMORY_ALLOC(Closure, 1, ALLOCATOR);
-    ClosureObj *closure_obj = MEMORY_ALLOC(ClosureObj, 1, ALLOCATOR);
+    OutValue *out_values = MEMORY_ALLOC(OutValue, meta_out_values_len, VMU_FRONT_ALLOCATOR);
+    Closure *closure = ALLOC_CLOSURE();
+    ClosureObj *closure_obj = ALLOC_CLOSURE_OBJ();
     Obj *obj = (Obj *)closure_obj;
 
     for (size_t i = 0; i < meta_out_values_len; i++){
@@ -1609,7 +1734,7 @@ ClosureObj *vmu_create_closure(MetaClosure *meta, VM *vm){
     return closure_obj;
 }
 
-void vmu_destroy_closure(ClosureObj *closure_obj, VM *vm){
+inline void vmu_destroy_closure(ClosureObj *closure_obj, VM *vm){
     if(!closure_obj){
         return;
     }
@@ -1618,13 +1743,13 @@ void vmu_destroy_closure(ClosureObj *closure_obj, VM *vm){
     OutValue *out_values = closure->out_values;
     MetaClosure *meta_closure = closure->meta;
 
-    MEMORY_DEALLOC(OutValue, meta_closure->meta_out_values_len, out_values, ALLOCATOR);
-    MEMORY_DEALLOC(Closure, 1, closure, ALLOCATOR);
-    MEMORY_DEALLOC(ClosureObj, 1, closure_obj, ALLOCATOR);
+    MEMORY_DEALLOC(OutValue, meta_closure->meta_out_values_len, out_values, VMU_FRONT_ALLOCATOR);
+    DEALLOC_CLOSURE(closure);
+    DEALLOC_CLOSURE_OBJ(closure_obj);
 }
 
-NativeModuleObj *vmu_create_native_module(NativeModule *native_module, VM *vm){
-    NativeModuleObj *native_module_obj = MEMORY_ALLOC(NativeModuleObj, 1, ALLOCATOR);
+inline NativeModuleObj *vmu_create_native_module(NativeModule *native_module, VM *vm){
+    NativeModuleObj *native_module_obj = ALLOC_NATIVE_MODULE_OBJ();
     Obj *obj = (Obj *)native_module_obj;
 
     init_obj(NATIVE_MODULE_OBJ_TYPE, obj, vm);
@@ -1633,16 +1758,16 @@ NativeModuleObj *vmu_create_native_module(NativeModule *native_module, VM *vm){
     return native_module_obj;
 }
 
-void vmu_destroy_native_module_obj(NativeModuleObj *native_module_obj, VM *vm){
+inline void vmu_destroy_native_module_obj(NativeModuleObj *native_module_obj, VM *vm){
     if(!native_module_obj){
         return;
     }
 
-    MEMORY_DEALLOC(NativeModuleObj, 1, native_module_obj, ALLOCATOR);
+    DEALLOC_NATIVE_MODULE_OBJ(native_module_obj);
 }
 
-Obj *vmu_create_module_obj(Module *module, VM *vm){
-    ModuleObj *module_obj = MEMORY_ALLOC(ModuleObj, 1, ALLOCATOR);
+inline Obj *vmu_create_module_obj(Module *module, VM *vm){
+    ModuleObj *module_obj = ALLOC_MODULE_OBJ();
 
     module_obj->header.type = MODULE_OBJ_TYPE;
     module_obj->module = module;
@@ -1650,10 +1775,10 @@ Obj *vmu_create_module_obj(Module *module, VM *vm){
     return &module_obj->header;
 }
 
-void vmu_destroy_module_obj(ModuleObj *module_obj, VM *vm){
+inline void vmu_destroy_module_obj(ModuleObj *module_obj, VM *vm){
     if(!module_obj){
         return;
     }
 
-    MEMORY_DEALLOC(ModuleObj, 1, module_obj, ALLOCATOR);
+    DEALLOC_MODULE_OBJ(module_obj);
 }

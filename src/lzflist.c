@@ -502,6 +502,10 @@ int lzflist_prealloc(size_t size, LZFList *list){
 }
 
 void *lzflist_alloc(size_t size, LZFList *list){
+    if(size == 0){
+        return NULL;
+    }
+
     void *ptr = look_first_fit(size, list, NULL);
 
     if(ptr){

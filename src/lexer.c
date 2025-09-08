@@ -307,6 +307,11 @@ Token *decimal(Lexer *lexer){
     }
 
 	if(match('.', lexer)){
+        if(!is_dec_digit(peek(lexer))){
+            error(lexer, "Expect digit after decimal point");
+            return NULL;
+        }
+
 		type = FLOAT_TYPE_TOKTYPE;
 
 		while (!is_at_end(lexer) && is_dec_digit(peek(lexer))){

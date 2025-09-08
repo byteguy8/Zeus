@@ -1,6 +1,7 @@
 #ifndef VM_H
 #define VM_H
 
+#include "lzpool.h"
 #include "lzbstr.h"
 #include "value.h"
 #include "obj.h"
@@ -65,34 +66,44 @@ typedef struct vm{
     char halt;
     jmp_buf exit_jmp;
     unsigned char exit_code;
-
+//-----------------------------  VALUE STACK  ------------------------------//
     Value *stack_top;
     Value stack[STACK_LENGTH];
-
+//-----------------------------  FRAME STACK  ------------------------------//
     Frame *frame_ptr;
     Frame frame_stack[FRAME_LENGTH];
-
+//--------------------------------  OTHER  ---------------------------------//
     LZOHTable *native_fns;
+    DynArr *native_symbols;
     LZOHTable *runtime_strs;
-//> MODULE
+    Template *templates;
+    Exception *exception_stack;
+//--------------------------------  MODULE  --------------------------------//
     int module_ptr;
     Module *main_module;
     Module *modules[MODULES_LENGTH];
-//< MODULE
-//> GARBAGE COLLECTOR
+//--------------------------  GARBAGE COLLECTOR  ---------------------------//
     size_t allocated_bytes;
     size_t allocation_limit_size;
-    ObjList while_objs;
+    ObjList white_objs;
     ObjList gray_objs;
     ObjList black_objs;
-//< GARBAGE COLLECTOR
-    DynArr *native_symbols;
-//> MEMORY HANDLERS
+//--------------------------------  POOLS  ---------------------------------//
+    LZPool str_objs_pool;
+    LZPool array_objs_pool;
+    LZPool list_objs_pool;
+    LZPool dict_objs_pool;
+    LZPool record_objs_pool;
+    LZPool native_fn_objs_pool;
+    LZPool fn_objs_pool;
+    LZPool closures_pool;
+    LZPool closure_objs_pool;
+    LZPool native_module_objs_pool;
+    LZPool module_objs_pool;
+//------------------------------  ALLOCATORS  ------------------------------//
     Allocator *allocator;
-    Allocator fake_allocator;
-//< MEMORY HANDLERS
-    Template *templates;
-    Exception *exception_stack;
+    Allocator back_allocator;
+    Allocator front_allocator;
 }VM;
 
 VM *vm_create(Allocator *allocator);

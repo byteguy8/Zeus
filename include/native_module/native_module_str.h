@@ -73,7 +73,7 @@ Value native_fn_str_substr(uint8_t argsc, Value *values, Value *target, void *co
 
 NativeFn *native_str_get(size_t key_size, const char *key, VM *vm){
     if(!str_symbols){
-        Allocator *allocator = &vm->fake_allocator;
+        Allocator *allocator = &vm->front_allocator;
         str_symbols = FACTORY_LZOHTABLE(allocator);
 
         dynarr_insert_ptr(str_symbols, vm->native_symbols);

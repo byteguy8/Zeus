@@ -119,8 +119,6 @@ static ClosureObj *init_closure(MetaClosure *meta, VM *vm);
 static Obj *push_native_module(NativeModule *native_module, VM *vm);
 static Obj *push_module(Module *module, VM *vm);
 static Value *pop(VM *vm);
-#define IS_AT_END(vm)((vm)->frame_ptr == 0 || CURRENT_FRAME(vm)->ip >= CURRENT_CHUNKS(vm)->used)
-#define ADVANCE(vm)(DYNARR_GET_AS(uint8_t, CURRENT_FRAME(vm)->ip++, CURRENT_CHUNKS(vm)))
 //----------     FRAMES RELATED FUNCTIONS     ----------//
 static inline Frame *current_frame(VM *vm);
 #define VM_CURRENT_FN(_vm)(current_frame(vm)->fn)
@@ -129,6 +127,7 @@ static inline Frame *current_frame(VM *vm);
 #define VM_CURRENT_MODULE(_vm)(VM_CURRENT_FN(_vm)->module)
 #define VM_CURRENT_CLOSURE(_vm)(current_frame(vm)->closure)
 static inline uint8_t advance(VM *vm);
+static inline uint8_t advance_save(VM *vm);
 static void add_out_value_to_current_frame(OutValue *value, VM *vm);
 static void remove_value_from_current_frame(OutValue *value, VM *vm);
 static Frame *push_frame(uint8_t argsc, VM *vm);
@@ -236,7 +235,7 @@ static inline void push(Value value, VM *vm){
         vmu_error(vm, "Stack over flow");
     }
 
-    *(vm->stack_top++) = value;
+    *((vm->stack_top)++) = value;
 }
 
 static inline FnObj *push_fn(Fn *fn, VM *vm){
@@ -305,6 +304,20 @@ static inline uint8_t advance(VM *vm){
     return DYNARR_GET_AS(uint8_t, frame->ip++, chunks);
 }
 
+static inline uint8_t advance_save(VM *vm){
+    Frame *frame = current_frame(vm);
+    DynArr *chunks = frame->fn->chunks;
+
+    if(frame->ip >= DYNARR_LEN(chunks)){
+        vmu_error(vm, "IP excceded chunks length");
+    }
+
+    uint8_t chunk = DYNARR_GET_AS(uint8_t, frame->ip++, chunks);
+    frame->last_offset = frame->ip - 1;
+
+    return chunk;
+}
+
 void add_out_value_to_current_frame(OutValue *value, VM *vm){
     Frame *frame = current_frame(vm);
 
@@ -346,14 +359,19 @@ static Frame *push_frame(uint8_t argsc, VM *vm){
     Value *locals = vm->stack_top - 1 - argsc;
 
     if(locals < vm->stack){
-        vmu_error(vm, "Frame locals out of value stack");
+        vmu_internal_error(vm, "Frame locals out of value stack");
     }
 
+    if(!IS_VALUE_FN(locals)){
+        vmu_internal_error(vm, "Frame locals must point to function");
+    }
+
+    Fn *fn = VALUE_TO_FN(locals)->fn;
     Frame *frame = vm->frame_ptr++;
 
     frame->ip = 0;
     frame->last_offset = 0;
-    frame->fn = NULL;
+    frame->fn = fn;
     frame->closure = NULL;
     frame->locals = locals;
     frame->outs_head = NULL;
@@ -384,7 +402,7 @@ static inline Value *frame_local(uint8_t which, VM *vm){
 
 static int execute(VM *vm){
     for (;;){
-        uint8_t chunk = advance(vm);
+        uint8_t chunk = advance_save(vm);
 
         switch (chunk){
             case EMPTY_OPCODE:{
@@ -433,14 +451,14 @@ static int execute(VM *vm){
                     LZBStr *str = template->str;
                     size_t buff_len;
                     char *buff = lzbstr_rclone_buff(
-                        (LZBStrAllocator *)&vm->fake_allocator,
+                        (LZBStrAllocator *)&vm->front_allocator,
                         str,
                         &buff_len
                     );
                     StrObj *str_obj = NULL;
 
                     if(vmu_create_str(1, buff_len, buff, vm, &str_obj)){
-                        MEMORY_DEALLOC(char, buff_len + 1, buff, &vm->fake_allocator);
+                        MEMORY_DEALLOC(char, buff_len + 1, buff, &vm->front_allocator);
                     }
 
                     PUSH_OBJ(str_obj, vm);
@@ -673,20 +691,18 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) && (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value))){
+                if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) &&
+                   (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value)))
+                {
                     double left;
                     double right;
 
-                    left = VALUE_TO_FLOAT(left_value);
-
-                    if(IS_VALUE_INT(left_value)){
-                        left = (double)VALUE_TO_INT(left_value);
-                    }
-
-                    right = VALUE_TO_FLOAT(right_value);
-
-                    if(IS_VALUE_INT(right_value)){
+                    if(IS_VALUE_FLOAT(left_value)){
+                        left = VALUE_TO_FLOAT(left_value);
                         right = (double)VALUE_TO_INT(right_value);
+                    }else{
+                        left = (double)VALUE_TO_INT(left_value);
+                        right = VALUE_TO_FLOAT(right_value);
                     }
 
                     push(FLOAT_VALUE(left + right), vm);
@@ -710,20 +726,18 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) && (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value))){
+                if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) &&
+                   (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value)))
+                {
                     double left;
                     double right;
 
-                    left = VALUE_TO_FLOAT(left_value);
-
-                    if(IS_VALUE_INT(left_value)){
-                        left = (double)VALUE_TO_INT(left_value);
-                    }
-
-                    right = VALUE_TO_FLOAT(right_value);
-
-                    if(IS_VALUE_INT(right_value)){
+                    if(IS_VALUE_FLOAT(left_value)){
+                        left = VALUE_TO_FLOAT(left_value);
                         right = (double)VALUE_TO_INT(right_value);
+                    }else{
+                        left = (double)VALUE_TO_INT(left_value);
+                        right = VALUE_TO_FLOAT(right_value);
                     }
 
                     push(FLOAT_VALUE(left - right), vm);
@@ -735,38 +749,32 @@ static int execute(VM *vm){
 
                 break;
             }case MUL_OPCODE:{
-                Value *right_value = peek_at(0, vm);
-                Value *left_value = peek_at(1, vm);
+                Value *right_value = pop(vm);
+                Value *left_value = pop(vm);
 
                 if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
                     int64_t left = VALUE_TO_INT(left_value);
                     int64_t right = VALUE_TO_INT(right_value);
 
-                    pop(vm);
-                    pop(vm);
                     push(INT_VALUE(left * right), vm);
 
                     break;
                 }
 
-                if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) && (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value))){
+                if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) &&
+                   (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value)))
+                {
                     double left;
                     double right;
 
-                    left = VALUE_TO_FLOAT(left_value);
-
-                    if(IS_VALUE_INT(left_value)){
-                        left = (double)VALUE_TO_INT(left_value);
-                    }
-
-                    right = VALUE_TO_FLOAT(right_value);
-
-                    if(IS_VALUE_INT(right_value)){
+                    if(IS_VALUE_FLOAT(left_value)){
+                        left = VALUE_TO_FLOAT(left_value);
                         right = (double)VALUE_TO_INT(right_value);
+                    }else{
+                        left = (double)VALUE_TO_INT(left_value);
+                        right = VALUE_TO_FLOAT(right_value);
                     }
 
-                    pop(vm);
-                    pop(vm);
                     push(FLOAT_VALUE(left * right), vm);
 
                     break;
@@ -792,20 +800,18 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) && (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value))){
+                if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) &&
+                   (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value)))
+                {
                     double left;
                     double right;
 
-                    left = VALUE_TO_FLOAT(left_value);
-
-                    if(IS_VALUE_INT(left_value)){
-                        left = (double)VALUE_TO_INT(left_value);
-                    }
-
-                    right = VALUE_TO_FLOAT(right_value);
-
-                    if(IS_VALUE_INT(right_value)){
+                    if(IS_VALUE_FLOAT(left_value)){
+                        left = VALUE_TO_FLOAT(left_value);
                         right = (double)VALUE_TO_INT(right_value);
+                    }else{
+                        left = (double)VALUE_TO_INT(left_value);
+                        right = VALUE_TO_FLOAT(right_value);
                     }
 
                     if(right == 0.0){
@@ -848,12 +854,12 @@ static int execute(VM *vm){
 
                 break;
             }case LSH_OPCODE:{
-                Value *vb = pop(vm);
-                Value *va = pop(vm);
+                Value *right_value = pop(vm);
+                Value *left_value = pop(vm);
 
-                if(IS_VALUE_INT(va) && IS_VALUE_INT(vb)){
-                    int64_t left = VALUE_TO_INT(va);
-                    int64_t right = VALUE_TO_INT(vb);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    uint64_t left = (uint64_t)VALUE_TO_INT(left_value);
+                    uint64_t right = (uint64_t)VALUE_TO_INT(right_value);
 
                     PUSH_INT(left << right, vm);
 
@@ -864,12 +870,12 @@ static int execute(VM *vm){
 
                 break;
             }case RSH_OPCODE:{
-                Value *vb = pop(vm);
-                Value *va = pop(vm);
+                Value *right_value = pop(vm);
+                Value *left_value = pop(vm);
 
-                if(IS_VALUE_INT(va) && IS_VALUE_INT(vb)){
-                    int64_t left = VALUE_TO_INT(va);
-                    int64_t right = VALUE_TO_INT(vb);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    uint64_t left = (uint64_t)VALUE_TO_INT(left_value);
+                    uint64_t right = (uint64_t)VALUE_TO_INT(right_value);
 
                     PUSH_INT(left >> right, vm);
 
@@ -880,12 +886,12 @@ static int execute(VM *vm){
 
                 break;
             }case BAND_OPCODE:{
-                Value *vb = pop(vm);
-                Value *va = pop(vm);
+                Value *right_value = pop(vm);
+                Value *left_value = pop(vm);
 
-                if(IS_VALUE_INT(va) && IS_VALUE_INT(vb)){
-                    int64_t left = VALUE_TO_INT(va);
-                    int64_t right = VALUE_TO_INT(vb);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     PUSH_INT(left & right, vm);
 
@@ -896,12 +902,12 @@ static int execute(VM *vm){
 
                 break;
             }case BXOR_OPCODE:{
-                Value *vb = pop(vm);
-                Value *va = pop(vm);
+                Value *right_value = pop(vm);
+                Value *left_value = pop(vm);
 
-                if(IS_VALUE_INT(va) && IS_VALUE_INT(vb)){
-                    int64_t left = VALUE_TO_INT(va);
-                    int64_t right = VALUE_TO_INT(vb);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     PUSH_INT(left ^ right, vm);
 
@@ -912,12 +918,12 @@ static int execute(VM *vm){
 
                 break;
             }case BOR_OPCODE:{
-                Value *vb = pop(vm);
-                Value *va = pop(vm);
+                Value *right_value = pop(vm);
+                Value *left_value = pop(vm);
 
-                if(IS_VALUE_INT(va) && IS_VALUE_INT(vb)){
-                    int64_t left = VALUE_TO_INT(va);
-                    int64_t right = VALUE_TO_INT(vb);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     PUSH_INT(left | right, vm);
 
@@ -928,21 +934,21 @@ static int execute(VM *vm){
 
                 break;
             }case LT_OPCODE:{
-                Value *vb = pop(vm);
-                Value *va = pop(vm);
+                Value *right_value = pop(vm);
+                Value *left_value = pop(vm);
 
-                if(IS_VALUE_INT(va) && IS_VALUE_INT(vb)){
-                    int64_t left = VALUE_TO_INT(va);
-                    int64_t right = VALUE_TO_INT(vb);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     PUSH_BOOL(left < right, vm);
 
                     break;
                 }
 
-                if(IS_VALUE_FLOAT(va) && IS_VALUE_FLOAT(vb)){
-                    double left = VALUE_TO_FLOAT(va);
-                    double right = VALUE_TO_FLOAT(vb);
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
 
                     PUSH_BOOL(left < right, vm);
 
@@ -953,21 +959,21 @@ static int execute(VM *vm){
 
                 break;
             }case GT_OPCODE:{
-                Value *vb = pop(vm);
-                Value *va = pop(vm);
+                Value *right_value = pop(vm);
+                Value *left_value = pop(vm);
 
-                if(IS_VALUE_INT(va) && IS_VALUE_INT(vb)){
-                    int64_t left = VALUE_TO_INT(va);
-                    int64_t right = VALUE_TO_INT(vb);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     PUSH_BOOL(left > right, vm);
 
                     break;
                 }
 
-                if(IS_VALUE_FLOAT(va) && IS_VALUE_FLOAT(vb)){
-                    double left = VALUE_TO_FLOAT(va);
-                    double right = VALUE_TO_FLOAT(vb);
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
 
                     PUSH_BOOL(left > right, vm);
 
@@ -978,21 +984,21 @@ static int execute(VM *vm){
 
                 break;
             }case LE_OPCODE:{
-                Value *vb = pop(vm);
-                Value *va = pop(vm);
+                Value *right_value = pop(vm);
+                Value *left_value = pop(vm);
 
-                if(IS_VALUE_INT(va) && IS_VALUE_INT(vb)){
-                    int64_t left = VALUE_TO_INT(va);
-                    int64_t right = VALUE_TO_INT(vb);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     PUSH_BOOL(left <= right, vm);
 
                     break;
                 }
 
-                if(IS_VALUE_FLOAT(va) && IS_VALUE_FLOAT(vb)){
-                    double left = VALUE_TO_FLOAT(va);
-                    double right = VALUE_TO_FLOAT(vb);
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
 
                     PUSH_BOOL(left <= right, vm);
 
@@ -1003,21 +1009,21 @@ static int execute(VM *vm){
 
                 break;
             }case GE_OPCODE:{
-                Value *vb = pop(vm);
-                Value *va = pop(vm);
+                Value *right_value = pop(vm);
+                Value *left_value = pop(vm);
 
-                if(IS_VALUE_INT(va) && IS_VALUE_INT(vb)){
-                    int64_t left = VALUE_TO_INT(va);
-                    int64_t right = VALUE_TO_INT(vb);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     PUSH_BOOL(left >= right, vm);
 
                     break;
                 }
 
-                if(IS_VALUE_FLOAT(va) && IS_VALUE_FLOAT(vb)){
-                    double left = VALUE_TO_FLOAT(va);
-                    double right = VALUE_TO_FLOAT(vb);
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
 
                     PUSH_BOOL(left >= right, vm);
 
@@ -1028,39 +1034,39 @@ static int execute(VM *vm){
 
                 break;
             }case EQ_OPCODE:{
-                Value *vb = pop(vm);
-                Value *va = pop(vm);
+                Value *right_value = pop(vm);
+                Value *left_value = pop(vm);
 
-                if(IS_VALUE_BOOL(va) && IS_VALUE_BOOL(vb)){
-                    uint8_t left = VALUE_TO_BOOL(va);
-                    uint8_t right = VALUE_TO_BOOL(vb);
-
-                    PUSH_BOOL(left == right, vm);
-
-                    break;
-                }
-
-                if(IS_VALUE_INT(va) && IS_VALUE_INT(vb)){
-                    int64_t left = VALUE_TO_INT(va);
-                    int64_t right = VALUE_TO_INT(vb);
+                if(IS_VALUE_BOOL(left_value) && IS_VALUE_BOOL(right_value)){
+                    uint8_t left = VALUE_TO_BOOL(left_value);
+                    uint8_t right = VALUE_TO_BOOL(right_value);
 
                     PUSH_BOOL(left == right, vm);
 
                     break;
                 }
 
-                if(IS_VALUE_FLOAT(va) && IS_VALUE_FLOAT(vb)){
-                    double left = VALUE_TO_FLOAT(va);
-                    double right = VALUE_TO_FLOAT(vb);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     PUSH_BOOL(left == right, vm);
 
                     break;
                 }
 
-                if(IS_VALUE_STR(va) && IS_VALUE_STR(vb)){
-                    StrObj *left = VALUE_TO_STR(va);
-                    StrObj *right = VALUE_TO_STR(vb);
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
+
+                    PUSH_BOOL(left == right, vm);
+
+                    break;
+                }
+
+                if(IS_VALUE_STR(left_value) && IS_VALUE_STR(right_value)){
+                    StrObj *left = VALUE_TO_STR(left_value);
+                    StrObj *right = VALUE_TO_STR(right_value);
 
                     PUSH_BOOL(left == right, vm);
 
@@ -1095,6 +1101,15 @@ static int execute(VM *vm){
                 if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
                     double left = VALUE_TO_FLOAT(left_value);
                     double right = VALUE_TO_FLOAT(right_value);
+
+                    PUSH_BOOL(left != right, vm);
+
+                    break;
+                }
+
+                if(IS_VALUE_STR(left_value) && IS_VALUE_STR(right_value)){
+                    StrObj *left = VALUE_TO_STR(left_value);
+                    StrObj *right = VALUE_TO_STR(right_value);
 
                     PUSH_BOOL(left != right, vm);
 
@@ -1469,9 +1484,7 @@ static int execute(VM *vm){
                         vmu_error(vm, "Failed to call function '%s'. Declared with %d parameter(s), but got %d argument(s)", fn->name, params_count, args_count);
                     }
 
-                    Frame *frame = push_frame(args_count, vm);
-
-                    frame->fn = fn;
+                    push_frame(args_count, vm);
 
                     break;
                 }
@@ -1486,10 +1499,7 @@ static int execute(VM *vm){
                         vmu_error(vm, "Failed to call function '%s'. Declared with %d parameter(s), but got %d argument(s)", fn->name, params_count, args_count);
                     }
 
-                    Frame *frame = push_frame(args_count, vm);
-
-                    frame->fn = fn;
-                    frame->closure = closure;
+                    push_frame(args_count, vm);
 
                     break;
                 }
@@ -1847,6 +1857,7 @@ VM *vm_create(Allocator *allocator){
         LZOHTABLE_DESTROY(runtime_strs);
         dynarr_destroy(native_symbols);
         MEMORY_DEALLOC(VM, 1, vm, allocator);
+
         return NULL;
     }
 
@@ -1876,16 +1887,42 @@ void vm_destroy(VM *vm){
 
     LZOHTABLE_DESTROY(vm->runtime_strs);
     dynarr_destroy(native_symbols);
+
+    lzpool_destroy_deinit(&vm->str_objs_pool);
+    lzpool_destroy_deinit(&vm->array_objs_pool);
+    lzpool_destroy_deinit(&vm->list_objs_pool);
+    lzpool_destroy_deinit(&vm->dict_objs_pool);
+    lzpool_destroy_deinit(&vm->record_objs_pool);
+    lzpool_destroy_deinit(&vm->native_fn_objs_pool);
+    lzpool_destroy_deinit(&vm->fn_objs_pool);
+    lzpool_destroy_deinit(&vm->closures_pool);
+    lzpool_destroy_deinit(&vm->closure_objs_pool);
+    lzpool_destroy_deinit(&vm->native_module_objs_pool);
+    lzpool_destroy_deinit(&vm->module_objs_pool);
+
     MEMORY_DEALLOC(VM, 1, vm, vm->allocator);
 }
 
 void vm_initialize(VM *vm){
-    vm->while_objs = (ObjList){0};
+    vm->white_objs = (ObjList){0};
     vm->gray_objs = (ObjList){0};
     vm->black_objs = (ObjList){0};
     vm->templates = NULL;
     vm->exception_stack = NULL;
-    MEMORY_INIT_ALLOCATOR(vm, vm_alloc, vm_realloc, vm_dealloc, &vm->fake_allocator);
+
+    lzpool_init(sizeof(StrObj), (LZPoolAllocator *)VMU_FRONT_ALLOCATOR, &vm->str_objs_pool);
+    lzpool_init(sizeof(ArrayObj), (LZPoolAllocator *)VMU_FRONT_ALLOCATOR, &vm->array_objs_pool);
+    lzpool_init(sizeof(ListObj), (LZPoolAllocator *)VMU_FRONT_ALLOCATOR, &vm->list_objs_pool);
+    lzpool_init(sizeof(DictObj), (LZPoolAllocator *)VMU_FRONT_ALLOCATOR, &vm->dict_objs_pool);
+    lzpool_init(sizeof(RecordObj), (LZPoolAllocator *)VMU_FRONT_ALLOCATOR, &vm->record_objs_pool);
+    lzpool_init(sizeof(FnObj), (LZPoolAllocator *)VMU_FRONT_ALLOCATOR, &vm->fn_objs_pool);
+    lzpool_init(sizeof(NativeFnObj), (LZPoolAllocator *)VMU_FRONT_ALLOCATOR, &vm->native_fn_objs_pool);
+    lzpool_init(sizeof(Closure), (LZPoolAllocator *)VMU_FRONT_ALLOCATOR, &vm->closures_pool);
+    lzpool_init(sizeof(ClosureObj), (LZPoolAllocator *)VMU_FRONT_ALLOCATOR, &vm->closure_objs_pool);
+    lzpool_init(sizeof(NativeModuleObj), (LZPoolAllocator *)VMU_FRONT_ALLOCATOR, &vm->native_module_objs_pool);
+    lzpool_init(sizeof(ModuleObj), (LZPoolAllocator *)VMU_FRONT_ALLOCATOR, &vm->module_objs_pool);
+
+    MEMORY_INIT_ALLOCATOR(vm, vm_alloc, vm_realloc, vm_dealloc, VMU_FRONT_ALLOCATOR);
 }
 
 int vm_execute(LZOHTable *native_fns, Module *module, VM *vm){
@@ -1904,10 +1941,9 @@ int vm_execute(LZOHTable *native_fns, Module *module, VM *vm){
             vm->modules[vm->module_ptr++] = module;
 
             Fn *main_fn = (Fn *)get_symbol(0, FUNCTION_SUBMODULE_SYM_TYPE, vm->modules[0], vm);
-            push_fn(main_fn, vm);
 
-            Frame *frame = push_frame(0, vm);
-            frame->fn = main_fn;
+            push_fn(main_fn, vm);
+            push_frame(0, vm);
 
             return execute(vm);
         }case 1:{

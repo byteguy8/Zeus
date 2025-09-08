@@ -6,12 +6,6 @@
 #include <assert.h>
 #include <inttypes.h>
 
-#ifdef _WIN32
-    #define SIZE_T_FORMAT "%zu"
-#elif __linux__
-    #define SIZE_T_FORMAT "%ld"
-#endif
-
 static int16_t compose_i16(uint8_t *bytes){
     return (int16_t)((uint16_t)bytes[1] << 8) | ((uint16_t)bytes[0]);
 }

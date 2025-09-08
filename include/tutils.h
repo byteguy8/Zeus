@@ -54,4 +54,9 @@
 #define IS_VALUE_NATIVE_MODULE(_value)(IS_VALUE_OBJ(_value) && OBJ_TYPE(VALUE_TO_OBJ(_value)) == NATIVE_MODULE_OBJ_TYPE)
 #define IS_VALUE_MODULE(_value)(IS_VALUE_OBJ(_value) && OBJ_TYPE(VALUE_TO_OBJ(_value)) == MODULE_OBJ_TYPE)
 
+static inline int is_value_numeric(Value *value){
+    ValueType type = value->type;
+    return type == INT_VTYPE || type == FLOAT_VTYPE;
+}
+
 #endif

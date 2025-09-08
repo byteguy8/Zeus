@@ -150,7 +150,7 @@ int utils_hexadecimal_str_to_i64(char *str, int64_t *out_value){
                 break;
             }
             default:{
-                nibble = (int64_t)c;
+                nibble = ((int64_t)c) - 48;
             }
         }
 

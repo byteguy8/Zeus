@@ -80,7 +80,7 @@ Value native_fn_list_remove(uint8_t argsc, Value *values, Value *target, void *c
 
 NativeFn *native_list_get(size_t key_size, const char *key, VM *vm){
     if(!list_symbols){
-        Allocator *allocator = &vm->fake_allocator;
+        Allocator *allocator = &vm->front_allocator;
         list_symbols = FACTORY_LZOHTABLE(allocator);
 
         dynarr_insert_ptr(list_symbols, vm->native_symbols);

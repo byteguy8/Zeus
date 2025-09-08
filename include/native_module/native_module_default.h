@@ -62,7 +62,7 @@ Value native_fn_to_str(uint8_t argsc, Value *values, Value *target, void *contex
     StrObj *str_obj = NULL;
 
     if(vmu_create_str(1, len, raw_str, VMU_VM, &str_obj)){
-        MEMORY_DEALLOC(char, len + 1, raw_str, &(VMU_VM->fake_allocator));
+        MEMORY_DEALLOC(char, len + 1, raw_str, VMU_NATIVE_FRONT_ALLOCATOR);
     }
 
     return OBJ_VALUE(str_obj);
@@ -175,11 +175,11 @@ Value native_fn_readln(uint8_t argsc, Value *values, Value *target, void *contex
 
     StrObj *str_obj = NULL;
     size_t backup_raw_buff_len;
-    char *cloned_backup_raw_buff = lzbstr_rclone_buff((LZBStrAllocator *)&vm->fake_allocator, backup_buff, &backup_raw_buff_len);
+    char *cloned_backup_raw_buff = lzbstr_rclone_buff((LZBStrAllocator *)&vm->front_allocator, backup_buff, &backup_raw_buff_len);
 
     if(vmu_create_str(1, backup_raw_buff_len, cloned_backup_raw_buff, vm, &str_obj)){
         lzbstr_destroy(backup_buff);
-        MEMORY_DEALLOC(char, backup_raw_buff_len + 1, cloned_backup_raw_buff, &vm->fake_allocator);
+        MEMORY_DEALLOC(char, backup_raw_buff_len + 1, cloned_backup_raw_buff, &vm->front_allocator);
         return OBJ_VALUE(str_obj);
     }
 

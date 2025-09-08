@@ -9,240 +9,31 @@
 #include <stdio.h>
 
 #define VMU_VM ((VM *)context)
-#define VMU_ALLOCATOR (&(((VM *)context)->fake_allocator))
 
-#define VALIDATE_VALUE_BOOL_ARG(_value, _param, _name, _vm){                                          \
-    if(!IS_VALUE_BOOL((_value))){                                                                     \
-        vmu_error(_vm, "Illegal type of argument %d: expect '%s' of type 'bool'", (_param), (_name)); \
-    }                                                                                                 \
-}
+#define VMU_STR_OBJS_POOL (&(vm->str_objs_pool))
+#define VMU_ARRAY_OBJS_POOL (&(vm->array_objs_pool))
+#define VMU_LIST_OBJS_POOL (&(vm->list_objs_pool))
+#define VMU_DICT_OBJS_POOL (&(vm->dict_objs_pool))
+#define VMU_RECORD_OBJS_POOL (&(vm->record_objs_pool))
+#define VMU_FN_OBJS_POOL (&(vm->fn_objs_pool))
+#define VMU_NATIVE_FN_OBJS_POOL (&(vm->native_fn_objs_pool))
+#define VMU_CLOSURES_POOL (&(vm->closures_pool))
+#define VMU_CLOSURE_OBJS_POOL (&(vm->closure_objs_pool))
+#define VMU_NATIVE_MODULE_OBJS_POOL (&(vm->native_module_objs_pool))
+#define VMU_MODULE_OBJS_POOL (&(vm->module_objs_pool))
 
-#define VALIDATE_VALUE_INT_ARG(_value, _param, _name, _vm){                                          \
-    if(!IS_VALUE_INT((_value))){                                                                     \
-        vmu_error(_vm, "Illegal type of argument %d: expect '%s' of type 'int'", (_param), (_name)); \
-    }                                                                                                \
-}
-
-#define VALIDATE_VALUE_FLOAT_ARG(_value, _param, _name, _vm){                                          \
-    if(!IS_VALUE_FLOAT((_value))){                                                                     \
-        vmu_error(_vm, "Illegal type of argument %d: expect '%s' of type 'float'", (_param), (_name)); \
-    }                                                                                                  \
-}
-
-#define VALIDATE_VALUE_STR_ARG(_value, _param, _name, _vm){                                          \
-    if(!IS_VALUE_STR((_value))){                                                                     \
-        vmu_error(_vm, "Illegal type of argument %d: expect '%s' of type 'str'", (_param), (_name)); \
-    }                                                                                                \
-}
-
-#define VALIDATE_VALUE_STR_EMPTY_ARG(_value, _param, _name, _vm){                         \
-    VALIDATE_VALUE_STR_ARG(_value, _param, _name, _vm);                                   \
-    if(VALUE_TO_STR(_value)->len == 0){                                                   \
-        vmu_error(_vm, "Illegal value of argument %d: '%s' is empty", (_param), (_name)); \
-    }                                                                                     \
-}
-
-#define VALIDATE_VALUE_ARRAY_ARG(_value, _param, _name, _vm){                                          \
-    if(!IS_VALUE_ARRAY((_value))){                                                                     \
-        vmu_error(_vm, "Illegal type of argument %d: expect '%s' of type 'array'", (_param), (_name)); \
-    }                                                                                                  \
-}
-
-#define VALIDATE_VALUE_LIST_ARG(_value, _param, _name, _vm){                                          \
-    if(!IS_VALUE_LIST((_value))){                                                                     \
-        vmu_error(_vm, "Illegal type of argument %d: expect '%s' of type 'list'", (_param), (_name)); \
-    }                                                                                                 \
-}
-
-#define VALIDATE_VALUE_RECORD_ARG(_value, _param, _name, _vm){                                          \
-    if(!IS_VALUE_RECORD((_value))){                                                                     \
-        vmu_error(_vm, "Illegal type of argument %d: expect '%s' of type 'record'", (_param), (_name)); \
-    }                                                                                                   \
-}
-
-#define VALIDATE_VALUE_INT_RANGE_ARG(_value, _param, _name, _min, _max, _vm){                         \
-    if(VALUE_TO_INT((_value)) < (_min)){                                                              \
-        vmu_error(_vm, "Illegal value of argument '%s': cannot be less than %ld", (_name), (_min));   \
-    }                                                                                                 \
-    if(VALUE_TO_INT((_value)) > (_max)){                                                              \
-        vmu_error(_vm, "Illegal value of argument '%s': cannot be greater than %d", (_name), (_max)); \
-    }                                                                                                 \
-}
-
-#define VALIDATE_VALUE_ARRAY_SIZE_ARG(_value, _param, _name, _vm){                                             \
-    VALIDATE_VALUE_INT_ARG(_value, _param, _name, _vm)                                                         \
-    if(VALUE_TO_INT(_value) < 0){                                                                              \
-        vmu_error((_vm), "Illegal argument %d: '%s' cannot be less than 0", (_param), (_name));                \
-    }                                                                                                          \
-    if(VALUE_TO_INT(_value) > ARRAY_LENGTH_MAX){                                                               \
-        vmu_error((_vm), "Illegal argument %d: '%s' cannot be greater than %d", (_param), (_name), INT32_MAX); \
-    }                                                                                                          \
-}
-
-#define VALIDATE_VALUE_ARRAY_INDEX_ARG(_value, _param, _name, _vm){                                            \
-    if(VALUE_TO_INT(_value) < 0){                                                                              \
-        vmu_error((_vm), "Illegal argument %d: '%s' cannot be less than 0", (_param), (_name));                \
-    }                                                                                                          \
-    if(VALUE_TO_INT(_value) > ARRAY_LENGTH_MAX - 1){                                                           \
-        vmu_error((_vm), "Illegal argument %d: '%s' cannot be greater than %d", (_param), (_name), INT32_MAX); \
-    }                                                                                                          \
-}
-
-#define VALIDATE_VALUE_INT(_value, _vm){                           \
-    if(!IS_VALUE_INT((_value))){                                   \
-        vmu_error(_vm, "Expect an 'int', but got something else"); \
-    }                                                              \
-}
-
-#define VALIDATE_VALUE_ARRAY(_value, _vm){                           \
-    if(!IS_VALUE_ARRAY(_value)){                                     \
-        vmu_error(_vm, "Expect an 'array', but got something else"); \
-    }                                                                \
-}
-
-#define VALIDATE_ARRAY_SIZE(_size, _vm){                                                                \
-    if((int64_t)(_size) < 0){                                                                           \
-        vmu_error(_vm, "Illegal size value for 'array': cannont be less than 0");                       \
-    }                                                                                                   \
-    if((_size) > ARRAY_LENGTH_MAX){                                                                     \
-        vmu_error(_vm, "Illegal size value for 'array': cannont be greater than %d", ARRAY_LENGTH_MAX); \
-    }                                                                                                   \
-}
-
-#define VALIDATE_STR_INDEX(_size, _value, _vm){                                                                               \
-    if(!IS_VALUE_INT((_value))){                                                                                              \
-        vmu_error((_vm), "Illegal type for 'str' index. Expect 'int', but got something else");                               \
-    }                                                                                                                         \
-    if(VALUE_TO_INT(_value) < 0){                                                                                             \
-        vmu_error((_vm), "Illegal 'str' index value: cannot be less than 0");                                                 \
-    }                                                                                                                         \
-    if(VALUE_TO_INT(_value) > SIDX_T_MAX){                                                                                \
-        vmu_error((_vm), "Illegal 'str' index value: cannot be greater than %d", SIDX_T_MAX);                             \
-    }                                                                                                                         \
-    if((STR_LENGTH_TYPE)VALUE_TO_INT(_value) >= (STR_LENGTH_TYPE)(_size)){                                                    \
-        vmu_error((_vm), "Index %d out of bounds for %d", (STR_LENGTH_TYPE)(VALUE_TO_INT(_value)), (STR_LENGTH_TYPE)(_size)); \
-    }                                                                                                                         \
-}
-
-#define VALIDATE_ARRAY_INDEX(_size, _value, _vm){                                                                                 \
-    if(!IS_VALUE_INT((_value))){                                                                                                  \
-        vmu_error((_vm), "Illegal type for 'array' index. Expect 'int', but got something else");                                 \
-    }                                                                                                                             \
-    if(VALUE_TO_INT(_value) < 0){                                                                                                 \
-        vmu_error((_vm), "Illegal 'array' index value: cannot be less than 0");                                                   \
-    }                                                                                                                             \
-    if(VALUE_TO_INT(_value) > ARRAY_LENGTH_MAX){                                                                                  \
-        vmu_error((_vm), "Illegal 'array' index value: cannot be greater than %d", ARRAY_LENGTH_MAX);                             \
-    }                                                                                                                             \
-    if((ARRAY_LENGTH_TYPE)VALUE_TO_INT(_value) >= (ARRAY_LENGTH_TYPE)(_size)){                                                    \
-        vmu_error((_vm), "Index %d out of bounds for %d", (ARRAY_LENGTH_TYPE)(VALUE_TO_INT(_value)), (ARRAY_LENGTH_TYPE)(_size)); \
-    }                                                                                                                             \
-}
-
-#define VALIDATE_LIST_INDEX(_size, _value, _vm){                                                                                \
-    if(!IS_VALUE_INT((_value))){                                                                                                \
-        vmu_error((_vm), "Illegal type for 'list' index. Expect 'int', but got something else");                                \
-    }                                                                                                                           \
-    if(VALUE_TO_INT((_value)) < 0){                                                                                             \
-        vmu_error((_vm), "Illegal 'list' index value: cannot be less than 0");                                                  \
-    }                                                                                                                           \
-    if(VALUE_TO_INT((_value)) > LIST_LENGTH_MAX){                                                                               \
-        vmu_error((_vm), "Illegal 'list' index value: cannot be greater than %d", LIST_LENGTH_MAX);                             \
-    }                                                                                                                           \
-    if((LIST_LENGTH_TYPE)VALUE_TO_INT((_value)) >= (LIST_LENGTH_TYPE)(_size)){                                                  \
-        vmu_error((_vm), "Index %d out of bounds for %d", (LIST_LENGTH_TYPE)VALUE_TO_INT((_value)), (LIST_LENGTH_TYPE)(_size)); \
-    }                                                                                                                           \
-}
-
-#define VALIDATE_I64_RANGE(_min, _max, _value, _param, _name, _vm){\
-    if((int64_t)(_value) < (int64_t)(_min)){\
-        vmu_error((_vm), "Illegal value for '%s': must be greater of equals to %ld, but got %ld", (_name), (int64_t)(_min), (int64_t)(_value));\
-    }\
-    if((_value) > (_max)){\
-        vmu_error((_vm), "Illegal value for '%s': must be less of equals to %ld, but got %ld", (_name), (int64_t)(_max), (int64_t)(_value));\
-    }\
-}
-
-#define TO_ARRAY_LENGTH(_value) ((ARRAY_LENGTH_TYPE)(VALUE_TO_INT((_value))))
-#define TO_ARRAY_INDEX(_value) ((ARRAY_LENGTH_TYPE)(VALUE_TO_INT((_value))))
-#define TO_LIST_INDEX(_value) ((LIST_LENGTH_TYPE)(VALUE_TO_INT((_value))))
-
-#define CURRENT_FRAME(_vm)(&(_vm)->frame_stack[(_vm)->frame_ptr - 1])
-#define CURRENT_LOCALS(_vm)(CURRENT_FRAME(_vm)->locals)
-#define CURRENT_FN(_vm)(CURRENT_FRAME(_vm)->fn)
-#define CURRENT_CHUNKS(_vm)(CURRENT_FN(_vm)->chunks)
-#define CURRENT_LOCATIONS(vm)(CURRENT_FN(vm)->locations)
-#define CURRENT_ICONSTS(_vm)(CURRENT_FN(_vm)->integers)
-#define CURRENT_FCONSTS(_vm)(CURRENT_FN(_vm)->floats)
-
-#define SELECTED_MODULE(_vm)((_vm)->modules[(_vm)->module_ptr - 1])
+#define VMU_FRONT_ALLOCATOR (&(vm->front_allocator))
+#define VMU_NATIVE_FRONT_ALLOCATOR (&(((VM *)context)->front_allocator))
 
 int vmu_error(VM *vm, char *msg, ...);
 int vmu_internal_error(VM *vm, char *msg, ...);
 
-static inline uint8_t validate_value_bool_arg(Value *value, uint8_t param, char *name, VM *vm){
-    if(!IS_VALUE_BOOL(value)){
-        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'bool'", param, name);
-    }
-
-    return VALUE_TO_BOOL(value);
-}
-
-static inline int64_t validate_value_int_arg(Value *value, uint8_t param, char *name, VM *vm){
-    if(!IS_VALUE_INT(value)){
-        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'int'", param, name);
-    }
-
-    return VALUE_TO_INT(value);
-}
-
-static inline double validate_value_float_arg(Value *value, uint8_t param, char *name, VM *vm){
-    if(!IS_VALUE_FLOAT(value)){
-        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'float'", param, name);
-    }
-
-    return VALUE_TO_FLOAT(value);
-}
-
-static inline double validate_value_ifloat_arg(Value *value, uint8_t param, char *name, VM *vm){
-    if(IS_VALUE_INT(value)){
-        return (double)VALUE_TO_INT(value);
-    }
-
-    if(IS_VALUE_FLOAT(value)){
-        return VALUE_TO_FLOAT(value);
-    }
-
-    vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'int' or 'float'", param, name);
-
-    return -1;
-}
-
-static inline int64_t validate_value_int_range_arg(Value *value, uint8_t param, char *name, int64_t from, int64_t to, VM *vm){
-    if(!IS_VALUE_INT(value)){
-        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'int'", param, name);
-    }
-
-    int64_t i64_value = VALUE_TO_INT(value);
-
-    if(i64_value < from){
-        vmu_error(vm, "Illegal value of argument %" PRIu8 ": expect '%s' be greater or equals to %" PRId64 ", but got %" PRId64, param, name, from, i64_value);
-    }
-
-    if(i64_value > to){
-        vmu_error(vm, "Illegal value of argument %" PRIu8 ": expect '%s' be less or equals to %" PRId64 ", but got %" PRId64, param, name, to, i64_value);
-    }
-
-    return i64_value;
-}
-
-static inline StrObj *validate_value_str_arg(Value *value, uint8_t param, char *name, VM *vm){
-    if(!IS_VALUE_STR(value)){
-        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'str'", param, name);
-    }                                                                                                \
-
-    return VALUE_TO_STR(value);
-}
+uint8_t validate_value_bool_arg(Value *value, uint8_t param, char *name, VM *vm);
+int64_t validate_value_int_arg(Value *value, uint8_t param, char *name, VM *vm);
+double validate_value_float_arg(Value *value, uint8_t param, char *name, VM *vm);
+double validate_value_ifloat_arg(Value *value, uint8_t param, char *name, VM *vm);
+int64_t validate_value_int_range_arg(Value *value, uint8_t param, char *name, int64_t from, int64_t to, VM *vm);
+StrObj *validate_value_str_arg(Value *value, uint8_t param, char *name, VM *vm);
 
 void vmu_clean_up(VM *vm);
 void vmu_gc(VM *vm);

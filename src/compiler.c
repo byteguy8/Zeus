@@ -850,6 +850,8 @@ void write_str(size_t len, char *rstr, Compiler *compiler){
 }
 
 void write_str_alloc(size_t len, char *rstr, Compiler *compiler){
+    assert(len > 0 && "'len' must be greater than 0");
+
     char *new_rstr = MEMORY_ALLOC(char, len + 1, RTALLOCATOR);
     DynArr *static_strs = MODULE_STRINGS(CURRENT_MODULE);
     size_t idx = DYNARR_LEN(static_strs);
