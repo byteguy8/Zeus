@@ -169,7 +169,6 @@ Scope *scope_in(ScopeType type, Compiler *compiler){
     scope->depth = compiler->depth;
     scope->locals = 0;
     scope->scope_locals = 0;
-    scope->try = NULL;
 	scope->type = type;
     scope->symbols_len = 0;
     scope->captured_symbols_len = 0;

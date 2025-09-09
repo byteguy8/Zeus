@@ -80,7 +80,6 @@ typedef struct scope{
     int locals;
     int scope_locals;
     ScopeType type;
-    TryBlock *try;
 
     uint8_t symbols_len;
     Symbol symbols[SYMBOLS_LENGTH];
