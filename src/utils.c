@@ -126,6 +126,7 @@
         return (new_current_ularge.QuadPart * 100) / 1000000;
     }
 
+    // must avoid use value of 0 for 'time'
     void utils_sleep(int64_t time){
         Sleep(time);
     }
@@ -137,6 +138,7 @@
         return spec.tv_nsec / 1e+6 + spec.tv_sec * 1000;
     }
 
+    // must avoid use value of 0 for 'time'
     void utils_sleep(int64_t time){
         usleep(time * 1000);
     }
