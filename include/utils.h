@@ -65,7 +65,6 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator);
 
 char *utils_files_parent_pathname(char *pathname, Allocator *allocator);
 char *utils_files_cwd(Allocator *allocator);
-char *utils_files_sysname(Allocator *allocator);
 
 int64_t utils_millis();
 void utils_sleep(int64_t time);
