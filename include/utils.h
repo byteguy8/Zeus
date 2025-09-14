@@ -18,11 +18,11 @@
     #include <sys/stat.h>
 #endif
 
-#ifndef SYS_PATH_SEPARATOR
+#ifndef OS_PATH_SEPARATOR
     #ifdef _WIN32
-        #define SYS_PATH_SEPARATOR ';'
+        #define OS_PATH_SEPARATOR ';'
     #elif __linux__
-        #define SYS_PATH_SEPARATOR ':'
+        #define OS_PATH_SEPARATOR ':'
     #else
         #error "Must define a system path separator"
     #endif

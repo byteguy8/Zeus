@@ -14,7 +14,7 @@ Value native_fn_os_name(uint8_t argsc, Value *values, Value *target, void *conte
 
 Value native_fn_os_path_separator(uint8_t argsc, Value *values, Value *target, void *context){
     StrObj *str_obj = NULL;
-    vmu_create_str(1, 1, (char[]){SYS_PATH_SEPARATOR, 0}, VMU_VM, &str_obj);
+    vmu_create_str(1, 1, (char[]){OS_PATH_SEPARATOR, 0}, VMU_VM, &str_obj);
     return OBJ_VALUE(str_obj);
 }
 

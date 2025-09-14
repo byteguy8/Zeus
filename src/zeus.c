@@ -179,7 +179,7 @@ DynArr *parse_search_paths(char *source_pathname, char *raw_search_paths, Alloca
     for (size_t i = 0; i < len; i++){
         char c = raw_search_paths[i];
 
-        if(c != SYS_PATH_SEPARATOR){
+        if(c != OS_PATH_SEPARATOR){
             b_idx = i;
 
             if(i + 1 < len){
