@@ -1,33 +1,33 @@
-PLATFORM := LINUX
-BUILD := DEBUG
+PLATFORM          := LINUX
+BUILD   		  := DEBUG
 
-COMPILER.LINUX := gcc
-COMPILER.WINDOWS := mingw64
-COMPILER := $(COMPILER.$(PLATFORM))
+COMPILER.LINUX    := gcc
+COMPILER.WINDOWS  := mingw64
+COMPILER          := $(COMPILER.$(PLATFORM))
 
-SRC_DIR := ./src
-OUT_DIR := ./build
+SRC_DIR           := ./src
+OUT_DIR           := ./build
 
-FLAGS.COMMON := -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -I./include
-FLAGS.DEBUG := -g2 -O0
+FLAGS.COMMON      := -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -I./include
+FLAGS.DEBUG       := -g2 -O0
 FLAGS.DEBUG.LINUX := -fsanitize=address,undefined,alignment
-FLAGS.RELEASE := -O3
-FLAGS.LINUX := --std=gnu99
-FLAGS.WINDOWS := --std=c99
-FLAGS := $(FLAGS.COMMON) $(FLAGS.$(BUILD)) $(FLAGS.$(BUILD).$(PLATFORM)) $(FLAGS.$(PLATFORM))
+FLAGS.RELEASE     := -O3
+FLAGS.LINUX       := --std=gnu99
+FLAGS.WINDOWS     := --std=c99
+FLAGS             := $(FLAGS.COMMON) $(FLAGS.$(BUILD)) $(FLAGS.$(BUILD).$(PLATFORM)) $(FLAGS.$(PLATFORM))
 
-OBJS := splitmix64.o xoshiro256.o \
-lzarena.o lzpool.o lzflist.o \
-lzbstr.o dynarr.o \
-lzohtable.o memory.o \
-factory.o utils.o lexer.o \
-parser.o compiler.o \
-dumpper.o vmu.o \
-vm.o obj.o
+OBJS              := splitmix64.o xoshiro256.o \
+					 lzarena.o lzpool.o lzflist.o \
+					 lzbstr.o dynarr.o \
+					 lzohtable.o memory.o \
+					 factory.o utils.o lexer.o \
+				     parser.o compiler.o \
+					 dumpper.o vmu.o \
+					 vm.o obj.o
 
-LINKS.COMMON := -lm
-LINKS.WINDOWS := -lshlwapi
-LINKS := $(LINKS.COMMON) $(LINKS.$(PLATFORM))
+LINKS.COMMON      := -lm
+LINKS.WINDOWS     := -lshlwapi
+LINKS             := $(LINKS.COMMON) $(LINKS.$(PLATFORM))
 
 zeus: $(OBJS)
 	$(COMPILER) -o $(OUT_DIR)/zeus $(FLAGS) $(OUT_DIR)/*.o $(SRC_DIR)/zeus.c $(LINKS)
