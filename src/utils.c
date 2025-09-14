@@ -253,10 +253,6 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator){
     void utils_sleep(int64_t time){
         Sleep(time);
     }
-
-    char *utils_files_sysname(Allocator *allocator){
-        return factory_clone_raw_str("Windows", allocator, NULL);
-    }
 #elif __linux__
     int utils_files_is_directory(char *pathname){
         struct stat file = {0};
@@ -310,9 +306,5 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator){
 
     void utils_sleep(int64_t time){
         usleep(time * 1000);
-    }
-
-    char *utils_files_sysname(Allocator *allocator){
-        return factory_clone_raw_str("Linux", allocator, NULL);
     }
 #endif
