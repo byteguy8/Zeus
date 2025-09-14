@@ -18,6 +18,16 @@
     #include <sys/stat.h>
 #endif
 
+#ifndef SYS_PATH_SEPARATOR
+    #ifdef _WIN32
+        #define SYS_PATH_SEPARATOR ';'
+    #elif __linux__
+        #define SYS_PATH_SEPARATOR ':'
+    #else
+        #error "Must define a system path separator"
+    #endif
+#endif
+
 char *utils_join_raw_strs(
     size_t buffa_len,
     char *buffa,
@@ -65,7 +75,7 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator);
     int utils_files_is_regular(char *pathname);
 #endif
 
-char *utils_files_parent_pathname(char *pathname);
+char *utils_files_parent_pathname(char *pathname, Allocator *allocator);
 char *utils_files_cwd(Allocator *allocator);
 char *utils_files_sysname(Allocator *allocator);
 

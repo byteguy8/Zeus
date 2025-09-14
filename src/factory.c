@@ -222,11 +222,12 @@ Module *factory_create_module(char *name, char *filepath, Allocator *allocator){
     module->pathname = module_pathname;
     module->submodule = submodule;
     module->allocator = allocator;
+    module->prev = NULL;
 
     return module;
 }
 
-Module *factory_create_clone_module(char *new_name, char *filepath, Module *module, Allocator *allocator){
+Module *factory_clone_module(char *new_name, char *filepath, Module *module, Allocator *allocator){
     char *module_name = factory_clone_raw_str(new_name, allocator, NULL);
     char *module_pathname = factory_clone_raw_str(filepath, allocator, NULL);
     Module *new_module = MEMORY_ALLOC(Module, 1, allocator);

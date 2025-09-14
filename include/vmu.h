@@ -111,7 +111,7 @@ void vmu_destroy_closure(ClosureObj *closure_obj, VM *vm);
 NativeModuleObj *vmu_create_native_module(NativeModule *native_module, VM *vm);
 void vmu_destroy_native_module_obj(NativeModuleObj *native_module_obj, VM *vm);
 //------------------    MODULE    --------------------------//
-Obj *vmu_create_module_obj(Module *module, VM *vm);
+ModuleObj *vmu_create_module_obj(Module *module, VM *vm);
 void vmu_destroy_module_obj(ModuleObj *module_obj, VM *vm);
 
 #endif

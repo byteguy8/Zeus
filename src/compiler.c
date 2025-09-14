@@ -84,7 +84,7 @@ void update_i32(size_t index, int32_t i32, Compiler *compiler);
 //--------------------------------  OTHER  ---------------------------------//
 int32_t generate_id(Compiler *compiler);
 uint32_t generate_trycatch_id(Compiler *compiler);
-char *names_to_name(DynArr *names, Token **out_name, Compiler *compiler);
+char *names_to_pathname(DynArr *names, Compiler *compiler, size_t *out_name_len, Token **out_name_token);
 NativeModule *resolve_native_module(char *module_name, Compiler *compiler);
 char *resolve_module_location(
     Token *import_token,
@@ -901,66 +901,75 @@ inline uint32_t generate_trycatch_id(Compiler *compiler){
     return ++(compiler->trycatch_counter);
 }
 
-char *names_to_name(DynArr *names, Token **out_name, Compiler *compiler){
-    if(DYNARR_LEN(names) == 1){
-        Token *name = (Token *)dynarr_get_raw(0, names);
-        *out_name = name;
-        return name->lexeme;
+char *names_to_pathname(DynArr *names, Compiler *compiler, size_t *out_name_len, Token **out_name_token){
+    size_t names_len = DYNARR_LEN(names);
+
+    if(names_len == 1){
+        Token *name_token = (Token *)dynarr_get_raw(0, names);
+
+        *out_name_len = name_token->lexeme_len;
+        *out_name_token = name_token;
+
+        return factory_clone_raw_str(name_token->lexeme, CTALLOCATOR, out_name_len);
     }
 
-    Token *name = NULL;
-    BStr *bstr = FACTORY_BSTR(CTALLOCATOR);
+    LZBStr *str_buff = FACTORY_LZBSTR(CTALLOCATOR);
+    Token *name_token;
 
-    for (size_t i = 0; i < DYNARR_LEN(names); i++){
-        name = (Token *)dynarr_get_raw(i, names);
-        bstr_append(name->lexeme, bstr);
-        if(i + 1 < DYNARR_LEN(names)) bstr_append("/", bstr);
+    for (size_t i = 0; i < names_len; i++){
+        name_token = (Token *)dynarr_get_raw(i, names);
+
+        lzbstr_append(name_token->lexeme, str_buff);
+
+        if(i + 1 < names_len){
+            lzbstr_append("/", str_buff);
+        }
     }
 
-    *out_name = name;
+    *out_name_token = name_token;
 
-    return (char *)bstr_raw_substr(0, bstr->len - 1, bstr);
+    return lzbstr_rclone_buff((LZBStrAllocator *)CTALLOCATOR, str_buff, out_name_len);
 }
 
 NativeModule *resolve_native_module(char *module_name, Compiler *compiler){
 	if(strcmp("math", module_name) == 0){
-		if(!math_module){
+		if(!math_native_module){
 			math_module_init(RTALLOCATOR);
 		}
 
-		return math_module;
+		return math_native_module;
 	}
 
     if(strcmp("random", module_name) == 0){
-        if(!random_module){
+        if(!random_native_module){
             random_module_init(RTALLOCATOR);
         }
 
-        return random_module;
+        return random_native_module;
     }
 
     if(strcmp("time", module_name) == 0){
-        if(!time_module){
+        if(!time_native_module){
             time_module_init(RTALLOCATOR);
         }
 
-        return time_module;
+        return time_native_module;
     }
 
     if(strcmp("io", module_name) == 0){
-        if(!io_module){
+        if(!io_native_module){
             io_module_init(RTALLOCATOR);
         }
 
-        return io_module;
+        return io_native_module;
     }
 
     if(strcmp("os", module_name) == 0){
-        if(!os_module){
+        if(!os_native_module){
             os_module_init(RTALLOCATOR);
         }
 
-        return os_module;
+        return os_native_module;
     }
 
 	return NULL;
@@ -976,31 +985,22 @@ char *resolve_module_location(
     size_t *out_module_pathname_len
 ){
     size_t module_name_len = strlen(module_name);
+    DynArr *search_paths = compiler->search_paths;
+    size_t search_paths_len = DYNARR_LEN(search_paths);
 
-    for (int i = 0; i < compiler->paths_len; i++){
-        char* base_pathname = compiler->paths[i];
-        size_t base_pathname_len = strlen(base_pathname);
+    for (size_t i = 0; i < search_paths_len; i++){
+        RawStr search_path_rstr = DYNARR_GET_AS(RawStr, i, search_paths);
+        size_t search_pathname_len = search_path_rstr.len;
+        char *search_pathname = search_path_rstr.buff;
 
-        size_t module_pathname_len = base_pathname_len + module_name_len + 4;
+        size_t module_pathname_len = search_pathname_len + module_name_len + 4;
         char module_pathname[module_pathname_len + 1];
 
-        memcpy(module_pathname, base_pathname, base_pathname_len);
-        memcpy(module_pathname + base_pathname_len, "/", 1);
-        memcpy(module_pathname + base_pathname_len + 1, module_name, module_name_len);
-        memcpy(module_pathname + base_pathname_len + 1 + module_name_len, ".ze", 3);
+        memcpy(module_pathname, search_pathname, search_pathname_len);
+        memcpy(module_pathname + search_pathname_len, "/", 1);
+        memcpy(module_pathname + search_pathname_len + 1, module_name, module_name_len);
+        memcpy(module_pathname + search_pathname_len + 1 + module_name_len, ".ze", 3);
         module_pathname[module_pathname_len] = '\0';
-
-        // detect self module import
-        if(strcmp(module_pathname, current_module->pathname) == 0){
-            error(compiler, import_token, "Trying to import the current module '%s'", module_name);
-        }
-
-        if(previous_module){
-            // detect circular dependency
-            if(strcmp(module_pathname, previous_module->pathname) == 0){
-                error(compiler, import_token, "Circular dependency between '%s' and '%s'", current_module->pathname, previous_module->pathname);
-            }
-        }
 
         if(!UTILS_FILES_EXISTS(module_pathname)){
             continue;
@@ -1014,13 +1014,30 @@ char *resolve_module_location(
             error(compiler, import_token, "File at '%s' is not a regular file", module_pathname);
         }
 
-        *out_module_name_len = module_name_len;
-        *out_module_pathname_len = module_pathname_len;
+        // detect self module import
+        if(strcmp(module_pathname, current_module->pathname) == 0){
+            error(compiler, import_token, "Trying to import the current module '%s'", module_name);
+        }
+
+        if(previous_module){
+            // detect circular dependency
+            if(strcmp(module_pathname, previous_module->pathname) == 0){
+                error(compiler, import_token, "Circular dependency between '%s' and '%s'", current_module->pathname, previous_module->pathname);
+            }
+        }
+
+        if(out_module_name_len){
+            *out_module_name_len = module_name_len;
+        }
+
+        if(out_module_pathname_len){
+            *out_module_pathname_len = module_pathname_len;
+        }
 
         return factory_clone_raw_str(module_pathname, CTALLOCATOR, NULL);
     }
 
-    error(compiler, import_token, "module %s not found", module_name);
+    error(compiler, import_token, "Module %s not found", module_name);
 
     return NULL;
 }
@@ -2243,127 +2260,138 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             break;
         }case IMPORT_STMTTYPE:{
-            assert(compiler->paths_len > 0);
-
             ImportStmt *import_stmt = (ImportStmt *)stmt->sub_stmt;
             Token *import_token = import_stmt->import_token;
             DynArr *names = import_stmt->names;
-            Token *alt_name = import_stmt->alt_name;
+            Token *alt_name_token = import_stmt->alt_name;
 
-            LZHTable *modules = compiler->modules;
+            LZOHTable *modules = compiler->modules;
             Module *current_module = compiler->current_module;
             Module *previous_module = compiler->previous_module;
             DynArr *current_symbols = MODULE_SYMBOLS(current_module);
 
-            Token *name = NULL;
-
-            char *module_name = NULL;
-
-            char *module_absolute_name = names_to_name(names, &name, compiler);
-            size_t module_absolute_name_len;
-
-            module_name = name->lexeme;
-
-            char *module_alt_name = alt_name ? alt_name->lexeme : NULL;
-            char *module_real_name = module_alt_name ? module_alt_name : module_name;
-
-			NativeModule *native_module = resolve_native_module(module_name, compiler);
-
-			if(native_module){
-				size_t symbol_index = add_native_module_symbol(native_module, current_symbols);
-				Symbol *symbol = declare(MODULE_SYMTYPE, alt_name ? alt_name : name, compiler);
-
-                symbol->index = symbol_index;
-
-                from_symbols_to_global(symbol_index, import_token, module_real_name, compiler);
-
-				break;
-			}
-
+            Token *name_token = NULL;
             size_t module_pathname_len;
-            char *module_pathname = resolve_module_location(
-                import_token,
-                module_absolute_name,
-                previous_module,
-                current_module,
-                compiler,
-                &module_absolute_name_len,
-                &module_pathname_len
-            );
+            char *module_pathname = names_to_pathname(names, compiler, &module_pathname_len, &name_token);
 
-            LZHTableNode *module_node = NULL;
+            alt_name_token = alt_name_token ? alt_name_token : name_token;
 
-            if(lzhtable_contains((uint8_t *)module_pathname, module_pathname_len, modules, &module_node)){
-                Module *imported_module = (Module *)module_node->value;
-                Module *cloned_module = factory_create_clone_module(module_name, module_pathname, imported_module, RTALLOCATOR);
+            char *real_name = name_token->lexeme;
+            char *alt_name = alt_name_token->lexeme;
 
-                size_t symbol_index = add_module_symbol(cloned_module, current_symbols);
-                Symbol *symbol = declare(MODULE_SYMTYPE, alt_name ? alt_name : name, compiler);
+            NativeModule *native_module = resolve_native_module(module_pathname, compiler);
 
-                symbol->index = symbol_index;
+            if(native_module){
+                size_t symbol_idx = add_native_module_symbol(native_module, current_symbols);
+                Symbol *symbol = declare(NATIVE_MODULE_SYMTYPE, alt_name_token, compiler);
 
-                from_symbols_to_global(symbol_index, import_token, module_real_name, compiler);
+                symbol->index = symbol_idx;
+
+                from_symbols_to_global(symbol_idx, import_token, alt_name, compiler);
 
                 break;
             }
 
-            RawStr *source = utils_read_source(module_pathname, CTALLOCATOR);
+            if(compiler->is_importing){
+                char *module_pathname = current_module->pathname;
+                size_t module_pathname_len = strlen(module_pathname);
 
+                char local_module_pathname[module_pathname_len + 1];
+                memcpy(local_module_pathname, module_pathname, module_pathname_len);
+                local_module_pathname[module_pathname_len] = 0;
+
+                char *parent_pathname = utils_files_parent_pathname(local_module_pathname, NULL);
+                size_t parent_pathname_len = strlen(parent_pathname);
+
+                if(!lzohtable_lookup(parent_pathname_len, parent_pathname, compiler->import_paths, NULL)){
+                    char *cloned_parent_pathname = factory_clone_raw_str(parent_pathname, CTALLOCATOR, NULL);
+                    RawStr rstr = {
+                        .len = parent_pathname_len,
+                        .buff = cloned_parent_pathname
+                    };
+
+                    dynarr_insert(&rstr, compiler->search_paths);
+                    lzohtable_put(parent_pathname_len, cloned_parent_pathname, NULL, compiler->import_paths, NULL);
+                }
+            }
+
+            size_t resolved_module_pathname_len;
+            char *resolved_module_pathname = resolve_module_location(
+                import_token,
+                module_pathname,
+                previous_module,
+                current_module,
+                compiler,
+                NULL,
+                &resolved_module_pathname_len
+            );
+            Module *module = NULL;
+
+            if(lzohtable_lookup(
+                resolved_module_pathname_len,
+                resolved_module_pathname,
+                modules, (void **)(&module))
+            ){
+                size_t symbol_idx = add_module_symbol(module, current_symbols);
+                Symbol *symbol = declare(MODULE_SYMTYPE, alt_name_token, compiler);
+
+                symbol->index = symbol_idx;
+
+                from_symbols_to_global(symbol_idx, import_token, alt_name, compiler);
+
+                break;
+            }
+
+            module = factory_create_module(real_name, resolved_module_pathname, compiler->rtallocator);
+
+            DynArr *search_paths = compiler->search_paths;
+            LZOHTable *import_paths = compiler->import_paths;
             LZOHTable *keywords = compiler->keywords;
-            LZOHTable *natives = compiler->natives_fns;
-
+            LZOHTable *native_fns = compiler->natives_fns;
+            RawStr *source = utils_read_source(resolved_module_pathname, CTALLOCATOR);
             DynArr *tokens = FACTORY_DYNARR_PTR(CTALLOCATOR);
             DynArr *stmts = FACTORY_DYNARR_PTR(CTALLOCATOR);
 
-            Module *module = factory_create_module(module_name, module_pathname, RTALLOCATOR);
-
             Lexer *lexer = lexer_create(CTALLOCATOR, RTALLOCATOR);
-	        Parser *parser = parser_create(CTALLOCATOR);
-            Compiler *import_compiler = compiler_create(CTALLOCATOR, RTALLOCATOR);
+            Parser *parser = parser_create(CTALLOCATOR);
+            Compiler *import_compiler = compiler_create(compiler->ctallocator, compiler->rtallocator);
 
-            char *cloned_module_pathname = factory_clone_raw_str(module_pathname, CTALLOCATOR, NULL);
-            import_compiler->paths[import_compiler->paths_len++] = utils_files_parent_pathname(cloned_module_pathname);
-
-            for (int i = 0; i < compiler->paths_len; i++){
-				import_compiler->paths[import_compiler->paths_len++] = compiler->paths[i];
+            if(lexer_scan(source, tokens, keywords, resolved_module_pathname, lexer)){
+                error(compiler, import_token, "Failed to import module '%s'", resolved_module_pathname);
             }
 
-            if(lexer_scan(
-                source,
-                tokens,
-                keywords,
-                module_pathname,
-                lexer
-            )){
-				compiler->is_err = 1;
-				break;
-			}
-
             if(parser_parse(tokens, stmts, parser)){
-				compiler->is_err = 1;
-				break;
-			}
+                error(compiler, import_token, "Failed to import module '%s'", resolved_module_pathname);
+            }
 
             if(compiler_import(
+                search_paths,
+                import_paths,
                 keywords,
-                natives,
+                native_fns,
                 stmts,
                 current_module,
                 module,
                 modules,
-                import_compiler
-            )){
-                compiler->is_err = 1;
-				break;
+                import_compiler)
+            ){
+                error(compiler, import_token, "Failed to import module '%s'", resolved_module_pathname);
             }
 
-            uint32_t module_pathname_hash = lzhtable_hash((uint8_t *)module_pathname, module_pathname_len);
-            lzhtable_hash_put(module_pathname_hash, module, modules);
+            lzohtable_put_ck(
+                resolved_module_pathname_len,
+                resolved_module_pathname,
+                module,
+                modules,
+                NULL
+            );
 
-            size_t symbol_index = add_module_symbol(module, current_symbols);
-            declare(MODULE_SYMTYPE, alt_name ? alt_name : name, compiler);
+            size_t symbol_idx = add_module_symbol(module, current_symbols);
+            Symbol *symbol = declare(MODULE_SYMTYPE, alt_name_token, compiler);
 
-            from_symbols_to_global(symbol_index, import_token, module_real_name, compiler);
+            symbol->index = symbol_idx;
+
+            from_symbols_to_global(symbol_idx, import_token, alt_name, compiler);
 
             break;
         }case THROW_STMTTYPE:{
@@ -2456,7 +2484,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
                 write_chunk(GASET_OPCODE, compiler);
                 write_location(symbol_identifier, compiler);
-                write_str_alloc(symbol_identifier->literal_size, symbol_identifier->lexeme, compiler);
+                write_str_alloc(symbol_identifier->lexeme_len, symbol_identifier->lexeme, compiler);
                 write_chunk(1, compiler);
             }
 
@@ -2528,9 +2556,10 @@ Compiler *compiler_create(Allocator *ctallocator, Allocator *rtallocator){
     Allocator *labels_allocator = memory_create_arena_allocator(ctallocator, NULL);
     Compiler *compiler = MEMORY_ALLOC(Compiler, 1, ctallocator);
 
-    if(!compiler){
+    if(!labels_allocator || !compiler){
         memory_destroy_arena_allocator(labels_allocator);
         MEMORY_DEALLOC(Compiler, 1, compiler, ctallocator);
+
         return NULL;
     }
 
@@ -2552,17 +2581,22 @@ void compiler_destroy(Compiler *compiler){
 }
 
 int compiler_compile(
+    DynArr *search_paths,
+    LZOHTable *import_paths,
     LZOHTable *keywords,
     LZOHTable *native_fns,
     DynArr *stmts,
     Module *current_module,
-    LZHTable *modules,
+    LZOHTable *modules,
     Compiler *compiler
 ){
     if(setjmp(compiler->err_jmp) == 1){
         return 1;
     }else{
+        compiler->is_importing = 0;
         compiler->symbols = 1;
+        compiler->search_paths = search_paths;
+        compiler->import_paths = import_paths;
         compiler->keywords = keywords;
         compiler->natives_fns = native_fns;
         compiler->current_module = current_module;
@@ -2603,17 +2637,22 @@ int compiler_compile(
 }
 
 int compiler_import(
+    DynArr *search_paths,
+    LZOHTable *import_paths,
     LZOHTable *keywords,
     LZOHTable *native_fns,
     DynArr *stmts,
     Module *previous_module,
     Module *current_module,
-    LZHTable *modules,
+    LZOHTable *modules,
     Compiler *compiler
 ){
     if(setjmp(compiler->err_jmp) == 1){
         return 1;
     }else{
+        compiler->is_importing = 1;
+        compiler->search_paths = search_paths;
+        compiler->import_paths = import_paths;
         compiler->keywords = keywords;
         compiler->natives_fns = native_fns;
         compiler->stmts = stmts;
@@ -2623,11 +2662,11 @@ int compiler_import(
 
         ComplexContext compile_ctx = (ComplexContext){
             .arg0 = compiler,
-            .arg1 = CTALLOCATOR
+            .arg1 = compiler->ctallocator
         };
         ComplexContext runtime_ctx = (ComplexContext){
             .arg0 = compiler,
-            .arg1 = RTALLOCATOR
+            .arg1 = compiler->rtallocator
         };
 
         MEMORY_INIT_ALLOCATOR(&compile_ctx, lzalloc, lzrealloc, lzdealloc, &compiler->fake_ctallocator);

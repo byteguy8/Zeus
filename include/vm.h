@@ -79,9 +79,8 @@ typedef struct vm{
     Template *templates;
     Exception *exception_stack;
 //--------------------------------  MODULE  --------------------------------//
-    int module_ptr;
-    Module *main_module;
-    Module *modules[MODULES_LENGTH];
+    int modules_stack_len;
+    Module *modules_stack;
 //--------------------------  GARBAGE COLLECTOR  ---------------------------//
     size_t allocated_bytes;
     size_t allocation_limit_size;

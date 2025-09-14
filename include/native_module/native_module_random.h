@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-NativeModule *random_module = NULL;
+NativeModule *random_native_module = NULL;
 
 void random_module_init(Allocator *allocator){}
 

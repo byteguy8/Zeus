@@ -39,7 +39,7 @@ NativeModule *factory_create_native_module(char *name, Allocator *allocator);
 void factory_destroy_native_module(NativeModule *native_module);
 
 Module *factory_create_module(char *name, char *filepath, Allocator *allocator);
-Module *factory_create_clone_module(char *new_name, char *filepath, Module *module, Allocator *allocator);
+Module *factory_clone_module(char *new_name, char *filepath, Module *module, Allocator *allocator);
 void factory_destroy_module(Module *module);
 
 #endif

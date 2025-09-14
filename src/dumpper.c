@@ -541,7 +541,7 @@ Dumpper *dumpper_create(Allocator *allocator){
 	return dumpper;
 }
 
-void dumpper_dump(LZHTable *modules, Module *main_module, Dumpper *dumpper){
+void dumpper_dump(LZOHTable *modules, Module *main_module, Dumpper *dumpper){
 	memset(dumpper, 0, sizeof(Dumpper));
 
     dumpper->ip = 0;
@@ -551,14 +551,17 @@ void dumpper_dump(LZHTable *modules, Module *main_module, Dumpper *dumpper){
 
     dump_module(main_module, dumpper);
 
-    LZHTableNode *node = modules->head;
+    size_t m = modules->m;
 
-    while (node){
-        LZHTableNode *next = node->next_table_node;
-        Module *module = (Module *)node->value;
+    for (size_t i = 0; i < m; i++){
+        LZOHTableSlot slot = modules->slots[i];
+
+        if(!slot.used){
+            continue;
+        }
+
+        Module *module = (Module *)slot.value;
 
         dump_module(module, dumpper);
-
-        node = next;
     }
 }

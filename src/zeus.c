@@ -17,12 +17,15 @@
 
 #define DEFAULT_INITIAL_COMPILE_TIME_MEMORY 4194304
 #define DEFAULT_INITIAL_RUNTIME_MEMORY 8388608
+#define DEFAULT_INITIAL_SEARCH_PATHS_BUFF_LEN 256
 
 typedef struct args{
 	unsigned char lex;
 	unsigned char parse;
 	unsigned char compile;
 	unsigned char dump;
+    unsigned char help;
+    char *search_paths;
     char *source_pathname;
 }Args;
 
@@ -51,7 +54,9 @@ void lzdealloc_link_flist(void *ptr, size_t size, void *ctx){
 }
 
 static void get_args(int argc, const char *argv[], Args *args){
-	for(int i = 1; i < argc; i++){
+    unsigned char exclusives = 0;
+
+    for(int i = 1; i < argc; i++){
 		const char *arg = argv[i];
 
 		if(strcmp("-l", arg) == 0){
@@ -61,6 +66,7 @@ static void get_args(int argc, const char *argv[], Args *args){
             }
 
             args->lex = 1;
+            exclusives |= 0b10000000;
         }else if(strcmp("-p", arg) == 0){
             if(args->parse){
                 fprintf(stderr, "-l flag already used");
@@ -68,6 +74,7 @@ static void get_args(int argc, const char *argv[], Args *args){
             }
 
             args->parse = 1;
+            exclusives |= 0b01000000;
         }else if(strcmp("-c", arg) == 0){
             if(args->compile){
                 fprintf(stderr, "-l flag already used");
@@ -75,6 +82,7 @@ static void get_args(int argc, const char *argv[], Args *args){
             }
 
             args->compile = 1;
+            exclusives |= 0b00100000;
         }else if(strcmp("-d", arg) == 0){
             if(args->dump){
                 fprintf(stderr, "-l flag already used");
@@ -82,6 +90,27 @@ static void get_args(int argc, const char *argv[], Args *args){
             }
 
             args->dump = 1;
+            exclusives |= 0b00010000;
+        }else if(strcmp("-h", arg) == 0){
+            if(args->help){
+                fprintf(stderr, "-h flag already used");
+                exit(EXIT_FAILURE);
+            }
+
+            args->help = 1;
+            exclusives |= 0b00001000;
+        }else if(strcmp("--spaths", arg) == 0){
+            if(args->search_paths){
+                fprintf(stderr, "search path already set");
+                exit(EXIT_FAILURE);
+            }
+
+            if(i + 1 >= argc){
+                fprintf(stderr, "expect search paths string after --spaths flag");
+                exit(EXIT_FAILURE);
+            }
+
+            args->search_paths = (char *)argv[++i];
         }else{
             if(args->source_pathname){
                 fprintf(stderr, "source pathname set");
@@ -91,6 +120,86 @@ static void get_args(int argc, const char *argv[], Args *args){
             args->source_pathname = (char *)arg;
         }
 	}
+
+    if(exclusives >= 136){
+        fprintf(stderr, "Can only use one of this flags at time: -l -p -c -d -h\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+RawStr get_cwd(Allocator *allocator){
+    char *buff = utils_files_cwd(allocator);
+    size_t len = strlen(buff);
+
+    return (RawStr){
+        .len = len,
+        .buff = buff
+    };
+}
+
+DynArr *parse_search_paths(char *source_pathname, char *raw_search_paths, Allocator *allocator){
+    DynArr *search_paths = DYNARR_CREATE_TYPE_BY(
+        RawStr,
+        DEFAULT_INITIAL_SEARCH_PATHS_BUFF_LEN,
+        (DynArrAllocator *)allocator
+    );
+
+    RawStr cwd_rstr = get_cwd(allocator);
+
+    dynarr_insert(&cwd_rstr, search_paths);
+
+    size_t source_pathname_len = strlen(source_pathname);
+    size_t result_pathname_len = cwd_rstr.len + 1 + source_pathname_len;
+    char result_pathname[result_pathname_len + 1];
+
+    memcpy(result_pathname, cwd_rstr.buff, cwd_rstr.len);
+    memcpy(result_pathname + cwd_rstr.len, "/", 1);
+    memcpy(result_pathname + cwd_rstr.len + 1, source_pathname, source_pathname_len);
+    result_pathname[result_pathname_len] = 0;
+
+    if(!UTILS_FILES_EXISTS(result_pathname)){
+        char *buff = utils_files_parent_pathname(source_pathname, allocator);
+        size_t len = strlen(buff);
+        RawStr parent_rstr = {
+            .len = len,
+            .buff = buff
+        };
+
+        dynarr_insert(&parent_rstr, search_paths);
+    }
+
+    if(!raw_search_paths){
+        return search_paths;
+    }
+
+    size_t a_idx = 0;
+    size_t b_idx = 0;
+    size_t len = strlen(raw_search_paths);
+
+    for (size_t i = 0; i < len; i++){
+        char c = raw_search_paths[i];
+
+        if(c != SYS_PATH_SEPARATOR){
+            b_idx = i;
+
+            if(i + 1 < len){
+                continue;
+            }
+        }
+
+        size_t buff_len = b_idx - a_idx + 1;
+        char *buff = MEMORY_ALLOC(char, buff_len + 1, allocator);
+
+        memcpy(buff, raw_search_paths + a_idx, buff_len);
+        buff[buff_len] = 0;
+
+        RawStr rstr = (RawStr){.len = buff_len, .buff = buff};
+        dynarr_insert(&rstr, search_paths);
+
+        a_idx = i + 1;
+    }
+
+    return search_paths;
 }
 
 void add_native(const char *name, int arity, RawNativeFn raw_native, LZOHTable *natives, const Allocator *allocator){
@@ -164,6 +273,15 @@ static void print_help(){
 
     fprintf(stderr, "    -d\n");
     fprintf(stderr, "                      Run the disassembler (executing: lexer, parser and compiler)\n");
+
+    fprintf(stderr, "    --spaths\n");
+    fprintf(stderr, "                      Make compiler aware of the paths it must look for imports.\n");
+    fprintf(stderr, "                      The paths must be separated by the OS;s paths separator.\n");
+    fprintf(stderr, "                      In Windows is ;, while in Linux is :. For example:\n");
+    fprintf(stderr, "                          Windows:\n");
+    fprintf(stderr, "                              D:\\path\\a;D:\\path\\b;D:\\path\\c\n");
+    fprintf(stderr, "                          Linux:\n");
+    fprintf(stderr, "                              /path/a:path/b:path/c\n");
 
     exit(EXIT_FAILURE);
 }
@@ -273,12 +391,12 @@ int main(int argc, const char *argv[]){
 	}
 
 	if(!UTILS_FILES_CAN_READ(source_pathname)){
-		fprintf(stderr, "File at '%s' do not exists or cannot be read.\n", source_pathname);
+		fprintf(stderr, "File at '%s' do not exists or cannot be read\n", source_pathname);
 		exit(EXIT_FAILURE);
 	}
 
 	if(!utils_files_is_regular(source_pathname)){
-		fprintf(stderr, "File at '%s' is not a regular file.\n", source_pathname);
+		fprintf(stderr, "File at '%s' is not a regular file\n", source_pathname);
 		exit(EXIT_FAILURE);
 	}
 
@@ -289,11 +407,13 @@ int main(int argc, const char *argv[]){
 
     init_memory(&ctarena, &rtflist, &ctallocator, &rtallocator);
 
+    DynArr *search_paths = parse_search_paths(source_pathname, args.search_paths, &ctallocator);
+    LZOHTable *import_paths = FACTORY_LZOHTABLE(&ctallocator);
     LZOHTable *keywords = create_keywords_table(&ctallocator);
 	RawStr *source = utils_read_source(source_pathname, &ctallocator);
     char *module_path = factory_clone_raw_str(source_pathname, &ctallocator, NULL);
 
-    LZHTable *modules = FACTORY_LZHTABLE(&ctallocator);
+    LZOHTable *modules = FACTORY_LZOHTABLE(&ctallocator);
 	DynArr *tokens = FACTORY_DYNARR_PTR(&ctallocator);
 	DynArr *stmts = FACTORY_DYNARR_PTR(&ctallocator);
 	Lexer *lexer = lexer_create(&ctallocator, &rtallocator);
@@ -304,13 +424,6 @@ int main(int argc, const char *argv[]){
     LZOHTable *native_fns = init_default_native_fns(&rtallocator);
     Module *module = factory_create_module("main", module_path, &rtallocator);
     VM *vm = vm_create(&rtallocator);
-
-    if(module_path[0] == '/'){
-        char *cloned_module_path = factory_clone_raw_str(module_path, &ctallocator, NULL);
-		compiler->paths[compiler->paths_len++] = utils_files_parent_pathname(cloned_module_path);
-	}else{
-		compiler->paths[compiler->paths_len++] = utils_files_cwd(&ctallocator);
-	}
 
     if(args.lex){
         if(lexer_scan(source, tokens, keywords, module_path, lexer)){
@@ -348,7 +461,7 @@ int main(int argc, const char *argv[]){
             result = 1;
 			goto CLEAN_UP;
 		}
-        if(compiler_compile(keywords, native_fns, stmts, module, modules, compiler)){
+        if(compiler_compile(search_paths, import_paths, keywords, native_fns, stmts, module, modules, compiler)){
             result = 1;
 			goto CLEAN_UP;
 		}
@@ -369,7 +482,7 @@ int main(int argc, const char *argv[]){
             result = 1;
 			goto CLEAN_UP;
 		}
-        if(compiler_compile(keywords, native_fns, stmts, module, modules, compiler)){
+        if(compiler_compile(search_paths, import_paths, keywords, native_fns, stmts, module, modules, compiler)){
             result = 1;
 			goto CLEAN_UP;
 		}
@@ -392,7 +505,7 @@ int main(int argc, const char *argv[]){
             result = 1;
 			goto CLEAN_UP;
 		}
-        if(compiler_compile(keywords, native_fns, stmts, module, modules, compiler)){
+        if(compiler_compile(search_paths, import_paths, keywords, native_fns, stmts, module, modules, compiler)){
             result = 1;
 			goto CLEAN_UP;
 		}

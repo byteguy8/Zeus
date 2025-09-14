@@ -106,7 +106,7 @@ void prepare_module_globals(Module *module, VM *vm){
 }
 
 void prepare_worklist(VM *vm){
-    prepare_module_globals(vm->main_module, vm);
+    prepare_module_globals(vm->modules_stack, vm);
 
     const Value *stack_top = vm->stack_top;
 
@@ -1766,13 +1766,14 @@ inline void vmu_destroy_native_module_obj(NativeModuleObj *native_module_obj, VM
     DEALLOC_NATIVE_MODULE_OBJ(native_module_obj);
 }
 
-inline Obj *vmu_create_module_obj(Module *module, VM *vm){
+inline ModuleObj *vmu_create_module_obj(Module *module, VM *vm){
     ModuleObj *module_obj = ALLOC_MODULE_OBJ();
+    Obj *obj = (Obj *)module_obj;
 
-    module_obj->header.type = MODULE_OBJ_TYPE;
+    init_obj(MODULE_OBJ_TYPE, obj, vm);
     module_obj->module = module;
 
-    return &module_obj->header;
+    return module_obj;
 }
 
 inline void vmu_destroy_module_obj(ModuleObj *module_obj, VM *vm){

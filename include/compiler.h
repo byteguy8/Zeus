@@ -92,14 +92,15 @@ typedef struct scope{
 }Scope;
 
 typedef struct compiler{
-    int32_t counter_id;
-    uint32_t trycatch_counter;
-
-	char is_err;
+    char is_err;
     jmp_buf err_jmp;
 
-    int paths_len;
-    char *paths[PATHS_LENGTH];
+    char is_importing;
+    DynArr *search_paths;
+    LZOHTable *import_paths;
+
+    int32_t counter_id;
+    uint32_t trycatch_counter;
 
     int symbols;
 
@@ -114,7 +115,7 @@ typedef struct compiler{
     DynArr *stmts;
     Module *previous_module;
     Module *current_module;
-    LZHTable *modules;
+    LZOHTable *modules;
 
     Allocator *ctallocator;
     Allocator *rtallocator;
@@ -127,21 +128,25 @@ Compiler *compiler_create(Allocator *ctallocator, Allocator *rtallocator);
 void compiler_destroy(Compiler *compiler);
 
 int compiler_compile(
+    DynArr *search_paths,
+    LZOHTable *import_paths,
     LZOHTable *keywords,
     LZOHTable *native_fns,
     DynArr *stmts,
     Module *module,
-    LZHTable *modules,
+    LZOHTable *modules,
     Compiler *compiler
 );
 
 int compiler_import(
+    DynArr *search_paths,
+    LZOHTable *import_paths,
     LZOHTable *keywords,
     LZOHTable *native_fns,
     DynArr *stmts,
     Module *previous_module,
     Module *module,
-    LZHTable *modules,
+    LZOHTable *modules,
     Compiler *compiler
 );
 

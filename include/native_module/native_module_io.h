@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <errno.h>
 
-static NativeModule *io_module;
+static NativeModule *io_native_module;
 
 void io_module_init(Allocator *allocator){}
 

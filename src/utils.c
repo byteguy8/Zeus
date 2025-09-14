@@ -325,7 +325,10 @@ int utils_read_file(
 
 RawStr *utils_read_source(char *pathname, Allocator *allocator){
 	FILE *source_file = fopen(pathname, "r");
-    if(source_file == NULL){return NULL;}
+
+    if(!source_file){
+        return NULL;
+    }
 
 	fseek(source_file, 0, SEEK_END);
 
@@ -357,9 +360,10 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator){
         return attributes & FILE_ATTRIBUTE_ARCHIVE;
     }
 
-    char *utils_files_parent_pathname(char *pathname){
-        PathRemoveFileSpecA(pathname);
-        return pathname;
+    char *utils_files_parent_pathname(char *pathname, Allocator *allocator){
+        char cloned_pathname = allocator ? factory_clone_raw_str(pathname, allocator, NULL) : pathname;
+        PathRemoveFileSpecA(cloned_pathname);
+        return cloned_pathname;
     }
 
     char *utils_files_cwd(Allocator *allocator){
@@ -436,8 +440,9 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator){
         return S_ISREG(file.st_mode);
     }
 
-    char *utils_files_parent_pathname(char *pathname){
-        return dirname(pathname);
+    char *utils_files_parent_pathname(char *pathname, Allocator *allocator){
+        char *cloned_pathname = allocator ? factory_clone_raw_str(pathname, allocator, NULL) : pathname;
+        return dirname(cloned_pathname);
     }
 
     char *utils_files_cwd(Allocator *allocator){

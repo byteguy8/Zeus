@@ -1348,6 +1348,21 @@ static int execute(VM *vm){
                         PUSH_OBJ(native_module_obj, vm);
 
                         break;
+                    }case MODULE_SUBMODULE_SYM_TYPE:{
+                        Module *module = (Module *)symbol.value;
+                        ModuleObj *module_obj = vmu_create_module_obj(module, vm);
+
+                        PUSH_OBJ(module_obj, vm);
+
+                        if(!module->submodule->resolved){
+                            module->prev = vm->modules_stack;
+                            vm->modules_stack_len++;
+                            vm->modules_stack = module;
+
+                            longjmp(vm->exit_jmp, 3);
+                        }
+
+                        break;
                     }default:{
                         vmu_internal_error(vm, "Unknown submodule symbol type");
                     }
@@ -1643,6 +1658,23 @@ static int execute(VM *vm){
                         }
 
                         break;
+                    }case MODULE_OBJ_TYPE:{
+                        ModuleObj *module_obj = OBJ_TO_MODULE(target_obj);
+                        Module *module = module_obj->module;
+                        GlobalValue *global_value = NULL;
+
+                        if(!lzohtable_lookup(key_size, key, module->submodule->globals, (void **)(&global_value))){
+                            vmu_error(vm, "Module '%s' do not have '%s' symbol", module->name, key);
+                        }
+
+                        if(global_value->access == PRIVATE_GLOVAL_VALUE_TYPE){
+                            vmu_error(vm, "Symbol '%s' in module '%s' is private", key, module->name);
+                        }
+
+                        pop(vm);
+                        push(global_value->value, vm);
+
+                        break;
                     }default:{
                         vmu_error(vm, "Illegal access target");
                     }
@@ -1710,6 +1742,17 @@ static int execute(VM *vm){
 
                 pop_frame(vm);
 
+                if(vm->modules_stack_len > 1){
+                    Module *module = vm->modules_stack;
+
+                    vm->modules_stack_len--;
+                    vm->modules_stack = module->prev;
+
+                    module->prev = NULL;
+                    module->submodule->resolved = 1;
+
+                    break;
+                }
                 if(vm->frame_ptr == vm->frame_stack){
                     return vm->exit_code;
                 }
@@ -1936,11 +1979,15 @@ int vm_execute(LZOHTable *native_fns, Module *module, VM *vm){
 
             vm->native_fns = native_fns;
 
-            vm->module_ptr = 0;
-            vm->main_module = module;
-            vm->modules[vm->module_ptr++] = module;
+            vm->modules_stack_len = 1;
+            vm->modules_stack = module;
 
-            Fn *main_fn = (Fn *)get_symbol(0, FUNCTION_SUBMODULE_SYM_TYPE, vm->modules[0], vm);
+            Fn *main_fn = (Fn *)get_symbol(
+                0,
+                FUNCTION_SUBMODULE_SYM_TYPE,
+                module,
+                vm
+            );
 
             push_fn(main_fn, vm);
             push_frame(0, vm);
@@ -1962,6 +2009,18 @@ int vm_execute(LZOHTable *native_fns, Module *module, VM *vm){
 
             MEMORY_DEALLOC(Exception, 1, ex, vm->allocator);
             push(throw_value, vm);
+
+            return execute(vm);
+        }case 3:{
+            Fn *import_fn = (Fn *)get_symbol(
+                0,
+                FUNCTION_SUBMODULE_SYM_TYPE,
+                vm->modules_stack,
+                vm
+            );
+
+            push_fn(import_fn, vm);
+            push_frame(0, vm);
 
             return execute(vm);
         }default:{

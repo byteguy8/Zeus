@@ -9,7 +9,7 @@
 
 typedef struct dumpper{
     size_t ip;
-    LZHTable *modules;
+    LZOHTable *modules;
     Module *main_module;
     Module *current_module;
     Fn *current_fn;
@@ -17,6 +17,6 @@ typedef struct dumpper{
 }Dumpper;
 
 Dumpper *dumpper_create(Allocator *allocator);
-void dumpper_dump(LZHTable *modules, Module *main_module, Dumpper *dumpper);
+void dumpper_dump(LZOHTable *modules, Module *main_module, Dumpper *dumpper);
 
 #endif

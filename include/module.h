@@ -38,6 +38,7 @@ typedef struct module{
     char *pathname;
     SubModule *submodule;
     Allocator *allocator;
+    struct module *prev;
 }Module;
 
 #define MODULE_SYMBOLS(_module)((_module)->submodule->symbols)
