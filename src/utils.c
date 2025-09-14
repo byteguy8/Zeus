@@ -17,6 +17,131 @@
     #include <sys/utsname.h>
 #endif
 
+//-----------------------------  FILE SYSTEM  ------------------------------//
+#ifdef _WIN32
+    int utils_files_is_directory(LPCSTR pathname){
+        DWORD attributes = GetFileAttributesA(pathname);
+        return attributes & FILE_ATTRIBUTE_DIRECTORY;
+    }
+
+    int utils_files_is_regular(LPCSTR pathname){
+	    DWORD attributes = GetFileAttributesA(pathname);
+        return attributes & FILE_ATTRIBUTE_ARCHIVE;
+    }
+
+    char *utils_files_parent_pathname(char *pathname, Allocator *allocator){
+        char *cloned_pathname = allocator ? factory_clone_raw_str(pathname, allocator, NULL) : pathname;
+        PathRemoveFileSpecA(cloned_pathname);
+        return cloned_pathname;
+    }
+
+    char *utils_files_cwd(Allocator *allocator){
+        DWORD buff_len = 0;
+        LPTSTR buff = NULL;
+
+        buff_len = GetCurrentDirectory(buff_len, buff);
+        buff = MEMORY_ALLOC(CHAR, buff_len, allocator);
+
+        if(!buff){
+            return NULL;
+        }
+
+        if(GetCurrentDirectory(buff_len, buff) == 0){
+            MEMORY_DEALLOC(CHAR, buff_len, buff, allocator);
+            return NULL;
+        }
+
+        return buff;
+    }
+#elif __linux__
+    int utils_files_is_directory(char *pathname){
+        struct stat file = {0};
+
+        if(stat(pathname, &file) == -1){
+            return -1;
+        }
+
+        return S_ISDIR(file.st_mode);
+    }
+
+    int utils_files_is_regular(char *pathname){
+        struct stat file = {0};
+
+        if(stat(pathname, &file) == -1){
+            return -1;
+        }
+
+        return S_ISREG(file.st_mode);
+    }
+
+    char *utils_files_parent_pathname(char *pathname, Allocator *allocator){
+        char *cloned_pathname = allocator ? factory_clone_raw_str(pathname, allocator, NULL) : pathname;
+        return dirname(cloned_pathname);
+    }
+
+    char *utils_files_cwd(Allocator *allocator){
+        char *pathname = getcwd(NULL, 0);
+        size_t pathname_len = strlen(pathname);
+        char *cloned_pathname = MEMORY_ALLOC(char, pathname_len + 1, allocator);
+
+        if(!cloned_pathname){
+            free(pathname);
+            return NULL;
+        }
+
+        memcpy(cloned_pathname, pathname, pathname_len);
+        cloned_pathname[pathname_len] = '\0';
+
+        free(pathname);
+
+        return cloned_pathname;
+    }
+#endif
+//---------------------------------  TIME  ---------------------------------//
+#ifdef _WIN32
+    int64_t utils_millis(){
+        FILETIME current_filetime = {0};
+        GetSystemTimeAsFileTime(&current_filetime);
+
+        SYSTEMTIME epoch_systime = {0};
+        epoch_systime.wYear = 1970;
+        epoch_systime.wMonth = 1;
+        epoch_systime.wDayOfWeek = 4;
+        epoch_systime.wDay = 1;
+
+        FILETIME epoch_filetime = {0};
+        SystemTimeToFileTime(&epoch_systime, &epoch_filetime);
+
+        ULARGE_INTEGER current_ularge = {0};
+        current_ularge.u.LowPart = current_filetime.dwLowDateTime;
+        current_ularge.u.HighPart = current_filetime.dwHighDateTime;
+
+        ULARGE_INTEGER epoch_ularge = {0};
+        epoch_ularge.u.LowPart = epoch_filetime.dwLowDateTime;
+        epoch_ularge.u.HighPart = epoch_filetime.dwHighDateTime;
+
+        ULARGE_INTEGER new_current_ularge = {0};
+        new_current_ularge.QuadPart = current_ularge.QuadPart - epoch_ularge.QuadPart;
+
+        return (new_current_ularge.QuadPart * 100) / 1000000;
+    }
+
+    void utils_sleep(int64_t time){
+        Sleep(time);
+    }
+#elif __linux__
+    int64_t utils_millis(){
+        struct timespec spec = {0};
+        clock_gettime(CLOCK_REALTIME, &spec);
+
+        return spec.tv_nsec / 1e+6 + spec.tv_sec * 1000;
+    }
+
+    void utils_sleep(int64_t time){
+        usleep(time * 1000);
+    }
+#endif
+//--------------------------------  OTHER  ---------------------------------//
 int utils_hexadecimal_str_to_i64(char *str, int64_t *out_value){
     int len = (int)strlen(str);
 
@@ -185,126 +310,3 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator){
 
 	return rstr;
 }
-
-
-#ifdef _WIN32
-    int utils_files_is_directory(LPCSTR pathname){
-        DWORD attributes = GetFileAttributesA(pathname);
-        return attributes & FILE_ATTRIBUTE_DIRECTORY;
-    }
-
-    int utils_files_is_regular(LPCSTR pathname){
-	    DWORD attributes = GetFileAttributesA(pathname);
-        return attributes & FILE_ATTRIBUTE_ARCHIVE;
-    }
-
-    char *utils_files_parent_pathname(char *pathname, Allocator *allocator){
-        char *cloned_pathname = allocator ? factory_clone_raw_str(pathname, allocator, NULL) : pathname;
-        PathRemoveFileSpecA(cloned_pathname);
-        return cloned_pathname;
-    }
-
-    char *utils_files_cwd(Allocator *allocator){
-        DWORD buff_len = 0;
-        LPTSTR buff = NULL;
-
-        buff_len = GetCurrentDirectory(buff_len, buff);
-        buff = MEMORY_ALLOC(CHAR, buff_len, allocator);
-
-        if(!buff){
-            return NULL;
-        }
-
-        if(GetCurrentDirectory(buff_len, buff) == 0){
-            MEMORY_DEALLOC(CHAR, buff_len, buff, allocator);
-            return NULL;
-        }
-
-        return buff;
-    }
-
-    int64_t utils_millis(){
-        FILETIME current_filetime = {0};
-        GetSystemTimeAsFileTime(&current_filetime);
-
-        SYSTEMTIME epoch_systime = {0};
-        epoch_systime.wYear = 1970;
-        epoch_systime.wMonth = 1;
-        epoch_systime.wDayOfWeek = 4;
-        epoch_systime.wDay = 1;
-
-        FILETIME epoch_filetime = {0};
-        SystemTimeToFileTime(&epoch_systime, &epoch_filetime);
-
-        ULARGE_INTEGER current_ularge = {0};
-        current_ularge.u.LowPart = current_filetime.dwLowDateTime;
-        current_ularge.u.HighPart = current_filetime.dwHighDateTime;
-
-        ULARGE_INTEGER epoch_ularge = {0};
-        epoch_ularge.u.LowPart = epoch_filetime.dwLowDateTime;
-        epoch_ularge.u.HighPart = epoch_filetime.dwHighDateTime;
-
-        ULARGE_INTEGER new_current_ularge = {0};
-        new_current_ularge.QuadPart = current_ularge.QuadPart - epoch_ularge.QuadPart;
-
-        return (new_current_ularge.QuadPart * 100) / 1000000;
-    }
-
-    void utils_sleep(int64_t time){
-        Sleep(time);
-    }
-#elif __linux__
-    int utils_files_is_directory(char *pathname){
-        struct stat file = {0};
-
-        if(stat(pathname, &file) == -1){
-            return -1;
-        }
-
-        return S_ISDIR(file.st_mode);
-    }
-
-    int utils_files_is_regular(char *pathname){
-        struct stat file = {0};
-
-        if(stat(pathname, &file) == -1){
-            return -1;
-        }
-
-        return S_ISREG(file.st_mode);
-    }
-
-    char *utils_files_parent_pathname(char *pathname, Allocator *allocator){
-        char *cloned_pathname = allocator ? factory_clone_raw_str(pathname, allocator, NULL) : pathname;
-        return dirname(cloned_pathname);
-    }
-
-    char *utils_files_cwd(Allocator *allocator){
-        char *pathname = getcwd(NULL, 0);
-        size_t pathname_len = strlen(pathname);
-        char *cloned_pathname = MEMORY_ALLOC(char, pathname_len + 1, allocator);
-
-        if(!cloned_pathname){
-            free(pathname);
-            return NULL;
-        }
-
-        memcpy(cloned_pathname, pathname, pathname_len);
-        cloned_pathname[pathname_len] = '\0';
-
-        free(pathname);
-
-        return cloned_pathname;
-    }
-
-    int64_t utils_millis(){
-        struct timespec spec = {0};
-        clock_gettime(CLOCK_REALTIME, &spec);
-
-        return spec.tv_nsec / 1e+6 + spec.tv_sec * 1000;
-    }
-
-    void utils_sleep(int64_t time){
-        usleep(time * 1000);
-    }
-#endif
