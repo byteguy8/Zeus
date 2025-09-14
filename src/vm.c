@@ -2027,5 +2027,7 @@ int vm_execute(LZOHTable *native_fns, Module *module, VM *vm){
             assert(0 && "Illegal jump value");
         }
     }
+
+    return -1;
 }
 //< PUBLIC IMPLEMENTATION

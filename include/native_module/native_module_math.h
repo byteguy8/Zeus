@@ -9,11 +9,11 @@
 
 NativeModule *math_native_module = NULL;
 
-static inline int64_t min(uint64_t x, uint64_t y){
+static inline int64_t calc_min(uint64_t x, uint64_t y){
     return y ^ ((x ^ y) & -(x < y));
 }
 
-static inline int64_t max(uint64_t x, uint64_t y){
+static inline int64_t calc_max(uint64_t x, uint64_t y){
     return x ^ ((x ^ y) & -(x < y));
 }
 
@@ -43,7 +43,7 @@ Value native_fn_min(uint8_t argsc, Value *values, Value *target, void *context){
     int64_t left = VALUE_TO_INT(left_value);
     int64_t right = VALUE_TO_INT(right_value);
 
-    return INT_VALUE(min(left, right));
+    return INT_VALUE(calc_min(left, right));
 }
 
 Value native_fn_max(uint8_t argsc, Value *values, Value *target, void *context){
@@ -72,7 +72,7 @@ Value native_fn_max(uint8_t argsc, Value *values, Value *target, void *context){
     int64_t left = VALUE_TO_INT(left_value);
     int64_t right = VALUE_TO_INT(right_value);
 
-    return INT_VALUE(max(left, right));
+    return INT_VALUE(calc_max(left, right));
 }
 
 Value native_fn_sqrt(uint8_t argsc, Value *values, Value *target, void *context){

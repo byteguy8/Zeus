@@ -199,7 +199,7 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator){
     }
 
     char *utils_files_parent_pathname(char *pathname, Allocator *allocator){
-        char cloned_pathname = allocator ? factory_clone_raw_str(pathname, allocator, NULL) : pathname;
+        char *cloned_pathname = allocator ? factory_clone_raw_str(pathname, allocator, NULL) : pathname;
         PathRemoveFileSpecA(cloned_pathname);
         return cloned_pathname;
     }
