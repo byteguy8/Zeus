@@ -312,3 +312,28 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator){
 
 	return rstr;
 }
+
+char *utils_read_file_as_text(char *pathname, Allocator *allocator, size_t *out_len){
+    FILE *file = fopen(pathname, "r");
+
+    if(!file){
+        return NULL;
+    }
+
+	fseek(file, 0, SEEK_END);
+
+	size_t content_len = (size_t)ftell(file);
+    char *content_buff = MEMORY_ALLOC(char, content_len + 1, allocator);
+
+	fseek(file, 0, SEEK_SET);
+	fread(content_buff, 1, content_len, file);
+	fclose(file);
+
+	content_buff[content_len] = '\0';
+
+    if(out_len){
+        *out_len = content_len;
+    }
+
+	return content_buff;
+}
