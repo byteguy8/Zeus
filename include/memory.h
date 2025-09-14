@@ -2,7 +2,6 @@
 #define MEMORY_H
 
 #include "types.h"
-#include "bstr.h"
 #include "lzarena.h"
 #include "lzflist.h"
 #include "dynarr.h"

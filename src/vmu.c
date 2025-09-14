@@ -1,7 +1,6 @@
 #include "vmu.h"
 #include "memory.h"
 #include "factory.h"
-#include "bstr.h"
 #include "lzbstr.h"
 #include "fn.h"
 #include <stdio.h>
@@ -70,7 +69,6 @@ void sweep_objs(VM *vm);
 void normalize_objs(VM *vm);
 //----------            OTHERS            --------//
 static int compare_locations(const void *a, const void *b);
-static BStr *prepare_stacktrace(unsigned int spaces, VM *vm);
 static int prepare_stacktrace_new(unsigned int spaces, LZBStr *str, VM *vm);
 
 static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str);
@@ -337,33 +335,6 @@ static int compare_locations(const void *a, const void *b){
     }
 }
 
-static BStr *prepare_stacktrace(unsigned int spaces, VM *vm){
-	BStr *st = FACTORY_BSTR(vm->allocator);
-
-    for(Frame *frame = vm->frame_stack; frame < vm->frame_ptr; frame++){
-        Fn *fn = frame->fn;
-		DynArr *locations = fn->locations;
-		int index = FIND_LOCATION(frame->last_offset, locations);
-		OPCodeLocation *location = index == -1 ? NULL : (OPCodeLocation *)dynarr_get_raw(index, locations);
-
-		if(location){
-			bstr_append_args(
-				st,
-				"%*sin file: '%s' at %s:%d\n",
-                spaces,
-                "",
-                location->filepath,
-				frame->fn->name,
-				location->line
-			);
-		}else{
-			bstr_append_args(st, "inside function '%s'\n", fn->name);
-        }
-    }
-
-	return st;
-}
-
 static int prepare_stacktrace_new(unsigned int spaces, LZBStr *str, VM *vm){
     for(Frame *frame = vm->frame_stack; frame < vm->frame_ptr; frame++){
         Fn *fn = frame->fn;
@@ -609,7 +580,8 @@ static void value_to_str(Value value, Obj *parent, LZBStr *str){
 //             PUBLIC IMPLEMENTATION              //
 //--------------------------------------------------
 int vmu_error(VM *vm, char *msg, ...){
-	BStr *st = prepare_stacktrace(4, vm);
+    LZBStr *stacktrace_lzbstr = FACTORY_LZBSTR(vm->allocator);
+    char print_stacktrace = stacktrace_lzbstr && !prepare_stacktrace_new(4, stacktrace_lzbstr, vm);
 
     va_list args;
 	va_start(args, msg);
@@ -618,12 +590,15 @@ int vmu_error(VM *vm, char *msg, ...){
 	vfprintf(stderr, msg, args);
     fprintf(stderr, "\n");
 
-    if(st && st->buff){
-        fprintf(stderr, "%s", (char *)st->buff);
+    va_end(args);
+
+    if(print_stacktrace){
+        fprintf(stderr, "%s", stacktrace_lzbstr->buff);
+    }else{
+        fprintf(stderr, "    **** Failed to create stacktrace ****\n");
     }
 
-	va_end(args);
-	bstr_destroy(st);
+    lzbstr_destroy(stacktrace_lzbstr);
 
     vm->exit_code = ERR_VMRESULT;
 
@@ -632,115 +607,26 @@ int vmu_error(VM *vm, char *msg, ...){
     return 0;
 }
 
-static inline void print_x_times(FILE *stream, char *format, unsigned int times){
-    for (unsigned int i = 0; i < times; i++){
-        fprintf(stream, "%s", format);
-    }
-}
-
 int vmu_internal_error(VM *vm, char *msg, ...){
-    BStr *st = prepare_stacktrace(4, vm);
-    LZBStr *err_str = FACTORY_LZBSTR(vm->allocator);
-
-    if(lzbstr_append("FATAL RUNTIME ERROR.\nA UNEXPECTED OPERATION IN THE VIRTUAL MACHINE WITH AN ILLEGAL STATE HAVE BEEN DETECTED.\nPLEASE, READ WITH CARE THE CAUSE:\n\n\n", err_str)){
-        return 0;
-    }
+    LZBStr *stacktrace_lzbstr = FACTORY_LZBSTR(vm->allocator);
+    char print_stacktrace = stacktrace_lzbstr && !prepare_stacktrace_new(4, stacktrace_lzbstr, vm);
 
     va_list args;
-
 	va_start(args, msg);
-    int len = vsnprintf(NULL, 0, msg, args);
-    char *allocated_err_msg = MEMORY_ALLOC(char, len + 1, vm->allocator);
 
-    if(allocated_err_msg){
-        va_start(args, msg);
-        vsnprintf(allocated_err_msg, len + 1, msg, args);
+    fprintf(stderr, "FATAL RUNTIME ERROR: ");
+	vfprintf(stderr, msg, args);
+    fprintf(stderr, "\n");
 
-        lzbstr_append(allocated_err_msg, err_str);
-        lzbstr_append_args(err_str, "\n%s", st->buff);
+    va_end(args);
 
-        int line_len = 0;
-        int max_line_len = 0;
-
-        for (int i = 0; i < err_str->offset; i++){
-            char c = err_str->buff[i];
-
-            if(c == '\n'){
-                if(line_len > max_line_len){
-                    max_line_len = line_len;
-                }
-
-                line_len = 0;
-
-                continue;
-            }
-
-            line_len++;
-        }
-
-        if(max_line_len == 0){
-            max_line_len = line_len;
-        }
-
-        fprintf(stderr, "//**");
-        print_x_times(stderr, "*", max_line_len);
-        fprintf(stderr, "**//\n");
-
-        fprintf(stderr, "//  ");
-        print_x_times(stderr, " ", max_line_len);
-        fprintf(stderr, "  //\n");
-
-        fprintf(stderr, "//  ");
-
-        int chars_count = 0;
-
-        for (int i = 0; i < err_str->offset; i++){
-            char c = err_str->buff[i];
-
-            if(c == '\n'){
-                int diff = max_line_len - chars_count;
-
-                print_x_times(stderr, " ", diff);
-                fprintf(stderr, "  //\n");
-                fprintf(stderr, "//  ");
-
-                chars_count = 0;
-
-                continue;
-            }
-
-            fprintf(stderr, "%c", c);
-            chars_count++;
-        }
-
-        int diff = max_line_len - chars_count;
-
-        print_x_times(stderr, " ", diff);
-        fprintf(stderr, "  //\n");
-
-        fprintf(stderr, "//  ");
-        print_x_times(stderr, " ", max_line_len);
-        fprintf(stderr, "  //\n");
-
-        fprintf(stderr, "//**");
-        print_x_times(stderr, "*", max_line_len);
-        fprintf(stderr, "**//\n");
-
-        MEMORY_DEALLOC(char, len + 1, allocated_err_msg, vm->allocator);
+    if(print_stacktrace){
+        fprintf(stderr, "%s", stacktrace_lzbstr->buff);
     }else{
-        fprintf(stderr, "FATAL RUNTIME ERROR:\n\t");
-        vfprintf(stderr, msg, args);
-
-        if(st && st->buff){
-            fprintf(stderr, "%s", (char *)st->buff);
-        }
-
-        fprintf(stderr, "\n--------------------");
-        fprintf(stderr, "\n");
+        fprintf(stderr, "    **** Failed to create stacktrace ****\n");
     }
 
-	va_end(args);
-	bstr_destroy(st);
+    lzbstr_destroy(stacktrace_lzbstr);
 
     vm->exit_code = ERR_VMRESULT;
 

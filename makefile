@@ -18,7 +18,7 @@ FLAGS := $(FLAGS.COMMON) $(FLAGS.$(BUILD)) $(FLAGS.$(BUILD).$(PLATFORM)) $(FLAGS
 
 OBJS := splitmix64.o xoshiro256.o \
 lzarena.o lzpool.o lzflist.o \
-bstr.o lzbstr.o dynarr.o \
+lzbstr.o dynarr.o \
 lzohtable.o memory.o \
 factory.o utils.o lexer.o \
 parser.o compiler.o \
@@ -57,8 +57,6 @@ dynarr.o:
 	$(COMPILER) -c -o $(OUT_DIR)/dynarr.o $(FLAGS) $(SRC_DIR)/dynarr.c
 lzbstr.o:
 	$(COMPILER) -c -o $(OUT_DIR)/lzbstr.o $(FLAGS) $(SRC_DIR)/lzbstr.c
-bstr.o:
-	$(COMPILER) -c -o $(OUT_DIR)/bstr.o $(FLAGS) $(SRC_DIR)/bstr.c
 lzarena.o:
 	$(COMPILER) -c -o $(OUT_DIR)/lzarena.o $(FLAGS) $(SRC_DIR)/lzarena.c
 lzpool.o:

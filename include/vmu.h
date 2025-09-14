@@ -2,7 +2,6 @@
 #define VM_UTILS_H
 
 #include "vm.h"
-#include "bstr.h"
 #include "lzbstr.h"
 #include "native_fn.h"
 #include "tutils.h"
