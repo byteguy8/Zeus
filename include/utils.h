@@ -28,6 +28,16 @@
     #endif
 #endif
 
+#ifndef OS_NAME
+    #ifdef _WIN32
+        #define OS_NAME "Windows"
+    #elif __linux__
+        #define OS_NAME "Linux"
+    #else
+        #error "Must define platform name"
+    #endif
+#endif
+
 #define INVLEN 1
 #define INVPRE 2
 #define INVDIG 3
