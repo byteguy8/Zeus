@@ -28,36 +28,14 @@
     #endif
 #endif
 
-char *utils_join_raw_strs(
-    size_t buffa_len,
-    char *buffa,
-    size_t buffb_len,
-    char *buffb,
-    Allocator *allocator
-);
-char *utils_multiply_raw_str(size_t by, size_t buff_len, char *buff, Allocator *allocator);
-
-int utils_is_integer(char *buff);
-int utils_is_float(char *buff);
-
 #define INVLEN 1
 #define INVPRE 2
 #define INVDIG 3
 
 int utils_decimal_str_to_i64(char *str, int64_t *out_value);
 int utils_hexadecimal_str_to_i64(char *str, int64_t *out_value);
-int utils_i64_to_str(int64_t value, char *out_value);
 
 int utils_str_to_double(char *raw_str, double *out_value);
-int utils_double_to_str(int buff_len, double value, char *out_value);
-int utils_read_file(
-    char *pathname,
-    size_t *length,
-    char **content,
-    size_t err_len,
-    char *err_str,
-    Allocator *allocator
-);
 RawStr *utils_read_source(char *pathname, Allocator *allocator);
 
 //> SYSTEM DEPENDENT
