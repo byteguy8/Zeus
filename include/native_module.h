@@ -3,7 +3,6 @@
 
 #include "memory.h"
 #include "native_fn.h"
-#include "lzhtable.h"
 
 typedef enum native_module_symbol_type{
 	NATIVE_FUNCTION_NMSYMTYPE

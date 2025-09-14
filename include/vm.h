@@ -10,7 +10,6 @@
 #include "fn.h"
 #include "closure.h"
 #include "dynarr.h"
-#include "lzhtable.h"
 #include <setjmp.h>
 
 #define LOCALS_LENGTH 255

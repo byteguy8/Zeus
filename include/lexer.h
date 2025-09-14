@@ -4,7 +4,6 @@
 #include "types.h"
 #include "lzbstr.h"
 #include "dynarr.h"
-#include "lzhtable.h"
 #include "lzohtable.h"
 #include <setjmp.h>
 

@@ -873,36 +873,6 @@ inline Frame *vmu_current_frame(VM *vm){
     return vm->frame_ptr - 1;
 }
 
-uint32_t vmu_hash_obj(Obj *obj){
-    switch (obj->type){
-        case STR_OBJ_TYPE :{
-            return 0;
-        }default:{
-            uintptr_t iaddr = (uintptr_t)obj;
-            uint32_t hash = lzhtable_hash((uint8_t *)&iaddr, sizeof(uintptr_t));
-            return hash;
-        }
-    }
-}
-
-uint32_t vmu_hash_value(Value *value){
-    switch (value->type){
-        case BOOL_VTYPE:{
-            uint32_t hash = lzhtable_hash((uint8_t *)&VALUE_TO_BOOL(value), sizeof(uint8_t));
-            return hash;
-        }case INT_VTYPE:{
-            uint32_t hash = lzhtable_hash((uint8_t *)&VALUE_TO_INT(value), sizeof(int64_t));
-            return hash;
-        }case FLOAT_VTYPE:{
-            uint32_t hash = lzhtable_hash((uint8_t *)&VALUE_TO_FLOAT(value), sizeof(double));
-            return hash;
-        }default:{
-            Obj *obj = VALUE_TO_OBJ(value);
-            return vmu_hash_obj(obj);
-        }
-    }
-}
-
 inline void vmu_value_to_str_w(Value value, LZBStr *str){
     value_to_str(value, NULL, str);
 }

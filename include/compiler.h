@@ -6,7 +6,6 @@
 #include "module.h"
 #include "token.h"
 #include "types.h"
-#include "lzhtable.h"
 #include <setjmp.h>
 
 #define PATHS_LENGTH 256

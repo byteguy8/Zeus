@@ -3,7 +3,6 @@
 
 #include "xoshiro256.h"
 #include "dynarr.h"
-#include "lzhtable.h"
 #include "value.h"
 #include "native_fn.h"
 #include "fn.h"

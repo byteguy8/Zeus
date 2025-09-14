@@ -6,7 +6,6 @@
 #include "lzarena.h"
 #include "lzflist.h"
 #include "dynarr.h"
-#include "lzhtable.h"
 #include <stddef.h>
 
 typedef struct complex_context{

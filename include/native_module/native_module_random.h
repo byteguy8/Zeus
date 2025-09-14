@@ -3,7 +3,6 @@
 
 #include "xoshiro256.h"
 #include "types.h"
-#include "lzhtable.h"
 #include "factory.h"
 #include "vmu.h"
 #include "tutils.h"

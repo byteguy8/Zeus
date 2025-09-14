@@ -4,7 +4,6 @@
 #include "value.h"
 #include "obj.h"
 #include "dynarr.h"
-#include "lzhtable.h"
 
 #define EMPTY_VALUE ((Value){.type = EMPTY_VTYPE})
 #define BOOL_VALUE(_value)((Value){.type = BOOL_VTYPE, .content.bool = (_value)})

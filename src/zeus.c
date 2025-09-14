@@ -1,4 +1,3 @@
-#include "lzhtable.h"
 #include "memory.h"
 #include "utils.h"
 #include "factory.h"

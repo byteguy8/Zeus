@@ -3,7 +3,6 @@
 
 #include "memory.h"
 #include "dynarr.h"
-#include "lzhtable.h"
 #include "lzohtable.h"
 
 typedef struct try_block{
