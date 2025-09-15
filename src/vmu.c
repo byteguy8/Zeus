@@ -201,9 +201,9 @@ void mark_objs(VM *vm){
                 RecordObj *record_obj = OBJ_TO_RECORD(current);
                 LZOHTable *attrs = record_obj->attrs;
                 LZOHTableSlot *slots = attrs->slots;
-                size_t len = attrs->n;
+                size_t m = attrs->m;
 
-                for (size_t i = 0; i < len; i++){
+                for (size_t i = 0; i < m; i++){
                     LZOHTableSlot slot = slots[i];
 
                     if(!slot.used){
