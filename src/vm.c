@@ -718,6 +718,15 @@ static int execute(VM *vm){
                     break;
                 }
 
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
+
+                    push(FLOAT_VALUE(left + right), vm);
+
+                    break;
+                }
+
                 if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) &&
                    (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value)))
                 {
@@ -749,6 +758,15 @@ static int execute(VM *vm){
                     int64_t right = VALUE_TO_INT(right_value);
 
                     push(INT_VALUE(left - right), vm);
+
+                    break;
+                }
+
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
+
+                    push(FLOAT_VALUE(left - right), vm);
 
                     break;
                 }
@@ -788,6 +806,15 @@ static int execute(VM *vm){
                     break;
                 }
 
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
+
+                    push(FLOAT_VALUE(left * right), vm);
+
+                    break;
+                }
+
                 if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) &&
                    (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value)))
                 {
@@ -823,6 +850,15 @@ static int execute(VM *vm){
                     }
 
                     push(INT_VALUE(left / right), vm);
+
+                    break;
+                }
+
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
+
+                    push(FLOAT_VALUE(left / right), vm);
 
                     break;
                 }
