@@ -21,8 +21,8 @@ Value native_fn_os_path_separator(uint8_t argsc, Value *values, Value *target, v
 void os_module_init(Allocator *allocator){
     os_native_module = factory_create_native_module("os", allocator);
 
-    factory_add_native_fn("name", 0, native_fn_os_name, os_native_module, allocator);
-    factory_add_native_fn("path_separator", 0, native_fn_os_path_separator, os_native_module, allocator);
+    factory_add_native_fn("name", 0, native_fn_os_name, os_native_module);
+    factory_add_native_fn("path_separator", 0, native_fn_os_path_separator, os_native_module);
 }
 
 #endif

@@ -1689,25 +1689,14 @@ static int execute(VM *vm){
                     }case NATIVE_MODULE_OBJ_TYPE:{
                         NativeModuleObj *native_module_obj = OBJ_TO_NATIVE_MODULE(target_obj);
                         NativeModule *native_module = native_module_obj->native_module;
-                        NativeModuleSymbol *native_module_symbol = NULL;
+                        Value *value = NULL;
 
-                        if(!lzohtable_lookup(key_size, key, native_module->symbols, (void **)(&native_module_symbol))){
+                        if(!lzohtable_lookup(key_size, key, native_module->symbols, (void **)(&value))){
                             vmu_error(vm, "Native module '%s' does not contain symbol '%s'", native_module->name, key);
                         }
 
-                        switch (native_module_symbol->type){
-                            case NATIVE_FUNCTION_NMSYMTYPE:{
-                                NativeFn *native_fn = (NativeFn *)native_module_symbol->content.native_fn;
-                                NativeFnObj *native_fn_obj = vmu_create_native_fn((Value){0}, native_fn, vm);
-
-                                pop(vm);
-                                PUSH_OBJ(native_fn_obj, vm);
-
-                                break;
-                            }default:{
-                                vmu_internal_error(vm, "Unknown native symbol type");
-                            }
-                        }
+                        pop(vm);
+                        push(*value, vm);
 
                         break;
                     }case MODULE_OBJ_TYPE:{

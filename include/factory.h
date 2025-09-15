@@ -29,7 +29,7 @@ void factory_destroy_raw_str(char *raw_str, const Allocator *allocator);
 NativeFn *factory_create_native_fn(uint8_t core, const char *name, uint8_t arity, RawNativeFn raw_native, const Allocator *allocator);
 void factory_destroy_native_fn(NativeFn *native_fn);
 
-int factory_add_native_fn(const char *name, uint8_t arity, RawNativeFn raw_native, NativeModule *module, const Allocator *allocator);
+int factory_add_native_fn(const char *name, uint8_t arity, RawNativeFn raw_native, NativeModule *module);
 int factory_add_native_fn_info_n(char *name, uint8_t arity, RawNativeFn raw_native, LZOHTable *natives, Allocator *allocator);
 
 Fn *factory_create_fn(char *name, Module *module, Allocator *allocator);

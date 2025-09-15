@@ -65,21 +65,42 @@ void factory_destroy_native_fn(NativeFn *native_fn){
     MEMORY_DEALLOC(NativeFn, 1, native_fn, allocator);
 }
 
-int factory_add_native_fn(const char *name, uint8_t arity, RawNativeFn raw_native, NativeModule *module, const Allocator *allocator){
-	NativeFn *native_fn = factory_create_native_fn(1, name, arity, raw_native, allocator);
+int factory_add_native_fn(const char *name, uint8_t arity, RawNativeFn raw_native, NativeModule *module){
+	Allocator *allocator = module->allocator;
+    NativeFn *native_fn = factory_create_native_fn(1, name, arity, raw_native, allocator);
 
     if(!native_fn){
         factory_destroy_native_fn(native_fn);
         return 1;
     }
 
-    NativeModuleSymbol symbol = (NativeModuleSymbol){
-        .type = NATIVE_FUNCTION_NMSYMTYPE,
-        .content.native_fn = native_fn
+    NativeFnObj *native_fn_obj = MEMORY_ALLOC(NativeFnObj, 1, allocator);
+    Obj *obj = (Obj *)native_fn_obj;
+
+    if(!native_fn_obj){
+        factory_destroy_native_fn(native_fn);
+        MEMORY_DEALLOC(NativeFnObj, 1, native_fn_obj, allocator);
+        return 1;
+    }
+
+    obj->type = NATIVE_FN_OBJ_TYPE;
+    obj->marked = 0;
+    obj->color = WHITE_OBJ_COLOR;
+    obj->prev = NULL;
+    obj->next = NULL;
+    obj->list = NULL;
+
+    native_fn_obj->target = (Value){0};
+    native_fn_obj->native_fn = native_fn;
+
+    Value value = {
+        .type = OBJ_VTYPE,
+        .content.obj = native_fn_obj
     };
 
-    if(lzohtable_put_ckv(strlen(name), name, sizeof(NativeModuleSymbol), (const void *)&symbol, module->symbols, NULL)){
+    if(lzohtable_put_ckv(strlen(name), name, sizeof(Value), (const void *)&value, module->symbols, NULL)){
         factory_destroy_native_fn(native_fn);
+        MEMORY_DEALLOC(NativeFnObj, 1, native_fn_obj, allocator);
         return 1;
     }
 

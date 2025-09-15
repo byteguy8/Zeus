@@ -36,7 +36,7 @@ Value native_fn_io_read_text(uint8_t argsc, Value *values, Value *target, void *
 void io_module_init(Allocator *allocator){
     io_native_module = factory_create_native_module("io", allocator);
 
-    factory_add_native_fn("read_text", 1, native_fn_io_read_text, io_native_module, allocator);
+    factory_add_native_fn("read_text", 1, native_fn_io_read_text, io_native_module);
 }
 
 #endif

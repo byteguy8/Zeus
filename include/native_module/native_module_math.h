@@ -146,21 +146,21 @@ Value native_fn_deg2rad(uint8_t argsc, Value *values, Value *target, void *conte
 void math_module_init(Allocator *allocator){
 	math_native_module = factory_create_native_module("math", allocator);
 
-    factory_add_native_fn("min", 2, native_fn_min, math_native_module, allocator);
-    factory_add_native_fn("max", 2, native_fn_max, math_native_module, allocator);
-	factory_add_native_fn("sqrt", 1, native_fn_sqrt, math_native_module, allocator);
-    factory_add_native_fn("pow", 2, native_fn_pow, math_native_module, allocator);
-    factory_add_native_fn("cos", 1, native_fn_cos, math_native_module, allocator);
-    factory_add_native_fn("acos", 1, native_fn_acos, math_native_module, allocator);
-    factory_add_native_fn("cosh", 1, native_fn_cosh, math_native_module, allocator);
-    factory_add_native_fn("sin", 1, native_fn_sin, math_native_module, allocator);
-    factory_add_native_fn("asin", 1, native_fn_asin, math_native_module, allocator);
-    factory_add_native_fn("sinh", 1, native_fn_sinh, math_native_module, allocator);
-    factory_add_native_fn("tan", 1, native_fn_tan, math_native_module, allocator);
-    factory_add_native_fn("atan", 1, native_fn_atan, math_native_module, allocator);
-    factory_add_native_fn("tanh", 1, native_fn_tanh, math_native_module, allocator);
-    factory_add_native_fn("rad2deg", 1, native_fn_rad2deg, math_native_module, allocator);
-    factory_add_native_fn("deg2rad", 1, native_fn_deg2rad, math_native_module, allocator);
+    factory_add_native_fn("min", 2, native_fn_min, math_native_module);
+    factory_add_native_fn("max", 2, native_fn_max, math_native_module);
+	factory_add_native_fn("sqrt", 1, native_fn_sqrt, math_native_module);
+    factory_add_native_fn("pow", 2, native_fn_pow, math_native_module);
+    factory_add_native_fn("cos", 1, native_fn_cos, math_native_module);
+    factory_add_native_fn("acos", 1, native_fn_acos, math_native_module);
+    factory_add_native_fn("cosh", 1, native_fn_cosh, math_native_module);
+    factory_add_native_fn("sin", 1, native_fn_sin, math_native_module);
+    factory_add_native_fn("asin", 1, native_fn_asin, math_native_module);
+    factory_add_native_fn("sinh", 1, native_fn_sinh, math_native_module);
+    factory_add_native_fn("tan", 1, native_fn_tan, math_native_module);
+    factory_add_native_fn("atan", 1, native_fn_atan, math_native_module);
+    factory_add_native_fn("tanh", 1, native_fn_tanh, math_native_module);
+    factory_add_native_fn("rad2deg", 1, native_fn_rad2deg, math_native_module);
+    factory_add_native_fn("deg2rad", 1, native_fn_deg2rad, math_native_module);
 }
 
 #endif

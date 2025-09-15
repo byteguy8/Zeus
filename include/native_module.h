@@ -10,10 +10,7 @@ typedef enum native_module_symbol_type{
 
 typedef struct native_module_symbol{
 	NativeModuleSymbolType type;
-
-	union{
-		NativeFn *native_fn;
-	}content;
+    Value value;
 }NativeModuleSymbol;
 
 typedef struct native_module{

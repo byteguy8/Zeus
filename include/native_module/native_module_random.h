@@ -27,8 +27,8 @@ void random_module_init(Allocator *allocator){
     xos256 = xoshiro256_init();
     random_native_module = factory_create_native_module("random", allocator);
 
-    factory_add_native_fn("seed", 1, native_fn_random_seed, random_native_module, allocator);
-    factory_add_native_fn("next", 0, native_fn_random_next, random_native_module, allocator);
+    factory_add_native_fn("seed", 1, native_fn_random_seed, random_native_module);
+    factory_add_native_fn("next", 0, native_fn_random_next, random_native_module);
 }
 
 #endif
