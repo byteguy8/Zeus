@@ -58,4 +58,17 @@ static inline int is_value_numeric(Value *value){
     return type == INT_VTYPE || type == FLOAT_VTYPE;
 }
 
+static inline int is_callable(Value *value){
+    ValueType type = value->type;
+
+    if(type != OBJ_VTYPE){
+        return 0;
+    }
+
+    ObjType obj_type = ((Obj *)value->content.obj)->type;
+
+    return obj_type == FN_OBJ_TYPE ||
+           obj_type == CLOSURE_OBJ_TYPE;
+}
+
 #endif

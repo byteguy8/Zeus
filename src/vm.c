@@ -131,6 +131,8 @@ static inline uint8_t advance_save(VM *vm);
 static void add_out_value_to_current_frame(OutValue *value, VM *vm);
 static void remove_value_from_current_frame(OutValue *value, VM *vm);
 static Frame *push_frame(uint8_t argsc, VM *vm);
+static inline void call_fn(uint8_t argsc, Fn *fn, VM *vm);
+static inline void call_closure(uint8_t argsc, Closure *closure, VM *vm);
 static inline void pop_frame(VM *vm);
 static inline Value *frame_local(uint8_t which, VM *vm);
 // OTHERS
@@ -362,22 +364,47 @@ static Frame *push_frame(uint8_t argsc, VM *vm){
         vmu_internal_error(vm, "Frame locals out of value stack");
     }
 
-    if(!IS_VALUE_FN(locals)){
+    if(!is_callable(locals)){
         vmu_internal_error(vm, "Frame locals must point to function");
     }
 
-    Fn *fn = VALUE_TO_FN(locals)->fn;
     Frame *frame = vm->frame_ptr++;
 
     frame->ip = 0;
     frame->last_offset = 0;
-    frame->fn = fn;
+    frame->fn = NULL;
     frame->closure = NULL;
     frame->locals = locals;
     frame->outs_head = NULL;
     frame->outs_tail = NULL;
 
     return frame;
+}
+
+static inline void call_fn(uint8_t argsc, Fn *fn, VM *vm){
+    size_t params_count = DYNARR_LEN(fn->params);
+
+    if(argsc != params_count){
+        vmu_error(vm, "Failed to call function '%s'. Declared with %d parameter(s), but got %d argument(s)", fn->name, params_count, argsc);
+    }
+
+    Frame *frame = push_frame(argsc, vm);
+
+    frame->fn = fn;
+}
+
+static inline void call_closure(uint8_t argsc, Closure *closure, VM *vm){
+    Fn *fn = closure->meta->fn;
+    size_t params_count = DYNARR_LEN(fn->params);
+
+    if(argsc != params_count){
+        vmu_error(vm, "Failed to call closure '%s'. Declared with %d parameter(s), but got %d argument(s)", fn->name, params_count, argsc);
+    }
+
+    Frame *frame = push_frame(argsc, vm);
+
+    frame->fn = fn;
+    frame->closure = closure;
 }
 
 static inline void pop_frame(VM *vm){
@@ -1493,13 +1520,8 @@ static int execute(VM *vm){
                 if(IS_VALUE_FN(callable_value)){
                     FnObj *fn_obj = VALUE_TO_FN(callable_value);
                     Fn *fn = fn_obj->fn;
-                    uint8_t params_count = fn->params ? DYNARR_LEN(fn->params) : 0;
 
-                    if(params_count != args_count){
-                        vmu_error(vm, "Failed to call function '%s'. Declared with %d parameter(s), but got %d argument(s)", fn->name, params_count, args_count);
-                    }
-
-                    push_frame(args_count, vm);
+                    call_fn(args_count, fn, vm);
 
                     break;
                 }
@@ -1507,14 +1529,8 @@ static int execute(VM *vm){
                 if(IS_VALUE_CLOSURE(callable_value)){
                     ClosureObj *closure_obj = VALUE_TO_CLOSURE(callable_value);
                     Closure *closure = closure_obj->closure;
-                    Fn *fn = closure->meta->fn;
-                    uint8_t params_count = fn->params ? DYNARR_LEN(fn->params) : 0;
 
-                    if(params_count != args_count){
-                        vmu_error(vm, "Failed to call function '%s'. Declared with %d parameter(s), but got %d argument(s)", fn->name, params_count, args_count);
-                    }
-
-                    push_frame(args_count, vm);
+                    call_closure(args_count, closure, vm);
 
                     break;
                 }
@@ -1990,7 +2006,7 @@ int vm_execute(LZOHTable *native_fns, Module *module, VM *vm){
             );
 
             push_fn(main_fn, vm);
-            push_frame(0, vm);
+            call_fn(0, main_fn, vm);
 
             return execute(vm);
         }case 1:{
@@ -2020,7 +2036,7 @@ int vm_execute(LZOHTable *native_fns, Module *module, VM *vm){
             );
 
             push_fn(import_fn, vm);
-            push_frame(0, vm);
+            call_fn(0, import_fn, vm);
 
             return execute(vm);
         }default:{
