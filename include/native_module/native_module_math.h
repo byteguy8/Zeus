@@ -9,11 +9,11 @@
 
 NativeModule *math_native_module = NULL;
 
-static inline int64_t calc_min(uint64_t x, uint64_t y){
+static inline int64_t calc_min(int64_t x, int64_t y){
     return y ^ ((x ^ y) & -(x < y));
 }
 
-static inline int64_t calc_max(uint64_t x, uint64_t y){
+static inline int64_t calc_max(int64_t x, int64_t y){
     return x ^ ((x ^ y) & -(x < y));
 }
 
