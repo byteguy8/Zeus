@@ -27,12 +27,12 @@
 int vmu_error(VM *vm, char *msg, ...);
 int vmu_internal_error(VM *vm, char *msg, ...);
 
-uint8_t validate_value_bool_arg(Value *value, uint8_t param, char *name, VM *vm);
-int64_t validate_value_int_arg(Value *value, uint8_t param, char *name, VM *vm);
-double validate_value_float_arg(Value *value, uint8_t param, char *name, VM *vm);
-double validate_value_ifloat_arg(Value *value, uint8_t param, char *name, VM *vm);
-int64_t validate_value_int_range_arg(Value *value, uint8_t param, char *name, int64_t from, int64_t to, VM *vm);
-StrObj *validate_value_str_arg(Value *value, uint8_t param, char *name, VM *vm);
+uint8_t validate_value_bool_arg(Value value, uint8_t param, char *name, VM *vm);
+int64_t validate_value_int_arg(Value value, uint8_t param, char *name, VM *vm);
+double validate_value_float_arg(Value value, uint8_t param, char *name, VM *vm);
+double validate_value_ifloat_arg(Value value, uint8_t param, char *name, VM *vm);
+int64_t validate_value_int_range_arg(Value value, uint8_t param, char *name, int64_t from, int64_t to, VM *vm);
+StrObj *validate_value_str_arg(Value value, uint8_t param, char *name, VM *vm);
 
 void vmu_clean_up(VM *vm);
 void vmu_gc(VM *vm);
@@ -43,7 +43,7 @@ Frame *vmu_current_frame(VM *vm);
 
 void vmu_value_to_str_w(Value value, LZBStr *str);
 char *vmu_value_to_str(Value value, VM *vm, size_t *out_len);
-void vmu_print_value(FILE *stream, Value *value);
+void vmu_print_value(FILE *stream, Value value);
 
 Value *vmu_clone_value(Value value, VM *vm);
 void vmu_destroy_value(Value *value, VM *vm);

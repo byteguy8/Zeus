@@ -8,7 +8,7 @@ Value native_fn_print_stack(uint8_t argsc, Value *values, Value *target, void *c
     VM *vm = (VM *)context;
 
     for(Value *current = vm->stack; current < vm->stack_top; current++){
-        vmu_print_value(stdout, current);
+        vmu_print_value(stdout, *current);
         fprintf(stdout, "\n");
     }
 
@@ -17,7 +17,7 @@ Value native_fn_print_stack(uint8_t argsc, Value *values, Value *target, void *c
 
 Value native_fn_exit(uint8_t argsc, Value *values, Value *target, void *context){
     VM *vm = (VM *)context;
-    int64_t exit_code = validate_value_int_range_arg(&values[0], 1, "exit code", 0, 255, vm);
+    int64_t exit_code = validate_value_int_range_arg(values[0], 1, "exit code", 0, 255, vm);
 
     vm->halt = 1;
     vm->exit_code = (unsigned char)exit_code;
@@ -26,7 +26,7 @@ Value native_fn_exit(uint8_t argsc, Value *values, Value *target, void *context)
 }
 
 Value native_fn_assert(uint8_t argsc, Value *values, Value *target, void *context){
-    uint8_t value = validate_value_bool_arg(&values[0], 1, "assertion", VMU_VM);
+    uint8_t value = validate_value_bool_arg(values[0], 1, "assertion", VMU_VM);
 
     if(!value){
         vmu_error(VMU_VM, "ASSERTION FAILED");
@@ -36,8 +36,8 @@ Value native_fn_assert(uint8_t argsc, Value *values, Value *target, void *contex
 }
 
 Value native_fn_assertm(uint8_t argsc, Value *values, Value *target, void *context){
-    uint8_t value = validate_value_bool_arg(&values[0], 1, "assertion", VMU_VM);
-    StrObj *str_obj = validate_value_str_arg(&values[1], 2, "message", VMU_VM);
+    uint8_t value = validate_value_bool_arg(values[0], 1, "assertion", VMU_VM);
+    StrObj *str_obj = validate_value_str_arg(values[1], 2, "message", VMU_VM);
 
     if(!value){
         vmu_error(VMU_VM, "%s", str_obj->buff);
@@ -47,12 +47,12 @@ Value native_fn_assertm(uint8_t argsc, Value *values, Value *target, void *conte
 }
 
 Value native_fn_is_str_int(uint8_t argsc, Value *values, Value *target, void *context){
-    StrObj *str_obj = validate_value_str_arg(&values[0], 1, "string", VMU_VM);
+    StrObj *str_obj = validate_value_str_arg(values[0], 1, "string", VMU_VM);
     return BOOL_VALUE((uint8_t)vmu_str_is_int(str_obj));
 }
 
 Value native_fn_is_str_float(uint8_t argsc, Value *values, Value *target, void *context){
-    StrObj *str_obj = validate_value_str_arg(&values[0], 1, "string", VMU_VM);
+    StrObj *str_obj = validate_value_str_arg(values[0], 1, "string", VMU_VM);
     return BOOL_VALUE((uint8_t)vmu_str_is_float(str_obj));
 }
 
@@ -69,23 +69,23 @@ Value native_fn_to_str(uint8_t argsc, Value *values, Value *target, void *contex
 }
 
 Value native_fn_to_int(uint8_t argsc, Value *values, Value *target, void *context){
-    Value *raw_value = &values[0];
+    Value raw_value = values[0];
 
-    if(IS_VALUE_BOOL(raw_value)){
-        return INT_VALUE((int64_t)VALUE_TO_BOOL(raw_value));
+    if(VM_IS_VALUE_BOOL(raw_value)){
+        return INT_VALUE((int64_t)VM_VALUE_TO_BOOL(raw_value));
     }
 
-    if(IS_VALUE_INT(raw_value)){
-        return *raw_value;
+    if(VM_IS_VALUE_INT(raw_value)){
+        return raw_value;
     }
 
-    if(IS_VALUE_FLOAT(raw_value)){
-        return INT_VALUE((int64_t)VALUE_TO_FLOAT(raw_value));
+    if(VM_IS_VALUE_FLOAT(raw_value)){
+        return INT_VALUE((int64_t)VM_VALUE_TO_FLOAT(raw_value));
     }
 
-    if(IS_VALUE_STR(raw_value)){
+    if(vm_is_value_str(raw_value)){
         int64_t value;
-        StrObj *str_obj = VALUE_TO_STR(raw_value);
+        StrObj *str_obj = VM_VALUE_TO_STR(raw_value);
 
         if(!vmu_str_is_int(str_obj)){
             vmu_error(VMU_VM, "Failed to parse 'str' to 'int': contains not valid digits");
@@ -102,19 +102,19 @@ Value native_fn_to_int(uint8_t argsc, Value *values, Value *target, void *contex
 }
 
 Value native_fn_to_float(uint8_t argsc, Value *values, Value *target, void *context){
-    Value *raw_value = &values[0];
+    Value raw_value = values[0];
 
-    if(IS_VALUE_INT(raw_value)){
-        return FLOAT_VALUE((double)VALUE_TO_INT(raw_value));
+    if(VM_IS_VALUE_INT(raw_value)){
+        return FLOAT_VALUE((double)VM_VALUE_TO_INT(raw_value));
     }
 
-    if(IS_VALUE_FLOAT(raw_value)){
-        return *raw_value;
+    if(VM_IS_VALUE_FLOAT(raw_value)){
+        return raw_value;
     }
 
-    if(IS_VALUE_STR(raw_value)){
+    if(vm_is_value_str(raw_value)){
         double value;
-        StrObj *str_obj = VALUE_TO_STR(raw_value);
+        StrObj *str_obj = VM_VALUE_TO_STR(raw_value);
 
         if(!vmu_str_is_float(str_obj)){
             vmu_error(VMU_VM, "Failed to parse 'str' to 'float': malformed float string");
@@ -131,28 +131,36 @@ Value native_fn_to_float(uint8_t argsc, Value *values, Value *target, void *cont
 }
 
 Value native_fn_print(uint8_t argsc, Value *values, Value *target, void *context){
-    Value *raw_value = &values[0];
+    Value raw_value = values[0];
+
     vmu_print_value(stdout, raw_value);
+
     return EMPTY_VALUE;
 }
 
 Value native_fn_println(uint8_t argsc, Value *values, Value *target, void *context){
-    Value *raw_value = &values[0];
+    Value raw_value = values[0];
+
     vmu_print_value(stdout, raw_value);
     printf("\n");
+
     return EMPTY_VALUE;
 }
 
 Value native_fn_eprint(uint8_t argsc, Value *values, Value *target, void *context){
-    Value *raw_value = &values[0];
+    Value raw_value = values[0];
+
     vmu_print_value(stderr, raw_value);
+
     return EMPTY_VALUE;
 }
 
 Value native_fn_eprintln(uint8_t argsc, Value *values, Value *target, void *context){
-    Value *raw_value = &values[0];
+    Value raw_value = values[0];
+
     vmu_print_value(stderr, raw_value);
     fprintf(stderr, "\n");
+
     return EMPTY_VALUE;
 }
 

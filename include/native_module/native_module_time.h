@@ -8,7 +8,7 @@
 NativeModule *time_native_module = NULL;
 
 Value native_fn_time_millis_sleep(uint8_t argsc, Value *values, Value *target, void *context){
-    int64_t sleep_value = validate_value_int_range_arg(&values[0], 1, "millis", 1, UINT32_MAX, VMU_VM);
+    int64_t sleep_value = validate_value_int_range_arg(values[0], 1, "millis", 1, UINT32_MAX, VMU_VM);
     utils_sleep(sleep_value);
     return EMPTY_VALUE;
 }

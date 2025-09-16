@@ -11,51 +11,14 @@
 #define FLOAT_VALUE(_value)((Value){.type = FLOAT_VTYPE, .content.fvalue = (_value)})
 #define OBJ_VALUE(_value)((Value){.type = OBJ_VTYPE, .content.obj = (_value)})
 
-#define OBJ_TO_STR(_obj)((StrObj *)(_obj))
-#define OBJ_TO_ARRAY(_obj)((ArrayObj *)(_obj))
-#define OBJ_TO_LIST(_obj)((ListObj *)(_obj))
-#define OBJ_TO_DICT(_obj)((DictObj *)(_obj))
-#define OBJ_TO_RECORD(_obj)((RecordObj *)(_obj))
-#define OBJ_TO_NATIVE_FN(_obj)((NativeFnObj *)(_obj))
-#define OBJ_TO_FN(_obj)((FnObj *)(_obj))
-#define OBJ_TO_CLOSURE(_obj)((ClosureObj *)(_obj))
-#define OBJ_TO_NATIVE_MODULE(_obj)((NativeModuleObj *)(_obj))
-#define OBJ_TO_MODULE(_obj)((ModuleObj *)(_obj))
+#define VM_IS_VALUE_EMPTY(_value)((_value).type == EMPTY_VTYPE)
+#define VM_IS_VALUE_BOOL(_value)((_value).type == BOOL_VTYPE)
+#define VM_IS_VALUE_INT(_value)((_value).type == INT_VTYPE)
+#define VM_IS_VALUE_FLOAT(_value)((_value).type == FLOAT_VTYPE)
+#define VM_IS_VALUE_OBJ(_value)((_value).type == OBJ_VTYPE)
 
-#define VALUE_TO_BOOL(_value)((_value)->content.bool)
-#define VALUE_TO_INT(_value)((_value)->content.ivalue)
-#define VALUE_TO_FLOAT(_value)((_value)->content.fvalue)
-#define VALUE_TO_OBJ(_value)((Obj *)((_value)->content.obj))
-#define VALUE_TO_STR(_value)(OBJ_TO_STR(VALUE_TO_OBJ(_value)))
-#define VALUE_TO_ARRAY(_value)(OBJ_TO_ARRAY(VALUE_TO_OBJ(_value)))
-#define VALUE_TO_LIST(_value)(OBJ_TO_LIST(VALUE_TO_OBJ(_value)))
-#define VALUE_TO_DICT(_value)(OBJ_TO_DICT(VALUE_TO_OBJ(_value)))
-#define VALUE_TO_RECORD(_value)(OBJ_TO_RECORD(VALUE_TO_OBJ(_value)))
-#define VALUE_TO_FN(_value)(OBJ_TO_FN(VALUE_TO_OBJ(_value)))
-#define VALUE_TO_CLOSURE(_value)(OBJ_TO_CLOSURE(VALUE_TO_OBJ(_value)))
-#define VALUE_TO_NATIVE_FN(_value)(OBJ_TO_NATIVE_FN(VALUE_TO_OBJ(_value)))
-#define VALUE_TO_NATIVE_MODULE(_value)(OBJ_TO_NATIVE_MODULE(VALUE_TO_OBJ(_value)))
-#define VALUE_TO_MODULE(_value)(OBJ_TO_MODULE(VALUE_TO_OBJ(_value)))
-
-#define IS_VALUE_EMPTY(_value)(VALUE_TYPE(_value) == EMPTY_VTYPE)
-#define IS_VALUE_BOOL(_value)(VALUE_TYPE(_value) == BOOL_VTYPE)
-#define IS_VALUE_INT(_value)(VALUE_TYPE(_value) == INT_VTYPE)
-#define IS_VALUE_FLOAT(_value)(VALUE_TYPE(_value) == FLOAT_VTYPE)
-#define IS_VALUE_OBJ(_value)(VALUE_TYPE(_value) == OBJ_VTYPE)
-#define IS_VALUE_STR(_value)(IS_VALUE_OBJ(_value) && OBJ_TYPE(VALUE_TO_OBJ(_value)) == STR_OBJ_TYPE)
-#define IS_VALUE_ARRAY(_value)(IS_VALUE_OBJ(_value) && OBJ_TYPE(VALUE_TO_OBJ(_value)) == ARRAY_OBJ_TYPE)
-#define IS_VALUE_LIST(_value)(IS_VALUE_OBJ(_value) && OBJ_TYPE(VALUE_TO_OBJ(_value)) == LIST_OBJ_TYPE)
-#define IS_VALUE_DICT(_value)(IS_VALUE_OBJ(_value) && OBJ_TYPE(VALUE_TO_OBJ(_value)) == DICT_OBJ_TYPE)
-#define IS_VALUE_RECORD(_value)(IS_VALUE_OBJ(_value) && OBJ_TYPE(VALUE_TO_OBJ(_value)) == RECORD_OBJ_TYPE)
-#define IS_VALUE_FN(_value)(IS_VALUE_OBJ(_value) && OBJ_TYPE(VALUE_TO_OBJ(_value)) == FN_OBJ_TYPE)
-#define IS_VALUE_CLOSURE(_value)(IS_VALUE_OBJ(_value) && OBJ_TYPE(VALUE_TO_OBJ(_value)) == CLOSURE_OBJ_TYPE)
-#define IS_VALUE_NATIVE_FN(_value)(IS_VALUE_OBJ(_value) && OBJ_TYPE(VALUE_TO_OBJ(_value)) == NATIVE_FN_OBJ_TYPE)
-#define IS_VALUE_NATIVE_MODULE(_value)(IS_VALUE_OBJ(_value) && OBJ_TYPE(VALUE_TO_OBJ(_value)) == NATIVE_MODULE_OBJ_TYPE)
-#define IS_VALUE_MODULE(_value)(IS_VALUE_OBJ(_value) && OBJ_TYPE(VALUE_TO_OBJ(_value)) == MODULE_OBJ_TYPE)
-
-static inline int is_value_numeric(Value *value){
-    ValueType type = value->type;
-    return type == INT_VTYPE || type == FLOAT_VTYPE;
+static inline int vm_is_value_numeric(Value value){
+    return value.type == INT_VTYPE || value.type == FLOAT_VTYPE;
 }
 
 static inline int is_callable(Value *value){
@@ -70,5 +33,69 @@ static inline int is_callable(Value *value){
     return obj_type == FN_OBJ_TYPE ||
            obj_type == CLOSURE_OBJ_TYPE;
 }
+
+static inline int vm_is_value_str(Value value){
+    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == STR_OBJ_TYPE;
+}
+
+static inline int vm_is_value_array(Value value){
+    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == ARRAY_OBJ_TYPE;
+}
+
+static inline int vm_is_value_list(Value value){
+    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == LIST_OBJ_TYPE;
+}
+
+static inline int vm_is_value_dict(Value value){
+    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == DICT_OBJ_TYPE;
+}
+
+static inline int vm_is_value_record(Value value){
+    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == RECORD_OBJ_TYPE;
+}
+
+static inline int vm_is_value_native_fn(Value value){
+    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == NATIVE_FN_OBJ_TYPE;
+}
+
+static inline int vm_is_value_fn(Value value){
+    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == FN_OBJ_TYPE;
+}
+
+static inline int vm_is_value_closure(Value value){
+    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == CLOSURE_OBJ_TYPE;
+}
+
+static inline int vm_is_value_native_module(Value value){
+    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == NATIVE_MODULE_OBJ_TYPE;
+}
+
+static inline int vm_is_value_module(Value value){
+    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == MODULE_OBJ_TYPE;
+}
+
+#define VM_VALUE_TO_BOOL(_value)((_value).content.bool)
+#define VM_VALUE_TO_INT(_value)((_value).content.ivalue)
+#define VM_VALUE_TO_FLOAT(_value)((_value).content.fvalue)
+#define VM_VALUE_TO_OBJ(_value)((Obj *)(_value).content.obj)
+#define VM_VALUE_TO_STR(_value)((StrObj *)(_value).content.obj)
+#define VM_VALUE_TO_ARRAY(_value)((ArrayObj *)(_value).content.obj)
+#define VM_VALUE_TO_LIST(_value)((ListObj*)(_value).content.obj)
+#define VM_VALUE_TO_DICT(_value)((DictObj *)(_value).content.obj)
+#define VM_VALUE_TO_RECORD(_value)((RecordObj *)(_value).content.obj)
+#define VM_VALUE_TO_NATIVE_FN(_value)((NativeFnObj *)(_value).content.obj)
+#define VM_VALUE_TO_FN(_value)((FnObj *)(_value).content.obj)
+#define VM_VALUE_TO_CLOSURE(_value)((ClosureObj *)(_value).content.obj)
+
+#define OBJ_TO_STR(_obj)((StrObj *)(_obj))
+#define OBJ_TO_ARRAY(_obj)((ArrayObj *)(_obj))
+#define OBJ_TO_LIST(_obj)((ListObj *)(_obj))
+#define OBJ_TO_DICT(_obj)((DictObj *)(_obj))
+#define OBJ_TO_RECORD(_obj)((RecordObj *)(_obj))
+#define OBJ_TO_NATIVE_FN(_obj)((NativeFnObj *)(_obj))
+#define OBJ_TO_FN(_obj)((FnObj *)(_obj))
+#define OBJ_TO_CLOSURE(_obj)((ClosureObj *)(_obj))
+#define OBJ_TO_NATIVE_MODULE(_obj)((NativeModuleObj *)(_obj))
+#define OBJ_TO_MODULE(_obj)((ModuleObj *)(_obj))
 
 #endif

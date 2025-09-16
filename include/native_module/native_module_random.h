@@ -14,7 +14,7 @@ XOShiro256 xos256;
 NativeModule *random_native_module = NULL;
 
 Value native_fn_random_seed(uint8_t argsc, Value *values, Value *target, void *context){
-    uint64_t seed = (uint64_t)validate_value_int_arg(&values[0], 1, "seed", VMU_VM);
+    uint64_t seed = (uint64_t)validate_value_int_arg(values[0], 1, "seed", VMU_VM);
     xos256 = xoshiro256_init_seed(seed);
     return EMPTY_VALUE;
 }

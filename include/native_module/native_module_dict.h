@@ -6,13 +6,13 @@
 static LZOHTable *dict_symbols = NULL;
 
 Value native_dict_fn_len(uint8_t argsc, Value *values, Value *target, void *context){
-    DictObj *dict_obj = VALUE_TO_DICT(target);
+    DictObj *dict_obj = VM_VALUE_TO_DICT(*target);
     LZOHTable *key_values = dict_obj->key_values;
     return INT_VALUE((int64_t)key_values->n);
 }
 
 Value native_dict_fn_clear(uint8_t argsc, Value *values, Value *target, void *context){
-    DictObj *dict_obj = VALUE_TO_DICT(target);
+    DictObj *dict_obj = VM_VALUE_TO_DICT(*target);
     LZOHTable *key_values = dict_obj->key_values;
     size_t len = key_values->n;
 
