@@ -71,21 +71,21 @@ Value native_fn_to_str(uint8_t argsc, Value *values, Value *target, void *contex
 Value native_fn_to_int(uint8_t argsc, Value *values, Value *target, void *context){
     Value raw_value = values[0];
 
-    if(VM_IS_VALUE_BOOL(raw_value)){
-        return INT_VALUE((int64_t)VM_VALUE_TO_BOOL(raw_value));
+    if(IS_VALUE_BOOL(raw_value)){
+        return INT_VALUE((int64_t)VALUE_TO_BOOL(raw_value));
     }
 
-    if(VM_IS_VALUE_INT(raw_value)){
+    if(IS_VALUE_INT(raw_value)){
         return raw_value;
     }
 
-    if(VM_IS_VALUE_FLOAT(raw_value)){
-        return INT_VALUE((int64_t)VM_VALUE_TO_FLOAT(raw_value));
+    if(IS_VALUE_FLOAT(raw_value)){
+        return INT_VALUE((int64_t)VALUE_TO_FLOAT(raw_value));
     }
 
-    if(vm_is_value_str(raw_value)){
+    if(is_value_str(raw_value)){
         int64_t value;
-        StrObj *str_obj = VM_VALUE_TO_STR(raw_value);
+        StrObj *str_obj = VALUE_TO_STR(raw_value);
 
         if(!vmu_str_is_int(str_obj)){
             vmu_error(VMU_VM, "Failed to parse 'str' to 'int': contains not valid digits");
@@ -104,17 +104,17 @@ Value native_fn_to_int(uint8_t argsc, Value *values, Value *target, void *contex
 Value native_fn_to_float(uint8_t argsc, Value *values, Value *target, void *context){
     Value raw_value = values[0];
 
-    if(VM_IS_VALUE_INT(raw_value)){
-        return FLOAT_VALUE((double)VM_VALUE_TO_INT(raw_value));
+    if(IS_VALUE_INT(raw_value)){
+        return FLOAT_VALUE((double)VALUE_TO_INT(raw_value));
     }
 
-    if(VM_IS_VALUE_FLOAT(raw_value)){
+    if(IS_VALUE_FLOAT(raw_value)){
         return raw_value;
     }
 
-    if(vm_is_value_str(raw_value)){
+    if(is_value_str(raw_value)){
         double value;
-        StrObj *str_obj = VM_VALUE_TO_STR(raw_value);
+        StrObj *str_obj = VALUE_TO_STR(raw_value);
 
         if(!vmu_str_is_float(str_obj)){
             vmu_error(VMU_VM, "Failed to parse 'str' to 'float': malformed float string");

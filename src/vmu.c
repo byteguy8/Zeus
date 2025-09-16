@@ -89,8 +89,8 @@ void prepare_module_globals(Module *module, VM *vm){
         GlobalValue *global_value = (GlobalValue *)slot->value;
         Value value = global_value->value;
 
-        if(VM_IS_VALUE_OBJ(value) && VM_VALUE_TO_OBJ(value)->color == WHITE_OBJ_COLOR){
-            Obj *obj = VM_VALUE_TO_OBJ(value);
+        if(IS_VALUE_OBJ(value) && VALUE_TO_OBJ(value)->color == WHITE_OBJ_COLOR){
+            Obj *obj = VALUE_TO_OBJ(value);
             obj->color = GRAY_OBJ_COLOR;
             obj_list_remove(obj);
             obj_list_insert(obj, &vm->gray_objs);
@@ -111,8 +111,8 @@ void prepare_worklist(VM *vm){
     for (Value *stack_slot = vm->stack; stack_slot < stack_top; stack_slot++){
         Value value = *stack_slot;
 
-        if(VM_IS_VALUE_OBJ(value) && VM_VALUE_TO_OBJ(value)->color == WHITE_OBJ_COLOR){
-            Obj *obj = VM_VALUE_TO_OBJ(value);
+        if(IS_VALUE_OBJ(value) && VALUE_TO_OBJ(value)->color == WHITE_OBJ_COLOR){
+            Obj *obj = VALUE_TO_OBJ(value);
             obj->color = GRAY_OBJ_COLOR;
             obj_list_remove(obj);
             obj_list_insert(obj, &vm->gray_objs);
@@ -387,7 +387,7 @@ static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
             for (size_t i = 0; i < len; i++){
                 Value value = values[i];
 
-                if(vm_is_value_str(value)){
+                if(is_value_str(value)){
                     lzbstr_append("'", str);
                     value_to_str(value, obj, str);
                     lzbstr_append("'", str);
@@ -413,7 +413,7 @@ static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
             for (size_t i = 0; i < len; i++){
                 Value value = DYNARR_GET_AS(Value, i, items);
 
-                if(vm_is_value_str(value)){
+                if(is_value_str(value)){
                     lzbstr_append("'", str);
                     value_to_str(value, obj, str);
                     lzbstr_append("'", str);
@@ -449,7 +449,7 @@ static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
                 Value key = *(Value *)slot.key;
                 Value value = *(Value *)slot.value;
 
-                if(vm_is_value_str(key)){
+                if(is_value_str(key)){
                     lzbstr_append("'", str);
                     value_to_str(key, obj, str);
                     lzbstr_append("'", str);
@@ -459,7 +459,7 @@ static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
 
                 lzbstr_append(": ", str);
 
-                if(vm_is_value_str(value)){
+                if(is_value_str(value)){
                     lzbstr_append("'", str);
                     value_to_str(value, obj, str);
                     lzbstr_append("'", str);
@@ -500,7 +500,7 @@ static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
 
                 lzbstr_append_args(str, "%s: ", key);
 
-                if(vm_is_value_str(value)){
+                if(is_value_str(value)){
                     lzbstr_append("'", str);
                     value_to_str(value, obj, str);
                     lzbstr_append("'", str);
@@ -638,36 +638,36 @@ int vmu_internal_error(VM *vm, char *msg, ...){
 }
 
 inline uint8_t validate_value_bool_arg(Value value, uint8_t param, char *name, VM *vm){
-    if(!VM_IS_VALUE_BOOL(value)){
+    if(!IS_VALUE_BOOL(value)){
         vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'bool'", param, name);
     }
 
-    return VM_VALUE_TO_BOOL(value);
+    return VALUE_TO_BOOL(value);
 }
 
 inline int64_t validate_value_int_arg(Value value, uint8_t param, char *name, VM *vm){
-    if(!VM_IS_VALUE_INT(value)){
+    if(!IS_VALUE_INT(value)){
         vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'int'", param, name);
     }
 
-    return VM_VALUE_TO_INT(value);
+    return VALUE_TO_INT(value);
 }
 
 inline double validate_value_float_arg(Value value, uint8_t param, char *name, VM *vm){
-    if(!VM_IS_VALUE_FLOAT(value)){
+    if(!IS_VALUE_FLOAT(value)){
         vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'float'", param, name);
     }
 
-    return VM_VALUE_TO_FLOAT(value);
+    return VALUE_TO_FLOAT(value);
 }
 
 inline double validate_value_ifloat_arg(Value value, uint8_t param, char *name, VM *vm){
-    if(VM_IS_VALUE_INT(value)){
-        return (double)VM_VALUE_TO_INT(value);
+    if(IS_VALUE_INT(value)){
+        return (double)VALUE_TO_INT(value);
     }
 
-    if(VM_IS_VALUE_FLOAT(value)){
-        return VM_VALUE_TO_FLOAT(value);
+    if(IS_VALUE_FLOAT(value)){
+        return VALUE_TO_FLOAT(value);
     }
 
     vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'int' or 'float'", param, name);
@@ -676,11 +676,11 @@ inline double validate_value_ifloat_arg(Value value, uint8_t param, char *name, 
 }
 
 inline int64_t validate_value_int_range_arg(Value value, uint8_t param, char *name, int64_t from, int64_t to, VM *vm){
-    if(!VM_IS_VALUE_INT(value)){
+    if(!IS_VALUE_INT(value)){
         vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'int'", param, name);
     }
 
-    int64_t i64_value = VM_VALUE_TO_INT(value);
+    int64_t i64_value = VALUE_TO_INT(value);
 
     if(i64_value < from){
         vmu_error(vm, "Illegal value of argument %" PRIu8 ": expect '%s' be greater or equals to %" PRId64 ", but got %" PRId64, param, name, from, i64_value);
@@ -694,11 +694,11 @@ inline int64_t validate_value_int_range_arg(Value value, uint8_t param, char *na
 }
 
 inline StrObj *validate_value_str_arg(Value value, uint8_t param, char *name, VM *vm){
-    if(!vm_is_value_str(value)){
+    if(!is_value_str(value)){
         vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'str'", param, name);
     }
 
-    return VM_VALUE_TO_STR(value);
+    return VALUE_TO_STR(value);
 }
 
 void vmu_clean_up(VM *vm){
@@ -838,17 +838,17 @@ void vmu_print_value(FILE *stream, Value value){
             fprintf(stream, "empty");
             break;
         }case BOOL_VTYPE:{
-            uint8_t bool = VM_VALUE_TO_BOOL(value);
+            uint8_t bool = VALUE_TO_BOOL(value);
             fprintf(stream, "%s", bool == 0 ? "false" : "true");
             break;
         }case INT_VTYPE:{
-            fprintf(stream, "%" PRId64, VM_VALUE_TO_INT(value));
+            fprintf(stream, "%" PRId64, VALUE_TO_INT(value));
             break;
         }case FLOAT_VTYPE:{
-			fprintf(stream, "%.8f", VM_VALUE_TO_FLOAT(value));
+			fprintf(stream, "%.8f", VALUE_TO_FLOAT(value));
             break;
 		}case OBJ_VTYPE:{
-            vmu_print_obj(stream, VM_VALUE_TO_OBJ(value));
+            vmu_print_obj(stream, VALUE_TO_OBJ(value));
             break;
         }default:{
             assert("Illegal value type");
@@ -1446,7 +1446,7 @@ inline void vmu_destroy_dict(DictObj *dict_obj, VM *vm){
 }
 
 inline void vmu_dict_put(Value key, Value value, DictObj *dict_obj, VM *vm){
-    if(VM_IS_VALUE_EMPTY(value)){
+    if(IS_VALUE_EMPTY(value)){
         vmu_error(vm, "Failed to put value into dict: key cannot be 'empty'");
     }
 

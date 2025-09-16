@@ -515,11 +515,11 @@ static int execute(VM *vm){
             }case ARRAY_OPCODE:{
                 Value len_value = pop(vm);
 
-                if(!VM_IS_VALUE_INT(len_value)){
+                if(!IS_VALUE_INT(len_value)){
                     vmu_error(vm, "Expect 'INT' as array length");
                 }
 
-                int64_t array_len = VM_VALUE_TO_INT(len_value);
+                int64_t array_len = VALUE_TO_INT(len_value);
                 ArrayObj *array_obj = vmu_create_array(array_len, vm);
 
                 PUSH_OBJ(array_obj, vm);
@@ -555,7 +555,7 @@ static int execute(VM *vm){
                 int64_t idx = (int64_t)read_i16(vm);
                 Value value = pop(vm);
                 Value array_value = peek(vm);
-                ArrayObj *array_obj = VM_VALUE_TO_ARRAY(array_value);
+                ArrayObj *array_obj = VALUE_TO_ARRAY(array_value);
 
                 vmu_array_set_at(idx, value, array_obj, vm);
 
@@ -564,11 +564,11 @@ static int execute(VM *vm){
                 Value value = peek_at(0, vm);
                 Value list_value = peek_at(1, vm);
 
-                if(!vm_is_value_list(list_value)){
+                if(!is_value_list(list_value)){
                     vmu_internal_error(vm, "Expect value of type 'dict', but got something else");
                 }
 
-                vmu_list_insert(value, VM_VALUE_TO_LIST(list_value), vm);
+                vmu_list_insert(value, VALUE_TO_LIST(list_value), vm);
                 pop(vm);
 
                 break;
@@ -577,11 +577,11 @@ static int execute(VM *vm){
                 Value key_value = peek_at(1, vm);
                 Value dict_value = peek_at(2, vm);
 
-                if(!vm_is_value_dict(dict_value)){
+                if(!is_value_dict(dict_value)){
                     vmu_internal_error(vm, "Expect value of type 'dict', but got something else");
                 }
 
-                vmu_dict_put(key_value, raw_value, VM_VALUE_TO_DICT(dict_value), vm);
+                vmu_dict_put(key_value, raw_value, VALUE_TO_DICT(dict_value), vm);
                 pop(vm);
                 pop(vm);
 
@@ -592,11 +592,11 @@ static int execute(VM *vm){
                 Value raw_value = peek_at(0, vm);
                 Value record_value = peek_at(1, vm);
 
-                if(!vm_is_value_record(record_value)){
+                if(!is_value_record(record_value)){
                     vmu_internal_error(vm, "Expect value of type 'record', but got something else");
                 }
 
-                vmu_record_insert_attr(key_size, key, raw_value, VM_VALUE_TO_RECORD(record_value), vm);
+                vmu_record_insert_attr(key_size, key, raw_value, VALUE_TO_RECORD(record_value), vm);
                 pop(vm);
 
                 break;
@@ -604,9 +604,9 @@ static int execute(VM *vm){
                 Value right_value = peek_at(0, vm);
                 Value left_value = peek_at(1, vm);
 
-                if(vm_is_value_str(left_value) && vm_is_value_str(right_value)){
-                    StrObj *left_str_obj = VM_VALUE_TO_STR(left_value);
-                    StrObj *right_str_obj = VM_VALUE_TO_STR(right_value);
+                if(is_value_str(left_value) && is_value_str(right_value)){
+                    StrObj *left_str_obj = VALUE_TO_STR(left_value);
+                    StrObj *right_str_obj = VALUE_TO_STR(right_value);
                     StrObj *result_str_obj = vmu_str_concat(left_str_obj, right_str_obj, vm);
 
                     pop(vm);
@@ -616,9 +616,9 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(vm_is_value_array(left_value) && vm_is_value_array(right_value)){
-                    ArrayObj *left_array_obj = VM_VALUE_TO_ARRAY(left_value);
-                    ArrayObj *right_array_obj = VM_VALUE_TO_ARRAY(right_value);
+                if(is_value_array(left_value) && is_value_array(right_value)){
+                    ArrayObj *left_array_obj = VALUE_TO_ARRAY(left_value);
+                    ArrayObj *right_array_obj = VALUE_TO_ARRAY(right_value);
                     ArrayObj *new_array_obj = vmu_array_join(left_array_obj, right_array_obj, vm);
 
                     pop(vm);
@@ -628,9 +628,9 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(vm_is_value_list(left_value) && vm_is_value_list(right_value)){
-                    ListObj *left_list_obj = VM_VALUE_TO_LIST(left_value);
-                    ListObj *right_list_obj = VM_VALUE_TO_LIST(right_value);
+                if(is_value_list(left_value) && is_value_list(right_value)){
+                    ListObj *left_list_obj = VALUE_TO_LIST(left_value);
+                    ListObj *right_list_obj = VALUE_TO_LIST(right_value);
                     ListObj *new_list_obj = vmu_list_join(left_list_obj, right_list_obj, vm);
 
                     pop(vm);
@@ -640,15 +640,15 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(vm_is_value_array(left_value) || vm_is_value_array(right_value)){
+                if(is_value_array(left_value) || is_value_array(right_value)){
                     ArrayObj *array_obj = NULL;
                     Value raw_value = {0};
 
-                    if(vm_is_value_array(left_value)){
-                        array_obj = VM_VALUE_TO_ARRAY(left_value);
+                    if(is_value_array(left_value)){
+                        array_obj = VALUE_TO_ARRAY(left_value);
                         raw_value = right_value;
                     }else{
-                        array_obj = VM_VALUE_TO_ARRAY(right_value);
+                        array_obj = VALUE_TO_ARRAY(right_value);
                         raw_value = left_value;
                     }
 
@@ -661,15 +661,15 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(vm_is_value_list(left_value) || vm_is_value_list(right_value)){
+                if(is_value_list(left_value) || is_value_list(right_value)){
                     ListObj *list_obj = NULL;
                     Value raw_value = {0};
 
-                    if(vm_is_value_list(left_value)){
-                        list_obj = VM_VALUE_TO_LIST(left_value);
+                    if(is_value_list(left_value)){
+                        list_obj = VALUE_TO_LIST(left_value);
                         raw_value = right_value;
                     }else{
-                        list_obj = VM_VALUE_TO_LIST(right_value);
+                        list_obj = VALUE_TO_LIST(right_value);
                         raw_value = left_value;
                     }
 
@@ -689,9 +689,9 @@ static int execute(VM *vm){
                 Value right_value = peek_at(0, vm);
                 Value left_value = peek_at(1, vm);
 
-                if(VM_IS_VALUE_INT(left_value) && vm_is_value_str(right_value)){
-                    int64_t by = VM_VALUE_TO_INT(left_value);
-                    StrObj *str_obj = VM_VALUE_TO_STR(right_value);
+                if(IS_VALUE_INT(left_value) && is_value_str(right_value)){
+                    int64_t by = VALUE_TO_INT(left_value);
+                    StrObj *str_obj = VALUE_TO_STR(right_value);
                     StrObj *new_str_obj = vmu_str_mul(by, str_obj, vm);
 
                     pop(vm);
@@ -701,9 +701,9 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(vm_is_value_str(left_value) && VM_IS_VALUE_INT(right_value)){
-                    int64_t by = VM_VALUE_TO_INT(right_value);
-                    StrObj *str_obj = VM_VALUE_TO_STR(left_value);
+                if(is_value_str(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t by = VALUE_TO_INT(right_value);
+                    StrObj *str_obj = VALUE_TO_STR(left_value);
                     StrObj *new_str_obj = vmu_str_mul(by, str_obj, vm);
 
                     pop(vm);
@@ -720,36 +720,36 @@ static int execute(VM *vm){
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
-                if(VM_IS_VALUE_INT(left_value) && VM_IS_VALUE_INT(right_value)){
-                    int64_t left = VM_VALUE_TO_INT(left_value);
-                    int64_t right = VM_VALUE_TO_INT(right_value);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     push(INT_VALUE(left + right), vm);
 
                     break;
                 }
 
-                if(VM_IS_VALUE_FLOAT(left_value) && VM_IS_VALUE_FLOAT(right_value)){
-                    double left = VM_VALUE_TO_FLOAT(left_value);
-                    double right = VM_VALUE_TO_FLOAT(right_value);
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
 
                     push(FLOAT_VALUE(left + right), vm);
 
                     break;
                 }
 
-                if((VM_IS_VALUE_INT(left_value) || VM_IS_VALUE_FLOAT(left_value)) &&
-                   (VM_IS_VALUE_INT(right_value) || VM_IS_VALUE_FLOAT(right_value)))
+                if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) &&
+                   (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value)))
                 {
                     double left;
                     double right;
 
-                    if(VM_IS_VALUE_FLOAT(left_value)){
-                        left = VM_VALUE_TO_FLOAT(left_value);
-                        right = (double)VM_VALUE_TO_INT(right_value);
+                    if(IS_VALUE_FLOAT(left_value)){
+                        left = VALUE_TO_FLOAT(left_value);
+                        right = (double)VALUE_TO_INT(right_value);
                     }else{
-                        left = (double)VM_VALUE_TO_INT(left_value);
-                        right = VM_VALUE_TO_FLOAT(right_value);
+                        left = (double)VALUE_TO_INT(left_value);
+                        right = VALUE_TO_FLOAT(right_value);
                     }
 
                     push(FLOAT_VALUE(left + right), vm);
@@ -764,36 +764,36 @@ static int execute(VM *vm){
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
-                if(VM_IS_VALUE_INT(left_value) && VM_IS_VALUE_INT(right_value)){
-                    int64_t left = VM_VALUE_TO_INT(left_value);
-                    int64_t right = VM_VALUE_TO_INT(right_value);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     push(INT_VALUE(left - right), vm);
 
                     break;
                 }
 
-                if(VM_IS_VALUE_FLOAT(left_value) && VM_IS_VALUE_FLOAT(right_value)){
-                    double left = VM_VALUE_TO_FLOAT(left_value);
-                    double right = VM_VALUE_TO_FLOAT(right_value);
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
 
                     push(FLOAT_VALUE(left - right), vm);
 
                     break;
                 }
 
-                if((VM_IS_VALUE_INT(left_value) || VM_IS_VALUE_FLOAT(left_value)) &&
-                   (VM_IS_VALUE_INT(right_value) || VM_IS_VALUE_FLOAT(right_value)))
+                if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) &&
+                   (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value)))
                 {
                     double left;
                     double right;
 
-                    if(VM_IS_VALUE_FLOAT(left_value)){
-                        left = VM_VALUE_TO_FLOAT(left_value);
-                        right = (double)VM_VALUE_TO_INT(right_value);
+                    if(IS_VALUE_FLOAT(left_value)){
+                        left = VALUE_TO_FLOAT(left_value);
+                        right = (double)VALUE_TO_INT(right_value);
                     }else{
-                        left = (double)VM_VALUE_TO_INT(left_value);
-                        right = VM_VALUE_TO_FLOAT(right_value);
+                        left = (double)VALUE_TO_INT(left_value);
+                        right = VALUE_TO_FLOAT(right_value);
                     }
 
                     push(FLOAT_VALUE(left - right), vm);
@@ -808,36 +808,36 @@ static int execute(VM *vm){
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
-                if(VM_IS_VALUE_INT(left_value) && VM_IS_VALUE_INT(right_value)){
-                    int64_t left = VM_VALUE_TO_INT(left_value);
-                    int64_t right = VM_VALUE_TO_INT(right_value);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     push(INT_VALUE(left * right), vm);
 
                     break;
                 }
 
-                if(VM_IS_VALUE_FLOAT(left_value) && VM_IS_VALUE_FLOAT(right_value)){
-                    double left = VM_VALUE_TO_FLOAT(left_value);
-                    double right = VM_VALUE_TO_FLOAT(right_value);
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
 
                     push(FLOAT_VALUE(left * right), vm);
 
                     break;
                 }
 
-                if((VM_IS_VALUE_INT(left_value) || VM_IS_VALUE_FLOAT(left_value)) &&
-                   (VM_IS_VALUE_INT(right_value) || VM_IS_VALUE_FLOAT(right_value)))
+                if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) &&
+                   (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value)))
                 {
                     double left;
                     double right;
 
-                    if(VM_IS_VALUE_FLOAT(left_value)){
-                        left = VM_VALUE_TO_FLOAT(left_value);
-                        right = (double)VM_VALUE_TO_INT(right_value);
+                    if(IS_VALUE_FLOAT(left_value)){
+                        left = VALUE_TO_FLOAT(left_value);
+                        right = (double)VALUE_TO_INT(right_value);
                     }else{
-                        left = (double)VM_VALUE_TO_INT(left_value);
-                        right = VM_VALUE_TO_FLOAT(right_value);
+                        left = (double)VALUE_TO_INT(left_value);
+                        right = VALUE_TO_FLOAT(right_value);
                     }
 
                     push(FLOAT_VALUE(left * right), vm);
@@ -852,9 +852,9 @@ static int execute(VM *vm){
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
-                if(VM_IS_VALUE_INT(left_value) && VM_IS_VALUE_INT(right_value)){
-                    int64_t left = VM_VALUE_TO_INT(left_value);
-                    int64_t right = VM_VALUE_TO_INT(right_value);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     if(right == 0){
                         vmu_error(vm, "Division by zero is undefined");
@@ -865,27 +865,27 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(VM_IS_VALUE_FLOAT(left_value) && VM_IS_VALUE_FLOAT(right_value)){
-                    double left = VM_VALUE_TO_FLOAT(left_value);
-                    double right = VM_VALUE_TO_FLOAT(right_value);
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
 
                     push(FLOAT_VALUE(left / right), vm);
 
                     break;
                 }
 
-                if((VM_IS_VALUE_INT(left_value) || VM_IS_VALUE_FLOAT(left_value)) &&
-                   (VM_IS_VALUE_INT(right_value) || VM_IS_VALUE_FLOAT(right_value)))
+                if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) &&
+                   (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value)))
                 {
                     double left;
                     double right;
 
-                    if(VM_IS_VALUE_FLOAT(left_value)){
-                        left = VM_VALUE_TO_FLOAT(left_value);
-                        right = (double)VM_VALUE_TO_INT(right_value);
+                    if(IS_VALUE_FLOAT(left_value)){
+                        left = VALUE_TO_FLOAT(left_value);
+                        right = (double)VALUE_TO_INT(right_value);
                     }else{
-                        left = (double)VM_VALUE_TO_INT(left_value);
-                        right = VM_VALUE_TO_FLOAT(right_value);
+                        left = (double)VALUE_TO_INT(left_value);
+                        right = VALUE_TO_FLOAT(right_value);
                     }
 
                     if(right == 0.0){
@@ -904,9 +904,9 @@ static int execute(VM *vm){
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
-                if(VM_IS_VALUE_INT(left_value) && VM_IS_VALUE_INT(right_value)){
-                    int64_t left = VM_VALUE_TO_INT(left_value);
-                    int64_t right = VM_VALUE_TO_INT(right_value);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     push(INT_VALUE(left % right), vm);
 
@@ -919,8 +919,8 @@ static int execute(VM *vm){
             }case BNOT_OPCODE:{
                 Value value = pop(vm);
 
-                if(VM_IS_VALUE_INT(value)){
-                    PUSH_INT(~VM_VALUE_TO_INT(value), vm);
+                if(IS_VALUE_INT(value)){
+                    PUSH_INT(~VALUE_TO_INT(value), vm);
                     break;
                 }
 
@@ -931,9 +931,9 @@ static int execute(VM *vm){
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
-                if(VM_IS_VALUE_INT(left_value) && VM_IS_VALUE_INT(right_value)){
-                    uint64_t left = (uint64_t)VM_VALUE_TO_INT(left_value);
-                    uint64_t right = (uint64_t)VM_VALUE_TO_INT(right_value);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    uint64_t left = (uint64_t)VALUE_TO_INT(left_value);
+                    uint64_t right = (uint64_t)VALUE_TO_INT(right_value);
 
                     PUSH_INT(left << right, vm);
 
@@ -947,9 +947,9 @@ static int execute(VM *vm){
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
-                if(VM_IS_VALUE_INT(left_value) && VM_IS_VALUE_INT(right_value)){
-                    uint64_t left = (uint64_t)VM_VALUE_TO_INT(left_value);
-                    uint64_t right = (uint64_t)VM_VALUE_TO_INT(right_value);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    uint64_t left = (uint64_t)VALUE_TO_INT(left_value);
+                    uint64_t right = (uint64_t)VALUE_TO_INT(right_value);
 
                     PUSH_INT(left >> right, vm);
 
@@ -963,9 +963,9 @@ static int execute(VM *vm){
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
-                if(VM_IS_VALUE_INT(left_value) && VM_IS_VALUE_INT(right_value)){
-                    int64_t left = VM_VALUE_TO_INT(left_value);
-                    int64_t right = VM_VALUE_TO_INT(right_value);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     PUSH_INT(left & right, vm);
 
@@ -979,9 +979,9 @@ static int execute(VM *vm){
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
-                if(VM_IS_VALUE_INT(left_value) && VM_IS_VALUE_INT(right_value)){
-                    int64_t left = VM_VALUE_TO_INT(left_value);
-                    int64_t right = VM_VALUE_TO_INT(right_value);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     PUSH_INT(left ^ right, vm);
 
@@ -995,9 +995,9 @@ static int execute(VM *vm){
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
-                if(VM_IS_VALUE_INT(left_value) && VM_IS_VALUE_INT(right_value)){
-                    int64_t left = VM_VALUE_TO_INT(left_value);
-                    int64_t right = VM_VALUE_TO_INT(right_value);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     PUSH_INT(left | right, vm);
 
@@ -1011,18 +1011,18 @@ static int execute(VM *vm){
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
-                if(VM_IS_VALUE_INT(left_value) && VM_IS_VALUE_INT(right_value)){
-                    int64_t left = VM_VALUE_TO_INT(left_value);
-                    int64_t right = VM_VALUE_TO_INT(right_value);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     PUSH_BOOL(left < right, vm);
 
                     break;
                 }
 
-                if(VM_IS_VALUE_FLOAT(left_value) && VM_IS_VALUE_FLOAT(right_value)){
-                    double left = VM_VALUE_TO_FLOAT(left_value);
-                    double right = VM_VALUE_TO_FLOAT(right_value);
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
 
                     PUSH_BOOL(left < right, vm);
 
@@ -1036,18 +1036,18 @@ static int execute(VM *vm){
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
-                if(VM_IS_VALUE_INT(left_value) && VM_IS_VALUE_INT(right_value)){
-                    int64_t left = VM_VALUE_TO_INT(left_value);
-                    int64_t right = VM_VALUE_TO_INT(right_value);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     PUSH_BOOL(left > right, vm);
 
                     break;
                 }
 
-                if(VM_IS_VALUE_FLOAT(left_value) && VM_IS_VALUE_FLOAT(right_value)){
-                    double left = VM_VALUE_TO_FLOAT(left_value);
-                    double right = VM_VALUE_TO_FLOAT(right_value);
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
 
                     PUSH_BOOL(left > right, vm);
 
@@ -1061,18 +1061,18 @@ static int execute(VM *vm){
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
-                if(VM_IS_VALUE_INT(left_value) && VM_IS_VALUE_INT(right_value)){
-                    int64_t left = VM_VALUE_TO_INT(left_value);
-                    int64_t right = VM_VALUE_TO_INT(right_value);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     PUSH_BOOL(left <= right, vm);
 
                     break;
                 }
 
-                if(VM_IS_VALUE_FLOAT(left_value) && VM_IS_VALUE_FLOAT(right_value)){
-                    double left = VM_VALUE_TO_FLOAT(left_value);
-                    double right = VM_VALUE_TO_FLOAT(right_value);
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
 
                     PUSH_BOOL(left <= right, vm);
 
@@ -1086,18 +1086,18 @@ static int execute(VM *vm){
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
-                if(VM_IS_VALUE_INT(left_value) && VM_IS_VALUE_INT(right_value)){
-                    int64_t left = VM_VALUE_TO_INT(left_value);
-                    int64_t right = VM_VALUE_TO_INT(right_value);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     PUSH_BOOL(left >= right, vm);
 
                     break;
                 }
 
-                if(VM_IS_VALUE_FLOAT(left_value) && VM_IS_VALUE_FLOAT(right_value)){
-                    double left = VM_VALUE_TO_FLOAT(left_value);
-                    double right = VM_VALUE_TO_FLOAT(right_value);
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
 
                     PUSH_BOOL(left >= right, vm);
 
@@ -1111,36 +1111,36 @@ static int execute(VM *vm){
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
-                if(VM_IS_VALUE_BOOL(left_value) && VM_IS_VALUE_BOOL(right_value)){
-                    uint8_t left = VM_VALUE_TO_BOOL(left_value);
-                    uint8_t right = VM_VALUE_TO_BOOL(right_value);
+                if(IS_VALUE_BOOL(left_value) && IS_VALUE_BOOL(right_value)){
+                    uint8_t left = VALUE_TO_BOOL(left_value);
+                    uint8_t right = VALUE_TO_BOOL(right_value);
 
                     PUSH_BOOL(left == right, vm);
 
                     break;
                 }
 
-                if(VM_IS_VALUE_INT(left_value) && VM_IS_VALUE_INT(right_value)){
-                    int64_t left = VM_VALUE_TO_INT(left_value);
-                    int64_t right = VM_VALUE_TO_INT(right_value);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     PUSH_BOOL(left == right, vm);
 
                     break;
                 }
 
-                if(VM_IS_VALUE_FLOAT(left_value) && VM_IS_VALUE_FLOAT(right_value)){
-                    double left = VM_VALUE_TO_FLOAT(left_value);
-                    double right = VM_VALUE_TO_FLOAT(right_value);
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
 
                     PUSH_BOOL(left == right, vm);
 
                     break;
                 }
 
-                if(vm_is_value_str(left_value) && vm_is_value_str(right_value)){
-                    StrObj *left = VM_VALUE_TO_STR(left_value);
-                    StrObj *right = VM_VALUE_TO_STR(right_value);
+                if(is_value_str(left_value) && is_value_str(right_value)){
+                    StrObj *left = VALUE_TO_STR(left_value);
+                    StrObj *right = VALUE_TO_STR(right_value);
 
                     PUSH_BOOL(left == right, vm);
 
@@ -1154,36 +1154,36 @@ static int execute(VM *vm){
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
-                if(VM_IS_VALUE_BOOL(left_value) && VM_IS_VALUE_BOOL(right_value)){
-                    uint8_t left = VM_VALUE_TO_BOOL(left_value);
-                    uint8_t right = VM_VALUE_TO_BOOL(right_value);
+                if(IS_VALUE_BOOL(left_value) && IS_VALUE_BOOL(right_value)){
+                    uint8_t left = VALUE_TO_BOOL(left_value);
+                    uint8_t right = VALUE_TO_BOOL(right_value);
 
                     PUSH_BOOL(left != right, vm);
 
                     break;
                 }
 
-                if(VM_IS_VALUE_INT(left_value) && VM_IS_VALUE_INT(right_value)){
-                    int64_t left = VM_VALUE_TO_INT(left_value);
-                    int64_t right = VM_VALUE_TO_INT(right_value);
+                if(IS_VALUE_INT(left_value) && IS_VALUE_INT(right_value)){
+                    int64_t left = VALUE_TO_INT(left_value);
+                    int64_t right = VALUE_TO_INT(right_value);
 
                     PUSH_BOOL(left != right, vm);
 
                     break;
                 }
 
-                if(VM_IS_VALUE_FLOAT(left_value) && VM_IS_VALUE_FLOAT(right_value)){
-                    double left = VM_VALUE_TO_FLOAT(left_value);
-                    double right = VM_VALUE_TO_FLOAT(right_value);
+                if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
+                    double left = VALUE_TO_FLOAT(left_value);
+                    double right = VALUE_TO_FLOAT(right_value);
 
                     PUSH_BOOL(left != right, vm);
 
                     break;
                 }
 
-                if(vm_is_value_str(left_value) && vm_is_value_str(right_value)){
-                    StrObj *left = VM_VALUE_TO_STR(left_value);
-                    StrObj *right = VM_VALUE_TO_STR(right_value);
+                if(is_value_str(left_value) && is_value_str(right_value)){
+                    StrObj *left = VALUE_TO_STR(left_value);
+                    StrObj *right = VALUE_TO_STR(right_value);
 
                     PUSH_BOOL(left != right, vm);
 
@@ -1197,9 +1197,9 @@ static int execute(VM *vm){
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
-                if(VM_IS_VALUE_BOOL(left_value) && VM_IS_VALUE_BOOL(right_value)){
-                    uint8_t left = VM_VALUE_TO_BOOL(left_value);
-                    uint8_t right = VM_VALUE_TO_BOOL(right_value);
+                if(IS_VALUE_BOOL(left_value) && IS_VALUE_BOOL(right_value)){
+                    uint8_t left = VALUE_TO_BOOL(left_value);
+                    uint8_t right = VALUE_TO_BOOL(right_value);
 
                     PUSH_BOOL(left || right, vm);
 
@@ -1213,9 +1213,9 @@ static int execute(VM *vm){
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
-                if(VM_IS_VALUE_BOOL(left_value) && VM_IS_VALUE_BOOL(right_value)){
-                    uint8_t left = VM_VALUE_TO_BOOL(left_value);
-                    uint8_t right = VM_VALUE_TO_BOOL(right_value);
+                if(IS_VALUE_BOOL(left_value) && IS_VALUE_BOOL(right_value)){
+                    uint8_t left = VALUE_TO_BOOL(left_value);
+                    uint8_t right = VALUE_TO_BOOL(right_value);
 
                     PUSH_BOOL(left && right, vm);
 
@@ -1228,23 +1228,23 @@ static int execute(VM *vm){
             }case NOT_OPCODE:{
                 Value value = pop(vm);
 
-                if(!VM_IS_VALUE_BOOL(value)){
+                if(!IS_VALUE_BOOL(value)){
                     vmu_error(vm, "Expect boolean at right side");
                 }
 
-                PUSH_BOOL(!VM_VALUE_TO_BOOL(value), vm);
+                PUSH_BOOL(!VALUE_TO_BOOL(value), vm);
 
                 break;
             }case NNOT_OPCODE:{
                 Value value = pop(vm);
 
-                if(VM_IS_VALUE_INT(value)){
-                    PUSH_INT(-VM_VALUE_TO_INT(value), vm);
+                if(IS_VALUE_INT(value)){
+                    PUSH_INT(-VALUE_TO_INT(value), vm);
                     break;
                 }
 
-                if(VM_IS_VALUE_FLOAT(value)){
-                    PUSH_FLOAT(-VM_VALUE_TO_FLOAT(value), vm);
+                if(IS_VALUE_FLOAT(value)){
+                    PUSH_FLOAT(-VALUE_TO_FLOAT(value), vm);
                     break;
                 }
 
@@ -1337,7 +1337,7 @@ static int execute(VM *vm){
                 Value value = global_value->value;
                 uint8_t access_type = advance(vm);
 
-                if(vm_is_value_native_module(value) || vm_is_value_module(value)){
+                if(is_value_native_module(value) || is_value_module(value)){
                     vmu_error(vm, "Modules cannot modify its access");
                 }
 
@@ -1452,35 +1452,35 @@ static int execute(VM *vm){
                 Value idx_value = peek_at(1, vm);
                 Value value = peek_at(2, vm);
 
-                if(!VM_IS_VALUE_OBJ(indexable_value)){
+                if(!IS_VALUE_OBJ(indexable_value)){
                     vmu_error(vm, "Illegal assignment target");
                 }
 
-                Obj *obj = VM_VALUE_TO_OBJ(indexable_value);
+                Obj *obj = VALUE_TO_OBJ(indexable_value);
 
                 switch (obj->type){
                     case ARRAY_OBJ_TYPE:{
-                        if(!VM_IS_VALUE_INT(idx_value)){
+                        if(!IS_VALUE_INT(idx_value)){
                             vmu_error(vm, "Expect index value of type 'int'");
                         }
 
-                        int64_t idx = VM_VALUE_TO_INT(idx_value);
-                        ArrayObj *array_obj = VM_VALUE_TO_ARRAY(indexable_value);
+                        int64_t idx = VALUE_TO_INT(idx_value);
+                        ArrayObj *array_obj = VALUE_TO_ARRAY(indexable_value);
                         vmu_array_set_at(idx, value, array_obj, vm);
 
                         break;
                     }case LIST_OBJ_TYPE:{
-                        if(!VM_IS_VALUE_INT(idx_value)){
+                        if(!IS_VALUE_INT(idx_value)){
                             vmu_error(vm, "Expect index value of type 'int'");
                         }
 
-                        int64_t idx = VM_VALUE_TO_INT(idx_value);
-                        ListObj *list_obj = VM_VALUE_TO_LIST(indexable_value);
+                        int64_t idx = VALUE_TO_INT(idx_value);
+                        ListObj *list_obj = VALUE_TO_LIST(indexable_value);
                         vmu_list_set_at(idx, value, list_obj, vm);
 
                         break;
                     }case DICT_OBJ_TYPE:{
-                        DictObj *dict_obj = VM_VALUE_TO_DICT(indexable_value);
+                        DictObj *dict_obj = VALUE_TO_DICT(indexable_value);
                         vmu_dict_put(idx_value, value, dict_obj, vm);
 
                         break;
@@ -1499,11 +1499,11 @@ static int execute(VM *vm){
                 Value target_value = pop(vm);
                 Value raw_value = peek(vm);
 
-                if(!vm_is_value_record(target_value)){
+                if(!is_value_record(target_value)){
                     vmu_error(vm, "Expect record in assignment");
                 }
 
-                RecordObj *record_obj = VM_VALUE_TO_RECORD(target_value);
+                RecordObj *record_obj = VALUE_TO_RECORD(target_value);
 
                 vmu_record_set_attr(key_size, key, raw_value, record_obj, vm);
 
@@ -1528,11 +1528,11 @@ static int execute(VM *vm){
             }case JIF_OPCODE:{
                 Value value = pop(vm);
 
-                if(!VM_IS_VALUE_BOOL(value)){
+                if(!IS_VALUE_BOOL(value)){
                     vmu_error(vm, "Expect boolean as conditional value");
                 }
 
-                uint8_t condition = VM_VALUE_TO_BOOL(value);
+                uint8_t condition = VALUE_TO_BOOL(value);
                 int16_t jmp_value = read_i16(vm);
 
                 if(jmp_value == 0){break;}
@@ -1549,11 +1549,11 @@ static int execute(VM *vm){
             }case JIT_OPCODE:{
                 Value value = pop(vm);
 
-                if(!VM_IS_VALUE_BOOL(value)){
+                if(!IS_VALUE_BOOL(value)){
                     vmu_error(vm, "Expect boolean as conditional value");
                 }
 
-                uint8_t condition = VM_VALUE_TO_BOOL(value);
+                uint8_t condition = VALUE_TO_BOOL(value);
                 int16_t jmp_value = read_i16(vm);
 
                 if(jmp_value == 0){break;}
@@ -1571,8 +1571,8 @@ static int execute(VM *vm){
                 uint8_t args_count = advance(vm);
                 Value callable_value = peek_at(args_count, vm);
 
-                if(vm_is_value_fn(callable_value)){
-                    FnObj *fn_obj = VM_VALUE_TO_FN(callable_value);
+                if(is_value_fn(callable_value)){
+                    FnObj *fn_obj = VALUE_TO_FN(callable_value);
                     Fn *fn = fn_obj->fn;
 
                     call_fn(args_count, fn, vm);
@@ -1580,8 +1580,8 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(vm_is_value_closure(callable_value)){
-                    ClosureObj *closure_obj = VM_VALUE_TO_CLOSURE(callable_value);
+                if(is_value_closure(callable_value)){
+                    ClosureObj *closure_obj = VALUE_TO_CLOSURE(callable_value);
                     Closure *closure = closure_obj->closure;
 
                     call_closure(args_count, closure, vm);
@@ -1589,8 +1589,8 @@ static int execute(VM *vm){
                     break;
                 }
 
-                if(vm_is_value_native_fn(callable_value)){
-                    NativeFnObj *native_fn_obj = VM_VALUE_TO_NATIVE_FN(callable_value);
+                if(is_value_native_fn(callable_value)){
+                    NativeFnObj *native_fn_obj = VALUE_TO_NATIVE_FN(callable_value);
                     NativeFn *native_fn = native_fn_obj->native_fn;
                     Value *target = &native_fn_obj->target;
                     RawNativeFn raw_fn = native_fn->raw_fn;
@@ -1627,13 +1627,13 @@ static int execute(VM *vm){
             }case ACCESS_OPCODE:{
                 Value target_value = peek(vm);
 
-                if(!VM_IS_VALUE_OBJ(target_value)){
+                if(!IS_VALUE_OBJ(target_value)){
                     vmu_error(vm, "Expect object as target of access");
                 }
 
                 size_t key_size;
                 char *key = read_str(vm, &key_size);
-                Obj *target_obj = VM_VALUE_TO_OBJ(target_value);
+                Obj *target_obj = VALUE_TO_OBJ(target_value);
 
                 switch (target_obj->type){
                     case STR_OBJ_TYPE:{
@@ -1746,32 +1746,32 @@ static int execute(VM *vm){
 
                 Value out_value = {0};
 
-                if(vm_is_value_array(target_value)){
-                    if(!VM_IS_VALUE_INT(idx_value)){
+                if(is_value_array(target_value)){
+                    if(!IS_VALUE_INT(idx_value)){
                         vmu_error(vm, "Expect 'INT' as index");
                     }
 
-                    int64_t idx = VM_VALUE_TO_INT(idx_value);
-                    ArrayObj *array_obj = VM_VALUE_TO_ARRAY(target_value);
+                    int64_t idx = VALUE_TO_INT(idx_value);
+                    ArrayObj *array_obj = VALUE_TO_ARRAY(target_value);
                     out_value = vmu_array_get_at(idx, array_obj, vm);
-                }else if(vm_is_value_list(target_value)){
-                    if(!VM_IS_VALUE_INT(idx_value)){
+                }else if(is_value_list(target_value)){
+                    if(!IS_VALUE_INT(idx_value)){
                         vmu_error(vm, "Expect 'INT' as index");
                     }
 
-                    int64_t idx = VM_VALUE_TO_INT(idx_value);
-                    ListObj *list_obj = VM_VALUE_TO_LIST(target_value);
+                    int64_t idx = VALUE_TO_INT(idx_value);
+                    ListObj *list_obj = VALUE_TO_LIST(target_value);
                     out_value = vmu_list_get_at(idx, list_obj, vm);
-                }else if(vm_is_value_dict(target_value)){
-                    DictObj *dict_obj = VM_VALUE_TO_DICT(target_value);
+                }else if(is_value_dict(target_value)){
+                    DictObj *dict_obj = VALUE_TO_DICT(target_value);
                     out_value = vmu_dict_get(idx_value, dict_obj, vm);
-                }else if(vm_is_value_str(target_value)){
-                    if(!VM_IS_VALUE_INT(idx_value)){
+                }else if(is_value_str(target_value)){
+                    if(!IS_VALUE_INT(idx_value)){
                         vmu_error(vm, "Expect 'INT' as index");
                     }
 
-                    int64_t idx = VM_VALUE_TO_INT(idx_value);
-                    StrObj *old_str_obj = VM_VALUE_TO_STR(target_value);
+                    int64_t idx = VALUE_TO_INT(idx_value);
+                    StrObj *old_str_obj = VALUE_TO_STR(target_value);
                     StrObj *new_str_obj = vmu_str_char(idx, old_str_obj, vm);
                     out_value = OBJ_VALUE(new_str_obj);
                 }
@@ -1824,8 +1824,8 @@ static int execute(VM *vm){
                 Value value = pop(vm);
                 uint8_t type = advance(vm);
 
-                if(VM_IS_VALUE_OBJ(value)){
-                    Obj *obj = VM_VALUE_TO_OBJ(value);
+                if(IS_VALUE_OBJ(value)){
+                    Obj *obj = VALUE_TO_OBJ(value);
 
                     switch(obj->type){
                         case STR_OBJ_TYPE:{
@@ -1906,10 +1906,10 @@ static int execute(VM *vm){
                 if(has_value){
                     raw_value = pop(vm);
 
-                    if(vm_is_value_str(raw_value)){
-                        throw_msg = VM_VALUE_TO_STR(raw_value);
-                    }else if(vm_is_value_record(raw_value)){
-                        RecordObj *record = VM_VALUE_TO_RECORD(raw_value);
+                    if(is_value_str(raw_value)){
+                        throw_msg = VALUE_TO_STR(raw_value);
+                    }else if(is_value_record(raw_value)){
+                        RecordObj *record = VALUE_TO_RECORD(raw_value);
                         LZOHTable *attrs = record->attrs;
 
                         if(attrs){
@@ -1920,11 +1920,11 @@ static int execute(VM *vm){
                             if(lzohtable_lookup(key_size, raw_key, attrs, (void **)(&msg_ptr_value))){
                                 Value msg_value = *msg_ptr_value;
 
-                                if(!vm_is_value_str(msg_value)){
+                                if(!is_value_str(msg_value)){
                                     vmu_error(vm, "Expect record attribute 'msg' to be of type 'str'");
                                 }
 
-                                throw_msg = VM_VALUE_TO_STR(msg_value);
+                                throw_msg = VALUE_TO_STR(msg_value);
                             }
                         }
                     }

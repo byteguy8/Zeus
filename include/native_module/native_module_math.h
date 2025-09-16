@@ -25,23 +25,23 @@ Value native_fn_min(uint8_t argsc, Value *values, Value *target, void *context){
         vmu_error(VMU_VM, "Expect both arguments of type of type 'int' and/or 'float'");
     }
 
-    if(VM_IS_VALUE_FLOAT(left_value) || VM_IS_VALUE_FLOAT(right_value)){
+    if(IS_VALUE_FLOAT(left_value) || IS_VALUE_FLOAT(right_value)){
         double left;
         double right;
 
-        if(VM_IS_VALUE_FLOAT(left_value)){
-            left = VM_VALUE_TO_FLOAT(left_value);
-            right = (double)VM_VALUE_TO_INT(right_value);
+        if(IS_VALUE_FLOAT(left_value)){
+            left = VALUE_TO_FLOAT(left_value);
+            right = (double)VALUE_TO_INT(right_value);
         }else{
-            left = (double)VM_VALUE_TO_INT(left_value);
-            right = VM_VALUE_TO_FLOAT(right_value);
+            left = (double)VALUE_TO_INT(left_value);
+            right = VALUE_TO_FLOAT(right_value);
         }
 
         return FLOAT_VALUE(fmin(left, right));
     }
 
-    int64_t left = VM_VALUE_TO_INT(left_value);
-    int64_t right = VM_VALUE_TO_INT(right_value);
+    int64_t left = VALUE_TO_INT(left_value);
+    int64_t right = VALUE_TO_INT(right_value);
 
     return INT_VALUE(calc_min(left, right));
 }
@@ -54,23 +54,23 @@ Value native_fn_max(uint8_t argsc, Value *values, Value *target, void *context){
         vmu_error(VMU_VM, "Expect both arguments of type of type 'int' and/or 'float'");
     }
 
-    if(VM_IS_VALUE_FLOAT(left_value) || VM_IS_VALUE_FLOAT(right_value)){
+    if(IS_VALUE_FLOAT(left_value) || IS_VALUE_FLOAT(right_value)){
         double left;
         double right;
 
-        if(VM_IS_VALUE_FLOAT(left_value)){
-            left = VM_VALUE_TO_FLOAT(left_value);
-            right = (double)VM_VALUE_TO_INT(right_value);
+        if(IS_VALUE_FLOAT(left_value)){
+            left = VALUE_TO_FLOAT(left_value);
+            right = (double)VALUE_TO_INT(right_value);
         }else{
-            left = (double)VM_VALUE_TO_INT(left_value);
-            right = VM_VALUE_TO_FLOAT(right_value);
+            left = (double)VALUE_TO_INT(left_value);
+            right = VALUE_TO_FLOAT(right_value);
         }
 
         return FLOAT_VALUE(fmax(left, right));
     }
 
-    int64_t left = VM_VALUE_TO_INT(left_value);
-    int64_t right = VM_VALUE_TO_INT(right_value);
+    int64_t left = VALUE_TO_INT(left_value);
+    int64_t right = VALUE_TO_INT(right_value);
 
     return INT_VALUE(calc_max(left, right));
 }
