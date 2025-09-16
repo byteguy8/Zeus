@@ -46,10 +46,6 @@
 #define FIND_LOCATION(index, arr)(dynarr_find(&((OPCodeLocation){.offset = index, .line = -1}), compare_locations, arr))
 #define FRAME_AT(at, vm)(&vm->frame_stack[at])
 
-#define VMU_IS_VALUE_IN(_value)((_value).type == INT_VTYPE)
-#define VMU_IS_VALUE_OBJ(_value)((_value).type == OBJ_VTYPE)
-#define VMU_VALUE_TO_OBJ(_value)((Obj *)((_value).content.obj))
-
 static inline void init_obj(ObjType type, Obj *obj, VM *vm){
     obj->type = type;
     obj->marked = 0;
@@ -142,8 +138,8 @@ void mark_objs(VM *vm){
                 for (size_t i = 0; i < len; i++){
                     Value raw_value = values[i];
 
-                    if(VMU_IS_VALUE_OBJ(raw_value) && VMU_VALUE_TO_OBJ(raw_value)->color == WHITE_OBJ_COLOR){
-                        Obj *obj = VMU_VALUE_TO_OBJ(raw_value);
+                    if(IS_VALUE_OBJ(raw_value) && VALUE_TO_OBJ(raw_value)->color == WHITE_OBJ_COLOR){
+                        Obj *obj = VALUE_TO_OBJ(raw_value);
                         obj->color = GRAY_OBJ_COLOR;
                         obj_list_remove(obj);
                         obj_list_insert(obj, &vm->gray_objs);
@@ -159,8 +155,8 @@ void mark_objs(VM *vm){
                 for (size_t i = 0; i < len; i++){
                     Value raw_value = DYNARR_GET_AS(Value, i, items);
 
-                    if(VMU_IS_VALUE_OBJ(raw_value) && VMU_VALUE_TO_OBJ(raw_value)->color == WHITE_OBJ_COLOR){
-                        Obj *obj = VMU_VALUE_TO_OBJ(raw_value);
+                    if(IS_VALUE_OBJ(raw_value) && VALUE_TO_OBJ(raw_value)->color == WHITE_OBJ_COLOR){
+                        Obj *obj = VALUE_TO_OBJ(raw_value);
                         obj->color = GRAY_OBJ_COLOR;
                         obj_list_remove(obj);
                         obj_list_insert(obj, &vm->gray_objs);
@@ -183,15 +179,15 @@ void mark_objs(VM *vm){
                     Value raw_key = *(Value *)(slot.key);
                     Value raw_value = *(Value *)(slot.value);
 
-                    if(VMU_IS_VALUE_OBJ(raw_key) && VMU_VALUE_TO_OBJ(raw_key)->color == WHITE_OBJ_COLOR){
-                        Obj *obj = VMU_VALUE_TO_OBJ(raw_key);
+                    if(IS_VALUE_OBJ(raw_key) && VALUE_TO_OBJ(raw_key)->color == WHITE_OBJ_COLOR){
+                        Obj *obj = VALUE_TO_OBJ(raw_key);
                         obj->color = GRAY_OBJ_COLOR;
                         obj_list_remove(obj);
                         obj_list_insert(obj, &vm->gray_objs);
                     }
 
-                    if(VMU_IS_VALUE_OBJ(raw_value) && VMU_VALUE_TO_OBJ(raw_value)->color == WHITE_OBJ_COLOR){
-                        Obj *obj = VMU_VALUE_TO_OBJ(raw_value);
+                    if(IS_VALUE_OBJ(raw_value) && VALUE_TO_OBJ(raw_value)->color == WHITE_OBJ_COLOR){
+                        Obj *obj = VALUE_TO_OBJ(raw_value);
                         obj->color = GRAY_OBJ_COLOR;
                         obj_list_remove(obj);
                         obj_list_insert(obj, &vm->gray_objs);
@@ -214,8 +210,8 @@ void mark_objs(VM *vm){
 
                     Value raw_value = *(Value *)(slot.value);
 
-                    if(VMU_IS_VALUE_OBJ(raw_value) && VMU_VALUE_TO_OBJ(raw_value)->color == WHITE_OBJ_COLOR){
-                        Obj *obj = VMU_VALUE_TO_OBJ(raw_value);
+                    if(IS_VALUE_OBJ(raw_value) && VALUE_TO_OBJ(raw_value)->color == WHITE_OBJ_COLOR){
+                        Obj *obj = VALUE_TO_OBJ(raw_value);
                         obj->color = GRAY_OBJ_COLOR;
                         obj_list_remove(obj);
                         obj_list_insert(obj, &vm->gray_objs);
@@ -227,8 +223,8 @@ void mark_objs(VM *vm){
                 NativeFnObj *native_fn_obj = OBJ_TO_NATIVE_FN(current);
                 Value target = native_fn_obj->target;
 
-                if(VMU_IS_VALUE_OBJ(target) && VMU_VALUE_TO_OBJ(target)->color == WHITE_OBJ_COLOR){
-                    Obj *obj = VMU_VALUE_TO_OBJ(target);
+                if(IS_VALUE_OBJ(target) && VALUE_TO_OBJ(target)->color == WHITE_OBJ_COLOR){
+                    Obj *obj = VALUE_TO_OBJ(target);
                     obj->color = GRAY_OBJ_COLOR;
                     obj_list_remove(obj);
                     obj_list_insert(obj, &vm->gray_objs);
@@ -569,7 +565,7 @@ static void value_to_str(Value value, Obj *parent, LZBStr *str){
             lzbstr_append_args(str, "%f", float_value);
             break;
         }case OBJ_VTYPE:{
-            Obj *obj = VMU_VALUE_TO_OBJ(value);
+            Obj *obj = VALUE_TO_OBJ(value);
             obj_to_str(obj, parent, str);
             break;
         }default:{
