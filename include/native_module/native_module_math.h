@@ -4,7 +4,7 @@
 #define PI 3.1415926535897932384626433
 
 #include "vmu.h"
-#include "tutils.h"
+#include "types_utils.h"
 #include <math.h>
 
 NativeModule *math_native_module = NULL;

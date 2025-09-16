@@ -2,7 +2,7 @@
 #define NATIVE_H
 
 #include "vmu.h"
-#include "tutils.h"
+#include "types_utils.h"
 
 Value native_fn_print_stack(uint8_t argsc, Value *values, Value *target, void *context){
     VM *vm = (VM *)context;

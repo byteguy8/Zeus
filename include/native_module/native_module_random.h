@@ -5,7 +5,7 @@
 #include "types.h"
 #include "factory.h"
 #include "vmu.h"
-#include "tutils.h"
+#include "types_utils.h"
 #include <stdint.h>
 #include <stdlib.h>
 #include <time.h>

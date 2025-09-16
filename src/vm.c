@@ -5,7 +5,7 @@
 #include "types.h"
 #include "value.h"
 #include "utils.h"
-#include "tutils.h"
+#include "types_utils.h"
 
 #include "native_module/native_module_str.h"
 #include "native_module/native_module_array.h"

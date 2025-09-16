@@ -4,7 +4,7 @@
 #include "vm.h"
 #include "lzbstr.h"
 #include "native_fn.h"
-#include "tutils.h"
+#include "types_utils.h"
 #include <stdio.h>
 
 #define VMU_VM ((VM *)context)
