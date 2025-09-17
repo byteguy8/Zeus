@@ -9,21 +9,21 @@
 
 static LZOHTable *array_symbols = NULL;
 
-Value native_fn_array_len(uint8_t argsc, Value *values, Value *target, void *context){
-    ArrayObj *target_array_obj = VALUE_TO_ARRAY(*target);
+Value native_fn_array_len(uint8_t argsc, Value *values, Value target, void *context){
+    ArrayObj *target_array_obj = VALUE_TO_ARRAY(target);
     return INT_VALUE(vmu_array_len(target_array_obj));
 }
 
-Value native_fn_array_make_room(uint8_t argsc, Value *values, Value *target, void *context){
-    ArrayObj *target_array_obj = VALUE_TO_ARRAY(*target);
+Value native_fn_array_make_room(uint8_t argsc, Value *values, Value target, void *context){
+    ArrayObj *target_array_obj = VALUE_TO_ARRAY(target);
     int64_t by = validate_value_int_arg(values[0], 1, "by", VMU_VM);
     ArrayObj *new_array_obj = vmu_array_grow(by, target_array_obj, context);
 
     return OBJ_VALUE(new_array_obj);
 }
 
-Value native_fn_array_to_list(uint8_t argsc, Value *values, Value *target, void *context){
-    ArrayObj *target_array_obj = VALUE_TO_ARRAY(*target);
+Value native_fn_array_to_list(uint8_t argsc, Value *values, Value target, void *context){
+    ArrayObj *target_array_obj = VALUE_TO_ARRAY(target);
     ListObj *list_obj = vmu_create_list(VMU_VM);
     size_t len = target_array_obj->len;
     Value *array_values = target_array_obj->values;
@@ -35,13 +35,13 @@ Value native_fn_array_to_list(uint8_t argsc, Value *values, Value *target, void 
     return OBJ_VALUE(list_obj);
 }
 
-Value native_fn_array_first(uint8_t argsc, Value *values, Value *target, void *context){
-    ArrayObj *array_obj = VALUE_TO_ARRAY(*target);
+Value native_fn_array_first(uint8_t argsc, Value *values, Value target, void *context){
+    ArrayObj *array_obj = VALUE_TO_ARRAY(target);
     return vmu_array_first(array_obj, VMU_VM);
 }
 
-Value native_fn_array_last(uint8_t argsc, Value *values, Value *target, void *context){
-    ArrayObj *array_obj = VALUE_TO_ARRAY(*target);
+Value native_fn_array_last(uint8_t argsc, Value *values, Value target, void *context){
+    ArrayObj *array_obj = VALUE_TO_ARRAY(target);
     return vmu_array_last(array_obj, VMU_VM);
 }
 

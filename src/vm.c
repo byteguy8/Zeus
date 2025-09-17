@@ -1592,7 +1592,7 @@ static int execute(VM *vm){
                 if(is_value_native_fn(callable_value)){
                     NativeFnObj *native_fn_obj = VALUE_TO_NATIVE_FN(callable_value);
                     NativeFn *native_fn = native_fn_obj->native_fn;
-                    Value *target = &native_fn_obj->target;
+                    Value target = native_fn_obj->target;
                     RawNativeFn raw_fn = native_fn->raw_fn;
 
                     if(native_fn->arity != args_count){

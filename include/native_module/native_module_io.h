@@ -8,7 +8,7 @@
 
 NativeModule *io_native_module = NULL;
 
-Value native_fn_io_read_text(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_io_read_text(uint8_t argsc, Value *values, Value target, void *context){
     StrObj *pathname_str_obj = validate_value_str_arg(values[0], 1, "pathname", VMU_VM);
     char *pathname = pathname_str_obj->buff;
 

@@ -6,13 +6,13 @@
 
 NativeModule *os_native_module = NULL;
 
-Value native_fn_os_name(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_os_name(uint8_t argsc, Value *values, Value target, void *context){
     StrObj *str_obj = NULL;
     vmu_create_str(1, strlen(OS_NAME), OS_NAME, VMU_VM, &str_obj);
     return OBJ_VALUE(str_obj);
 }
 
-Value native_fn_os_path_separator(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_os_path_separator(uint8_t argsc, Value *values, Value target, void *context){
     StrObj *str_obj = NULL;
     vmu_create_str(1, 1, (char[]){OS_PATH_SEPARATOR, 0}, VMU_VM, &str_obj);
     return OBJ_VALUE(str_obj);

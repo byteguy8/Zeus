@@ -17,7 +17,7 @@ static inline int64_t calc_max(int64_t x, int64_t y){
     return x ^ ((x ^ y) & -(x < y));
 }
 
-Value native_fn_min(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_min(uint8_t argsc, Value *values, Value target, void *context){
     Value left_value = values[0];
     Value right_value = values[1];
 
@@ -46,7 +46,7 @@ Value native_fn_min(uint8_t argsc, Value *values, Value *target, void *context){
     return INT_VALUE(calc_min(left, right));
 }
 
-Value native_fn_max(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_max(uint8_t argsc, Value *values, Value target, void *context){
     Value left_value = values[0];
     Value right_value = values[1];
 
@@ -75,70 +75,70 @@ Value native_fn_max(uint8_t argsc, Value *values, Value *target, void *context){
     return INT_VALUE(calc_max(left, right));
 }
 
-Value native_fn_sqrt(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_sqrt(uint8_t argsc, Value *values, Value target, void *context){
     double value = validate_value_ifloat_arg(values[0], 1, "value", VMU_VM);
     return FLOAT_VALUE(sqrt(value));
 }
 
-Value native_fn_pow(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_pow(uint8_t argsc, Value *values, Value target, void *context){
     double base = validate_value_ifloat_arg(values[0], 1, "base", VMU_VM);
     double ex = validate_value_ifloat_arg(values[1], 2, "exp", VMU_VM);
     return FLOAT_VALUE(pow(base, ex));
 }
 
-Value native_fn_cos(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_cos(uint8_t argsc, Value *values, Value target, void *context){
     double value = validate_value_ifloat_arg(values[0], 1, "value", VMU_VM);
     return FLOAT_VALUE(cos(value));
 }
 
-Value native_fn_acos(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_acos(uint8_t argsc, Value *values, Value target, void *context){
     double value = validate_value_ifloat_arg(values[0], 1, "value", VMU_VM);
     return FLOAT_VALUE(acos(value));
 }
 
-Value native_fn_cosh(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_cosh(uint8_t argsc, Value *values, Value target, void *context){
     double value = validate_value_ifloat_arg(values[0], 1, "value", VMU_VM);
     return FLOAT_VALUE(cosh(value));
 }
 
-Value native_fn_sin(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_sin(uint8_t argsc, Value *values, Value target, void *context){
     double value = validate_value_ifloat_arg(values[0], 1, "value", VMU_VM);
     return FLOAT_VALUE(sin(value));
 }
 
-Value native_fn_asin(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_asin(uint8_t argsc, Value *values, Value target, void *context){
     double value = validate_value_ifloat_arg(values[0], 1, "value", VMU_VM);
     return FLOAT_VALUE(asin(value));
 }
 
-Value native_fn_sinh(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_sinh(uint8_t argsc, Value *values, Value target, void *context){
     double value = validate_value_ifloat_arg(values[0], 1, "value", VMU_VM);
     return FLOAT_VALUE(sinh(value));
 }
 
-Value native_fn_tan(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_tan(uint8_t argsc, Value *values, Value target, void *context){
     double value = validate_value_ifloat_arg(values[0], 1, "value", VMU_VM);
     return FLOAT_VALUE(tan(value));
 }
 
-Value native_fn_atan(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_atan(uint8_t argsc, Value *values, Value target, void *context){
     double value = validate_value_ifloat_arg(values[0], 1, "value", VMU_VM);
     return FLOAT_VALUE(atan(value));
 }
 
-Value native_fn_tanh(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_tanh(uint8_t argsc, Value *values, Value target, void *context){
     double value = validate_value_ifloat_arg(values[0], 1, "value", VMU_VM);
     return FLOAT_VALUE(tanh(value));
 }
 
 // this function assumes the radio of the calculated radian value is of value 1
-Value native_fn_rad2deg(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_rad2deg(uint8_t argsc, Value *values, Value target, void *context){
     double rad = validate_value_ifloat_arg(values[0], 1, "rad", VMU_VM);
     return FLOAT_VALUE(rad * (1.0 / (PI * 2.0 / 360.0)));
 }
 
 // this function assumes the radio of the calculated radian value is of value 1
-Value native_fn_deg2rad(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_deg2rad(uint8_t argsc, Value *values, Value target, void *context){
     double degrees = validate_value_ifloat_arg(values[0], 1, "value", VMU_VM);
     return FLOAT_VALUE(degrees / (1.0 / (PI * 2.0 / 360.0)));
 }

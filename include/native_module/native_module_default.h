@@ -4,7 +4,7 @@
 #include "vmu.h"
 #include "types_utils.h"
 
-Value native_fn_print_stack(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_print_stack(uint8_t argsc, Value *values, Value target, void *context){
     VM *vm = (VM *)context;
 
     for(Value *current = vm->stack; current < vm->stack_top; current++){
@@ -15,7 +15,7 @@ Value native_fn_print_stack(uint8_t argsc, Value *values, Value *target, void *c
     return EMPTY_VALUE;
 }
 
-Value native_fn_exit(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_exit(uint8_t argsc, Value *values, Value target, void *context){
     VM *vm = (VM *)context;
     int64_t exit_code = validate_value_int_range_arg(values[0], 1, "exit code", 0, 255, vm);
 
@@ -25,7 +25,7 @@ Value native_fn_exit(uint8_t argsc, Value *values, Value *target, void *context)
 	return EMPTY_VALUE;
 }
 
-Value native_fn_assert(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_assert(uint8_t argsc, Value *values, Value target, void *context){
     uint8_t value = validate_value_bool_arg(values[0], 1, "assertion", VMU_VM);
 
     if(!value){
@@ -35,7 +35,7 @@ Value native_fn_assert(uint8_t argsc, Value *values, Value *target, void *contex
 	return EMPTY_VALUE;
 }
 
-Value native_fn_assertm(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_assertm(uint8_t argsc, Value *values, Value target, void *context){
     uint8_t value = validate_value_bool_arg(values[0], 1, "assertion", VMU_VM);
     StrObj *str_obj = validate_value_str_arg(values[1], 2, "message", VMU_VM);
 
@@ -46,17 +46,17 @@ Value native_fn_assertm(uint8_t argsc, Value *values, Value *target, void *conte
 	return EMPTY_VALUE;
 }
 
-Value native_fn_is_str_int(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_is_str_int(uint8_t argsc, Value *values, Value target, void *context){
     StrObj *str_obj = validate_value_str_arg(values[0], 1, "string", VMU_VM);
     return BOOL_VALUE((uint8_t)vmu_str_is_int(str_obj));
 }
 
-Value native_fn_is_str_float(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_is_str_float(uint8_t argsc, Value *values, Value target, void *context){
     StrObj *str_obj = validate_value_str_arg(values[0], 1, "string", VMU_VM);
     return BOOL_VALUE((uint8_t)vmu_str_is_float(str_obj));
 }
 
-Value native_fn_to_str(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_to_str(uint8_t argsc, Value *values, Value target, void *context){
     size_t len;
     char *raw_str = vmu_value_to_str(values[0], VMU_VM, &len);
     StrObj *str_obj = NULL;
@@ -68,7 +68,7 @@ Value native_fn_to_str(uint8_t argsc, Value *values, Value *target, void *contex
     return OBJ_VALUE(str_obj);
 }
 
-Value native_fn_to_int(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_to_int(uint8_t argsc, Value *values, Value target, void *context){
     Value raw_value = values[0];
 
     if(IS_VALUE_BOOL(raw_value)){
@@ -101,7 +101,7 @@ Value native_fn_to_int(uint8_t argsc, Value *values, Value *target, void *contex
     return EMPTY_VALUE;
 }
 
-Value native_fn_to_float(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_to_float(uint8_t argsc, Value *values, Value target, void *context){
     Value raw_value = values[0];
 
     if(IS_VALUE_INT(raw_value)){
@@ -130,7 +130,7 @@ Value native_fn_to_float(uint8_t argsc, Value *values, Value *target, void *cont
     return EMPTY_VALUE;
 }
 
-Value native_fn_print(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_print(uint8_t argsc, Value *values, Value target, void *context){
     Value raw_value = values[0];
 
     vmu_print_value(stdout, raw_value);
@@ -138,7 +138,7 @@ Value native_fn_print(uint8_t argsc, Value *values, Value *target, void *context
     return EMPTY_VALUE;
 }
 
-Value native_fn_println(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_println(uint8_t argsc, Value *values, Value target, void *context){
     Value raw_value = values[0];
 
     vmu_print_value(stdout, raw_value);
@@ -147,7 +147,7 @@ Value native_fn_println(uint8_t argsc, Value *values, Value *target, void *conte
     return EMPTY_VALUE;
 }
 
-Value native_fn_eprint(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_eprint(uint8_t argsc, Value *values, Value target, void *context){
     Value raw_value = values[0];
 
     vmu_print_value(stderr, raw_value);
@@ -155,7 +155,7 @@ Value native_fn_eprint(uint8_t argsc, Value *values, Value *target, void *contex
     return EMPTY_VALUE;
 }
 
-Value native_fn_eprintln(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_eprintln(uint8_t argsc, Value *values, Value target, void *context){
     Value raw_value = values[0];
 
     vmu_print_value(stderr, raw_value);
@@ -164,7 +164,7 @@ Value native_fn_eprintln(uint8_t argsc, Value *values, Value *target, void *cont
     return EMPTY_VALUE;
 }
 
-Value native_fn_readln(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_readln(uint8_t argsc, Value *values, Value target, void *context){
     VM *vm = VMU_VM;
     size_t raw_buff_len = 1024;
     char raw_buff[raw_buff_len];
@@ -196,12 +196,12 @@ Value native_fn_readln(uint8_t argsc, Value *values, Value *target, void *contex
     return OBJ_VALUE(str_obj);
 }
 
-Value native_fn_gc(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_gc(uint8_t argsc, Value *values, Value target, void *context){
     vmu_gc(context);
     return EMPTY_VALUE;
 }
 
-Value native_fn_halt(uint8_t argsc, Value *values, Value *target, void *context){
+Value native_fn_halt(uint8_t argsc, Value *values, Value target, void *context){
     VM *vm = VMU_VM;
     longjmp(vm->exit_jmp, 1);
 }

@@ -5,7 +5,7 @@
 #include "value.h"
 #include <stdint.h>
 
-typedef Value (*RawNativeFn)(uint8_t argc, Value *values, Value *target, void *context);
+typedef Value (*RawNativeFn)(uint8_t argc, Value *values, Value target, void *context);
 
 typedef struct native_fn_info{
     uint8_t arity;

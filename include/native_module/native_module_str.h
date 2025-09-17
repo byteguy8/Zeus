@@ -8,19 +8,19 @@
 
 static LZOHTable *str_symbols = NULL;
 
-Value native_fn_str_len(uint8_t argsc, Value *values, Value *target, void *context){
-	StrObj *target_str = VALUE_TO_STR(*target);
+Value native_fn_str_len(uint8_t argsc, Value *values, Value target, void *context){
+	StrObj *target_str = VALUE_TO_STR(target);
 	return INT_VALUE(vmu_str_len(target_str));
 }
 
-Value native_fn_str_code(uint8_t argsc, Value *values, Value *target, void *context){
-	StrObj *target_str = VALUE_TO_STR(*target);
+Value native_fn_str_code(uint8_t argsc, Value *values, Value target, void *context){
+	StrObj *target_str = VALUE_TO_STR(target);
     int64_t at = validate_value_int_arg(values[0], 1, "at", VMU_VM);
     return INT_VALUE(vmu_str_code(at, target_str, VMU_VM));
 }
 
-Value native_fn_str_insert(uint8_t argsc, Value *values, Value *target, void *context){
-    StrObj *target_str_obj = VALUE_TO_STR(*target);
+Value native_fn_str_insert(uint8_t argsc, Value *values, Value target, void *context){
+    StrObj *target_str_obj = VALUE_TO_STR(target);
     int64_t at = validate_value_int_arg(values[0], 1, "at", VMU_VM);
     StrObj *str_obj = validate_value_str_arg(values[1], 1, "string", VMU_VM);
     StrObj *new_str_obj = vmu_str_insert_at(at, target_str_obj, str_obj, VMU_VM);
@@ -28,8 +28,8 @@ Value native_fn_str_insert(uint8_t argsc, Value *values, Value *target, void *co
     return OBJ_VALUE(new_str_obj);
 }
 
-Value native_fn_str_remove(uint8_t argsc, Value *values, Value *target, void *context){
-    StrObj *target_str_obj = VALUE_TO_STR(*target);
+Value native_fn_str_remove(uint8_t argsc, Value *values, Value target, void *context){
+    StrObj *target_str_obj = VALUE_TO_STR(target);
     int64_t from = validate_value_int_arg(values[0], 1, "from", VMU_VM);
     int64_t to = validate_value_int_arg(values[1], 1, "to", VMU_VM);
     StrObj *new_str_obj = vmu_str_remove(from, to, target_str_obj, VMU_VM);
@@ -37,8 +37,8 @@ Value native_fn_str_remove(uint8_t argsc, Value *values, Value *target, void *co
     return OBJ_VALUE(new_str_obj);
 }
 
-Value native_fn_str_remove_first(uint8_t argsc, Value *values, Value *target, void *context){
-    StrObj *target_str_obj = VALUE_TO_STR(*target);
+Value native_fn_str_remove_first(uint8_t argsc, Value *values, Value target, void *context){
+    StrObj *target_str_obj = VALUE_TO_STR(target);
 
     if(target_str_obj->len == 0){
         vmu_error(VMU_VM, "String is empty");
@@ -49,8 +49,8 @@ Value native_fn_str_remove_first(uint8_t argsc, Value *values, Value *target, vo
     return OBJ_VALUE(new_str_obj);
 }
 
-Value native_fn_str_remove_last(uint8_t argsc, Value *values, Value *target, void *context){
-    StrObj *target_str_obj = VALUE_TO_STR(*target);
+Value native_fn_str_remove_last(uint8_t argsc, Value *values, Value target, void *context){
+    StrObj *target_str_obj = VALUE_TO_STR(target);
     size_t len = target_str_obj->len;
 
     if(target_str_obj->len == 0){
@@ -62,8 +62,8 @@ Value native_fn_str_remove_last(uint8_t argsc, Value *values, Value *target, voi
     return OBJ_VALUE(new_str_obj);
 }
 
-Value native_fn_str_substr(uint8_t argsc, Value *values, Value *target, void *context){
-    StrObj *target_str_obj = VALUE_TO_STR(*target);
+Value native_fn_str_substr(uint8_t argsc, Value *values, Value target, void *context){
+    StrObj *target_str_obj = VALUE_TO_STR(target);
     int64_t from = validate_value_int_arg(values[0], 1, "from", VMU_VM);
     int64_t to = validate_value_int_arg(values[1], 1, "to", VMU_VM);
     StrObj *new_str_obj = vmu_str_sub_str(from, to, target_str_obj, VMU_VM);
