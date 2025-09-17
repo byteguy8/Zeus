@@ -111,6 +111,7 @@ typedef struct compiler{
 
     LZOHTable *keywords;
     LZOHTable *natives_fns;
+    DynArr *fns_prototypes;
     DynArr *stmts;
     Module *previous_module;
     Module *current_module;
@@ -131,6 +132,7 @@ int compiler_compile(
     LZOHTable *import_paths,
     LZOHTable *keywords,
     LZOHTable *native_fns,
+    DynArr *fns_prototypes,
     DynArr *stmts,
     Module *module,
     LZOHTable *modules,
@@ -142,6 +144,7 @@ int compiler_import(
     LZOHTable *import_paths,
     LZOHTable *keywords,
     LZOHTable *native_fns,
+    DynArr *fns_prototypes,
     DynArr *stmts,
     Module *previous_module,
     Module *module,

@@ -1289,6 +1289,12 @@ Stmt *parse_var_decl_stmt(Parser *parser){
 }
 
 Stmt *parse_function_stmt(Parser *parser){
+    if(parser->fns_stack_count == 255){
+        error(parser, peek(parser), "Can not nest more than 255 functions");
+    }
+
+    parser->fns_stack_count++;
+
     Token *name_token = NULL;
     DynArr *params = NULL;
     DynArr *stmts = NULL;
@@ -1315,6 +1321,12 @@ Stmt *parse_function_stmt(Parser *parser){
 		consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of function body.");
 		stmts = parse_block_stmt(parser);
 	}
+
+    parser->fns_stack_count--;
+
+    if(parser->fns_stack_count == 0){
+        dynarr_insert_ptr(name_token, parser->fns_prototypes);
+    }
 
     FunctionStmt *function_stmt = MEMORY_ALLOC(FunctionStmt, 1, CTALLOCATOR);
 
@@ -1391,10 +1403,12 @@ Parser *parser_create(Allocator *ctallocator){
 	return parser;
 }
 
-int parser_parse(DynArr *tokens, DynArr *stmts, Parser *parser){
+int parser_parse(DynArr *tokens, DynArr *fns_prototypes, DynArr *stmts, Parser *parser){
 	if(setjmp(parser->err_buf) == 0){
+        parser->fns_stack_count = 0;
         parser->current = 0;
         parser->tokens = tokens;
+        parser->fns_prototypes = fns_prototypes;
 
         ComplexContext compile_ctx = (ComplexContext){
             .arg0 = parser,
@@ -1416,8 +1430,10 @@ int parser_parse(DynArr *tokens, DynArr *stmts, Parser *parser){
 
 int parser_parse_str_interpolation(DynArr *tokens, DynArr *exprs, Parser *parser){
     if(setjmp(parser->err_buf) == 0){
+        parser->fns_stack_count = 0;
         parser->current = 0;
         parser->tokens = tokens;
+        parser->fns_prototypes = NULL;
 
         ComplexContext compile_ctx = (ComplexContext){
             .arg0 = parser,

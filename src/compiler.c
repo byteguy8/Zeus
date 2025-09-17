@@ -57,6 +57,7 @@ void resolve_jmps(Scope *current, Compiler *compiler);
 int resolve_symbol(Token *identifier, Symbol *symbol, Compiler *compiler);
 Symbol *exists_scope(char *name, Scope *scope, Compiler *compiler);
 Symbol *exists_local(char *name, Compiler *compiler);
+int exists_global(char *name, Compiler *compiler);
 Symbol *get(Token *identifier_token, Compiler *compiler);
 void to_local(Symbol *symbol, Compiler *compiler);
 void from_symbols_to_global(size_t symbol_index, Token *location_token, char *name, Compiler *compiler);
@@ -100,6 +101,7 @@ size_t add_native_module_symbol(NativeModule *module, DynArr *symbols);
 size_t add_module_symbol(Module *module, DynArr *symbols);
 void compile_stmt(Stmt *stmt, Compiler *compiler);
 void define_natives(Compiler *compiler);
+void define_fns_prototypes(DynArr *fns_prototypes, Compiler *compiler);
 void add_captured_symbol(Token *identifier, Symbol *symbol, Scope *scope, Compiler *compiler);
 void set_fn(size_t index, Fn *fn, Compiler *compiler);
 void set_closure(size_t index, MetaClosure *closure, Compiler *compiler);
@@ -572,8 +574,17 @@ Symbol *exists_local(char *name, Compiler *compiler){
     return exists_scope(name, scope, compiler);
 }
 
+int exists_global(char *name, Compiler *compiler){
+    assert(compiler->depth > 0);
+
+    Scope *scope = &compiler->scopes[0];
+
+    return exists_scope(name, scope, compiler) != NULL;
+}
+
 Symbol *get(Token *identifier_token, Compiler *compiler){
     assert(compiler->depth > 0);
+
     char *identifier = identifier_token->lexeme;
 
     for (int i = compiler->depth - 1; i >= 0; i--){
@@ -2189,7 +2200,10 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             Fn *fn = NULL;
             size_t symbol_index = 0;
 
-            Symbol *fn_symbol = declare(FN_SYMTYPE, identifier_token, compiler);
+            Symbol *fn_symbol = exists_global(identifier_token->lexeme, compiler) ?
+                                get(identifier_token, compiler) :
+                                declare(FN_SYMTYPE, identifier_token, compiler);
+
             Scope *fn_scope = scope_in_fn(identifier_token->lexeme, compiler, &fn, &symbol_index);
 
             fn_symbol->index = ((int)symbol_index);
@@ -2350,6 +2364,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             LZOHTable *native_fns = compiler->natives_fns;
             RawStr *source = utils_read_source(resolved_module_pathname, CTALLOCATOR);
             DynArr *tokens = FACTORY_DYNARR_PTR(CTALLOCATOR);
+            DynArr *fns_prototypes = FACTORY_DYNARR_PTR(CTALLOCATOR);
             DynArr *stmts = FACTORY_DYNARR_PTR(CTALLOCATOR);
 
             Lexer *lexer = lexer_create(CTALLOCATOR, RTALLOCATOR);
@@ -2360,7 +2375,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 error(compiler, import_token, "Failed to import module '%s'", resolved_module_pathname);
             }
 
-            if(parser_parse(tokens, stmts, parser)){
+            if(parser_parse(tokens, fns_prototypes, stmts, parser)){
                 error(compiler, import_token, "Failed to import module '%s'", resolved_module_pathname);
             }
 
@@ -2369,12 +2384,13 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 import_paths,
                 keywords,
                 native_fns,
+                fns_prototypes,
                 stmts,
                 current_module,
                 module,
                 modules,
-                import_compiler)
-            ){
+                import_compiler
+            )){
                 error(compiler, import_token, "Failed to import module '%s'", resolved_module_pathname);
             }
 
@@ -2513,6 +2529,15 @@ void define_natives(Compiler *compiler){
     }
 }
 
+void define_fns_prototypes(DynArr *fns_prototypes, Compiler *compiler){
+    size_t len = DYNARR_LEN(fns_prototypes);
+
+    for (size_t i = 0; i < len; i++){
+        Token *token = (Token *)dynarr_get_ptr(i, fns_prototypes);
+        declare(FN_SYMTYPE, token, compiler);
+    }
+}
+
 void add_captured_symbol(Token *identifier, Symbol *symbol, Scope *scope, Compiler *compiler){
     if(scope->captured_symbols_len >= SYMBOLS_LENGTH){
         error(compiler, identifier, "Cannot capture more than %d symbols", SYMBOLS_LENGTH);
@@ -2585,6 +2610,7 @@ int compiler_compile(
     LZOHTable *import_paths,
     LZOHTable *keywords,
     LZOHTable *native_fns,
+    DynArr *fns_prototypes,
     DynArr *stmts,
     Module *current_module,
     LZOHTable *modules,
@@ -2601,6 +2627,7 @@ int compiler_compile(
         compiler->natives_fns = native_fns;
         compiler->current_module = current_module;
         compiler->modules = modules;
+        compiler->fns_prototypes = fns_prototypes;
         compiler->stmts = stmts;
 
         ComplexContext compile_ctx = (ComplexContext){
@@ -2620,6 +2647,7 @@ int compiler_compile(
 
         scope_in_fn("main", compiler, &fn, &symbol_index);
         define_natives(compiler);
+        define_fns_prototypes(fns_prototypes, compiler);
 
         for (size_t i = 0; i < stmts->used; i++){
             Stmt *stmt = (Stmt *)dynarr_get_ptr(i, stmts);
@@ -2641,6 +2669,7 @@ int compiler_import(
     LZOHTable *import_paths,
     LZOHTable *keywords,
     LZOHTable *native_fns,
+    DynArr *fns_prototypes,
     DynArr *stmts,
     Module *previous_module,
     Module *current_module,
@@ -2655,6 +2684,7 @@ int compiler_import(
         compiler->import_paths = import_paths;
         compiler->keywords = keywords;
         compiler->natives_fns = native_fns;
+        compiler->fns_prototypes = fns_prototypes;
         compiler->stmts = stmts;
         compiler->previous_module = previous_module;
         compiler->current_module = current_module;
@@ -2677,6 +2707,7 @@ int compiler_import(
 
         scope_in_fn("import", compiler, &fn, &symbol_index);
         define_natives(compiler);
+        define_fns_prototypes(fns_prototypes, compiler);
 
         for (size_t i = 0; i < stmts->used; i++){
             Stmt *stmt = (Stmt *)dynarr_get_ptr(i, stmts);

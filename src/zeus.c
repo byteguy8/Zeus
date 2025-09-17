@@ -414,6 +414,7 @@ int main(int argc, const char *argv[]){
 
     LZOHTable *modules = FACTORY_LZOHTABLE(&ctallocator);
 	DynArr *tokens = FACTORY_DYNARR_PTR(&ctallocator);
+    DynArr *fns_prototypes = FACTORY_DYNARR_PTR(&ctallocator);
 	DynArr *stmts = FACTORY_DYNARR_PTR(&ctallocator);
 	Lexer *lexer = lexer_create(&ctallocator, &rtallocator);
 	Parser *parser = parser_create(&ctallocator);
@@ -440,7 +441,7 @@ int main(int argc, const char *argv[]){
             result = 1;
 			goto CLEAN_UP;
 		}
-        if(parser_parse(tokens, stmts, parser)){
+        if(parser_parse(tokens, fns_prototypes, stmts, parser)){
             result = 1;
 			goto CLEAN_UP;
 		}
@@ -456,11 +457,21 @@ int main(int argc, const char *argv[]){
             result = 1;
 			goto CLEAN_UP;
 		}
-        if(parser_parse(tokens, stmts, parser)){
+        if(parser_parse(tokens, fns_prototypes, stmts, parser)){
             result = 1;
 			goto CLEAN_UP;
 		}
-        if(compiler_compile(search_paths, import_paths, keywords, native_fns, stmts, module, modules, compiler)){
+        if(compiler_compile(
+            search_paths,
+            import_paths,
+            keywords,
+            native_fns,
+            fns_prototypes,
+            stmts,
+            module,
+            modules,
+            compiler
+        )){
             result = 1;
 			goto CLEAN_UP;
 		}
@@ -477,11 +488,21 @@ int main(int argc, const char *argv[]){
             result = 1;
 			goto CLEAN_UP;
 		}
-        if(parser_parse(tokens, stmts, parser)){
+        if(parser_parse(tokens, fns_prototypes, stmts, parser)){
             result = 1;
 			goto CLEAN_UP;
 		}
-        if(compiler_compile(search_paths, import_paths, keywords, native_fns, stmts, module, modules, compiler)){
+        if(compiler_compile(
+            search_paths,
+            import_paths,
+            keywords,
+            native_fns,
+            fns_prototypes,
+            stmts,
+            module,
+            modules,
+            compiler
+        )){
             result = 1;
 			goto CLEAN_UP;
 		}
@@ -500,11 +521,21 @@ int main(int argc, const char *argv[]){
 			result = 1;
             goto CLEAN_UP;
 		}
-        if(parser_parse(tokens, stmts, parser)){
+        if(parser_parse(tokens, fns_prototypes, stmts, parser)){
             result = 1;
 			goto CLEAN_UP;
 		}
-        if(compiler_compile(search_paths, import_paths, keywords, native_fns, stmts, module, modules, compiler)){
+        if(compiler_compile(
+            search_paths,
+            import_paths,
+            keywords,
+            native_fns,
+            fns_prototypes,
+            stmts,
+            module,
+            modules,
+            compiler
+        )){
             result = 1;
 			goto CLEAN_UP;
 		}
