@@ -1442,8 +1442,8 @@ inline void vmu_destroy_dict(DictObj *dict_obj, VM *vm){
 }
 
 inline void vmu_dict_put(Value key, Value value, DictObj *dict_obj, VM *vm){
-    if(IS_VALUE_EMPTY(value)){
-        vmu_error(vm, "Failed to put value into dict: key cannot be 'empty'");
+    if(IS_VALUE_EMPTY(key)){
+        vmu_error(vm, "Failed to put key into dict: key cannot be 'empty'");
     }
 
     LZOHTable *keys_values = dict_obj->key_values;
