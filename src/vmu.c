@@ -172,7 +172,7 @@ void mark_objs(VM *vm){
                 for (size_t i = 0; i < m; i++){
                     LZOHTableSlot slot = key_values->slots[i];
 
-                    if(slot.used){
+                    if(!slot.used){
                         continue;
                     }
 
