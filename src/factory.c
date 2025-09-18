@@ -65,6 +65,19 @@ void factory_destroy_native_fn(NativeFn *native_fn){
     MEMORY_DEALLOC(NativeFn, 1, native_fn, allocator);
 }
 
+inline int factory_add_value_to_native_module(Value value, const char *name, NativeModule *native_module){
+    if(lzohtable_put_ckv(
+        strlen(name),
+        name,
+        sizeof(Value),
+        (const void *)&value,
+        native_module->symbols,
+        NULL
+    )){
+        return 1;
+    }
+}
+
 int factory_add_native_fn(const char *name, uint8_t arity, RawNativeFn raw_native, NativeModule *module){
 	Allocator *allocator = module->allocator;
     NativeFn *native_fn = factory_create_native_fn(1, name, arity, raw_native, allocator);

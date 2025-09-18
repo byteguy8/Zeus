@@ -2,6 +2,7 @@
 #define NATIVE_MATH_H
 
 #define PI 3.1415926535897932384626433
+#define E  2.7182818284590452353602874
 
 #include "vmu.h"
 #include "types_utils.h"
@@ -145,6 +146,9 @@ Value native_fn_deg2rad(uint8_t argsc, Value *values, Value target, void *contex
 
 void math_module_init(Allocator *allocator){
 	math_native_module = factory_create_native_module("math", allocator);
+
+    factory_add_value_to_native_module(FLOAT_VALUE(PI), "PI", math_native_module);
+    factory_add_value_to_native_module(FLOAT_VALUE(E), "E", math_native_module);
 
     factory_add_native_fn("min", 2, native_fn_min, math_native_module);
     factory_add_native_fn("max", 2, native_fn_max, math_native_module);
