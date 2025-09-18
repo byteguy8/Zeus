@@ -1457,6 +1457,10 @@ inline void vmu_dict_raw_put_str_value(char *str, Value value, DictObj *dict_obj
     lzohtable_put_ckv(str_len, str, VALUE_SIZE, &value, keys_values, NULL);
 }
 
+inline int vmu_dict_contains(Value key, DictObj *dict_obj){
+    return lzohtable_lookup(VALUE_SIZE, &key, dict_obj->key_values, NULL);
+}
+
 inline Value vmu_dict_get(Value key, DictObj *dict_obj, VM *vm){
     LZOHTable *keys_values = dict_obj->key_values;
     Value *raw_value = NULL;
@@ -1466,6 +1470,10 @@ inline Value vmu_dict_get(Value key, DictObj *dict_obj, VM *vm){
     }
 
     return (Value){0};
+}
+
+inline void vmu_dict_remove(Value key, DictObj *dict_obj){
+    LZOHTABLE_REMOVE(VALUE_SIZE, &key, dict_obj->key_values);
 }
 
 inline RecordObj *vmu_create_record(uint16_t length, VM *vm){

@@ -88,7 +88,9 @@ DictObj *vmu_create_dict(VM *vm);
 void vmu_destroy_dict(DictObj *dict_obj, VM *vm);
 void vmu_dict_put(Value key, Value value, DictObj *dict_obj, VM *vm);
 void vmu_dict_raw_put_str_value(char *str, Value value, DictObj *dict_obj, VM *vm);
+int vmu_dict_contains(Value key, DictObj *dict_obj);
 Value vmu_dict_get(Value key, DictObj *dict_obj, VM *vm);
+void vmu_dict_remove(Value key, DictObj *dict_obj);
 //------------------    RECORD    --------------------------//
 RecordObj *vmu_create_record(uint16_t length, VM *vm);
 void vmu_destroy_record(RecordObj *record_obj, VM *vm);

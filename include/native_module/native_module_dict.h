@@ -11,6 +11,12 @@ Value native_dict_fn_len(uint8_t argsc, Value *values, Value target, void *conte
     return INT_VALUE((int64_t)key_values->n);
 }
 
+Value native_dict_fn_contains(uint8_t argsc, Value *values, Value target, void *context){
+    DictObj *dict_obj = VALUE_TO_DICT(target);
+    Value key = values[0];
+    return BOOL_VALUE((int64_t)vmu_dict_contains(key, dict_obj));
+}
+
 Value native_dict_fn_clear(uint8_t argsc, Value *values, Value target, void *context){
     DictObj *dict_obj = VALUE_TO_DICT(target);
     LZOHTable *key_values = dict_obj->key_values;
@@ -21,6 +27,15 @@ Value native_dict_fn_clear(uint8_t argsc, Value *values, Value target, void *con
     return INT_VALUE((int64_t)len);
 }
 
+Value native_dict_fn_remove(uint8_t argsc, Value *values, Value target, void *context){
+    DictObj *dict_obj = VALUE_TO_DICT(target);
+    Value key = values[0];
+
+    vmu_dict_remove(key, dict_obj);
+
+    return EMPTY_VALUE;
+}
+
 NativeFn *native_dict_get(size_t key_size, const char *key, VM *vm){
     if(!dict_symbols){
         Allocator *allocator = &vm->front_allocator;
@@ -29,7 +44,9 @@ NativeFn *native_dict_get(size_t key_size, const char *key, VM *vm){
         dynarr_insert_ptr(dict_symbols, vm->native_symbols);
 
         factory_add_native_fn_info_n("len", 0, native_dict_fn_len, dict_symbols, allocator);
+        factory_add_native_fn_info_n("contains", 1, native_dict_fn_contains, dict_symbols, allocator);
         factory_add_native_fn_info_n("clear", 0, native_dict_fn_clear, dict_symbols, allocator);
+        factory_add_native_fn_info_n("remove", 1, native_dict_fn_remove, dict_symbols, allocator);
     }
 
     NativeFn *native_fn = NULL;
