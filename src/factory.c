@@ -76,6 +76,8 @@ inline int factory_add_value_to_native_module(Value value, const char *name, Nat
     )){
         return 1;
     }
+
+    return 0;
 }
 
 int factory_add_native_fn(const char *name, uint8_t arity, RawNativeFn raw_native, NativeModule *module){
