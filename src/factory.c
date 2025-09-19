@@ -100,7 +100,7 @@ int factory_add_native_fn(const char *name, uint8_t arity, RawNativeFn raw_nativ
 
     obj->type = NATIVE_FN_OBJ_TYPE;
     obj->marked = 0;
-    obj->color = WHITE_OBJ_COLOR;
+    obj->color = TRANSPARENT_OBJ_COLOR;
     obj->prev = NULL;
     obj->next = NULL;
     obj->list = NULL;

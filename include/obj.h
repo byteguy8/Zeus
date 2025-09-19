@@ -31,6 +31,7 @@ enum obj_type{
 };
 
 enum obj_color{
+    TRANSPARENT_OBJ_COLOR,
     WHITE_OBJ_COLOR,
     GRAY_OBJ_COLOR,
     BLACK_OBJ_COLOR,
