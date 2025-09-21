@@ -120,8 +120,6 @@ typedef struct compiler{
     Allocator *ctallocator;
     Allocator *rtallocator;
     Allocator *labels_allocator;
-    Allocator fake_rtallocator;
-    Allocator fake_ctallocator;
 }Compiler;
 
 Compiler *compiler_create(Allocator *ctallocator, Allocator *rtallocator);

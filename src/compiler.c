@@ -19,8 +19,8 @@
 #include <stdio.h>
 #include <inttypes.h>
 
-#define CTALLOCATOR (&(compiler->fake_ctallocator))
-#define RTALLOCATOR (&(compiler->fake_rtallocator))
+#define CTALLOCATOR (compiler->ctallocator)
+#define RTALLOCATOR (compiler->rtallocator)
 #define LABELS_ALLOCATOR (compiler->labels_allocator)
 #define CURRENT_MODULE (compiler->current_module)
 //--------------------------------------------------------------------------//
@@ -29,10 +29,6 @@
 //--------------------------------  ERROR  ---------------------------------//
 static void error(Compiler *compiler, Token *token, char *msg, ...);
 static void fatal_error(Compiler *compiler, char *fmt, ...);
-//--------------------------------  MEMORY  --------------------------------//
-static void *lzalloc(size_t size, void *ctx);
-static void *lzrealloc(void *ptr, size_t old_size, size_t new_size, void *ctx);
-static void lzdealloc(void *ptr, size_t size, void *ctx);
 //--------------------------------  SCOPE  ---------------------------------//
 Scope *scope_in(ScopeType type, Compiler *compiler);
 Scope *scope_in_soft(ScopeType type, Compiler *compiler);
@@ -130,38 +126,6 @@ static void fatal_error(Compiler *compiler, char *fmt, ...){
 
     va_end(args);
     longjmp(compiler->err_jmp, 1);
-}
-
-static void *lzalloc(size_t size, void *ctx){
-    ComplexContext *complex_ctx = (ComplexContext *)ctx;
-    void *worker = complex_ctx->arg0;
-    Allocator *allocator = (Allocator *)complex_ctx->arg1;
-    void *ptr = allocator->alloc(size, allocator->ctx);
-
-    if(!ptr){
-        fatal_error(worker, "Failed to allocate %ld bytes", size);
-    }
-
-    return ptr;
-}
-
-static void *lzrealloc(void *ptr, size_t old_size, size_t new_size, void *ctx){
-    ComplexContext *complex_ctx = (ComplexContext *)ctx;
-    void *worker = complex_ctx->arg0;
-    Allocator *allocator = (Allocator *)complex_ctx->arg1;
-    void *new_ptr = allocator->realloc(ptr, old_size, new_size, allocator->ctx);
-
-    if(!new_ptr){
-        fatal_error(worker, "Failed to reallocate %ld bytes", new_size);
-    }
-
-    return new_ptr;
-}
-
-static void lzdealloc(void *ptr, size_t size, void *ctx){
-    ComplexContext *complex_ctx = (ComplexContext *)ctx;
-    Allocator *allocator = (Allocator *)complex_ctx->arg1;
-    allocator->dealloc(ptr, size, allocator->ctx);
 }
 
 Scope *scope_in(ScopeType type, Compiler *compiler){
@@ -2630,18 +2594,6 @@ int compiler_compile(
         compiler->fns_prototypes = fns_prototypes;
         compiler->stmts = stmts;
 
-        ComplexContext compile_ctx = (ComplexContext){
-            .arg0 = compiler,
-            .arg1 = compiler->ctallocator
-        };
-        ComplexContext runtime_ctx = (ComplexContext){
-            .arg0 = compiler,
-            .arg1 = compiler->rtallocator
-        };
-
-        MEMORY_INIT_ALLOCATOR(&compile_ctx, lzalloc, lzrealloc, lzdealloc, &compiler->fake_ctallocator);
-        MEMORY_INIT_ALLOCATOR(&runtime_ctx, lzalloc, lzrealloc, lzdealloc, &compiler->fake_rtallocator);
-
         Fn *fn = NULL;
         size_t symbol_index = 0;
 
@@ -2689,18 +2641,6 @@ int compiler_import(
         compiler->previous_module = previous_module;
         compiler->current_module = current_module;
         compiler->modules = modules;
-
-        ComplexContext compile_ctx = (ComplexContext){
-            .arg0 = compiler,
-            .arg1 = compiler->ctallocator
-        };
-        ComplexContext runtime_ctx = (ComplexContext){
-            .arg0 = compiler,
-            .arg1 = compiler->rtallocator
-        };
-
-        MEMORY_INIT_ALLOCATOR(&compile_ctx, lzalloc, lzrealloc, lzdealloc, &compiler->fake_ctallocator);
-        MEMORY_INIT_ALLOCATOR(&runtime_ctx, lzalloc, lzrealloc, lzdealloc, &compiler->fake_rtallocator);
 
         Fn *fn = NULL;
         size_t symbol_index = 0;

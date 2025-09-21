@@ -100,7 +100,6 @@ typedef struct vm{
     LZPool module_objs_pool;
 //------------------------------  ALLOCATORS  ------------------------------//
     Allocator *allocator;
-    Allocator back_allocator;
     Allocator front_allocator;
 }VM;
 

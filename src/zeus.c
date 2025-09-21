@@ -28,6 +28,36 @@ typedef struct args{
     char *source_pathname;
 }Args;
 
+static LZFList *allocator = NULL;
+
+void *lzalloc_link_flist(size_t size, void *ctx){
+    void *ptr = lzflist_alloc(size, ctx);
+
+    if(!ptr){
+        fprintf(stderr, "It seems the system ran out of memory");
+        lzflist_destroy(allocator);
+        exit(EXIT_FAILURE);
+    }
+
+    return ptr;
+}
+
+void *lzrealloc_link_flist(void *ptr, size_t old_size, size_t new_size, void *ctx){
+    void *new_ptr = lzflist_realloc(ptr, new_size, ctx);
+
+    if(!new_ptr){
+        fprintf(stderr, "It seems the system ran out of memory");
+        lzflist_destroy(allocator);
+        exit(EXIT_FAILURE);
+    }
+
+    return new_ptr;
+}
+
+void lzdealloc_link_flist(void *ptr, size_t size, void *ctx){
+    lzflist_dealloc(ptr, ctx);
+}
+
 void *lzalloc_link_arena(size_t size, void *ctx){
     return LZARENA_ALLOC(size, ctx);
 }
@@ -38,18 +68,6 @@ void *lzrealloc_link_arena(void *ptr, size_t old_size, size_t new_size, void *ct
 
 void lzdealloc_link_arena(void *ptr, size_t size, void *ctx){
     // nothing to be done
-}
-
-void *lzalloc_link_flist(size_t size, void *ctx){
-    return lzflist_alloc(size, ctx);
-}
-
-void *lzrealloc_link_flist(void *ptr, size_t old_size, size_t new_size, void *ctx){
-    return lzflist_realloc(ptr, new_size, ctx);
-}
-
-void lzdealloc_link_flist(void *ptr, size_t size, void *ctx){
-    lzflist_dealloc(ptr, ctx);
 }
 
 static void get_args(int argc, const char *argv[], Args *args){
@@ -286,30 +304,13 @@ static void print_help(){
 }
 
 static void init_memory(LZArena **out_ctarena, LZFList **out_rtflist, Allocator *ctallocator, Allocator *rtallocator){
-    LZArena *ctarena = lzarena_create(NULL);
     LZFList *rtflist = lzflist_create(NULL);
 
-    if(!ctarena || !rtflist){
-        lzarena_destroy(ctarena);
+    if(!rtflist || lzflist_prealloc(DEFAULT_INITIAL_RUNTIME_MEMORY, rtflist)){
+        fprintf(stderr, "Failed to init memory");
         lzflist_destroy(rtflist);
         exit(EXIT_FAILURE);
     }
-
-    if(lzarena_append_region(DEFAULT_INITIAL_COMPILE_TIME_MEMORY, ctarena) ||
-       lzflist_prealloc(DEFAULT_INITIAL_RUNTIME_MEMORY, rtflist))
-    {
-        lzarena_destroy(ctarena);
-        lzflist_destroy(rtflist);
-        exit(EXIT_FAILURE);
-    }
-
-    MEMORY_INIT_ALLOCATOR(
-        ctarena,
-        lzalloc_link_arena,
-        lzrealloc_link_arena,
-        lzdealloc_link_arena,
-        ctallocator
-    );
 
     MEMORY_INIT_ALLOCATOR(
         rtflist,
@@ -317,6 +318,18 @@ static void init_memory(LZArena **out_ctarena, LZFList **out_rtflist, Allocator 
         lzrealloc_link_flist,
         lzdealloc_link_flist,
         rtallocator
+    );
+
+    LZArena *ctarena = lzarena_create((LZArenaAllocator *)rtallocator);
+
+    lzarena_append_region(DEFAULT_INITIAL_COMPILE_TIME_MEMORY, ctarena);
+
+    MEMORY_INIT_ALLOCATOR(
+        ctarena,
+        lzalloc_link_arena,
+        lzrealloc_link_arena,
+        lzdealloc_link_arena,
+        ctallocator
     );
 
     *out_ctarena = ctarena;

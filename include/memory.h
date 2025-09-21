@@ -16,10 +16,11 @@ typedef struct complex_context{
 #define MEMORY_MIBIBYTES(_count)(MEMORY_KIBIBYTES((_count) * 1024))
 
 #define MEMORY_INIT_ALLOCATOR(_ctx, _alloc, _realloc, _dealloc, _allocator){ \
-    (_allocator)->ctx = (_ctx);                                              \
-    (_allocator)->alloc = (_alloc);                                          \
+    (_allocator)->ctx     = (_ctx);                                          \
+    (_allocator)->alloc   = (_alloc);                                        \
     (_allocator)->realloc = (_realloc);                                      \
     (_allocator)->dealloc = (_dealloc);                                      \
+    (_allocator)->extra   = NULL;                                            \
 }
 
 #define MEMORY_INIT_FAKE_ALLOCATOR(_alloc, _realloc, _dealloc, _args, _allocator, _fake_allocator){ \

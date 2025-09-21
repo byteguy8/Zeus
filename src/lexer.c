@@ -9,17 +9,12 @@
 #include <stdio.h>
 #include <math.h>
 
-#define COMPILE_ALLOCATOR (&(lexer->fake_ctallocator))
-#define RUNTIME_ALLOCATOR (&(lexer->fake_rtallocator))
+#define COMPILE_ALLOCATOR (lexer->ctallocator)
+#define RUNTIME_ALLOCATOR (lexer->rtallocator)
 //--------------------------------------------------------------------------//
 //                            PRIVATE INTERFACE                             //
 //--------------------------------------------------------------------------//
 static void error(Lexer *lexer, char *msg, ...);
-static void fatal_error(Lexer *lexer, char *fmt, ...);
-
-static void *lzalloc(size_t size, void *ctx);
-static void *lzrealloc(void *ptr, size_t old_size, size_t new_size, void *ctx);
-static void lzdealloc(void *ptr, size_t size, void *ctx);
 
 static inline int is_at_end(Lexer *lexer);
 static inline int is_dec_digit(char c);
@@ -79,51 +74,6 @@ void error(Lexer *lexer, char *msg, ...){
     fprintf(stderr, "\n");
 
 	va_end(args);
-}
-
-static void fatal_error(Lexer *lexer, char *fmt, ...){
-    va_list args;
-	va_start(args, fmt);
-
-	fprintf(stderr, "LEXER FATAL ERROR:\n\t");
-	vfprintf(stderr, fmt, args);
-    fprintf(stderr, "\n");
-
-	va_end(args);
-
-    longjmp(lexer->err_buf, 1);
-}
-
-static void *lzalloc(size_t size, void *ctx){
-    ComplexContext *complex_ctx = (ComplexContext *)ctx;
-    Lexer *lexer = (Lexer *)complex_ctx->arg0;
-    Allocator *allocator = (Allocator *)complex_ctx->arg1;
-    void *ptr = allocator->alloc(size, allocator->ctx);
-
-    if(!ptr){
-        fatal_error(lexer, "Failed to allocate %ld bytes", size);
-    }
-
-    return ptr;
-}
-
-static void *lzrealloc(void *ptr, size_t old_size, size_t new_size, void *ctx){
-    ComplexContext *complex_ctx = (ComplexContext *)ctx;
-    Lexer *lexer = (Lexer *)complex_ctx->arg0;
-    Allocator *allocator = (Allocator *)complex_ctx->arg1;
-    void *new_ptr = allocator->realloc(ptr, old_size, new_size, allocator->ctx);
-
-    if(!new_ptr){
-        fatal_error(lexer, "Failed to reallocate %ld bytes", new_size);
-    }
-
-    return new_ptr;
-}
-
-static void lzdealloc(void *ptr, size_t size, void *ctx){
-    ComplexContext *complex_ctx = (ComplexContext *)ctx;
-    Allocator *allocator = (Allocator *)complex_ctx->arg1;
-    allocator->dealloc(ptr, size, allocator->ctx);
 }
 
 static inline int is_at_end(Lexer *lexer){
@@ -873,19 +823,6 @@ int lexer_scan(
         lexer->tokens = tokens;
         lexer->keywords = keywords;
         lexer->pathname = pathname;
-
-        ComplexContext compile_ctx = (ComplexContext){
-            .arg0 = lexer,
-            .arg1 = lexer->ctallocator
-        };
-        ComplexContext runtime_ctx = (ComplexContext){
-            .arg0 = lexer,
-            .arg1 = lexer->rtallocator
-        };
-
-        MEMORY_INIT_ALLOCATOR(&compile_ctx, lzalloc, lzrealloc, lzdealloc, &lexer->fake_ctallocator);
-        MEMORY_INIT_ALLOCATOR(&runtime_ctx, lzalloc, lzrealloc, lzdealloc, &lexer->fake_rtallocator);
-
         lexer->str_helper = FACTORY_LZBSTR(COMPILE_ALLOCATOR);
 
         while (!is_at_end(lexer)){

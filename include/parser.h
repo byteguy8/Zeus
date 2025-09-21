@@ -13,7 +13,6 @@ typedef struct parser{
 	DynArr *tokens;
     DynArr *fns_prototypes;
     Allocator *ctallocator;
-    Allocator fake_ctallocator;
 }Parser;
 
 Parser *parser_create(Allocator *allocator);

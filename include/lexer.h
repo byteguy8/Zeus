@@ -20,8 +20,6 @@ typedef struct lexer{
     LZOHTable *keywords;
     Allocator *rtallocator;
     Allocator *ctallocator;
-    Allocator fake_rtallocator;
-    Allocator fake_ctallocator;
 }Lexer;
 
 Lexer *lexer_create(Allocator *compile_time_allocator, Allocator *runtime_allocator);

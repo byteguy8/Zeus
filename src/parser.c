@@ -10,17 +10,12 @@
 #include <setjmp.h>
 #include <assert.h>
 
-#define CTALLOCATOR (&(parser->fake_ctallocator))
+#define CTALLOCATOR (parser->ctallocator)
 //--------------------------------------------------------------------------//
 //                            PRIVATE INTERFACE                             //
 //--------------------------------------------------------------------------//
 //--------------------------------  ERROR  ---------------------------------//
 static void error(Parser *parser, Token *token, char *msg, ...);
-static void fatal_error(Parser *parser, char *fmt, ...);
-
-static void *lzalloc(size_t size, void *ctx);
-static void *lzrealloc(void *ptr, size_t old_size, size_t new_size, void *ctx);
-static void lzdealloc(void *ptr, size_t size, void *ctx);
 //--------------------------------  OTHER  ---------------------------------//
 static Expr *create_expr(ExprType type, void *sub_expr, Parser *parser);
 static Stmt *create_stmt(StmtType type, void *sub_stmt, Parser *parser);
@@ -83,51 +78,6 @@ void error(Parser *parser, Token *token, char *msg, ...){
 	va_end(args);
 
     longjmp(parser->err_buf, 1);
-}
-
-void fatal_error(Parser *parser, char *fmt, ...){
-    va_list args;
-	va_start(args, fmt);
-
-	fprintf(stderr, "Parser FATAL ERROR:\n\t");
-	vfprintf(stderr, fmt, args);
-    fprintf(stderr, "\n");
-
-	va_end(args);
-
-    longjmp(parser->err_buf, 1);
-}
-
-void *lzalloc(size_t size, void *ctx){
-    ComplexContext *complex_ctx = (ComplexContext *)ctx;
-    Parser *parser = (Parser *)complex_ctx->arg0;
-    Allocator *allocator = (Allocator *)complex_ctx->arg1;
-    void *ptr = allocator->alloc(size, allocator->ctx);
-
-    if(!ptr){
-        fatal_error(parser, "Failed to allocate %ld bytes", size);
-    }
-
-    return ptr;
-}
-
-void *lzrealloc(void *ptr, size_t old_size, size_t new_size, void *ctx){
-    ComplexContext *complex_ctx = (ComplexContext *)ctx;
-    Parser *parser = (Parser *)complex_ctx->arg0;
-    Allocator *allocator = (Allocator *)complex_ctx->arg1;
-    void *new_ptr = allocator->realloc(ptr, old_size, new_size, allocator->ctx);
-
-    if(!new_ptr){
-        fatal_error(parser, "Failed to reallocate %ld bytes", new_size);
-    }
-
-    return new_ptr;
-}
-
-void lzdealloc(void *ptr, size_t size, void *ctx){
-    ComplexContext *complex_ctx = (ComplexContext *)ctx;
-    Allocator *allocator = (Allocator *)complex_ctx->arg1;
-    allocator->dealloc(ptr, size, allocator->ctx);
 }
 
 Expr *create_expr(ExprType type, void *sub_expr, Parser *parser){
@@ -1410,13 +1360,6 @@ int parser_parse(DynArr *tokens, DynArr *fns_prototypes, DynArr *stmts, Parser *
         parser->tokens = tokens;
         parser->fns_prototypes = fns_prototypes;
 
-        ComplexContext compile_ctx = (ComplexContext){
-            .arg0 = parser,
-            .arg1 = parser->ctallocator
-        };
-
-        MEMORY_INIT_ALLOCATOR(&compile_ctx, lzalloc, lzrealloc, lzdealloc, &parser->fake_ctallocator);
-
         while(!is_at_end(parser)){
             Stmt *stmt = parse_stmt(parser);
             dynarr_insert_ptr(stmt, stmts);
@@ -1434,13 +1377,6 @@ int parser_parse_str_interpolation(DynArr *tokens, DynArr *exprs, Parser *parser
         parser->current = 0;
         parser->tokens = tokens;
         parser->fns_prototypes = NULL;
-
-        ComplexContext compile_ctx = (ComplexContext){
-            .arg0 = parser,
-            .arg1 = parser->ctallocator
-        };
-
-        MEMORY_INIT_ALLOCATOR(&compile_ctx, lzalloc, lzrealloc, lzdealloc, &parser->fake_ctallocator);
 
         while(!is_at_end(parser)){
             Expr *expr = parse_tenary_expr(parser);
