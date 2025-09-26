@@ -823,7 +823,6 @@ int lexer_scan(
         lexer->tokens = tokens;
         lexer->keywords = keywords;
         lexer->pathname = pathname;
-        lexer->str_helper = FACTORY_LZBSTR(COMPILE_ALLOCATOR);
 
         while (!is_at_end(lexer)){
             char c = advance(lexer);

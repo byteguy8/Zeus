@@ -16,7 +16,6 @@ typedef struct lexer{
     char *pathname;
     RawStr *source;
 	DynArr *tokens;
-    LZBStr *str_helper;
     LZOHTable *keywords;
     Allocator *rtallocator;
     Allocator *ctallocator;
