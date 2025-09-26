@@ -1029,6 +1029,25 @@ static int execute(VM *vm){
                     break;
                 }
 
+                if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) &&
+                   (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value)))
+                {
+                    double left;
+                    double right;
+
+                    if(IS_VALUE_FLOAT(left_value)){
+                        left = VALUE_TO_FLOAT(left_value);
+                        right = (double)VALUE_TO_INT(right_value);
+                    }else{
+                        left = (double)VALUE_TO_INT(left_value);
+                        right = VALUE_TO_FLOAT(right_value);
+                    }
+
+                    PUSH_BOOL(left < right, vm);
+
+                    break;
+                }
+
                 vmu_error(vm, "Unsuported types using < operator");
 
                 break;
@@ -1048,6 +1067,25 @@ static int execute(VM *vm){
                 if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
                     double left = VALUE_TO_FLOAT(left_value);
                     double right = VALUE_TO_FLOAT(right_value);
+
+                    PUSH_BOOL(left > right, vm);
+
+                    break;
+                }
+
+                if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) &&
+                   (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value)))
+                {
+                    double left;
+                    double right;
+
+                    if(IS_VALUE_FLOAT(left_value)){
+                        left = VALUE_TO_FLOAT(left_value);
+                        right = (double)VALUE_TO_INT(right_value);
+                    }else{
+                        left = (double)VALUE_TO_INT(left_value);
+                        right = VALUE_TO_FLOAT(right_value);
+                    }
 
                     PUSH_BOOL(left > right, vm);
 
@@ -1079,6 +1117,25 @@ static int execute(VM *vm){
                     break;
                 }
 
+                if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) &&
+                   (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value)))
+                {
+                    double left;
+                    double right;
+
+                    if(IS_VALUE_FLOAT(left_value)){
+                        left = VALUE_TO_FLOAT(left_value);
+                        right = (double)VALUE_TO_INT(right_value);
+                    }else{
+                        left = (double)VALUE_TO_INT(left_value);
+                        right = VALUE_TO_FLOAT(right_value);
+                    }
+
+                    PUSH_BOOL(left <= right, vm);
+
+                    break;
+                }
+
                 vmu_error(vm, "Unsuported types using <= operator");
 
                 break;
@@ -1098,6 +1155,25 @@ static int execute(VM *vm){
                 if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
                     double left = VALUE_TO_FLOAT(left_value);
                     double right = VALUE_TO_FLOAT(right_value);
+
+                    PUSH_BOOL(left >= right, vm);
+
+                    break;
+                }
+
+                if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) &&
+                   (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value)))
+                {
+                    double left;
+                    double right;
+
+                    if(IS_VALUE_FLOAT(left_value)){
+                        left = VALUE_TO_FLOAT(left_value);
+                        right = (double)VALUE_TO_INT(right_value);
+                    }else{
+                        left = (double)VALUE_TO_INT(left_value);
+                        right = VALUE_TO_FLOAT(right_value);
+                    }
 
                     PUSH_BOOL(left >= right, vm);
 
@@ -1132,6 +1208,25 @@ static int execute(VM *vm){
                 if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
                     double left = VALUE_TO_FLOAT(left_value);
                     double right = VALUE_TO_FLOAT(right_value);
+
+                    PUSH_BOOL(left == right, vm);
+
+                    break;
+                }
+
+                if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) &&
+                   (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value)))
+                {
+                    double left;
+                    double right;
+
+                    if(IS_VALUE_FLOAT(left_value)){
+                        left = VALUE_TO_FLOAT(left_value);
+                        right = (double)VALUE_TO_INT(right_value);
+                    }else{
+                        left = (double)VALUE_TO_INT(left_value);
+                        right = VALUE_TO_FLOAT(right_value);
+                    }
 
                     PUSH_BOOL(left == right, vm);
 
@@ -1175,6 +1270,25 @@ static int execute(VM *vm){
                 if(IS_VALUE_FLOAT(left_value) && IS_VALUE_FLOAT(right_value)){
                     double left = VALUE_TO_FLOAT(left_value);
                     double right = VALUE_TO_FLOAT(right_value);
+
+                    PUSH_BOOL(left != right, vm);
+
+                    break;
+                }
+
+                if((IS_VALUE_INT(left_value) || IS_VALUE_FLOAT(left_value)) &&
+                   (IS_VALUE_INT(right_value) || IS_VALUE_FLOAT(right_value)))
+                {
+                    double left;
+                    double right;
+
+                    if(IS_VALUE_FLOAT(left_value)){
+                        left = VALUE_TO_FLOAT(left_value);
+                        right = (double)VALUE_TO_INT(right_value);
+                    }else{
+                        left = (double)VALUE_TO_INT(left_value);
+                        right = VALUE_TO_FLOAT(right_value);
+                    }
 
                     PUSH_BOOL(left != right, vm);
 
