@@ -1550,59 +1550,116 @@ void compile_expr(Expr *expr, Compiler *compiler){
             break;
         }case COMPOUND_EXPRTYPE:{
 			CompoundExpr *compound_expr = (CompoundExpr *)expr->sub_expr;
-			Token *identifier_token = compound_expr->identifier_token;
+            Expr *left = compound_expr->left;
 			Token *operator = compound_expr->operator;
 			Expr *right = compound_expr->right;
 
-			Symbol *symbol = get(identifier_token, compiler);
+            switch (left->type){
+                case IDENTIFIER_EXPRTYPE:{
+                    IdentifierExpr *identifier_expr = (IdentifierExpr *)left->sub_expr;
+                    Token *identifier_token = identifier_expr->identifier_token;
+                    Symbol *symbol = get(identifier_token, compiler);
 
-			if(symbol->type == IMUT_SYMTYPE)
-				error(compiler, identifier_token, "'%s' declared as constant. Can't change its value.", identifier_token->lexeme);
+                    if(symbol->type == IMUT_SYMTYPE){
+                        error(
+                            compiler,
+                            identifier_token,
+                            "'%s' declared as constant. Can't change its value.",
+                            identifier_token->lexeme
+                        );
+                    }
 
-			if(symbol->depth == 1){
-                write_chunk(GGET_OPCODE, compiler);
-			    write_str_alloc(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
-            }else{
-                write_chunk(LGET_OPCODE, compiler);
-			    write_chunk(symbol->local, compiler);
-            }
+                    if(symbol->depth == 1){
+                        write_chunk(GGET_OPCODE, compiler);
+                        write_location(identifier_token, compiler);
+                        write_str_alloc(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
+                    }else{
+                        write_chunk(LGET_OPCODE, compiler);
+                        write_location(identifier_token, compiler);
+                        write_chunk(symbol->local, compiler);
+                    }
 
-			compile_expr(right, compiler);
+                    compile_expr(right, compiler);
 
-			switch(operator->type){
-				case COMPOUND_ADD_TOKTYPE:{
-					write_chunk(ADD_OPCODE, compiler);
-					break;
-				}
-				case COMPOUND_SUB_TOKTYPE:{
-					write_chunk(SUB_OPCODE, compiler);
-					break;
-				}
-				case COMPOUND_MUL_TOKTYPE:{
-					write_chunk(MUL_OPCODE, compiler);
-					break;
-				}
-				case COMPOUND_DIV_TOKTYPE:{
-					write_chunk(DIV_OPCODE, compiler);
-					break;
-				}
-				default:{
-					assert("Illegal compound type");
-				}
-			}
+                    switch(operator->type){
+                        case COMPOUND_ADD_TOKTYPE:{
+                            write_chunk(ADD_OPCODE, compiler);
+                            break;
+                        }
+                        case COMPOUND_SUB_TOKTYPE:{
+                            write_chunk(SUB_OPCODE, compiler);
+                            break;
+                        }
+                        case COMPOUND_MUL_TOKTYPE:{
+                            write_chunk(MUL_OPCODE, compiler);
+                            break;
+                        }
+                        case COMPOUND_DIV_TOKTYPE:{
+                            write_chunk(DIV_OPCODE, compiler);
+                            break;
+                        }
+                        default:{
+                            assert("Illegal compound type");
+                        }
+                    }
 
-			write_location(operator, compiler);
+                    write_location(operator, compiler);
 
-			if(symbol->depth == 1){
-                write_chunk(GSET_OPCODE, compiler);
-				write_location(identifier_token, compiler);
+                    if(symbol->depth == 1){
+                        write_chunk(GSET_OPCODE, compiler);
+                        write_location(identifier_token, compiler);
+                        write_str_alloc(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
+                    }else{
+                        write_chunk(LSET_OPCODE, compiler);
+                        write_location(identifier_token, compiler);
+                        write_chunk(symbol->local, compiler);
+                    }
 
-			    write_str_alloc(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
-            }else{
-                write_chunk(LSET_OPCODE, compiler);
-				write_location(identifier_token, compiler);
+                    break;
+                }case ACCESS_EXPRTYPE:{
+                    compile_expr(left, compiler);
 
-			    write_chunk(symbol->local, compiler);
+                    AccessExpr *access_expr = (AccessExpr *)left->sub_expr;
+                    Expr *left = access_expr->left;
+                    Token *dot_token = access_expr->dot_token;
+                    Token *symbol_token = access_expr->symbol_token;
+
+                    compile_expr(right, compiler);
+
+                    switch(operator->type){
+                        case COMPOUND_ADD_TOKTYPE:{
+                            write_chunk(ADD_OPCODE, compiler);
+                            break;
+                        }
+                        case COMPOUND_SUB_TOKTYPE:{
+                            write_chunk(SUB_OPCODE, compiler);
+                            break;
+                        }
+                        case COMPOUND_MUL_TOKTYPE:{
+                            write_chunk(MUL_OPCODE, compiler);
+                            break;
+                        }
+                        case COMPOUND_DIV_TOKTYPE:{
+                            write_chunk(DIV_OPCODE, compiler);
+                            break;
+                        }
+                        default:{
+                            assert("Illegal compound type");
+                        }
+                    }
+
+                    write_location(operator, compiler);
+
+                    compile_expr(left, compiler);
+
+                    write_chunk(PUT_OPCODE, compiler);
+                    write_location(dot_token, compiler);
+                    write_str_alloc(symbol_token->lexeme_len, symbol_token->lexeme, compiler);
+
+                    break;
+                }default:{
+                    error(compiler, operator, "Illegal compound operator left operand");
+                }
             }
 
 			break;

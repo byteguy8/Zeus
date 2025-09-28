@@ -192,20 +192,12 @@ Expr *parse_assign(Parser *parser){
 		COMPOUND_MUL_TOKTYPE,
 		COMPOUND_DIV_TOKTYPE
     )){
-		if(expr->type != IDENTIFIER_EXPRTYPE)
-            error(
-                parser,
-                peek(parser),
-                "Expect identifier in left side of assignment expression.");
-
-		IdentifierExpr *identifier_expr = (IdentifierExpr *)expr->sub_expr;
-		Token *identifier_token = identifier_expr->identifier_token;
 		Token *operator = previous(parser);
 		Expr *right = parse_assign(parser);
 
 		CompoundExpr *compound_expr = MEMORY_ALLOC(CompoundExpr, 1, CTALLOCATOR);
 
-		compound_expr->identifier_token = identifier_token;
+		compound_expr->left = expr;
 		compound_expr->operator = operator;
 		compound_expr->right = right;
 

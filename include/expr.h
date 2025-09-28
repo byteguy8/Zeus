@@ -146,7 +146,7 @@ typedef struct assign_expr{
 }AssignExpr;
 
 typedef struct compound_expr{
-	Token *identifier_token;
+	Expr *left;
 	Token *operator;
 	Expr *right;
 }CompoundExpr;
