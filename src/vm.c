@@ -1685,57 +1685,67 @@ static int execute(VM *vm){
                 uint8_t args_count = advance(vm);
                 Value callable_value = peek_at(args_count, vm);
 
-                if(is_value_fn(callable_value)){
-                    FnObj *fn_obj = VALUE_TO_FN(callable_value);
-                    Fn *fn = fn_obj->fn;
-
-                    call_fn(args_count, fn, vm);
-
-                    break;
+                if(!IS_VALUE_OBJ(callable_value)){
+                    vmu_error(vm, "Target is not callable");
                 }
 
-                if(is_value_closure(callable_value)){
-                    ClosureObj *closure_obj = VALUE_TO_CLOSURE(callable_value);
-                    Closure *closure = closure_obj->closure;
+                Obj *callable_obj = VALUE_TO_OBJ(callable_value);
 
-                    call_closure(args_count, closure, vm);
+                switch (callable_obj->type){
+                    case NATIVE_FN_OBJ_TYPE:{
+                        NativeFnObj *native_fn_obj = VALUE_TO_NATIVE_FN(callable_value);
+                        NativeFn *native_fn = native_fn_obj->native_fn;
+                        Value target = native_fn_obj->target;
+                        RawNativeFn raw_fn = native_fn->raw_fn;
 
-                    break;
-                }
+                        if(native_fn->arity != args_count){
+                            vmu_error(
+                                vm,
+                                "Failed to call native function '%s'. Declared with %d parameter(s), but got %d argument(s)",
+                                native_fn->name,
+                                native_fn->arity,
+                                args_count
+                            );
+                        }
 
-                if(is_value_native_fn(callable_value)){
-                    NativeFnObj *native_fn_obj = VALUE_TO_NATIVE_FN(callable_value);
-                    NativeFn *native_fn = native_fn_obj->native_fn;
-                    Value target = native_fn_obj->target;
-                    RawNativeFn raw_fn = native_fn->raw_fn;
+                        Value return_value;
 
-                    if(native_fn->arity != args_count){
-                        vmu_error(
-                            vm,
-                            "Failed to call function '%s'.\n\tDeclared with %d parameter(s), but got %d argument(s)",
-                            native_fn->name,
-                            native_fn->arity,
-                            args_count
-                        );
+                        if(args_count > 0){
+                            Value args[args_count];
+
+                            for (int16_t i = args_count; i > 0; i--){
+                                args[i - 1] = peek_at(args_count - i, vm);
+                            }
+
+                            return_value = raw_fn(args_count, args, target, vm);
+                        }else{
+                            return_value = raw_fn(0, NULL, target, vm);
+                        }
+
+                        vm->stack_top = peek_at_ptr(args_count, vm);
+
+                        push(return_value, vm);
+
+                        break;
+                    }case FN_OBJ_TYPE:{
+                        FnObj *fn_obj = VALUE_TO_FN(callable_value);
+                        Fn *fn = fn_obj->fn;
+
+                        call_fn(args_count, fn, vm);
+
+                        break;
+                    }case CLOSURE_OBJ_TYPE:{
+                        ClosureObj *closure_obj = VALUE_TO_CLOSURE(callable_value);
+                        Closure *closure = closure_obj->closure;
+
+                        call_closure(args_count, closure, vm);
+
+                        break;
+                    }default:{
+                        vmu_error(vm, "Target is not callable");
+                        break;
                     }
-
-                    // VLA must not be declared with a zero length
-                    Value args[args_count == 0 ? 1 : args_count];
-
-                    for (int i = args_count; i > 0; i--){
-                        args[i - 1] = peek_at(args_count - i, vm);
-                    }
-
-                    Value out_value = raw_fn(args_count, args, target, vm);
-
-                    vm->stack_top = peek_at_ptr(args_count, vm);
-
-                    push(out_value, vm);
-
-                    break;
                 }
-
-                vmu_internal_error(vm, "Expect function after %d parameters count", args_count);
 
                 break;
             }case ACCESS_OPCODE:{
