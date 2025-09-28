@@ -1795,9 +1795,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 				}case RECORD_TOKTYPE:{
                     write_chunk(8, compiler);
 					break;
-                }case FN_OBJ_TYPE:
-                 case CLOSURE_OBJ_TYPE:
-                 case NATIVE_FN_OBJ_TYPE:{
+                }case PROC_TOKTYPE:{
                     write_chunk(9, compiler);
                     break;
                 }default:{

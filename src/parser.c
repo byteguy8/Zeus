@@ -251,7 +251,7 @@ Expr *parse_is_expr(Parser *parser){
 
 		is_token = previous(parser);
 
-		if(match(parser, 9,
+		if(match(parser, 10,
 			EMPTY_TOKTYPE,
 			BOOL_TOKTYPE,
 			INT_TOKTYPE,
@@ -260,13 +260,15 @@ Expr *parse_is_expr(Parser *parser){
             ARRAY_TOKTYPE,
 			LIST_TOKTYPE,
 			DICT_TOKTYPE,
-            RECORD_TOKTYPE
+            RECORD_TOKTYPE,
+            PROC_TOKTYPE
         )){
 			type_token = previous(parser);
 		}
 
-		if(!type_token)
-			error(parser, is_token, "Expect type after 'is' keyword.");
+		if(!type_token){
+            error(parser, is_token, "Expect type after 'is' keyword.");
+        }
 
 		IsExpr *is_expr = MEMORY_ALLOC(IsExpr, 1, CTALLOCATOR);
 

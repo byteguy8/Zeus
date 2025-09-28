@@ -1967,13 +1967,13 @@ static int execute(VM *vm){
                         }case RECORD_OBJ_TYPE:{
                             push(BOOL_VALUE(type == 8), vm);
                             break;
-                        }case FN_OBJ_TYPE:
-                        case CLOSURE_OBJ_TYPE:
-                        case NATIVE_FN_OBJ_TYPE:{
+                        }case NATIVE_FN_OBJ_TYPE:
+                         case FN_OBJ_TYPE:
+                         case CLOSURE_OBJ_TYPE:{
                             push(BOOL_VALUE(type == 9), vm);
                             break;
                         }default:{
-                            vmu_error(vm, "Illegal object type");
+                            vmu_internal_error(vm, "Illegal object type");
                             break;
                         }
                     }
@@ -1992,7 +1992,7 @@ static int execute(VM *vm){
                             push(BOOL_VALUE(type == 3), vm);
                             break;
                         }default:{
-                            vmu_error(vm, "Illegal value type");
+                            vmu_internal_error(vm, "Illegal value type");
                             break;
                         }
                     }
