@@ -1607,7 +1607,7 @@ static int execute(VM *vm){
                 pop(vm);
 
                 break;
-            }case PUT_OPCODE:{
+            }case RSET_OPCODE:{
                 size_t key_size;
                 char *key = read_str(vm, &key_size);
                 Value target_value = pop(vm);

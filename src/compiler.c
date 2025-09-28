@@ -1523,7 +1523,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 				compile_expr(value_expr, compiler);
                 compile_expr(left, compiler);
 
-				write_chunk(PUT_OPCODE, compiler);
+				write_chunk(RSET_OPCODE, compiler);
 				write_location(equals_token, compiler);
 				write_str_alloc(symbol_token->lexeme_len, symbol_token->lexeme, compiler);
 
@@ -1644,7 +1644,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
                     compile_expr(left, compiler);
 
-                    write_chunk(PUT_OPCODE, compiler);
+                    write_chunk(RSET_OPCODE, compiler);
                     write_location(dot_token, compiler);
                     write_str_alloc(symbol_token->lexeme_len, symbol_token->lexeme, compiler);
 

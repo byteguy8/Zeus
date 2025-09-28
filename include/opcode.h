@@ -66,7 +66,7 @@ typedef enum opcode{
     NGET_OPCODE,  // get native symbol
     SGET_OPCODE,  // get symbol from list of symbols
 	ASET_OPCODE,  // set a value inside array
-    PUT_OPCODE,   // set a value inside record
+    RSET_OPCODE,   // set a value inside record
 
     POP_OPCODE,
 

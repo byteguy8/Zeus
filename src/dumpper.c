@@ -310,7 +310,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             size_t end = dumpper->ip;
             printf("%8.8s %.7zu\n", "ASET", end - start);
             break;
-        }case PUT_OPCODE:{
+        }case RSET_OPCODE:{
 			char *target = read_str(dumpper, NULL);
             size_t end = dumpper->ip;
 
