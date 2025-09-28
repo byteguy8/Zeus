@@ -1585,20 +1585,16 @@ void compile_expr(Expr *expr, Compiler *compiler){
                         case COMPOUND_ADD_TOKTYPE:{
                             write_chunk(ADD_OPCODE, compiler);
                             break;
-                        }
-                        case COMPOUND_SUB_TOKTYPE:{
+                        }case COMPOUND_SUB_TOKTYPE:{
                             write_chunk(SUB_OPCODE, compiler);
                             break;
-                        }
-                        case COMPOUND_MUL_TOKTYPE:{
+                        }case COMPOUND_MUL_TOKTYPE:{
                             write_chunk(MUL_OPCODE, compiler);
                             break;
-                        }
-                        case COMPOUND_DIV_TOKTYPE:{
+                        }case COMPOUND_DIV_TOKTYPE:{
                             write_chunk(DIV_OPCODE, compiler);
                             break;
-                        }
-                        default:{
+                        }default:{
                             assert("Illegal compound type");
                         }
                     }
@@ -1630,20 +1626,16 @@ void compile_expr(Expr *expr, Compiler *compiler){
                         case COMPOUND_ADD_TOKTYPE:{
                             write_chunk(ADD_OPCODE, compiler);
                             break;
-                        }
-                        case COMPOUND_SUB_TOKTYPE:{
+                        }case COMPOUND_SUB_TOKTYPE:{
                             write_chunk(SUB_OPCODE, compiler);
                             break;
-                        }
-                        case COMPOUND_MUL_TOKTYPE:{
+                        }case COMPOUND_MUL_TOKTYPE:{
                             write_chunk(MUL_OPCODE, compiler);
                             break;
-                        }
-                        case COMPOUND_DIV_TOKTYPE:{
+                        }case COMPOUND_DIV_TOKTYPE:{
                             write_chunk(DIV_OPCODE, compiler);
                             break;
-                        }
-                        default:{
+                        }default:{
                             assert("Illegal compound type");
                         }
                     }
