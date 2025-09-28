@@ -11,7 +11,7 @@
 #define LABEL_NAME_LENGTH 64
 #define SCOPES_LENGTH 32
 #define SYMBOLS_LENGTH 255
-#define SYMBOL_NAME_LENGTH 32
+#define SYMBOL_NAME_LENGTH 64
 #define FUNCTIONS_LENGTH 16
 
 typedef enum symbol_type{
