@@ -314,7 +314,7 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 			char *target = read_str(dumpper, NULL);
             size_t end = dumpper->ip;
 
-			printf("%8.8s %.7zu", "PUT", end - start);
+			printf("%8.8s %.7zu", "RSET", end - start);
             printf(" | target: '%s'\n", target);
 
             break;
