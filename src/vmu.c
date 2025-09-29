@@ -67,8 +67,14 @@ void normalize_objs(VM *vm);
 static int compare_locations(const void *a, const void *b);
 static int prepare_stacktrace_new(unsigned int spaces, LZBStr *str, VM *vm);
 
-static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str);
-static void value_to_str(Value value, Obj *parent, LZBStr *str);
+typedef struct pass_value{
+    Obj *obj;
+    struct pass_value *prev;
+    struct pass_value *next;
+}PassValue;
+
+static void obj_to_str(PassValue pass, Obj *obj, LZBStr *str);
+static void value_to_str(PassValue pass, Value value, LZBStr *str);
 //--------------------------------------------------
 //             PRIVATE IMPLEMENTATION             //
 //--------------------------------------------------
@@ -362,10 +368,19 @@ static int prepare_stacktrace_new(unsigned int spaces, LZBStr *str, VM *vm){
     return 0;
 }
 
-static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
-    if(obj == parent){
-        lzbstr_append("self", str);
-        return;
+static void obj_to_str(PassValue pass, Obj *obj, LZBStr *str){
+    PassValue *current = &pass;
+    PassValue *prev = NULL;
+
+    while(current){
+        prev = current->prev;
+
+        if(current->next && current->obj == obj){
+            lzbstr_append("...", str);
+            return;
+        }
+
+        current = prev;
     }
 
     switch (obj->type){
@@ -385,10 +400,10 @@ static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
 
                 if(is_value_str(value)){
                     lzbstr_append("'", str);
-                    value_to_str(value, obj, str);
+                    value_to_str(pass, value, str);
                     lzbstr_append("'", str);
                 }else{
-                    value_to_str(value, obj, str);
+                    value_to_str(pass, value, str);
                 }
 
                 if(i + 1 < len){
@@ -411,10 +426,10 @@ static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
 
                 if(is_value_str(value)){
                     lzbstr_append("'", str);
-                    value_to_str(value, obj, str);
+                    value_to_str(pass, value, str);
                     lzbstr_append("'", str);
                 }else{
-                    value_to_str(value, obj, str);
+                    value_to_str(pass, value, str);
                 }
 
                 if(i + 1 < len){
@@ -447,20 +462,20 @@ static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
 
                 if(is_value_str(key)){
                     lzbstr_append("'", str);
-                    value_to_str(key, obj, str);
+                    value_to_str(pass, key, str);
                     lzbstr_append("'", str);
                 }else{
-                    value_to_str(key, obj, str);
+                    value_to_str(pass, key, str);
                 }
 
                 lzbstr_append(": ", str);
 
                 if(is_value_str(value)){
                     lzbstr_append("'", str);
-                    value_to_str(value, obj, str);
+                    value_to_str(pass, value, str);
                     lzbstr_append("'", str);
                 }else{
-                    value_to_str(value, obj, str);
+                    value_to_str(pass, value, str);
                 }
 
                 if(count + 1 < n){
@@ -498,10 +513,10 @@ static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
 
                 if(is_value_str(value)){
                     lzbstr_append("'", str);
-                    value_to_str(value, obj, str);
+                    value_to_str(pass, value, str);
                     lzbstr_append("'", str);
                 }else{
-                    value_to_str(value, obj, str);
+                    value_to_str(pass, value, str);
                 }
 
                 if(count + 1 < n){
@@ -547,7 +562,7 @@ static void obj_to_str(Obj *obj, Obj *parent, LZBStr *str){
     }
 }
 
-static void value_to_str(Value value, Obj *parent, LZBStr *str){
+static void value_to_str(PassValue pass, Value value, LZBStr *str){
     switch (value.type){
         case EMPTY_VTYPE:{
             lzbstr_append("empty", str);
@@ -562,11 +577,30 @@ static void value_to_str(Value value, Obj *parent, LZBStr *str){
             break;
         }case FLOAT_VTYPE:{
             double float_value = value.content.fvalue;
-            lzbstr_append_args(str, "%f", float_value);
+            lzbstr_append_args(str, "%.6f", float_value);
             break;
         }case OBJ_VTYPE:{
             Obj *obj = VALUE_TO_OBJ(value);
-            obj_to_str(obj, parent, str);
+
+            if(pass.obj){
+                PassValue next_pass = {
+                    .obj = obj,
+                    .prev = &pass,
+                    .next = NULL
+                };
+
+                pass.next = &next_pass;
+
+                obj_to_str(next_pass, obj, str);
+
+                next_pass.prev = NULL;
+                pass.next = NULL;
+            }else{
+                pass.obj = obj;
+
+                obj_to_str(pass, obj, str);
+            }
+
             break;
         }default:{
             assert(0 && "Illegal value type");
@@ -758,14 +792,14 @@ inline Frame *vmu_current_frame(VM *vm){
 }
 
 inline void vmu_value_to_str_w(Value value, LZBStr *str){
-    value_to_str(value, NULL, str);
+    value_to_str((PassValue){0}, value, str);
 }
 
 char *vmu_value_to_str(Value value, VM *vm, size_t *out_len){
     char *str_value = NULL;
     LZBStr *str = FACTORY_LZBSTR(vm->allocator);
 
-    value_to_str(value, NULL, str);
+    value_to_str((PassValue){0}, value, str);
     str_value = lzbstr_rclone_buff((LZBStrAllocator *)VMU_FRONT_ALLOCATOR, str, out_len);
     lzbstr_destroy(str);
 
