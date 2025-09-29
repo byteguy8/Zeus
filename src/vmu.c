@@ -533,14 +533,14 @@ static void obj_to_str(PassValue pass, Obj *obj, LZBStr *str){
             NativeFnObj *native_fn_obj = OBJ_TO_NATIVE_FN(obj);
             NativeFn *native_fn = native_fn_obj->native_fn;
 
-            lzbstr_append_args(str, "<native function " PRIu8 " %p>", native_fn->arity, native_fn_obj);
+            lzbstr_append_args(str, "<native function '%s' %" PRIu8 " %p>", native_fn->name, native_fn->arity, native_fn_obj);
 
             break;
         }case FN_OBJ_TYPE:{
             FnObj *fn_obj = OBJ_TO_FN(obj);
             Fn *fn = fn_obj->fn;
 
-            lzbstr_append_args(str, "<function %zu %p>", DYNARR_LEN(fn->params), fn_obj);
+            lzbstr_append_args(str, "<function '%s' %zu %p>", fn->name, DYNARR_LEN(fn->params), fn_obj);
 
             break;
         }case CLOSURE_OBJ_TYPE:{
@@ -549,11 +549,71 @@ static void obj_to_str(PassValue pass, Obj *obj, LZBStr *str){
             break;
         }case NATIVE_MODULE_OBJ_TYPE:{
             NativeModuleObj *native_module_obj = OBJ_TO_NATIVE_MODULE(obj);
-            lzbstr_append_args(str, "<native module %p>", native_module_obj);
+            NativeModule *native_module = native_module_obj->native_module;
+            LZOHTable *symbols = native_module->symbols;
+            LZOHTableSlot *slots = symbols->slots;
+            size_t m = symbols->m;
+            size_t n = symbols->n;
+            size_t count = 0;
+
+            lzbstr_append("{", str);
+
+            for (size_t i = 0; i < m; i++){
+                LZOHTableSlot slot = slots[i];
+
+                if(!slot.used){
+                    continue;
+                }
+
+                count++;
+
+                char *name = (char *)slot.key;
+                Value value = *(Value *)slot.value;
+
+                lzbstr_append_args(str, "%s: ", name);
+                value_to_str(pass, value, str);
+
+                if(count < n){
+                    lzbstr_append(", ", str);
+                }
+            }
+
+            lzbstr_append("}", str);
+
             break;
         }case MODULE_OBJ_TYPE:{
             ModuleObj *module_obj = OBJ_TO_MODULE(obj);
-            lzbstr_append_args(str, "<module %p>", module_obj);
+            Module *module = module_obj->module;
+            SubModule *submodule = module->submodule;
+            LZOHTable *globals = submodule->globals;
+            LZOHTableSlot *slots = globals->slots;
+            size_t m = globals->m;
+
+            lzbstr_append("{", str);
+
+            for (size_t i = 0; i < m; i++){
+                LZOHTableSlot slot = slots[i];
+
+                if(!slot.used){
+                    continue;
+                }
+
+                char *name = (char *)slot.key;
+                GlobalValue global_value = *(GlobalValue *)slot.value;
+                Value value = global_value.value;
+
+                if(global_value.access == PRIVATE_GLOVAL_VALUE_TYPE){
+                    continue;
+                }
+
+                lzbstr_append_args(str, "%s: ", name);
+                value_to_str(pass, value, str);
+                lzbstr_append(", ", str);
+            }
+
+            lzbstr_remove(LZBSTR_LEN(str) - 1 - 2, LZBSTR_LEN(str), str);
+            lzbstr_append("}", str);
+
             break;
         }default:{
             assert(0 && "Illegal object type");
