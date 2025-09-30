@@ -43,6 +43,7 @@ Frame *vmu_current_frame(VM *vm);
 
 void vmu_value_to_str_w(Value value, LZBStr *str);
 char *vmu_value_to_str(Value value, VM *vm, size_t *out_len);
+char *vmu_value_to_json(unsigned int default_spaces, unsigned int spaces, Value value, VM *vm, size_t *out_len);
 void vmu_print_value(FILE *stream, Value value);
 
 Value *vmu_clone_value(Value value, VM *vm);

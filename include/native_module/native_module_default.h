@@ -68,6 +68,18 @@ Value native_fn_to_str(uint8_t argsc, Value *values, Value target, void *context
     return OBJ_VALUE(str_obj);
 }
 
+Value native_fn_to_json(uint8_t argsc, Value *values, Value target, void *context){
+    size_t len;
+    char *raw_str = vmu_value_to_json(4, 0, values[0], VMU_VM, &len);
+    StrObj *str_obj = NULL;
+
+    if(vmu_create_str(1, len, raw_str, VMU_VM, &str_obj)){
+        MEMORY_DEALLOC(char, len + 1, raw_str, VMU_NATIVE_FRONT_ALLOCATOR);
+    }
+
+    return OBJ_VALUE(str_obj);
+}
+
 Value native_fn_to_int(uint8_t argsc, Value *values, Value target, void *context){
     Value raw_value = values[0];
 

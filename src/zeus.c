@@ -346,6 +346,7 @@ static LZOHTable *init_default_native_fns(Allocator *rtallocator){
     add_native("is_str_int", 1, native_fn_is_str_int, native_fns, rtallocator);
     add_native("is_str_float", 1, native_fn_is_str_float, native_fns, rtallocator);
     add_native("to_str", 1, native_fn_to_str, native_fns, rtallocator);
+    add_native("to_json", 1, native_fn_to_json, native_fns, rtallocator);
     add_native("to_int", 1, native_fn_to_int, native_fns, rtallocator);
     add_native("to_float", 1, native_fn_to_float, native_fns, rtallocator);
 

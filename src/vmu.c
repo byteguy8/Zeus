@@ -75,6 +75,23 @@ typedef struct pass_value{
 
 static void obj_to_str(PassValue pass, Obj *obj, LZBStr *str);
 static void value_to_str(PassValue pass, Value value, LZBStr *str);
+
+static void obj_to_json(
+    unsigned int default_spaces,
+    unsigned int spaces,
+    PassValue pass,
+    Obj *obj,
+    LZBStr *str,
+    VM *vm
+);
+static void value_to_json(
+    unsigned int default_spaces,
+    unsigned int spaces,
+    PassValue pass,
+    Value value,
+    LZBStr *str,
+    VM *vm
+);
 //--------------------------------------------------
 //             PRIVATE IMPLEMENTATION             //
 //--------------------------------------------------
@@ -668,6 +685,321 @@ static void value_to_str(PassValue pass, Value value, LZBStr *str){
         }
     }
 }
+
+void obj_to_json(
+    unsigned int default_spaces,
+    unsigned int spaces,
+    PassValue pass,
+    Obj *obj,
+    LZBStr *str,
+    VM *vm
+){
+    PassValue *current = &pass;
+    PassValue *prev = NULL;
+
+    while(current){
+        prev = current->prev;
+
+        if(current->next && current->obj == obj){
+            vmu_error(vm, "Circular reference detected");
+        }
+
+        current = prev;
+    }
+
+    switch (obj->type){
+        case STR_OBJ_TYPE:{
+            StrObj *str_obj = OBJ_TO_STR(obj);
+            lzbstr_append(str_obj->buff, str);
+            break;
+        }case ARRAY_OBJ_TYPE:{
+            ArrayObj *array_obj = OBJ_TO_ARRAY(obj);
+            size_t len = array_obj->len;
+            Value *values = array_obj->values;
+
+            lzbstr_append("[", str);
+
+            for (size_t i = 0; i < len; i++){
+                Value value = values[i];
+
+                if(is_value_str(value)){
+                    lzbstr_append("\"", str);
+                    value_to_json(default_spaces, spaces, pass, value, str, vm);
+                    lzbstr_append("\"", str);
+                }else{
+                    value_to_json(default_spaces, spaces, pass, value, str, vm);
+                }
+
+                if(i + 1 < len){
+                    lzbstr_append(", ", str);
+                }
+            }
+
+            lzbstr_append("]", str);
+
+            break;
+        }case LIST_OBJ_TYPE:{
+            ListObj *list_obj = OBJ_TO_LIST(obj);
+            DynArr *items = list_obj->items;
+            size_t len = DYNARR_LEN(items);
+
+            lzbstr_append("[", str);
+
+            for (size_t i = 0; i < len; i++){
+                Value value = DYNARR_GET_AS(Value, i, items);
+
+                if(is_value_str(value)){
+                    lzbstr_append("\"", str);
+                    value_to_json(default_spaces, spaces, pass, value, str, vm);
+                    lzbstr_append("\"", str);
+                }else{
+                    value_to_json(default_spaces, spaces, pass, value, str, vm);
+                }
+
+                if(i + 1 < len){
+                    lzbstr_append(", ", str);
+                }
+            }
+
+            lzbstr_append("]", str);
+
+            break;
+        }case DICT_OBJ_TYPE:{
+            DictObj *dict_obj = OBJ_TO_DICT(obj);
+            LZOHTable *key_values = dict_obj->key_values;
+
+            size_t count = 0;
+            size_t m = key_values->m;
+            size_t n = key_values->n;
+
+            lzbstr_append("{\n", str);
+
+            for (size_t i = 0; i < m; i++){
+                LZOHTableSlot slot = key_values->slots[i];
+
+                if(!slot.used){
+                    continue;
+                }
+
+                Value key = *(Value *)slot.key;
+                Value value = *(Value *)slot.value;
+
+                lzbstr_append_args(str, "%*s\"", spaces + default_spaces, "");
+                value_to_json(default_spaces, spaces, pass, key, str, vm);
+                lzbstr_append("\"", str);
+
+                lzbstr_append(": ", str);
+
+                if(is_value_str(value)){
+                    lzbstr_append("\"", str);
+                    value_to_json(default_spaces, spaces, pass, value, str, vm);
+                    lzbstr_append("\"", str);
+                }else{
+                    value_to_json(default_spaces, spaces + default_spaces, pass, value, str, vm);
+                }
+
+                if(count + 1 < n){
+                    lzbstr_append(",\n", str);
+                }
+
+                count++;
+            }
+
+            lzbstr_append_args(str, "\n%*s}", spaces, "");
+
+            break;
+        }case RECORD_OBJ_TYPE:{
+            RecordObj *record_obj = OBJ_TO_RECORD(obj);
+            LZOHTable *attrs = record_obj->attrs;
+
+            size_t count = 0;
+            size_t n = attrs->n;
+            size_t m = attrs->m;
+            LZOHTableSlot *slots = attrs->slots;
+
+            lzbstr_append("{\n", str);
+
+            for (size_t i = 0; i < m; i++){
+                LZOHTableSlot slot = slots[i];
+
+                if(!slot.used){
+                    continue;
+                }
+
+                char *key = (char *)slot.key;
+                Value value = *(Value *)slot.value;
+
+                lzbstr_append_args(str, "%*s\"%s\": ", spaces + default_spaces, "", key);
+
+                if(is_value_str(value)){
+                    lzbstr_append("\"", str);
+                    value_to_json(default_spaces, spaces, pass, value, str, vm);
+                    lzbstr_append("\"", str);
+                }else{
+                    value_to_json(default_spaces, spaces + default_spaces, pass, value, str, vm);
+                }
+
+                if(count + 1 < n){
+                    lzbstr_append(",\n", str);
+                }
+
+                count++;
+            }
+
+            lzbstr_append_args(str, "\n%*s}", spaces, "");
+
+            break;
+        }case NATIVE_FN_OBJ_TYPE:{
+            NativeFnObj *native_fn_obj = OBJ_TO_NATIVE_FN(obj);
+            NativeFn *native_fn = native_fn_obj->native_fn;
+
+            lzbstr_append_args(str, "<native function '%s' %" PRIu8 ">", native_fn->name, native_fn->arity);
+
+            break;
+        }case FN_OBJ_TYPE:{
+            FnObj *fn_obj = OBJ_TO_FN(obj);
+            Fn *fn = fn_obj->fn;
+
+            lzbstr_append_args(str, "<function '%s' %zu>", fn->name, DYNARR_LEN(fn->params));
+
+            break;
+        }case CLOSURE_OBJ_TYPE:{
+            ClosureObj *closure_obj = OBJ_TO_CLOSURE(obj);
+            Closure *closure = closure_obj->closure;
+            MetaClosure *meta_closure = closure->meta;
+            Fn *fn = meta_closure->fn;
+
+            lzbstr_append_args(str, "<closure %zu>", DYNARR_LEN(fn->params));
+
+            break;
+        }case NATIVE_MODULE_OBJ_TYPE:{
+            NativeModuleObj *native_module_obj = OBJ_TO_NATIVE_MODULE(obj);
+            NativeModule *native_module = native_module_obj->native_module;
+            LZOHTable *symbols = native_module->symbols;
+            LZOHTableSlot *slots = symbols->slots;
+            size_t m = symbols->m;
+            size_t n = symbols->n;
+            size_t count = 0;
+
+            lzbstr_append("{\n", str);
+
+            for (size_t i = 0; i < m; i++){
+                LZOHTableSlot slot = slots[i];
+
+                if(!slot.used){
+                    continue;
+                }
+
+                count++;
+
+                char *name = (char *)slot.key;
+                Value value = *(Value *)slot.value;
+
+                lzbstr_append_args(str, "%*s\"%s\": ", spaces + default_spaces, "", name);
+                value_to_json(default_spaces, spaces + default_spaces, pass, value, str, vm);
+
+                if(count < n){
+                    lzbstr_append(",\n", str);
+                }
+            }
+
+            lzbstr_append_args(str, "\n%*s}", spaces, "");
+
+            break;
+        }case MODULE_OBJ_TYPE:{
+            ModuleObj *module_obj = OBJ_TO_MODULE(obj);
+            Module *module = module_obj->module;
+            SubModule *submodule = module->submodule;
+            LZOHTable *globals = submodule->globals;
+            LZOHTableSlot *slots = globals->slots;
+            size_t m = globals->m;
+
+            lzbstr_append("{\n", str);
+
+            for (size_t i = 0; i < m; i++){
+                LZOHTableSlot slot = slots[i];
+
+                if(!slot.used){
+                    continue;
+                }
+
+                char *name = (char *)slot.key;
+                GlobalValue global_value = *(GlobalValue *)slot.value;
+                Value value = global_value.value;
+
+                if(global_value.access == PRIVATE_GLOVAL_VALUE_TYPE){
+                    continue;
+                }
+
+                lzbstr_append_args(str, "%*s\"%s\": ", spaces + default_spaces, "", name);
+                value_to_json(default_spaces, spaces + default_spaces, pass, value, str, vm);
+                lzbstr_append(",\n", str);
+            }
+
+            lzbstr_remove(LZBSTR_LEN(str) - 1 - 1, LZBSTR_LEN(str), str);
+            lzbstr_append_args(str, "\n%*s}", spaces, "");
+
+            break;
+        }default:{
+            assert(0 && "Illegal object type");
+            break;
+        }
+    }
+}
+
+void value_to_json(
+    unsigned int default_spaces,
+    unsigned int spaces,
+    PassValue pass,
+    Value value,
+    LZBStr *str,
+    VM *vm
+){
+    switch (value.type){
+        case EMPTY_VTYPE:{
+            lzbstr_append("null", str);
+            break;
+        }case BOOL_VTYPE:{
+            uint8_t bool_value = value.content.bool;
+            lzbstr_append_args(str, "%s", bool_value ? "true" : "false");
+            break;
+        }case INT_VTYPE:{
+            int64_t int_value = value.content.ivalue;
+            lzbstr_append_args(str, "%" PRId64, int_value);
+            break;
+        }case FLOAT_VTYPE:{
+            double float_value = value.content.fvalue;
+            lzbstr_append_args(str, "%g", float_value);
+            break;
+        }case OBJ_VTYPE:{
+            Obj *obj = VALUE_TO_OBJ(value);
+
+            if(pass.obj){
+                PassValue next_pass = {
+                    .obj = obj,
+                    .prev = &pass,
+                    .next = NULL
+                };
+
+                pass.next = &next_pass;
+
+                obj_to_json(default_spaces, spaces, next_pass, obj, str, vm);
+
+                next_pass.prev = NULL;
+                pass.next = NULL;
+            }else{
+                pass.obj = obj;
+
+                obj_to_json(default_spaces, spaces, pass, obj, str, vm);
+            }
+
+            break;
+        }default:{
+            assert(0 && "Illegal value type");
+            break;
+        }
+    }
+}
 //--------------------------------------------------
 //             PUBLIC IMPLEMENTATION              //
 //--------------------------------------------------
@@ -860,6 +1192,17 @@ char *vmu_value_to_str(Value value, VM *vm, size_t *out_len){
     LZBStr *str = FACTORY_LZBSTR(vm->allocator);
 
     value_to_str((PassValue){0}, value, str);
+    str_value = lzbstr_rclone_buff((LZBStrAllocator *)VMU_FRONT_ALLOCATOR, str, out_len);
+    lzbstr_destroy(str);
+
+    return str_value;
+}
+
+char *vmu_value_to_json(unsigned int default_spaces, unsigned int spaces, Value value, VM *vm, size_t *out_len){
+    char *str_value = NULL;
+    LZBStr *str = FACTORY_LZBSTR(vm->allocator);
+
+    value_to_json(default_spaces, spaces, (PassValue){0}, value, str, vm);
     str_value = lzbstr_rclone_buff((LZBStrAllocator *)VMU_FRONT_ALLOCATOR, str, out_len);
     lzbstr_destroy(str);
 
