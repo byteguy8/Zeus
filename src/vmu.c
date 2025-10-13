@@ -1123,6 +1123,14 @@ inline StrObj *validate_value_str_arg(Value value, uint8_t param, char *name, VM
     return VALUE_TO_STR(value);
 }
 
+inline RecordObj *validate_value_record_arg(Value value, uint8_t param, char *name, VM *vm){
+    if(!is_value_record(value)){
+        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'record'", param, name);
+    }
+
+    return VALUE_TO_RECORD(value);
+}
+
 void vmu_clean_up(VM *vm){
     ObjList *white_objs = &vm->white_objs;
     Obj *current = white_objs->head;
@@ -1917,9 +1925,16 @@ inline RecordObj *vmu_create_record(uint16_t length, VM *vm){
     LZOHTable *attrs = length == 0 ? NULL : FACTORY_LZOHTABLE(VMU_FRONT_ALLOCATOR);
     RecordObj *record_obj = ALLOC_RECORD_OBJ();
     Obj *obj = (Obj*)record_obj;
+    RecordExtra *record_extra = &record_obj->extra;
 
     init_obj(RECORD_OBJ_TYPE, obj, vm);
+
     record_obj->attrs = attrs;
+
+    record_extra->type = NOTHING_RECORD_EXTRA_TYPE;
+    record_extra->value = NULL;
+    record_extra->ctx = NULL;
+    record_extra->destroy_value = NULL;
 
 	return record_obj;
 }
@@ -1927,6 +1942,13 @@ inline RecordObj *vmu_create_record(uint16_t length, VM *vm){
 inline void vmu_destroy_record(RecordObj *record_obj, VM *vm){
     if(!record_obj){
         return;
+    }
+
+    RecordExtra *extra = &record_obj->extra;
+    void(*destroy_value)(void *, void *) = extra->destroy_value;
+
+    if(extra->type != NOTHING_RECORD_EXTRA_TYPE && destroy_value){
+        destroy_value(extra->ctx, extra->value);
     }
 
     LZOHTABLE_DESTROY(record_obj->attrs);

@@ -33,6 +33,7 @@ double validate_value_float_arg(Value value, uint8_t param, char *name, VM *vm);
 double validate_value_ifloat_arg(Value value, uint8_t param, char *name, VM *vm);
 int64_t validate_value_int_range_arg(Value value, uint8_t param, char *name, int64_t from, int64_t to, VM *vm);
 StrObj *validate_value_str_arg(Value value, uint8_t param, char *name, VM *vm);
+RecordObj *validate_value_record_arg(Value value, uint8_t param, char *name, VM *vm);
 
 void vmu_clean_up(VM *vm);
 void vmu_gc(VM *vm);

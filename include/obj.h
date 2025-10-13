@@ -83,9 +83,22 @@ typedef struct record_file{
     FILE *handler;
 }RecordFile;
 
+typedef enum record_extra_type{
+    NOTHING_RECORD_EXTRA_TYPE,
+    RANDOM_RECORD_EXTRA_TYPE,
+}RecordExtraType;
+
+typedef struct record_extra{
+    RecordExtraType type;
+    void *value;
+    void *ctx;
+    void (*destroy_value)(void *arg0, void *value);
+}RecordExtra;
+
 typedef struct record_obj{
     Obj header;
 	LZOHTable *attrs;
+    RecordExtra extra;
 }RecordObj;
 
 typedef struct native_fn_obj{
