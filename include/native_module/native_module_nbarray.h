@@ -224,6 +224,27 @@ Value native_fn_nbarray_clone(uint8_t argsc, Value *values, Value target, void *
 	return OBJ_VALUE(native_obj);
 }
 
+Value native_fn_nbarray_to_str(uint8_t argsc, Value *values, Value target, void *context){
+	NBArrayNative *nbarray = nbarray_native_validate_value_arg(
+		values[0],
+		1,
+		"array",
+		VMU_VM
+	);
+
+	StrObj *str_obj = NULL;
+
+	vmu_create_str(
+		1,
+		nbarray->len,
+		(char *)nbarray->bytes,
+		VMU_VM,
+		&str_obj
+	);
+
+	return OBJ_VALUE(str_obj);
+}
+
 Value native_fn_nbarray_create(uint8_t argsc, Value *values, Value target, void *context){
 	size_t len = validate_value_len_arg(values[0], 1, "len", VMU_VM);
 	NBArrayNative *nbarray_native = nbarray_native_create(
@@ -243,6 +264,7 @@ void nbarray_module_init(Allocator *allocator){
     factory_add_native_fn("cpy", 5, native_fn_nbarray_cpy, nbarray_native_module);
     factory_add_native_fn("mov", 5, native_fn_nbarray_mov, nbarray_native_module);
     factory_add_native_fn("clone", 1, native_fn_nbarray_clone, nbarray_native_module);
+    factory_add_native_fn("to_str", 1, native_fn_nbarray_to_str, nbarray_native_module);
     factory_add_native_fn("create", 1, native_fn_nbarray_create, nbarray_native_module);
 }
 
