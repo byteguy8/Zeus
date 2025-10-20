@@ -54,6 +54,10 @@ static inline int is_value_record(Value value){
     return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == RECORD_OBJ_TYPE;
 }
 
+static inline int is_value_native(Value value){
+	return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == NATIVE_OBJ_TYPE;
+}
+
 static inline int is_value_native_fn(Value value){
     return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == NATIVE_FN_OBJ_TYPE;
 }
@@ -83,6 +87,7 @@ static inline int is_value_module(Value value){
 #define VALUE_TO_LIST(_value)((ListObj*)(_value).content.obj)
 #define VALUE_TO_DICT(_value)((DictObj *)(_value).content.obj)
 #define VALUE_TO_RECORD(_value)((RecordObj *)(_value).content.obj)
+#define VALUE_TO_NATIVE(_value)((NativeObj *)(_value).content.obj)
 #define VALUE_TO_NATIVE_FN(_value)((NativeFnObj *)(_value).content.obj)
 #define VALUE_TO_FN(_value)((FnObj *)(_value).content.obj)
 #define VALUE_TO_CLOSURE(_value)((ClosureObj *)(_value).content.obj)
@@ -92,6 +97,7 @@ static inline int is_value_module(Value value){
 #define OBJ_TO_LIST(_obj)((ListObj *)(_obj))
 #define OBJ_TO_DICT(_obj)((DictObj *)(_obj))
 #define OBJ_TO_RECORD(_obj)((RecordObj *)(_obj))
+#define OBJ_TO_NATIVE(_obj)((NativeObj *)(_obj))
 #define OBJ_TO_NATIVE_FN(_obj)((NativeFnObj *)(_obj))
 #define OBJ_TO_FN(_obj)((FnObj *)(_obj))
 #define OBJ_TO_CLOSURE(_obj)((ClosureObj *)(_obj))

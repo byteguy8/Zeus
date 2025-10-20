@@ -1,4 +1,7 @@
 #include "vm.h"
+#include "native/native.h"
+#include "native/native_nbarray.h"
+#include "obj.h"
 #include "vmu.h"
 #include "opcode.h"
 #include "memory.h"
@@ -1570,9 +1573,9 @@ static int execute(VM *vm){
                     vmu_error(vm, "Illegal assignment target");
                 }
 
-                Obj *obj = VALUE_TO_OBJ(indexable_value);
+                Obj *target_obj = VALUE_TO_OBJ(indexable_value);
 
-                switch (obj->type){
+                switch (target_obj->type){
                     case ARRAY_OBJ_TYPE:{
                         if(!IS_VALUE_INT(idx_value)){
                             vmu_error(vm, "Expect index value of type 'int'");
@@ -1596,6 +1599,38 @@ static int execute(VM *vm){
                     }case DICT_OBJ_TYPE:{
                         DictObj *dict_obj = VALUE_TO_DICT(indexable_value);
                         vmu_dict_put(idx_value, value, dict_obj, vm);
+
+                        break;
+                    }case NATIVE_OBJ_TYPE:{
+                   		NativeObj *native_obj = OBJ_TO_NATIVE(target_obj);
+                    	NativeHeader *native_header = native_obj->native;
+
+                    	switch (native_header->type) {
+	                     	case NBARRAY_NATIVE_TYPE:{
+								if(!IS_VALUE_INT(idx_value)){
+                            		vmu_error(vm, "Expect index value of type 'int'");
+                        		}
+
+								if(!IS_VALUE_INT(value)){
+									vmu_error(vm, "Expect assignment value of type 'int'");
+								}
+
+								NBArrayNative *nbarray_native = (NBArrayNative *)native_header;
+                        		int64_t idx = VALUE_TO_INT(idx_value);
+                        		int64_t assing_value = VALUE_TO_INT(value);
+
+                          		if(idx < 0 || (size_t)idx >= nbarray_native->len){
+                            		vmu_error(vm, "Index out of bounds");
+                            	}
+
+                           		nbarray_native->bytes[(size_t)idx] = (unsigned char)assing_value;
+
+								break;
+							}default:{
+								vmu_error(vm, "Illegal assignment target");
+								break;
+							}
+	                    }
 
                         break;
                     }default:{
@@ -1867,37 +1902,82 @@ static int execute(VM *vm){
             }case INDEX_OPCODE:{
                 Value target_value = peek_at(0, vm);
                 Value idx_value = peek_at(1, vm);
-
                 Value out_value = {0};
 
-                if(is_value_array(target_value)){
-                    if(!IS_VALUE_INT(idx_value)){
-                        vmu_error(vm, "Expect 'INT' as index");
-                    }
+                if(!IS_VALUE_OBJ(target_value)){
+                	vmu_error(vm, "Expect object");
+                }
 
-                    int64_t idx = VALUE_TO_INT(idx_value);
-                    ArrayObj *array_obj = VALUE_TO_ARRAY(target_value);
-                    out_value = vmu_array_get_at(idx, array_obj, vm);
-                }else if(is_value_list(target_value)){
-                    if(!IS_VALUE_INT(idx_value)){
-                        vmu_error(vm, "Expect 'INT' as index");
-                    }
+                Obj *target_obj = VALUE_TO_OBJ(target_value);
 
-                    int64_t idx = VALUE_TO_INT(idx_value);
-                    ListObj *list_obj = VALUE_TO_LIST(target_value);
-                    out_value = vmu_list_get_at(idx, list_obj, vm);
-                }else if(is_value_dict(target_value)){
-                    DictObj *dict_obj = VALUE_TO_DICT(target_value);
-                    out_value = vmu_dict_get(idx_value, dict_obj, vm);
-                }else if(is_value_str(target_value)){
-                    if(!IS_VALUE_INT(idx_value)){
-                        vmu_error(vm, "Expect 'INT' as index");
-                    }
+                switch (target_obj->type) {
+                	case ARRAY_OBJ_TYPE:{
+		                if(!IS_VALUE_INT(idx_value)){
+		                    vmu_error(vm, "Expect 'INT' as index");
+		                }
 
-                    int64_t idx = VALUE_TO_INT(idx_value);
-                    StrObj *old_str_obj = VALUE_TO_STR(target_value);
-                    StrObj *new_str_obj = vmu_str_char(idx, old_str_obj, vm);
-                    out_value = OBJ_VALUE(new_str_obj);
+		                int64_t idx = VALUE_TO_INT(idx_value);
+		                ArrayObj *array_obj = VALUE_TO_ARRAY(target_value);
+		                out_value = vmu_array_get_at(idx, array_obj, vm);
+
+               			break;
+                 	}case LIST_OBJ_TYPE:{
+		                if(!IS_VALUE_INT(idx_value)){
+			                vmu_error(vm, "Expect 'INT' as index");
+		                }
+
+		                int64_t idx = VALUE_TO_INT(idx_value);
+		                ListObj *list_obj = VALUE_TO_LIST(target_value);
+		                out_value = vmu_list_get_at(idx, list_obj, vm);
+
+                  		break;
+                  	}case DICT_OBJ_TYPE:{
+	                    DictObj *dict_obj = VALUE_TO_DICT(target_value);
+	                    out_value = vmu_dict_get(idx_value, dict_obj, vm);
+
+                   		break;
+                   	}case STR_OBJ_TYPE:{
+	                    if(!IS_VALUE_INT(idx_value)){
+	                        vmu_error(vm, "Expect 'INT' as index");
+	                    }
+
+	                    int64_t idx = VALUE_TO_INT(idx_value);
+	                    StrObj *old_str_obj = VALUE_TO_STR(target_value);
+	                    StrObj *new_str_obj = vmu_str_char(idx, old_str_obj, vm);
+	                    out_value = OBJ_VALUE(new_str_obj);
+
+                  		break;
+                    }case NATIVE_OBJ_TYPE:{
+                   		NativeObj *native_obj = OBJ_TO_NATIVE(target_obj);
+                    	NativeHeader *native_header = native_obj->native;
+
+                    	switch (native_header->type) {
+                     		case NBARRAY_NATIVE_TYPE:{
+		                       NBArrayNative *nbuff_native = (NBArrayNative *)native_header;
+
+	                     		if(!IS_VALUE_INT(idx_value)){
+		                        	vmu_error(vm, "Expect 'INT' as index");
+	                       		}
+
+	                       		int64_t idx = VALUE_TO_INT(idx_value);
+
+	                         	if(idx < 0 || (size_t)idx >= nbuff_native->len){
+	                        		vmu_error(vm, "Index out of bounds");
+	                          	}
+
+	                         	out_value = INT_VALUE(nbuff_native->bytes[(size_t)idx]);
+
+                    			break;
+                       		}default:{
+                         		vmu_error(vm, "Illegal native type");
+                       			break;
+                         	}
+                     	}
+
+                  		break;
+                    }default:{
+                    	vmu_error(vm, "Illegal target to index");
+                    }
                 }
 
                 pop(vm);

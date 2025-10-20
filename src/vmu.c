@@ -3,10 +3,17 @@
 #include "factory.h"
 #include "lzbstr.h"
 #include "fn.h"
+#include "native/native.h"
+#include "obj.h"
+#include "types_utils.h"
+
+#include <stdint.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <inttypes.h>
 #include <assert.h>
+#include <limits.h>
+#include <string.h>
 
 #define POOL_DEFAULT_ALLOC_LEN 1024
 
@@ -46,36 +53,27 @@
 #define FIND_LOCATION(index, arr)(dynarr_find(&((OPCodeLocation){.offset = index, .line = -1}), compare_locations, arr))
 #define FRAME_AT(at, vm)(&vm->frame_stack[at])
 
-static inline void init_obj(ObjType type, Obj *obj, VM *vm){
-    obj->type = type;
-    obj->marked = 0;
-    obj->color = WHITE_OBJ_COLOR;
-    obj->prev = NULL;
-    obj->next = NULL;
-    obj_list_insert(obj, &vm->white_objs);
-}
-//--------------------------------------------------
-//               PRIVATE INTERFACE                //
-//--------------------------------------------------
-//----------      GARBAGE COLLECTOR       --------//
-void prepare_module_globals(Module *module, VM *vm);
-void prepare_worklist(VM *vm);
-void mark_objs(VM *vm);
-void sweep_objs(VM *vm);
-void normalize_objs(VM *vm);
-//----------            OTHERS            --------//
-static int compare_locations(const void *a, const void *b);
-static int prepare_stacktrace_new(unsigned int spaces, LZBStr *str, VM *vm);
-
 typedef struct pass_value{
     Obj *obj;
     struct pass_value *prev;
     struct pass_value *next;
 }PassValue;
 
+//----------------------------------------------------------------//
+//                       PRIVATE INTERFACE                        //
+//----------------------------------------------------------------//
+//---------------------  GARBAGE COLLECTOR  ----------------------//
+void prepare_module_globals(Module *module, VM *vm);
+void prepare_worklist(VM *vm);
+void mark_objs(VM *vm);
+void sweep_objs(VM *vm);
+void normalize_objs(VM *vm);
+//---------------------------  OTHERS  ---------------------------//
+static void init_obj(ObjType type, Obj *obj, VM *vm);
+static int compare_locations(const void *a, const void *b);
+static int prepare_stacktrace_new(unsigned int spaces, LZBStr *str, VM *vm);
 static void obj_to_str(PassValue pass, Obj *obj, LZBStr *str);
 static void value_to_str(PassValue pass, Value value, LZBStr *str);
-
 static void obj_to_json(
     unsigned int default_spaces,
     unsigned int spaces,
@@ -92,9 +90,9 @@ static void value_to_json(
     LZBStr *str,
     VM *vm
 );
-//--------------------------------------------------
-//             PRIVATE IMPLEMENTATION             //
-//--------------------------------------------------
+//----------------------------------------------------------------//
+//                     PRIVATE IMPLEMENTATION                     //
+//----------------------------------------------------------------//
 void prepare_module_globals(Module *module, VM *vm){
     LZOHTable *globals = MODULE_GLOBALS(module);
 
@@ -242,6 +240,8 @@ void mark_objs(VM *vm){
                 }
 
                 break;
+            }case NATIVE_OBJ_TYPE:{
+           		break;
             }case NATIVE_FN_OBJ_TYPE:{
                 NativeFnObj *native_fn_obj = OBJ_TO_NATIVE_FN(current);
                 Value target = native_fn_obj->target;
@@ -263,7 +263,7 @@ void mark_objs(VM *vm){
             }case MODULE_OBJ_TYPE:{
                 break;
             }default:{
-                break;
+            	assert(0 && "Illegal object type");
             }
         }
 
@@ -298,6 +298,9 @@ void sweep_objs(VM *vm){
             }case RECORD_OBJ_TYPE:{
                 vmu_destroy_record(OBJ_TO_RECORD(current), vm);
                 break;
+            }case NATIVE_OBJ_TYPE:{
+           		vmu_destroy_native(OBJ_TO_NATIVE(current), vm);
+           		break;
             }case NATIVE_FN_OBJ_TYPE:{
                 vmu_destroy_native_fn(OBJ_TO_NATIVE_FN(current), vm);
                 break;
@@ -343,7 +346,16 @@ void normalize_objs(VM *vm){
     }
 }
 
-static int compare_locations(const void *a, const void *b){
+inline void init_obj(ObjType type, Obj *obj, VM *vm){
+    obj->type = type;
+    obj->marked = 0;
+    obj->color = WHITE_OBJ_COLOR;
+    obj->prev = NULL;
+    obj->next = NULL;
+    obj_list_insert(obj, &vm->white_objs);
+}
+
+int compare_locations(const void *a, const void *b){
 	OPCodeLocation *location_a = (OPCodeLocation *)a;
 	OPCodeLocation *location_b = (OPCodeLocation *)b;
 
@@ -356,7 +368,7 @@ static int compare_locations(const void *a, const void *b){
     }
 }
 
-static int prepare_stacktrace_new(unsigned int spaces, LZBStr *str, VM *vm){
+int prepare_stacktrace_new(unsigned int spaces, LZBStr *str, VM *vm){
     for(Frame *frame = vm->frame_stack; frame < vm->frame_ptr; frame++){
         Fn *fn = frame->fn;
 		DynArr *locations = fn->locations;
@@ -385,7 +397,7 @@ static int prepare_stacktrace_new(unsigned int spaces, LZBStr *str, VM *vm){
     return 0;
 }
 
-static void obj_to_str(PassValue pass, Obj *obj, LZBStr *str){
+void obj_to_str(PassValue pass, Obj *obj, LZBStr *str){
     PassValue *current = &pass;
     PassValue *prev = NULL;
 
@@ -546,6 +558,13 @@ static void obj_to_str(PassValue pass, Obj *obj, LZBStr *str){
             lzbstr_append("}", str);
 
             break;
+        }case NATIVE_OBJ_TYPE:{
+       		NativeObj *native_obj = OBJ_TO_NATIVE(obj);
+        	NativeHeader *native_header = native_obj->native;
+
+        	printf("<native '%s'>", native_header->name);
+
+       		break;
         }case NATIVE_FN_OBJ_TYPE:{
             NativeFnObj *native_fn_obj = OBJ_TO_NATIVE_FN(obj);
             NativeFn *native_fn = native_fn_obj->native_fn;
@@ -634,12 +653,11 @@ static void obj_to_str(PassValue pass, Obj *obj, LZBStr *str){
             break;
         }default:{
             assert(0 && "Illegal object type");
-            break;
         }
     }
 }
 
-static void value_to_str(PassValue pass, Value value, LZBStr *str){
+void value_to_str(PassValue pass, Value value, LZBStr *str){
     switch (value.type){
         case EMPTY_VTYPE:{
             lzbstr_append("empty", str);
@@ -681,7 +699,6 @@ static void value_to_str(PassValue pass, Value value, LZBStr *str){
             break;
         }default:{
             assert(0 && "Illegal value type");
-            break;
         }
     }
 }
@@ -849,6 +866,13 @@ void obj_to_json(
             lzbstr_append_args(str, "\n%*s}", spaces, "");
 
             break;
+        }case NATIVE_OBJ_TYPE:{
+       		NativeObj *native_obj = OBJ_TO_NATIVE(obj);
+        	NativeHeader *header = native_obj->native;
+
+       		lzbstr_append_args(str, "<native '%s' at %p>", header->name, native_obj);
+
+       		break;
         }case NATIVE_FN_OBJ_TYPE:{
             NativeFnObj *native_fn_obj = OBJ_TO_NATIVE_FN(obj);
             NativeFn *native_fn = native_fn_obj->native_fn;
@@ -942,7 +966,6 @@ void obj_to_json(
             break;
         }default:{
             assert(0 && "Illegal object type");
-            break;
         }
     }
 }
@@ -996,13 +1019,12 @@ void value_to_json(
             break;
         }default:{
             assert(0 && "Illegal value type");
-            break;
         }
     }
 }
-//--------------------------------------------------
-//             PUBLIC IMPLEMENTATION              //
-//--------------------------------------------------
+//----------------------------------------------------------------//
+//                     PUBLIC IMPLEMENTATION                      //
+//----------------------------------------------------------------//
 int vmu_error(VM *vm, char *msg, ...){
     LZBStr *stacktrace_lzbstr = FACTORY_LZBSTR(vm->allocator);
     char print_stacktrace = stacktrace_lzbstr && !prepare_stacktrace_new(4, stacktrace_lzbstr, vm);
@@ -1059,31 +1081,46 @@ int vmu_internal_error(VM *vm, char *msg, ...){
     return 0;
 }
 
-inline uint8_t validate_value_bool_arg(Value value, uint8_t param, char *name, VM *vm){
+inline uint8_t validate_value_bool_arg(Value value, uint8_t param, const char *name, VM *vm){
     if(!IS_VALUE_BOOL(value)){
-        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'bool'", param, name);
+        vmu_error(
+        	vm,
+         	"Illegal type of argument %" PRIu8 ": expect '%s' of type 'bool'",
+          	param,
+           	name
+        );
     }
 
     return VALUE_TO_BOOL(value);
 }
 
-inline int64_t validate_value_int_arg(Value value, uint8_t param, char *name, VM *vm){
+inline int64_t validate_value_int_arg(Value value, uint8_t param, const char *name, VM *vm){
     if(!IS_VALUE_INT(value)){
-        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'int'", param, name);
+        vmu_error(
+        	vm,
+         	"Illegal type of argument %" PRIu8 ": expect '%s' of type 'int'",
+          	param,
+           	name
+        );
     }
 
     return VALUE_TO_INT(value);
 }
 
-inline double validate_value_float_arg(Value value, uint8_t param, char *name, VM *vm){
+inline double validate_value_float_arg(Value value, uint8_t param, const char *name, VM *vm){
     if(!IS_VALUE_FLOAT(value)){
-        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'float'", param, name);
+        vmu_error(
+        	vm,
+         	"Illegal type of argument %" PRIu8 ": expect '%s' of type 'float'",
+          	param,
+           	name
+        );
     }
 
     return VALUE_TO_FLOAT(value);
 }
 
-inline double validate_value_ifloat_arg(Value value, uint8_t param, char *name, VM *vm){
+inline double validate_value_ifloat_arg(Value value, uint8_t param, const char *name, VM *vm){
     if(IS_VALUE_INT(value)){
         return (double)VALUE_TO_INT(value);
     }
@@ -1092,40 +1129,157 @@ inline double validate_value_ifloat_arg(Value value, uint8_t param, char *name, 
         return VALUE_TO_FLOAT(value);
     }
 
-    vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'int' or 'float'", param, name);
+    vmu_error(
+    	vm,
+     	"Illegal type of argument %" PRIu8 ": expect '%s' of type 'int' or 'float'",
+      	param,
+       	name
+    );
 
     return -1;
 }
 
-inline int64_t validate_value_int_range_arg(Value value, uint8_t param, char *name, int64_t from, int64_t to, VM *vm){
+inline int64_t validate_value_int_range_arg(Value value, uint8_t param, const char *name, int64_t from, int64_t to, VM *vm){
     if(!IS_VALUE_INT(value)){
-        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'int'", param, name);
+        vmu_error(
+        	vm,
+         	"Illegal type of argument %" PRIu8 ": expect '%s' of type 'int'",
+          	param,
+           	name
+        );
     }
 
     int64_t i64_value = VALUE_TO_INT(value);
 
     if(i64_value < from){
-        vmu_error(vm, "Illegal value of argument %" PRIu8 ": expect '%s' be greater or equals to %" PRId64 ", but got %" PRId64, param, name, from, i64_value);
+        vmu_error(
+        	vm,
+         	"Illegal value of argument %" PRIu8 ": expect '%s' be greater or equals to %" PRId64 ", but got %" PRId64,
+          	param,
+           	name,
+            from,
+            i64_value
+        );
     }
 
     if(i64_value > to){
-        vmu_error(vm, "Illegal value of argument %" PRIu8 ": expect '%s' be less or equals to %" PRId64 ", but got %" PRId64, param, name, to, i64_value);
+        vmu_error(
+        	vm,
+         	"Illegal value of argument %" PRIu8 ": expect '%s' be less or equals to %" PRId64 ", but got %" PRId64,
+          	param,
+           	name,
+            to,
+            i64_value
+        );
     }
 
     return i64_value;
 }
 
-inline StrObj *validate_value_str_arg(Value value, uint8_t param, char *name, VM *vm){
+static const int64_t IndexableMaxValue =
+	SIZE_MAX < INT64_MAX ? (int64_t)SIZE_MAX : INT64_MAX;
+
+inline size_t validate_value_len_arg(Value value, uint8_t param, const char *name, VM *vm){
+	if(!IS_VALUE_INT(value)){
+        vmu_error(
+        	vm,
+         	"Illegal type of argument %" PRIu8 ": expect '%s' of type 'int'",
+          	param,
+           	name
+        );
+    }
+
+	int64_t idx = VALUE_TO_INT(value);
+
+	if(idx < 0 || idx > IndexableMaxValue){
+		vmu_error(
+        	vm,
+         	"Illegal value of argument %" PRIu8 ": expect '%s' bigger or equals to 0 and less THAN %"PRId64,
+          	param,
+           	name,
+            IndexableMaxValue
+        );
+	}
+
+	return (size_t)idx;
+}
+
+inline size_t validate_value_idx_arg(
+	Value value,
+	uint8_t param,
+	const char *name,
+	size_t len,
+	VM *vm
+){
+	if(!IS_VALUE_INT(value)){
+        vmu_error(
+        	vm,
+         	"Illegal type of argument %" PRIu8 ": expect '%s' of type 'int'",
+          	param,
+           	name
+        );
+    }
+
+	int64_t idx = VALUE_TO_INT(value);
+
+	if(idx < 0 || idx > IndexableMaxValue){
+		vmu_error(
+        	vm,
+         	"Illegal value of argument %" PRIu8 ": expect '%s' bigger or equals to 0 and less THAN %"PRId64,
+          	param,
+           	name,
+            IndexableMaxValue
+        );
+	}
+
+	if(idx >= (int64_t)len){
+		vmu_error(
+        	vm,
+         	"Illegal value of argument %" PRIu8 ": '%s' index %"PRId64" out of bounds %zu",
+          	param,
+           	name,
+            idx,
+            len
+        );
+	}
+
+	return (size_t)idx;
+}
+
+inline StrObj *validate_value_str_arg(Value value, uint8_t param, const char *name, VM *vm){
     if(!is_value_str(value)){
-        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'str'", param, name);
+        vmu_error(
+        	vm,
+         	"Illegal type of argument %" PRIu8 ": expect '%s' of type 'str'",
+          	param,
+           	name
+        );
     }
 
     return VALUE_TO_STR(value);
 }
 
-inline RecordObj *validate_value_record_arg(Value value, uint8_t param, char *name, VM *vm){
+inline ArrayObj *validate_value_array_arg(Value value, uint8_t param, const char *name, VM *vm){
+	if(!is_value_array(value)){
+		vmu_error(
+			vm,
+			"Illegal type of argument %" PRIu8 ": expect '%s' of type 'array'",
+			param,
+			name
+		);
+	}
+
+	return VALUE_TO_ARRAY(value);
+}
+
+inline RecordObj *validate_value_record_arg(Value value, uint8_t param, const char *name, VM *vm){
     if(!is_value_record(value)){
-        vmu_error(vm, "Illegal type of argument %" PRIu8 ": expect '%s' of type 'record'", param, name);
+        vmu_error(
+        	vm,
+         	"Illegal type of argument %" PRIu8 ": expect '%s' of type 'record'",
+          	param,
+           	name
+        );
     }
 
     return VALUE_TO_RECORD(value);
@@ -1155,6 +1309,9 @@ void vmu_clean_up(VM *vm){
                 break;
             }case RECORD_OBJ_TYPE:{
                 vmu_destroy_record(OBJ_TO_RECORD(current), vm);
+                break;
+            }case NATIVE_OBJ_TYPE:{
+                vmu_destroy_native(OBJ_TO_NATIVE(current), vm);
                 break;
             }case NATIVE_FN_OBJ_TYPE:{
                 vmu_destroy_native_fn(OBJ_TO_NATIVE_FN(current), vm);
@@ -1240,6 +1397,13 @@ void vmu_print_obj(FILE *stream, Obj *object){
         }case RECORD_OBJ_TYPE:{
 			RecordObj *record_obj = OBJ_TO_RECORD(object);
             fprintf(stream, "<record %zu at %p>", record_obj->attrs ? record_obj->attrs->n : 0, record_obj);
+			break;
+		}case NATIVE_OBJ_TYPE:{
+			NativeObj *native_obj = OBJ_TO_NATIVE(object);
+			NativeHeader *native_header = native_obj->native;
+
+			fprintf(stream, "<native '%s' at %p>", native_header->name, native_obj);
+
 			break;
 		}case NATIVE_FN_OBJ_TYPE:{
             NativeFnObj *native_fn_obj = OBJ_TO_NATIVE_FN(object);
@@ -1924,17 +2088,9 @@ inline void vmu_dict_remove(Value key, DictObj *dict_obj){
 inline RecordObj *vmu_create_record(uint16_t length, VM *vm){
     LZOHTable *attrs = length == 0 ? NULL : FACTORY_LZOHTABLE(VMU_FRONT_ALLOCATOR);
     RecordObj *record_obj = ALLOC_RECORD_OBJ();
-    Obj *obj = (Obj*)record_obj;
-    RecordExtra *record_extra = &record_obj->extra;
 
-    init_obj(RECORD_OBJ_TYPE, obj, vm);
-
+    init_obj(RECORD_OBJ_TYPE, (Obj*)record_obj, vm);
     record_obj->attrs = attrs;
-
-    record_extra->type = NOTHING_RECORD_EXTRA_TYPE;
-    record_extra->value = NULL;
-    record_extra->ctx = NULL;
-    record_extra->destroy_value = NULL;
 
 	return record_obj;
 }
@@ -1942,13 +2098,6 @@ inline RecordObj *vmu_create_record(uint16_t length, VM *vm){
 inline void vmu_destroy_record(RecordObj *record_obj, VM *vm){
     if(!record_obj){
         return;
-    }
-
-    RecordExtra *extra = &record_obj->extra;
-    void(*destroy_value)(void *, void *) = extra->destroy_value;
-
-    if(extra->type != NOTHING_RECORD_EXTRA_TYPE && destroy_value){
-        destroy_value(extra->ctx, extra->value);
     }
 
     LZOHTABLE_DESTROY(record_obj->attrs);
@@ -1994,6 +2143,31 @@ inline Value vmu_record_get_attr(size_t key_size, char *key, RecordObj *record_o
     vmu_error(vm, "Failed to get attribute: record does not contain attribute '%s'", key);
 
     return (Value){0};
+}
+
+NativeObj *vmu_create_native(void *native, VM *vm){
+	NativeObj *native_obj = MEMORY_ALLOC(NativeObj, 1, VMU_FRONT_ALLOCATOR);
+
+	init_obj(NATIVE_OBJ_TYPE, (Obj *)native_obj, vm);
+	native_obj->native = native;
+
+	return native_obj;
+}
+
+void vmu_destroy_native(NativeObj *native_obj, VM *vm){
+	if(!native_obj){
+		return;
+	}
+
+	void *native = native_obj->native;
+	NativeHeader *naitve_header = native;
+	char *name = naitve_header->name;
+	size_t name_len = strlen(name);
+
+	MEMORY_DEALLOC(char, name_len + 1, name, VMU_FRONT_ALLOCATOR);
+
+	naitve_header->destroy_helper(native, VMU_FRONT_ALLOCATOR);
+	MEMORY_DEALLOC(NativeObj, 1, native_obj, VMU_FRONT_ALLOCATOR);
 }
 
 inline NativeFnObj *vmu_create_native_fn(Value target, NativeFn *native_fn, VM *vm){

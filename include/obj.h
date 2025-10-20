@@ -23,6 +23,7 @@ enum obj_type{
 	LIST_OBJ_TYPE,
     DICT_OBJ_TYPE,
 	RECORD_OBJ_TYPE,
+	NATIVE_OBJ_TYPE,
     NATIVE_FN_OBJ_TYPE,
     FN_OBJ_TYPE,
     CLOSURE_OBJ_TYPE,
@@ -83,23 +84,15 @@ typedef struct record_file{
     FILE *handler;
 }RecordFile;
 
-typedef enum record_extra_type{
-    NOTHING_RECORD_EXTRA_TYPE,
-    RANDOM_RECORD_EXTRA_TYPE,
-}RecordExtraType;
-
-typedef struct record_extra{
-    RecordExtraType type;
-    void *value;
-    void *ctx;
-    void (*destroy_value)(void *arg0, void *value);
-}RecordExtra;
-
 typedef struct record_obj{
     Obj header;
 	LZOHTable *attrs;
-    RecordExtra extra;
 }RecordObj;
+
+typedef struct native_obj{
+	Obj header;
+	void *native;
+}NativeObj;
 
 typedef struct native_fn_obj{
     Obj header;
@@ -134,17 +127,6 @@ typedef struct module_obj{
 #define RECORD_FILE_MODE(_record)(RECORD_FILE(_record)->mode)
 #define RECORD_FILE_PATHNAME(_record)(RECORD_FILE(_record)->pathname)
 #define RECORD_FILE_HANDLER(_record)(RECORD_FILE(_record)->handler)
-
-#define FILE_READ_MODE   0b10000000
-#define FILE_WRITE_MODE  0b01000000
-#define FILE_APPEND_MODE 0b00100000
-#define FILE_BINARY_MODE 0b00000010
-#define FILE_PLUS_MODE   0b00000001
-
-#define FILE_CAN_READ(_mode) (((_mode) & FILE_READ_MODE) || ((_mode) & FILE_PLUS_MODE))
-#define FILE_CAN_WRITE(_mode) (((_mode) & FILE_WRITE_MODE) || ((_mode) & FILE_APPEND_MODE) || ((_mode) & FILE_PLUS_MODE))
-#define FILE_CAN_APPEND(_mode) ((_mode) & FILE_APPEND_MODE)
-#define FILE_IS_BINARY(_mode)((_mode) & FILE_BINARY_MODE)
 
 void obj_list_insert(Obj *obj, ObjList *list);
 void obj_list_remove(Obj *obj);

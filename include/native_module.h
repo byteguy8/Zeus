@@ -1,8 +1,8 @@
 #ifndef NATIVE_MODULE_H
 #define NATIVE_MODULE_H
 
+#include "lzohtable.h"
 #include "memory.h"
-#include "native_fn.h"
 
 typedef struct native_module{
 	char *name;

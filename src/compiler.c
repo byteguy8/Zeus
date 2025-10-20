@@ -1,6 +1,7 @@
 #include "compiler.h"
 #include "memory.h"
 #include "factory.h"
+#include "native_module/native_module_nbarray.h"
 #include "utils.h"
 #include "token.h"
 #include "expr.h"
@@ -18,6 +19,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <inttypes.h>
+#include <string.h>
 
 #define CTALLOCATOR (compiler->ctallocator)
 #define RTALLOCATOR (compiler->rtallocator)
@@ -945,6 +947,14 @@ NativeModule *resolve_native_module(char *module_name, Compiler *compiler){
         }
 
         return os_native_module;
+    }
+
+    if(strcmp("nbarray", module_name) == 0){
+    	if(!nbarray_native_module){
+   			nbarray_module_init(RTALLOCATOR);
+     	}
+
+     	return nbarray_native_module;
     }
 
 	return NULL;

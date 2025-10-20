@@ -8,7 +8,7 @@ COMPILER          := $(COMPILER.$(PLATFORM))
 SRC_DIR           := ./src
 OUT_DIR           := ./build
 
-FLAGS.COMMON      := -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -I./include
+FLAGS.COMMON      := -Wall -Wextra -Wno-unused-parameter -Wno-unused-function -I./include -I./include/native
 FLAGS.DEBUG       := -g2 -O0
 FLAGS.DEBUG.LINUX := -fsanitize=address,undefined,alignment
 FLAGS.RELEASE     := -O3
@@ -23,7 +23,7 @@ OBJS              := splitmix64.o xoshiro256.o \
 					 factory.o utils.o lexer.o \
 				     parser.o compiler.o \
 					 dumpper.o vmu.o \
-					 vm.o obj.o
+					 vm.o obj.o native.o native_nbarray.o native_file.o native_random.o
 
 LINKS.COMMON      := -lm
 LINKS.WINDOWS     := -lshlwapi
@@ -33,6 +33,16 @@ zeus: $(OBJS)
 	$(COMPILER) -o $(OUT_DIR)/zeus $(FLAGS) $(OUT_DIR)/*.o $(SRC_DIR)/zeus.c $(LINKS)
 vm.o:
 	$(COMPILER) -c -o $(OUT_DIR)/vm.o $(FLAGS) $(SRC_DIR)/vm.c
+
+native_random.o:
+	$(COMPILER) -c -o $(OUT_DIR)/native_random.o $(FLAGS) $(SRC_DIR)/native/native_random.c
+native_file.o:
+	$(COMPILER) -c -o $(OUT_DIR)/native_file.o $(FLAGS) $(SRC_DIR)/native/native_file.c
+native_nbarray.o:
+	$(COMPILER) -c -o $(OUT_DIR)/native_nbarray.o $(FLAGS) $(SRC_DIR)/native/native_nbarray.c
+native.o:
+	$(COMPILER) -c -o $(OUT_DIR)/native.o $(FLAGS) $(SRC_DIR)/native/native.c
+
 vmu.o:
 	$(COMPILER) -c -o $(OUT_DIR)/vmu.o $(FLAGS) $(SRC_DIR)/vmu.c
 obj.o:
