@@ -529,7 +529,7 @@ static void dump_module(Module *module, Dumpper *dumpper){
 }
 
 Dumpper *dumpper_create(Allocator *allocator){
-	Dumpper *dumpper = MEMORY_ALLOC(Dumpper, 1, allocator);
+	Dumpper *dumpper = MEMORY_ALLOC(allocator, Dumpper, 1);
 
     if(!dumpper){
         return NULL;

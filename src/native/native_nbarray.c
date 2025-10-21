@@ -4,13 +4,13 @@
 static void narray_native_destroy(void *native, Allocator *allocator){
 	NBArrayNative *buff_native = native;
 
-	MEMORY_DEALLOC(char, buff_native->len, buff_native->bytes, allocator);
-	MEMORY_DEALLOC(NBArrayNative, 1, buff_native, allocator);
+	MEMORY_DEALLOC(allocator, char, buff_native->len, buff_native->bytes);
+	MEMORY_DEALLOC(allocator, NBArrayNative, 1, buff_native);
 }
 
 NBArrayNative *nbarray_native_create(size_t len, Allocator *allocator){
-	unsigned char *bytes = MEMORY_ALLOC(unsigned char, len, allocator);
-	NBArrayNative *nbarray_native = MEMORY_ALLOC(NBArrayNative, 1, allocator);
+	unsigned char *bytes = MEMORY_ALLOC(allocator, unsigned char, len);
+	NBArrayNative *nbarray_native = MEMORY_ALLOC(allocator, NBArrayNative, 1);
 
 	memset(bytes, 0, len);
 

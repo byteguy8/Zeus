@@ -316,13 +316,13 @@ Label *label(Compiler *compiler, char *fmt, ...){
     Scope *scope = current_scope(compiler);
     Allocator *allocator = scope->depth == 1 ? CTALLOCATOR : LABELS_ALLOCATOR;
 
-    char *name = MEMORY_ALLOC(char, LABEL_NAME_LENGTH, allocator);
+    char *name = MEMORY_ALLOC(allocator, char, LABEL_NAME_LENGTH);
     int out_count = vsnprintf(name, LABEL_NAME_LENGTH, fmt, args);
 
     va_end(args);
     assert(out_count < LABEL_NAME_LENGTH);
 
-    Label *label = MEMORY_ALLOC(Label, 1, allocator);
+    Label *label = MEMORY_ALLOC(allocator, Label, 1);
 
     label->name = name;
     label->location = chunks_len(compiler);
@@ -382,13 +382,13 @@ JMP *jif(Compiler *compiler, Token *ref_token, char *fmt, ...){
     Scope *scope = current_scope(compiler);
     Allocator *allocator = scope->depth == 1 ? CTALLOCATOR : LABELS_ALLOCATOR;
 
-    char *label = MEMORY_ALLOC(char, LABEL_NAME_LENGTH, allocator);
+    char *label = MEMORY_ALLOC(allocator, char, LABEL_NAME_LENGTH);
     int out_count = vsnprintf(label, LABEL_NAME_LENGTH, fmt, args);
 
     va_end(args);
     assert(out_count < LABEL_NAME_LENGTH);
 
-    JMP *jmp = (JMP *)MEMORY_ALLOC(JMP, 1, allocator);
+    JMP *jmp = (JMP *)MEMORY_ALLOC(allocator, JMP, 1);
 
     jmp->bef = bef;
     jmp->af = af;
@@ -417,13 +417,13 @@ JMP *jit(Compiler *compiler, Token *ref_token, char *fmt, ...){
     Scope *scope = current_scope(compiler);
     Allocator *allocator = LABELS_ALLOCATOR;
 
-    char *label = MEMORY_ALLOC(char, LABEL_NAME_LENGTH, allocator);
+    char *label = MEMORY_ALLOC(allocator, char, LABEL_NAME_LENGTH);
     int out_count = vsnprintf(label, LABEL_NAME_LENGTH, fmt, args);
 
     va_end(args);
     assert(out_count < LABEL_NAME_LENGTH);
 
-    JMP *jmp = (JMP *)MEMORY_ALLOC(JMP, 1, allocator);
+    JMP *jmp = (JMP *)MEMORY_ALLOC(allocator, JMP, 1);
 
     jmp->bef = bef;
     jmp->af = af;
@@ -452,13 +452,13 @@ JMP *jmp(Compiler *compiler, Token *ref_token, char *fmt, ...){
     Scope *scope = current_scope(compiler);
     Allocator *allocator = scope->depth == 1 ? CTALLOCATOR : LABELS_ALLOCATOR;
 
-    char *label = MEMORY_ALLOC(char, LABEL_NAME_LENGTH, allocator);
+    char *label = MEMORY_ALLOC(allocator, char, LABEL_NAME_LENGTH);
     int out_count = vsnprintf(label, LABEL_NAME_LENGTH, fmt, args);
 
     va_end(args);
     assert(out_count < LABEL_NAME_LENGTH);
 
-    JMP *jmp = (JMP *)MEMORY_ALLOC(JMP, 1, allocator);
+    JMP *jmp = (JMP *)MEMORY_ALLOC(allocator, JMP, 1);
 
     jmp->bef = bef;
     jmp->af = af;
@@ -828,7 +828,7 @@ void write_str(size_t len, char *rstr, Compiler *compiler){
 void write_str_alloc(size_t len, char *rstr, Compiler *compiler){
     assert(len > 0 && "'len' must be greater than 0");
 
-    char *new_rstr = MEMORY_ALLOC(char, len + 1, RTALLOCATOR);
+    char *new_rstr = MEMORY_ALLOC(RTALLOCATOR, char, len + 1);
     DynArr *static_strs = MODULE_STRINGS(CURRENT_MODULE);
     size_t idx = DYNARR_LEN(static_strs);
 
@@ -1139,7 +1139,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             scope_out_fn(compiler);
 
             if(fn_scope->captured_symbols_len > 0){
-                MetaClosure *closure = MEMORY_ALLOC(MetaClosure, 1, RTALLOCATOR);
+                MetaClosure *closure = MEMORY_ALLOC(RTALLOCATOR, MetaClosure, 1);
 
                 closure->meta_out_values_len = fn_scope->captured_symbols_len;
 
@@ -2266,7 +2266,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             int is_normal = enclosing == NULL;
 
             if(fn_scope->captured_symbols_len > 0){
-                MetaClosure *closure = MEMORY_ALLOC(MetaClosure, 1, RTALLOCATOR);
+                MetaClosure *closure = MEMORY_ALLOC(RTALLOCATOR, MetaClosure, 1);
 
                 closure->meta_out_values_len = fn_scope->captured_symbols_len;
 
@@ -2600,11 +2600,11 @@ void set_closure(size_t index, MetaClosure *closure, Compiler *compiler){
 //--------------------------------------------------------------------------//
 Compiler *compiler_create(Allocator *ctallocator, Allocator *rtallocator){
     Allocator *labels_allocator = memory_create_arena_allocator(ctallocator, NULL);
-    Compiler *compiler = MEMORY_ALLOC(Compiler, 1, ctallocator);
+    Compiler *compiler = MEMORY_ALLOC(ctallocator, Compiler, 1);
 
     if(!labels_allocator || !compiler){
         memory_destroy_arena_allocator(labels_allocator);
-        MEMORY_DEALLOC(Compiler, 1, compiler, ctallocator);
+        MEMORY_DEALLOC(ctallocator, Compiler, 1, compiler);
 
         return NULL;
     }
@@ -2623,7 +2623,7 @@ void compiler_destroy(Compiler *compiler){
     }
 
     memory_destroy_arena_allocator(compiler->labels_allocator);
-    MEMORY_DEALLOC(Compiler, 1, compiler, compiler->ctallocator);
+    MEMORY_DEALLOC(compiler->ctallocator, Compiler, 1, compiler);
 }
 
 int compiler_compile(

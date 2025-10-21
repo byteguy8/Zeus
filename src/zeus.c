@@ -205,7 +205,7 @@ DynArr *parse_search_paths(char *source_pathname, char *raw_search_paths, Alloca
         }
 
         size_t buff_len = b_idx - a_idx + 1;
-        char *buff = MEMORY_ALLOC(char, buff_len + 1, allocator);
+        char *buff = MEMORY_ALLOC(allocator, char, buff_len + 1);
 
         memcpy(buff, raw_search_paths + a_idx, buff_len);
         buff[buff_len] = 0;

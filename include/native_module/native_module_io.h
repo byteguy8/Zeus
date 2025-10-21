@@ -343,7 +343,7 @@ Value native_fn_io_read_text(uint8_t argsc, Value *values, Value target, void *c
     StrObj *content_str_obj = NULL;
 
     if(vmu_create_str(1, content_len, content_buff, VMU_VM, &content_str_obj)){
-        MEMORY_DEALLOC(char, content_len + 1, content_buff, VMU_NATIVE_FRONT_ALLOCATOR);
+        MEMORY_DEALLOC(VMU_NATIVE_FRONT_ALLOCATOR, char, content_len + 1, content_buff);
     }
 
     return OBJ_VALUE(content_str_obj);

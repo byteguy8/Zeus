@@ -478,7 +478,7 @@ static int execute(VM *vm){
                 break;
             }case STTE_OPCODE:{
                 LZBStr *str = FACTORY_LZBSTR(vm->allocator);
-                Template *template = MEMORY_ALLOC(Template, 1, vm->allocator);
+                Template *template = MEMORY_ALLOC(vm->allocator, Template, 1);
 
                 template->str = str;
                 template->prev = vm->templates;
@@ -499,7 +499,7 @@ static int execute(VM *vm){
                     StrObj *str_obj = NULL;
 
                     if(vmu_create_str(1, buff_len, buff, vm, &str_obj)){
-                        MEMORY_DEALLOC(char, buff_len + 1, buff, &vm->front_allocator);
+                        MEMORY_DEALLOC(&vm->front_allocator, char, buff_len + 1, buff);
                     }
 
                     PUSH_OBJ(str_obj, vm);
@@ -507,7 +507,7 @@ static int execute(VM *vm){
                     vm->templates = template->prev;
 
                     lzbstr_destroy(str);
-                    MEMORY_DEALLOC(Template, 1, template, vm->allocator);
+                    MEMORY_DEALLOC(vm->allocator, Template, 1, template);
 
                     break;
                 }
@@ -2081,7 +2081,7 @@ static int execute(VM *vm){
                 break;
             }case TRYO_OPCODE:{
                 size_t catch_ip = (size_t)read_i16(vm);
-                Exception *ex = MEMORY_ALLOC(Exception, 1, vm->allocator);
+                Exception *ex = MEMORY_ALLOC(vm->allocator, Exception, 1);
 
                 ex->catch_ip = catch_ip;
                 ex->stack_top = vm->stack_top;
@@ -2095,7 +2095,7 @@ static int execute(VM *vm){
 
                 if(ex){
                     vm->exception_stack = ex->prev;
-                    MEMORY_DEALLOC(Exception, 1, ex, vm->allocator);
+                    MEMORY_DEALLOC(vm->allocator, Exception, 1, ex);
                     break;
                 }
 
@@ -2161,12 +2161,12 @@ static int execute(VM *vm){
 VM *vm_create(Allocator *allocator){
     LZOHTable *runtime_strs = FACTORY_LZOHTABLE(allocator);
     DynArr *native_symbols = FACTORY_DYNARR_PTR(allocator);
-    VM *vm = MEMORY_ALLOC(VM, 1, allocator);
+    VM *vm = MEMORY_ALLOC(allocator, VM, 1);
 
     if(!runtime_strs || !native_symbols || !vm){
         LZOHTABLE_DESTROY(runtime_strs);
         dynarr_destroy(native_symbols);
-        MEMORY_DEALLOC(VM, 1, vm, allocator);
+        MEMORY_DEALLOC(allocator, VM, 1, vm);
 
         return NULL;
     }
@@ -2210,7 +2210,7 @@ void vm_destroy(VM *vm){
     lzpool_destroy_deinit(&vm->native_module_objs_pool);
     lzpool_destroy_deinit(&vm->module_objs_pool);
 
-    MEMORY_DEALLOC(VM, 1, vm, vm->allocator);
+    MEMORY_DEALLOC(vm->allocator, VM, 1, vm);
 }
 
 void vm_initialize(VM *vm){
@@ -2274,7 +2274,7 @@ int vm_execute(LZOHTable *native_fns, Module *module, VM *vm){
             vm->frame_ptr = frame + 1;
             vm->exception_stack = ex->prev;
 
-            MEMORY_DEALLOC(Exception, 1, ex, vm->allocator);
+            MEMORY_DEALLOC(vm->allocator, Exception, 1, ex);
             push(throw_value, vm);
 
             return execute(vm);

@@ -11,7 +11,7 @@ void native_init_header(
 	Allocator *allocator
 ){
 	size_t name_len = strlen(name);
-	char *cloned_name = MEMORY_ALLOC(char, name_len + 1, allocator);
+	char *cloned_name = MEMORY_ALLOC(allocator, char, name_len + 1);
 
 	memcpy(cloned_name, name, name_len);
 	cloned_name[name_len] = 0;

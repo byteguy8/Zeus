@@ -9,7 +9,7 @@ typedef struct factory_str{
 
 char *factory_clone_raw_str(const char *raw_str, const Allocator *allocator, size_t *out_len){
     size_t len = strlen(raw_str);
-    char *cloned_raw_str = MEMORY_ALLOC(char, len + 1, allocator);
+    char *cloned_raw_str = MEMORY_ALLOC(allocator, char, len + 1);
 
     if(!cloned_raw_str){
         return NULL;
@@ -31,16 +31,16 @@ void factory_destroy_raw_str(char *raw_str, const Allocator *allocator){
     }
 
     size_t raw_str_len = strlen(raw_str);
-    MEMORY_DEALLOC(char, raw_str_len + 1, raw_str, allocator);
+    MEMORY_DEALLOC(allocator, char, raw_str_len + 1, raw_str);
 }
 
 NativeFn *factory_create_native_fn(uint8_t core, const char *name, uint8_t arity, RawNativeFn raw_native, const Allocator *allocator){
     char *cloned_name = factory_clone_raw_str(name, allocator, NULL);
-    NativeFn *native_fn = MEMORY_ALLOC(NativeFn, 1, allocator);
+    NativeFn *native_fn = MEMORY_ALLOC(allocator, NativeFn, 1);
 
     if(!cloned_name || !native_fn){
         factory_destroy_raw_str(cloned_name, allocator);
-        MEMORY_DEALLOC(NativeFn, 1, native_fn, allocator);
+        MEMORY_DEALLOC(allocator, NativeFn, 1, native_fn);
 
         return NULL;
     }
@@ -62,7 +62,7 @@ void factory_destroy_native_fn(NativeFn *native_fn){
     const Allocator *allocator = native_fn->allocator;
 
     factory_destroy_raw_str(native_fn->name, allocator);
-    MEMORY_DEALLOC(NativeFn, 1, native_fn, allocator);
+    MEMORY_DEALLOC(allocator, NativeFn, 1, native_fn);
 }
 
 inline int factory_add_value_to_native_module(Value value, const char *name, NativeModule *native_module){
@@ -89,12 +89,12 @@ int factory_add_native_fn(const char *name, uint8_t arity, RawNativeFn raw_nativ
         return 1;
     }
 
-    NativeFnObj *native_fn_obj = MEMORY_ALLOC(NativeFnObj, 1, allocator);
+    NativeFnObj *native_fn_obj = MEMORY_ALLOC(allocator, NativeFnObj, 1);
     Obj *obj = (Obj *)native_fn_obj;
 
     if(!native_fn_obj){
         factory_destroy_native_fn(native_fn);
-        MEMORY_DEALLOC(NativeFnObj, 1, native_fn_obj, allocator);
+        MEMORY_DEALLOC(allocator, NativeFnObj, 1, native_fn_obj);
         return 1;
     }
 
@@ -115,7 +115,7 @@ int factory_add_native_fn(const char *name, uint8_t arity, RawNativeFn raw_nativ
 
     if(lzohtable_put_ckv(strlen(name), name, sizeof(Value), (const void *)&value, module->symbols, NULL)){
         factory_destroy_native_fn(native_fn);
-        MEMORY_DEALLOC(NativeFnObj, 1, native_fn_obj, allocator);
+        MEMORY_DEALLOC(allocator, NativeFnObj, 1, native_fn_obj);
         return 1;
     }
 
@@ -125,11 +125,11 @@ int factory_add_native_fn(const char *name, uint8_t arity, RawNativeFn raw_nativ
 int factory_add_native_fn_info_n(char *name, uint8_t arity, RawNativeFn raw_native, LZOHTable *natives, Allocator *allocator){
     size_t name_len;
     char *cloned_name = factory_clone_raw_str(name, allocator, &name_len);
-    NativeFn *native_fn = MEMORY_ALLOC(NativeFn, 1, allocator);
+    NativeFn *native_fn = MEMORY_ALLOC(allocator, NativeFn, 1);
 
     if(!cloned_name || !native_fn){
         factory_destroy_raw_str(cloned_name, allocator);
-        MEMORY_DEALLOC(NativeFn, 1, native_fn, allocator);
+        MEMORY_DEALLOC(allocator, NativeFn, 1, native_fn);
 
         return 1;
     }
@@ -149,7 +149,7 @@ Fn *factory_create_fn(char *name, Module *module, Allocator *allocator){
 	DynArr *locations = FACTORY_DYNARR(sizeof(OPCodeLocation), allocator);
     DynArr *iconsts = FACTORY_DYNARR(sizeof(int64_t), allocator);
     DynArr *fconsts = FACTORY_DYNARR(sizeof(double), allocator);
-    Fn *fn = MEMORY_ALLOC(Fn, 1, allocator);
+    Fn *fn = MEMORY_ALLOC(allocator, Fn, 1);
 
     if(!fn_name || !params || !chunks || !locations || !iconsts || !fconsts || !fn){
         factory_destroy_raw_str(fn_name, allocator);
@@ -159,7 +159,7 @@ Fn *factory_create_fn(char *name, Module *module, Allocator *allocator){
         dynarr_destroy(iconsts);
         dynarr_destroy(fconsts);
 
-        MEMORY_DEALLOC(Fn, 1, fn, allocator);
+        MEMORY_DEALLOC(allocator, Fn, 1, fn);
 
         return NULL;
     }
@@ -190,18 +190,18 @@ void factory_destroy_fn(Fn *fn){
     dynarr_destroy(fn->iconsts);
     dynarr_destroy(fn->fconsts);
 
-    MEMORY_DEALLOC(Fn, 1, fn, allocator);
+    MEMORY_DEALLOC(allocator, Fn, 1, fn);
 }
 
 NativeModule *factory_create_native_module(char *name, Allocator *allocator){
 	char *module_name = factory_clone_raw_str(name, allocator, NULL);
 	LZOHTable *symbols = FACTORY_LZOHTABLE(allocator);
-	NativeModule *module = MEMORY_ALLOC(NativeModule, 1, allocator);
+	NativeModule *module = MEMORY_ALLOC(allocator, NativeModule, 1);
 
     if(!module_name || !symbols || !module){
         factory_destroy_raw_str(module_name, allocator);
         LZOHTABLE_DESTROY(symbols);
-        MEMORY_DEALLOC(NativeModule, 1, module, allocator);
+        MEMORY_DEALLOC(allocator, NativeModule, 1, module);
 
         return NULL;
     }
@@ -222,28 +222,28 @@ void factory_destroy_native_module(NativeModule *native_module){
 
     factory_destroy_raw_str(native_module->name, allocator);
     LZOHTABLE_DESTROY(native_module->symbols);
-    MEMORY_DEALLOC(NativeModule, 1, native_module, allocator);
+    MEMORY_DEALLOC(allocator, NativeModule, 1, native_module);
 }
 
 Module *factory_create_module(char *name, char *filepath, Allocator *allocator){
 	DynArr *symbols = FACTORY_DYNARR_TYPE(SubModuleSymbol, allocator);
     LZOHTable *globals = FACTORY_LZOHTABLE_LEN(64, allocator);
     DynArr *static_strs = FACTORY_DYNARR_TYPE(RawStr, allocator);
-    SubModule *submodule = MEMORY_ALLOC(SubModule, 1, allocator);
+    SubModule *submodule = MEMORY_ALLOC(allocator, SubModule, 1);
 
     char *module_name = factory_clone_raw_str(name, allocator, NULL);
     char *module_pathname = factory_clone_raw_str(filepath, allocator, NULL);
-    Module *module = MEMORY_ALLOC(Module, 1, allocator);
+    Module *module = MEMORY_ALLOC(allocator, Module, 1);
 
     if(!symbols || !globals || !static_strs || !submodule || !module_name || !module_pathname || !module){
         dynarr_destroy(symbols);
         LZOHTABLE_DESTROY(globals);
         dynarr_destroy(static_strs);
-        MEMORY_DEALLOC(SubModule, 1, submodule, allocator);
+        MEMORY_DEALLOC(allocator, SubModule, 1, submodule);
 
         factory_destroy_raw_str(module_name, allocator);
         factory_destroy_raw_str(module_pathname, allocator);
-        MEMORY_DEALLOC(Module, 1, module, allocator);
+        MEMORY_DEALLOC(allocator, Module, 1, module);
 
         return NULL;
     }
@@ -266,7 +266,7 @@ Module *factory_create_module(char *name, char *filepath, Allocator *allocator){
 Module *factory_clone_module(char *new_name, char *filepath, Module *module, Allocator *allocator){
     char *module_name = factory_clone_raw_str(new_name, allocator, NULL);
     char *module_pathname = factory_clone_raw_str(filepath, allocator, NULL);
-    Module *new_module = MEMORY_ALLOC(Module, 1, allocator);
+    Module *new_module = MEMORY_ALLOC(allocator, Module, 1);
 
     new_module->original = 0;
     new_module->name = module_name;
@@ -289,10 +289,10 @@ void factory_destroy_module(Module *module){
         dynarr_destroy(submodule->symbols);
         LZOHTABLE_DESTROY(submodule->globals);
         dynarr_destroy(submodule->static_strs);
-        MEMORY_DEALLOC(SubModule, 1, submodule, allocator);
+        MEMORY_DEALLOC(allocator, SubModule, 1, submodule);
     }
 
     factory_destroy_raw_str(module->name, allocator);
     factory_destroy_raw_str(module->pathname, allocator);
-    MEMORY_DEALLOC(Module, 1, module, allocator);
+    MEMORY_DEALLOC(allocator, Module, 1, module);
 }

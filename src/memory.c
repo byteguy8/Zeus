@@ -19,11 +19,11 @@ void lzarena_link_dealloc(void *ptr, size_t size, void *ctx){
 
 Allocator *memory_create_arena_allocator(Allocator *allocator, LZArena **out_arena){
     LZArena *arena = lzarena_create((LZArenaAllocator *)allocator);
-    Allocator *arena_allocator = MEMORY_ALLOC(Allocator, 1, allocator);
+    Allocator *arena_allocator = MEMORY_ALLOC(allocator, Allocator, 1);
 
     if(!arena || !arena_allocator){
         lzarena_destroy(arena);
-        MEMORY_DEALLOC(Allocator, 1, arena_allocator, allocator);
+        MEMORY_DEALLOC(allocator, Allocator, 1, arena_allocator);
 
         return NULL;
     }
@@ -54,5 +54,5 @@ void memory_destroy_arena_allocator(Allocator *arena_allocator){
     LZArena *arena = (LZArena *)arena_allocator->ctx;
 
     lzarena_destroy(arena);
-    MEMORY_DEALLOC(Allocator, 1, arena_allocator, origin_allocator);
+    MEMORY_DEALLOC(origin_allocator, Allocator, 1, arena_allocator);
 }

@@ -9,11 +9,11 @@ void file_native_destroy(void *native, Allocator *allocator){
 		fclose(stream);
 	}
 
-	MEMORY_DEALLOC(FileNative, 1, file, allocator);
+	MEMORY_DEALLOC(allocator, FileNative, 1, file);
 }
 
 FileNative *file_native_create(file_mode_t mode, FILE *file, Allocator *allocator){
-	FileNative *file_native = MEMORY_ALLOC(FileNative, 1, allocator);
+	FileNative *file_native = MEMORY_ALLOC(allocator, FileNative, 1);
 
 	native_init_header(
 		(NativeHeader *)file_native,

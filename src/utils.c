@@ -40,14 +40,14 @@
         LPTSTR buff = NULL;
 
         buff_len = GetCurrentDirectory(buff_len, buff);
-        buff = MEMORY_ALLOC(CHAR, buff_len, allocator);
+        buff = MEMORY_ALLOC(allocator, CHAR, buff_len);
 
         if(!buff){
             return NULL;
         }
 
         if(GetCurrentDirectory(buff_len, buff) == 0){
-            MEMORY_DEALLOC(CHAR, buff_len, buff, allocator);
+            MEMORY_DEALLOC(allocator, CHAR, buff_len, buff);
             return NULL;
         }
 
@@ -82,7 +82,7 @@
     char *utils_files_cwd(Allocator *allocator){
         char *pathname = getcwd(NULL, 0);
         size_t pathname_len = strlen(pathname);
-        char *cloned_pathname = MEMORY_ALLOC(char, pathname_len + 1, allocator);
+        char *cloned_pathname = MEMORY_ALLOC(allocator, char, pathname_len + 1);
 
         if(!cloned_pathname){
             free(pathname);
@@ -298,8 +298,8 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator){
 	fseek(source_file, 0, SEEK_END);
 
 	size_t source_size = (size_t)ftell(source_file);
-    char *buff = MEMORY_ALLOC(char, source_size + 1, allocator);
-	RawStr *rstr = MEMORY_ALLOC(RawStr, 1, allocator);
+    char *buff = MEMORY_ALLOC(allocator, char, source_size + 1);
+	RawStr *rstr = MEMORY_ALLOC(allocator, RawStr, 1);
 
 	fseek(source_file, 0, SEEK_SET);
 	fread(buff, 1, source_size, source_file);
@@ -323,7 +323,7 @@ char *utils_read_file_as_text(char *pathname, Allocator *allocator, size_t *out_
 	fseek(file, 0, SEEK_END);
 
 	size_t content_len = (size_t)ftell(file);
-    char *content_buff = MEMORY_ALLOC(char, content_len + 1, allocator);
+    char *content_buff = MEMORY_ALLOC(allocator, char, content_len + 1);
 
 	fseek(file, 0, SEEK_SET);
 	fread(content_buff, 1, content_len, file);

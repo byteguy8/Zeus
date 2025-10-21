@@ -149,7 +149,7 @@ static char *copy_source_range(size_t start, size_t end, Lexer *lexer, size_t *o
     assert(end > start && (size_t)end <= source->len);
 
     size_t lexeme_len = end - start;
-    char *lexeme = MEMORY_ALLOC(char, lexeme_len + 1, lexer->rtallocator);
+    char *lexeme = MEMORY_ALLOC(lexer->rtallocator, char, lexeme_len + 1);
 
     memcpy(lexeme, source->buff + (size_t)start, lexeme_len);
     lexeme[lexeme_len] = '\0';
@@ -163,7 +163,7 @@ static char *copy_source_range(size_t start, size_t end, Lexer *lexer, size_t *o
 
 static char *create_lexeme(char *lexeme, Lexer *lexer, size_t *out_len){
     size_t lexeme_len = strlen(lexeme);
-    char *new_lexeme = MEMORY_ALLOC(char, lexeme_len + 1, COMPILE_ALLOCATOR);
+    char *new_lexeme = MEMORY_ALLOC(COMPILE_ALLOCATOR, char, lexeme_len + 1);
 
     memcpy(new_lexeme, lexeme, lexeme_len);
     new_lexeme[lexeme_len] = 0;
@@ -202,7 +202,7 @@ static inline Token *create_token_raw(
     void *literal,
     Lexer *lexer
 ){
-    Token *token = MEMORY_ALLOC(Token, 1, lexer->rtallocator);
+    Token *token = MEMORY_ALLOC(lexer->rtallocator, Token, 1);
 
     token->line = line;
     token->type = type;
@@ -273,7 +273,7 @@ Token *decimal(Lexer *lexer){
     char *lexeme = current_lexeme(lexer, &lexeme_len);
 
     if(type == INT_TYPE_TOKTYPE){
-        int64_t *value = MEMORY_ALLOC(int64_t, 1, lexer->rtallocator);
+        int64_t *value = MEMORY_ALLOC(lexer->rtallocator, int64_t, 1);
         utils_decimal_str_to_i64(lexeme, value);
 
 		return create_token_raw(
@@ -286,7 +286,7 @@ Token *decimal(Lexer *lexer){
 			lexer
 		);
 	}else{
-        double *value = MEMORY_ALLOC(double, 1, lexer->rtallocator);
+        double *value = MEMORY_ALLOC(lexer->rtallocator, double, 1);
         utils_str_to_double(lexeme, value);
 
         return create_token_raw(
@@ -319,7 +319,7 @@ Token *hexadecimal(Lexer *lexer){
         return NULL;
     }
 
-    int64_t *value = MEMORY_ALLOC(int64_t, 1, lexer->rtallocator);
+    int64_t *value = MEMORY_ALLOC(lexer->rtallocator, int64_t, 1);
 
     utils_hexadecimal_str_to_i64(lexeme, value);
 
@@ -663,7 +663,7 @@ Token *string(Lexer *lexer){
 
     if(LZBSTR_LEN(str_helper) == 0){
         literal_size = 0;
-        literal = MEMORY_ALLOC(char, 1, RUNTIME_ALLOCATOR);
+        literal = MEMORY_ALLOC(RUNTIME_ALLOCATOR, char, 1);
         literal[0] = 0;
     }else{
         literal = lzbstr_rclone_buff((LZBStrAllocator *)RUNTIME_ALLOCATOR, str_helper, &literal_size);
@@ -795,7 +795,7 @@ Token *scan_token(char c, Lexer *lexer){
 //                          PUBLIC IMPLEMENTATION                           //
 //--------------------------------------------------------------------------//
 Lexer *lexer_create(Allocator *ctallocator, Allocator *rtallocator){
-    Lexer *lexer = (Lexer *)MEMORY_ALLOC(Lexer, 1, ctallocator);
+    Lexer *lexer = (Lexer *)MEMORY_ALLOC(ctallocator, Lexer, 1);
 
     if(!lexer){
         return NULL;

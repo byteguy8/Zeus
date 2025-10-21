@@ -31,9 +31,9 @@ typedef struct complex_context{
     (_fake_allocator)->args = (_args);                                                              \
 }
 
-#define MEMORY_ALLOC(type, count, allocator) ((type *)((allocator)->alloc(sizeof(type) * count, ((allocator)->ctx))))
-#define MEMORY_REALLOC(type, old_count, new_count, ptr, allocator)((type *)((allocator)->realloc(ptr, (sizeof(type) * old_count), (sizeof(type) * new_count), (allocator)->ctx)))
-#define MEMORY_DEALLOC(type, count, ptr, allocator) ((allocator)->dealloc((ptr), (sizeof(type) * count), (allocator)->ctx))
+#define MEMORY_ALLOC(allocator, type, count)                       ((type *)((allocator)->alloc(sizeof(type) * count, ((allocator)->ctx))))
+#define MEMORY_REALLOC(allocator, type, old_count, new_count, ptr) ((type *)((allocator)->realloc(ptr, (sizeof(type) * old_count), (sizeof(type) * new_count), (allocator)->ctx)))
+#define MEMORY_DEALLOC(allocator, type, count, ptr)                ((allocator)->dealloc((ptr), (sizeof(type) * count), (allocator)->ctx))
 
 Allocator *memory_create_arena_allocator(Allocator *allocator, LZArena **out_arena);
 void memory_destroy_arena_allocator(Allocator *allocator);
