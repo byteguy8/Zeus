@@ -65,7 +65,7 @@ static double read_float_const(Dumpper *dumpper){
 static char *read_str(Dumpper *dumpper, size_t *out_len){
     DynArr *static_strs = CURRENT_STRINGS(dumpper);
     size_t idx = (size_t)read_i16(dumpper);
-    RawStr str = DYNARR_GET_AS(RawStr, idx, static_strs);
+    DStr str = DYNARR_GET_AS(DStr, idx, static_strs);
 
     if(out_len){
         *out_len = str.len;

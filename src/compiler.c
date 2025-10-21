@@ -816,7 +816,7 @@ void write_str(size_t len, char *rstr, Compiler *compiler){
         fatal_error(compiler, "Only " PRIu16 " strings literals per module are allowed", UINT16_MAX);
     }
 
-    RawStr str = (RawStr){
+    DStr str = (DStr){
         .len = len,
         .buff = rstr
     };
@@ -839,7 +839,7 @@ void write_str_alloc(size_t len, char *rstr, Compiler *compiler){
         fatal_error(compiler, "Only " PRIu16 " strings literals per module are allowed", UINT16_MAX);
     }
 
-    RawStr str = (RawStr){
+    DStr str = (DStr){
         .len = len,
         .buff = new_rstr
     };
@@ -974,7 +974,7 @@ char *resolve_module_location(
     size_t search_paths_len = DYNARR_LEN(search_paths);
 
     for (size_t i = 0; i < search_paths_len; i++){
-        RawStr search_path_rstr = DYNARR_GET_AS(RawStr, i, search_paths);
+        DStr search_path_rstr = DYNARR_GET_AS(DStr, i, search_paths);
         size_t search_pathname_len = search_path_rstr.len;
         char *search_pathname = search_path_rstr.buff;
 
@@ -2340,7 +2340,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
                 if(!lzohtable_lookup(parent_pathname_len, parent_pathname, compiler->import_paths, NULL)){
                     char *cloned_parent_pathname = factory_clone_raw_str(parent_pathname, CTALLOCATOR, NULL);
-                    RawStr rstr = {
+                    DStr rstr = {
                         .len = parent_pathname_len,
                         .buff = cloned_parent_pathname
                     };
@@ -2383,7 +2383,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             LZOHTable *import_paths = compiler->import_paths;
             LZOHTable *keywords = compiler->keywords;
             LZOHTable *native_fns = compiler->natives_fns;
-            RawStr *source = utils_read_source(resolved_module_pathname, CTALLOCATOR);
+            DStr *source = utils_read_source(resolved_module_pathname, CTALLOCATOR);
             DynArr *tokens = FACTORY_DYNARR_PTR(CTALLOCATOR);
             DynArr *fns_prototypes = FACTORY_DYNARR_PTR(CTALLOCATOR);
             DynArr *stmts = FACTORY_DYNARR_PTR(CTALLOCATOR);

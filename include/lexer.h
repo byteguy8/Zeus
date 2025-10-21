@@ -15,7 +15,7 @@ typedef struct lexer{
 	int start;
 	int current;
     char *pathname;
-    RawStr *source;
+    DStr *source;
 	DynArr *tokens;
     LZOHTable *keywords;
     Allocator *rtallocator;
@@ -25,7 +25,7 @@ typedef struct lexer{
 Lexer *lexer_create(Allocator *compile_time_allocator, Allocator *runtime_allocator);
 
 int lexer_scan(
-    RawStr *source,
+    DStr *source,
     DynArr *tokens,
     LZOHTable *keywords,
     char *pathname,

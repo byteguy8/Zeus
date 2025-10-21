@@ -144,11 +144,11 @@ static void get_args(int argc, const char *argv[], Args *args){
     }
 }
 
-RawStr get_cwd(Allocator *allocator){
+DStr get_cwd(Allocator *allocator){
     char *buff = utils_files_cwd(allocator);
     size_t len = strlen(buff);
 
-    return (RawStr){
+    return (DStr){
         .len = len,
         .buff = buff
     };
@@ -156,12 +156,12 @@ RawStr get_cwd(Allocator *allocator){
 
 DynArr *parse_search_paths(char *source_pathname, char *raw_search_paths, Allocator *allocator){
     DynArr *search_paths = DYNARR_CREATE_TYPE_BY(
-        RawStr,
+        DStr,
         DEFAULT_INITIAL_SEARCH_PATHS_BUFF_LEN,
         (DynArrAllocator *)allocator
     );
 
-    RawStr cwd_rstr = get_cwd(allocator);
+    DStr cwd_rstr = get_cwd(allocator);
 
     dynarr_insert(&cwd_rstr, search_paths);
 
@@ -177,7 +177,7 @@ DynArr *parse_search_paths(char *source_pathname, char *raw_search_paths, Alloca
     if(!UTILS_FILES_EXISTS(result_pathname)){
         char *buff = utils_files_parent_pathname(source_pathname, allocator);
         size_t len = strlen(buff);
-        RawStr parent_rstr = {
+        DStr parent_rstr = {
             .len = len,
             .buff = buff
         };
@@ -210,7 +210,7 @@ DynArr *parse_search_paths(char *source_pathname, char *raw_search_paths, Alloca
         memcpy(buff, raw_search_paths + a_idx, buff_len);
         buff[buff_len] = 0;
 
-        RawStr rstr = (RawStr){.len = buff_len, .buff = buff};
+        DStr rstr = (DStr){.len = buff_len, .buff = buff};
         dynarr_insert(&rstr, search_paths);
 
         a_idx = i + 1;
@@ -423,7 +423,7 @@ int main(int argc, const char *argv[]){
     DynArr *search_paths = parse_search_paths(source_pathname, args.search_paths, &ctallocator);
     LZOHTable *import_paths = FACTORY_LZOHTABLE(&ctallocator);
     LZOHTable *keywords = create_keywords_table(&ctallocator);
-	RawStr *source = utils_read_source(source_pathname, &ctallocator);
+	DStr *source = utils_read_source(source_pathname, &ctallocator);
     char *module_path = factory_clone_raw_str(source_pathname, &ctallocator, NULL);
 
     LZOHTable *modules = FACTORY_LZOHTABLE(&ctallocator);

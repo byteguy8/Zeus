@@ -3,9 +3,9 @@
 
 #include <stddef.h>
 
-typedef struct rawstr{
+typedef struct dstr{
 	size_t len;
 	char *buff;
-}RawStr;
+}DStr;
 
 #endif

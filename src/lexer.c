@@ -77,7 +77,7 @@ void error(Lexer *lexer, char *msg, ...){
 }
 
 static inline int is_at_end(Lexer *lexer){
-    RawStr *source = lexer->source;
+    DStr *source = lexer->source;
     return lexer->current >= ((int)source->len);
 }
 
@@ -102,7 +102,7 @@ static inline char peek(Lexer *lexer){
 		return '\0';
 	}
 
-    RawStr *source = lexer->source;
+    DStr *source = lexer->source;
 
     return source->buff[lexer->current];
 }
@@ -112,7 +112,7 @@ static inline char peek_at(uint16_t offset, Lexer *lexer){
 		return '\0';
 	}
 
-    RawStr *source = lexer->source;
+    DStr *source = lexer->source;
 
     return source->buff[(size_t)offset];
 }
@@ -122,7 +122,7 @@ int match(char c, Lexer *lexer){
 		return '\0';
 	}
 
-    RawStr *source = lexer->source;
+    DStr *source = lexer->source;
     char cc = source->buff[lexer->current];
 
     if(c != cc){
@@ -138,13 +138,13 @@ char advance(Lexer *lexer){
 		return '\0';
 	}
 
-    RawStr *source = lexer->source;
+    DStr *source = lexer->source;
     return source->buff[lexer->current++];
 }
 
 // the output str is valid only during compilation allocated
 static char *copy_source_range(size_t start, size_t end, Lexer *lexer, size_t *out_len){
-    RawStr *source = lexer->source;
+    DStr *source = lexer->source;
 
     assert(end > start && (size_t)end <= source->len);
 
@@ -187,7 +187,7 @@ static inline void put_current_lexeme(char *buff, Lexer *lexer){
     size_t start = lexer->start;
     size_t current = lexer->current;
     size_t len = current - start;
-    RawStr *source = lexer->source;
+    DStr *source = lexer->source;
 
     memcpy(buff, source->buff + start, len);
     buff[len] = 0;
@@ -809,7 +809,7 @@ Lexer *lexer_create(Allocator *ctallocator, Allocator *rtallocator){
 }
 
 int lexer_scan(
-	RawStr *source,
+	DStr *source,
 	DynArr *tokens,
 	LZOHTable *keywords,
     char *pathname,

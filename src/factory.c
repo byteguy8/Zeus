@@ -228,7 +228,7 @@ void factory_destroy_native_module(NativeModule *native_module){
 Module *factory_create_module(char *name, char *filepath, Allocator *allocator){
 	DynArr *symbols = FACTORY_DYNARR_TYPE(SubModuleSymbol, allocator);
     LZOHTable *globals = FACTORY_LZOHTABLE_LEN(64, allocator);
-    DynArr *static_strs = FACTORY_DYNARR_TYPE(RawStr, allocator);
+    DynArr *static_strs = FACTORY_DYNARR_TYPE(DStr, allocator);
     SubModule *submodule = MEMORY_ALLOC(allocator, SubModule, 1);
 
     char *module_name = factory_clone_raw_str(name, allocator, NULL);

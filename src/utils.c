@@ -288,7 +288,7 @@ int utils_str_to_double(char *raw_str, double *out_value){
     return 0;
 }
 
-RawStr *utils_read_source(char *pathname, Allocator *allocator){
+DStr *utils_read_source(char *pathname, Allocator *allocator){
 	FILE *source_file = fopen(pathname, "r");
 
     if(!source_file){
@@ -299,7 +299,7 @@ RawStr *utils_read_source(char *pathname, Allocator *allocator){
 
 	size_t source_size = (size_t)ftell(source_file);
     char *buff = MEMORY_ALLOC(allocator, char, source_size + 1);
-	RawStr *rstr = MEMORY_ALLOC(allocator, RawStr, 1);
+	DStr *rstr = MEMORY_ALLOC(allocator, DStr, 1);
 
 	fseek(source_file, 0, SEEK_SET);
 	fread(buff, 1, source_size, source_file);

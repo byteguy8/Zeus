@@ -190,7 +190,7 @@ static char *read_str(VM *vm, size_t *out_len){
         vmu_error(vm, "Illegal module static strings access index");
     }
 
-    RawStr raw_str = DYNARR_GET_AS(RawStr, idx, static_strs);
+    DStr raw_str = DYNARR_GET_AS(DStr, idx, static_strs);
 
     if(out_len){
         *out_len = raw_str.len;
