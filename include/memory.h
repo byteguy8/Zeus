@@ -23,14 +23,6 @@ typedef struct complex_context{
     (_allocator)->extra   = NULL;                                            \
 }
 
-#define MEMORY_INIT_FAKE_ALLOCATOR(_alloc, _realloc, _dealloc, _args, _allocator, _fake_allocator){ \
-    (_fake_allocator)->ctx = (_allocator)->ctx;                                                     \
-    (_fake_allocator)->alloc = (_alloc);                                                            \
-    (_fake_allocator)->realloc = (_realloc);                                                        \
-    (_fake_allocator)->dealloc = (_dealloc);                                                        \
-    (_fake_allocator)->args = (_args);                                                              \
-}
-
 #define MEMORY_ALLOC(allocator, type, count)                       ((type *)((allocator)->alloc(sizeof(type) * count, ((allocator)->ctx))))
 #define MEMORY_REALLOC(allocator, type, old_count, new_count, ptr) ((type *)((allocator)->realloc(ptr, (sizeof(type) * old_count), (sizeof(type) * new_count), (allocator)->ctx)))
 #define MEMORY_DEALLOC(allocator, type, count, ptr)                ((allocator)->dealloc((ptr), (sizeof(type) * count), (allocator)->ctx))
