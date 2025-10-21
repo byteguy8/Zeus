@@ -6,7 +6,6 @@
 #include "value.h"
 #include "obj.h"
 #include "memory.h"
-#include "types.h"
 #include "fn.h"
 #include "closure.h"
 #include "dynarr.h"

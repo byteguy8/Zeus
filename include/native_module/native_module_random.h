@@ -4,7 +4,6 @@
 #include "obj.h"
 #include "vm.h"
 #include "xoshiro256.h"
-#include "types.h"
 #include "factory.h"
 #include "vmu.h"
 #include "types_utils.h"

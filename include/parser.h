@@ -1,8 +1,9 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-#include "types.h"
 #include "dynarr.h"
+#include "memory.h"
+
 #include <stddef.h>
 #include <setjmp.h>
 

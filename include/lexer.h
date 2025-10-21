@@ -1,10 +1,11 @@
 #ifndef LEXER_H
 #define LEXER_H
 
-#include "types.h"
+#include "memory.h"
 #include "lzbstr.h"
 #include "dynarr.h"
 #include "lzohtable.h"
+
 #include <setjmp.h>
 
 typedef struct lexer{

@@ -2,7 +2,6 @@
 #define DUMPPER_H
 
 #include "dynarr.h"
-#include "types.h"
 #include "fn.h"
 #include "module.h"
 

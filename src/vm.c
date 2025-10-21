@@ -5,7 +5,6 @@
 #include "vmu.h"
 #include "opcode.h"
 #include "memory.h"
-#include "types.h"
 #include "value.h"
 #include "utils.h"
 #include "types_utils.h"

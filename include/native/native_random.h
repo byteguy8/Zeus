@@ -3,7 +3,6 @@
 
 #include "memory.h"
 #include "native.h"
-#include "types.h"
 #include "obj.h"
 #include "types_utils.h"
 #include "value.h"

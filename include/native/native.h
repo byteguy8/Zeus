@@ -1,7 +1,7 @@
 #ifndef NATIVE_H
 #define NATIVE_H
 
-#include "types.h"
+#include "memory.h"
 
 typedef enum native_type{
 	RANDOM_NATIVE_TYPE,

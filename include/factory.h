@@ -7,7 +7,6 @@
 #include "native_fn.h"
 #include "fn.h"
 #include "closure.h"
-#include "types.h"
 #include "native_fn.h"
 #include "native_module.h"
 #include "module.h"

@@ -3,7 +3,6 @@
 
 #include "native/native.h"
 #include "obj.h"
-#include "types.h"
 #include "vm.h"
 #include "lzbstr.h"
 #include "native_fn.h"

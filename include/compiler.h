@@ -5,7 +5,6 @@
 #include "fn.h"
 #include "module.h"
 #include "token.h"
-#include "types.h"
 #include <setjmp.h>
 
 #define LABEL_NAME_LENGTH 64

@@ -1,6 +1,5 @@
 #include "native/native.h"
 #include "memory.h"
-#include "types.h"
 #include <string.h>
 
 void native_init_header(

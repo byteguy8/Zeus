@@ -1,7 +1,8 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-#include "types.h"
+#include "memory.h"
+
 #include <stdint.h>
 #include <string.h>
 
