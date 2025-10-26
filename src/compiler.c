@@ -2599,7 +2599,7 @@ void set_closure(size_t index, MetaClosure *closure, Compiler *compiler){
 //                          PUBLIC IMPLEMENTATION                           //
 //--------------------------------------------------------------------------//
 Compiler *compiler_create(Allocator *ctallocator, Allocator *rtallocator){
-    Allocator *labels_allocator = memory_create_arena_allocator(ctallocator, NULL);
+    Allocator *labels_allocator = memory_arena_allocator(ctallocator, NULL);
     Compiler *compiler = MEMORY_ALLOC(ctallocator, Compiler, 1);
 
     if(!labels_allocator || !compiler){

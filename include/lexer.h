@@ -1,10 +1,11 @@
 #ifndef LEXER_H
 #define LEXER_H
 
-#include "memory.h"
-#include "lzbstr.h"
 #include "dynarr.h"
+#include "lzbstr.h"
 #include "lzohtable.h"
+#include "lzarena.h"
+#include "memory.h"
 
 #include <setjmp.h>
 
@@ -18,6 +19,8 @@ typedef struct lexer{
     DStr *source;
 	DynArr *tokens;
     LZOHTable *keywords;
+    LZArena *ctarena;
+    Allocator *ctarena_allocator;
     Allocator *rtallocator;
     Allocator *ctallocator;
 }Lexer;

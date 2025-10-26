@@ -1,4 +1,5 @@
 #include "lexer.h"
+#include "lzarena.h"
 #include "memory.h"
 #include "factory.h"
 #include "utils.h"
@@ -9,8 +10,9 @@
 #include <stdio.h>
 #include <math.h>
 
-#define COMPILE_ALLOCATOR (lexer->ctallocator)
-#define RUNTIME_ALLOCATOR (lexer->rtallocator)
+#define COMPILE_ALLOCATOR       (lexer->ctallocator)
+#define COMPILE_ARENA_ALLOCATOR (lexer->ctarena_allocator)
+#define RUNTIME_ALLOCATOR       (lexer->rtallocator)
 //--------------------------------------------------------------------------//
 //                            PRIVATE INTERFACE                             //
 //--------------------------------------------------------------------------//
@@ -519,7 +521,7 @@ Token *string(Lexer *lexer){
     size_t from_inner = 0;
     int from_outer = lexer->current;
     DynArr *template_tokens = NULL;
-    LZBStr *str_helper = FACTORY_LZBSTR(COMPILE_ALLOCATOR);
+    LZBStr *str_helper = MEMORY_LZBSTR(COMPILE_ARENA_ALLOCATOR);
 
     while(!is_at_end(lexer) && peek(lexer) != '"'){
         char c = advance(lexer);
@@ -816,13 +818,21 @@ int lexer_scan(
 	Lexer *lexer
 ){
     if(setjmp(lexer->err_buf) == 0){
-        lexer->line = 1;
+    	LZArena *ctarena = NULL;
+  		Allocator *ctarena_allocator = memory_arena_allocator(
+    		COMPILE_ALLOCATOR,
+      		&ctarena
+    	);
+
+    	lexer->line = 1;
         lexer->start = 0;
         lexer->current = 0;
         lexer->source = source;
         lexer->tokens = tokens;
         lexer->keywords = keywords;
         lexer->pathname = pathname;
+        lexer->ctarena = ctarena;
+        lexer->ctarena_allocator = ctarena_allocator;
 
         while (!is_at_end(lexer)){
             char c = advance(lexer);
@@ -833,11 +843,27 @@ int lexer_scan(
             }
 
             lexer->start = lexer->current;
+
+            if(ctarena->allocted_bytes > 0){
+            	lzarena_free_all(ctarena);
+            }
         }
 
         size_t lexeme_len;
         char *lexeme = create_lexeme("EOF", lexer, &lexeme_len);
-        ADD_TOKEN_RAW(create_token_raw(-1, EOF_TOKTYPE, lexeme_len, lexeme, 0, NULL, lexer));
+
+        ADD_TOKEN_RAW(
+        	create_token_raw(
+         		-1,
+           		EOF_TOKTYPE,
+             	lexeme_len,
+              	lexeme,
+               	0,
+                NULL,
+                lexer
+         	)
+        );
+        memory_destroy_arena_allocator(ctarena_allocator);
 
         return lexer->status;
     }else{

@@ -1,10 +1,11 @@
 #ifndef MEMORY_H
 #define MEMORY_H
 
-#include "types.h"
+#include "dynarr.h"
 #include "lzarena.h"
 #include "lzflist.h"
-#include "dynarr.h"
+#include "types.h"
+
 #include <stddef.h>
 
 typedef struct allocator{
@@ -35,7 +36,10 @@ typedef struct complex_context{
 #define MEMORY_REALLOC(allocator, type, old_count, new_count, ptr) ((type *)((allocator)->realloc(ptr, (sizeof(type) * old_count), (sizeof(type) * new_count), (allocator)->ctx)))
 #define MEMORY_DEALLOC(allocator, type, count, ptr)                ((allocator)->dealloc((ptr), (sizeof(type) * count), (allocator)->ctx))
 
-Allocator *memory_create_arena_allocator(Allocator *allocator, LZArena **out_arena);
+#define MEMORY_LZBSTR(_allocator)                                  (lzbstr_create((LZBStrAllocator *)(_allocator)))
+#define MEMORY_LZARENA(_allocator)                                 (lzarena_create((LZArenaAllocator *)(_allocator)))
+
+Allocator *memory_arena_allocator(Allocator *allocator, LZArena **out_arena);
 void memory_destroy_arena_allocator(Allocator *allocator);
 
 #endif
