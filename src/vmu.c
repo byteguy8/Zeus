@@ -663,15 +663,15 @@ void value_to_str(PassValue pass, Value value, LZBStr *str){
             lzbstr_append("empty", str);
             break;
         }case BOOL_VALUE_TYPE:{
-            uint8_t bool_value = value.content.bool_val;
+            uint8_t bool_value = VALUE_TO_BOOL(value);
             lzbstr_append_args(str, "%s", bool_value ? "true" : "false");
             break;
         }case INT_VALUE_TYPE:{
-            int64_t int_value = value.content.int_val;
+            int64_t int_value = VALUE_TO_INT(value);
             lzbstr_append_args(str, "%" PRId64, int_value);
             break;
         }case FLOAT_VALUE_TYPE:{
-            double float_value = value.content.float_val;
+            double float_value = VALUE_TO_FLOAT(value);
             lzbstr_append_args(str, "%.6f", float_value);
             break;
         }case OBJ_VALUE_TYPE:{
@@ -983,15 +983,15 @@ void value_to_json(
             lzbstr_append("null", str);
             break;
         }case BOOL_VALUE_TYPE:{
-            uint8_t bool_value = value.content.bool_val;
+            uint8_t bool_value = VALUE_TO_BOOL(value);
             lzbstr_append_args(str, "%s", bool_value ? "true" : "false");
             break;
         }case INT_VALUE_TYPE:{
-            int64_t int_value = value.content.int_val;
+            int64_t int_value = VALUE_TO_INT(value);
             lzbstr_append_args(str, "%" PRId64, int_value);
             break;
         }case FLOAT_VALUE_TYPE:{
-            double float_value = value.content.float_val;
+            double float_value = VALUE_TO_FLOAT(value);
             lzbstr_append_args(str, "%g", float_value);
             break;
         }case OBJ_VALUE_TYPE:{
