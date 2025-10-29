@@ -76,12 +76,6 @@ typedef struct dict_obj{
     LZOHTable *key_values;
 }DictObj;
 
-typedef struct record_file{
-    char mode;
-    char *pathname;
-    FILE *handler;
-}RecordFile;
-
 typedef struct record_obj{
     Obj header;
 	LZOHTable *attrs;
@@ -117,14 +111,6 @@ typedef struct module_obj{
     Obj header;
     Module *module;
 }ModuleObj;
-
-#define OBJ_TYPE(_obj)((_obj)->type)
-#define RECORD_RANDOM(_record)((RecordRandom *)((_record)->content))
-
-#define RECORD_FILE(_record)((RecordFile *)((_record)->content))
-#define RECORD_FILE_MODE(_record)(RECORD_FILE(_record)->mode)
-#define RECORD_FILE_PATHNAME(_record)(RECORD_FILE(_record)->pathname)
-#define RECORD_FILE_HANDLER(_record)(RECORD_FILE(_record)->handler)
 
 void obj_list_insert(Obj *obj, ObjList *list);
 void obj_list_remove(Obj *obj);
