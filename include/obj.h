@@ -76,8 +76,6 @@ typedef struct dict_obj{
     LZOHTable *key_values;
 }DictObj;
 
-typedef XOShiro256 RecordRandom;
-
 typedef struct record_file{
     char mode;
     char *pathname;
