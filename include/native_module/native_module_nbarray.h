@@ -231,16 +231,42 @@ Value native_fn_nbarray_to_str(uint8_t argsc, Value *values, Value target, void 
 		"array",
 		VMU_VM
 	);
+    size_t len = validate_value_len_arg(values[1], 1, "len", VMU_VM);
+	size_t nbarray_len = nbarray->len;
+    StrObj *str_obj = NULL;
 
-	StrObj *str_obj = NULL;
+    if(len > nbarray_len){
+        vmu_error(
+            VMU_VM,
+            "len (%zu) out of bounds (%zu)",
+            len,
+            nbarray_len
+        );
+    }
 
-	vmu_create_str(
+    unsigned char *buff = MEMORY_ALLOC(
+        VMU_NATIVE_FRONT_ALLOCATOR,
+        unsigned char,
+        len + 1
+    );
+
+    memcpy(buff, nbarray->bytes, len);
+    buff[len] = 0;
+
+	if(vmu_create_str(
 		1,
-		nbarray->len,
+		len,
 		(char *)nbarray->bytes,
 		VMU_VM,
 		&str_obj
-	);
+	)){
+        MEMORY_DEALLOC(
+            VMU_NATIVE_FRONT_ALLOCATOR,
+            unsigned char,
+            len + 1,
+            buff
+        );
+    }
 
 	return OBJ_VALUE(str_obj);
 }
@@ -264,7 +290,7 @@ void nbarray_module_init(Allocator *allocator){
     factory_add_native_fn("cpy", 5, native_fn_nbarray_cpy, nbarray_native_module);
     factory_add_native_fn("mov", 5, native_fn_nbarray_mov, nbarray_native_module);
     factory_add_native_fn("clone", 1, native_fn_nbarray_clone, nbarray_native_module);
-    factory_add_native_fn("to_str", 1, native_fn_nbarray_to_str, nbarray_native_module);
+    factory_add_native_fn("to_str", 2, native_fn_nbarray_to_str, nbarray_native_module);
     factory_add_native_fn("create", 1, native_fn_nbarray_create, nbarray_native_module);
 }
 
