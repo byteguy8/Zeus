@@ -659,22 +659,22 @@ void obj_to_str(PassValue pass, Obj *obj, LZBStr *str){
 
 void value_to_str(PassValue pass, Value value, LZBStr *str){
     switch (value.type){
-        case EMPTY_VTYPE:{
+        case EMPTY_VALUE_TYPE:{
             lzbstr_append("empty", str);
             break;
-        }case BOOL_VTYPE:{
+        }case BOOL_VALUE_TYPE:{
             uint8_t bool_value = value.content.bool;
             lzbstr_append_args(str, "%s", bool_value ? "true" : "false");
             break;
-        }case INT_VTYPE:{
+        }case INT_VALUE_TYPE:{
             int64_t int_value = value.content.ivalue;
             lzbstr_append_args(str, "%" PRId64, int_value);
             break;
-        }case FLOAT_VTYPE:{
+        }case FLOAT_VALUE_TYPE:{
             double float_value = value.content.fvalue;
             lzbstr_append_args(str, "%.6f", float_value);
             break;
-        }case OBJ_VTYPE:{
+        }case OBJ_VALUE_TYPE:{
             Obj *obj = VALUE_TO_OBJ(value);
 
             if(pass.obj){
@@ -979,22 +979,22 @@ void value_to_json(
     VM *vm
 ){
     switch (value.type){
-        case EMPTY_VTYPE:{
+        case EMPTY_VALUE_TYPE:{
             lzbstr_append("null", str);
             break;
-        }case BOOL_VTYPE:{
+        }case BOOL_VALUE_TYPE:{
             uint8_t bool_value = value.content.bool;
             lzbstr_append_args(str, "%s", bool_value ? "true" : "false");
             break;
-        }case INT_VTYPE:{
+        }case INT_VALUE_TYPE:{
             int64_t int_value = value.content.ivalue;
             lzbstr_append_args(str, "%" PRId64, int_value);
             break;
-        }case FLOAT_VTYPE:{
+        }case FLOAT_VALUE_TYPE:{
             double float_value = value.content.fvalue;
             lzbstr_append_args(str, "%g", float_value);
             break;
-        }case OBJ_VTYPE:{
+        }case OBJ_VALUE_TYPE:{
             Obj *obj = VALUE_TO_OBJ(value);
 
             if(pass.obj){
@@ -1439,20 +1439,20 @@ void vmu_print_obj(FILE *stream, Obj *object){
 
 void vmu_print_value(FILE *stream, Value value){
     switch (value.type){
-        case EMPTY_VTYPE:{
+        case EMPTY_VALUE_TYPE:{
             fprintf(stream, "empty");
             break;
-        }case BOOL_VTYPE:{
+        }case BOOL_VALUE_TYPE:{
             uint8_t bool = VALUE_TO_BOOL(value);
             fprintf(stream, "%s", bool == 0 ? "false" : "true");
             break;
-        }case INT_VTYPE:{
+        }case INT_VALUE_TYPE:{
             fprintf(stream, "%" PRId64, VALUE_TO_INT(value));
             break;
-        }case FLOAT_VTYPE:{
+        }case FLOAT_VALUE_TYPE:{
 			fprintf(stream, "%.8f", VALUE_TO_FLOAT(value));
             break;
-		}case OBJ_VTYPE:{
+		}case OBJ_VALUE_TYPE:{
             vmu_print_obj(stream, VALUE_TO_OBJ(value));
             break;
         }default:{

@@ -4,11 +4,11 @@
 #include <stdint.h>
 
 typedef enum value_type{
-    EMPTY_VTYPE,
-    BOOL_VTYPE,
-    INT_VTYPE,
-    FLOAT_VTYPE,
-	OBJ_VTYPE
+    EMPTY_VALUE_TYPE,
+    BOOL_VALUE_TYPE,
+    INT_VALUE_TYPE,
+    FLOAT_VALUE_TYPE,
+	OBJ_VALUE_TYPE
 }ValueType;
 
 typedef struct value{

@@ -5,26 +5,26 @@
 #include "obj.h"
 #include "dynarr.h"
 
-#define EMPTY_VALUE ((Value){.type = EMPTY_VTYPE})
-#define BOOL_VALUE(_value)((Value){.type = BOOL_VTYPE, .content.bool = (_value)})
-#define INT_VALUE(_value)((Value){.type = INT_VTYPE, .content.ivalue = (_value)})
-#define FLOAT_VALUE(_value)((Value){.type = FLOAT_VTYPE, .content.fvalue = (_value)})
-#define OBJ_VALUE(_value)((Value){.type = OBJ_VTYPE, .content.obj = (_value)})
+#define EMPTY_VALUE ((Value){.type = EMPTY_VALUE_TYPE})
+#define BOOL_VALUE(_value)((Value){.type = BOOL_VALUE_TYPE, .content.bool = (_value)})
+#define INT_VALUE(_value)((Value){.type = INT_VALUE_TYPE, .content.ivalue = (_value)})
+#define FLOAT_VALUE(_value)((Value){.type = FLOAT_VALUE_TYPE, .content.fvalue = (_value)})
+#define OBJ_VALUE(_value)((Value){.type = OBJ_VALUE_TYPE, .content.obj = (_value)})
 
-#define IS_VALUE_EMPTY(_value)((_value).type == EMPTY_VTYPE)
-#define IS_VALUE_BOOL(_value)((_value).type == BOOL_VTYPE)
-#define IS_VALUE_INT(_value)((_value).type == INT_VTYPE)
-#define IS_VALUE_FLOAT(_value)((_value).type == FLOAT_VTYPE)
-#define IS_VALUE_OBJ(_value)((_value).type == OBJ_VTYPE)
+#define IS_VALUE_EMPTY(_value)((_value).type == EMPTY_VALUE_TYPE)
+#define IS_VALUE_BOOL(_value)((_value).type == BOOL_VALUE_TYPE)
+#define IS_VALUE_INT(_value)((_value).type == INT_VALUE_TYPE)
+#define IS_VALUE_FLOAT(_value)((_value).type == FLOAT_VALUE_TYPE)
+#define IS_VALUE_OBJ(_value)((_value).type == OBJ_VALUE_TYPE)
 
 static inline int vm_is_value_numeric(Value value){
-    return value.type == INT_VTYPE || value.type == FLOAT_VTYPE;
+    return value.type == INT_VALUE_TYPE || value.type == FLOAT_VALUE_TYPE;
 }
 
 static inline int is_callable(Value *value){
     ValueType type = value->type;
 
-    if(type != OBJ_VTYPE){
+    if(type != OBJ_VALUE_TYPE){
         return 0;
     }
 
@@ -35,47 +35,47 @@ static inline int is_callable(Value *value){
 }
 
 static inline int is_value_str(Value value){
-    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == STR_OBJ_TYPE;
+    return value.type == OBJ_VALUE_TYPE && ((Obj *)(value.content.obj))->type == STR_OBJ_TYPE;
 }
 
 static inline int is_value_array(Value value){
-    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == ARRAY_OBJ_TYPE;
+    return value.type == OBJ_VALUE_TYPE && ((Obj *)(value.content.obj))->type == ARRAY_OBJ_TYPE;
 }
 
 static inline int is_value_list(Value value){
-    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == LIST_OBJ_TYPE;
+    return value.type == OBJ_VALUE_TYPE && ((Obj *)(value.content.obj))->type == LIST_OBJ_TYPE;
 }
 
 static inline int is_value_dict(Value value){
-    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == DICT_OBJ_TYPE;
+    return value.type == OBJ_VALUE_TYPE && ((Obj *)(value.content.obj))->type == DICT_OBJ_TYPE;
 }
 
 static inline int is_value_record(Value value){
-    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == RECORD_OBJ_TYPE;
+    return value.type == OBJ_VALUE_TYPE && ((Obj *)(value.content.obj))->type == RECORD_OBJ_TYPE;
 }
 
 static inline int is_value_native(Value value){
-	return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == NATIVE_OBJ_TYPE;
+	return value.type == OBJ_VALUE_TYPE && ((Obj *)(value.content.obj))->type == NATIVE_OBJ_TYPE;
 }
 
 static inline int is_value_native_fn(Value value){
-    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == NATIVE_FN_OBJ_TYPE;
+    return value.type == OBJ_VALUE_TYPE && ((Obj *)(value.content.obj))->type == NATIVE_FN_OBJ_TYPE;
 }
 
 static inline int is_value_fn(Value value){
-    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == FN_OBJ_TYPE;
+    return value.type == OBJ_VALUE_TYPE && ((Obj *)(value.content.obj))->type == FN_OBJ_TYPE;
 }
 
 static inline int is_value_closure(Value value){
-    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == CLOSURE_OBJ_TYPE;
+    return value.type == OBJ_VALUE_TYPE && ((Obj *)(value.content.obj))->type == CLOSURE_OBJ_TYPE;
 }
 
 static inline int is_value_native_module(Value value){
-    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == NATIVE_MODULE_OBJ_TYPE;
+    return value.type == OBJ_VALUE_TYPE && ((Obj *)(value.content.obj))->type == NATIVE_MODULE_OBJ_TYPE;
 }
 
 static inline int is_value_module(Value value){
-    return value.type == OBJ_VTYPE && ((Obj *)(value.content.obj))->type == MODULE_OBJ_TYPE;
+    return value.type == OBJ_VALUE_TYPE && ((Obj *)(value.content.obj))->type == MODULE_OBJ_TYPE;
 }
 
 #define VALUE_TO_BOOL(_value)((_value).content.bool)

@@ -2058,16 +2058,16 @@ static int execute(VM *vm){
                     }
                 }else{
                     switch(value.type){
-                        case EMPTY_VTYPE:{
+                        case EMPTY_VALUE_TYPE:{
                             push(BOOL_VALUE(type == 0), vm);
                             break;
-                        }case BOOL_VTYPE:{
+                        }case BOOL_VALUE_TYPE:{
                             push(BOOL_VALUE(type == 1), vm);
                             break;
-                        }case INT_VTYPE:{
+                        }case INT_VALUE_TYPE:{
                             push(BOOL_VALUE(type == 2), vm);
                             break;
-                        }case FLOAT_VTYPE:{
+                        }case FLOAT_VALUE_TYPE:{
                             push(BOOL_VALUE(type == 3), vm);
                             break;
                         }default:{

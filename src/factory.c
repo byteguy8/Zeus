@@ -109,7 +109,7 @@ int factory_add_native_fn(const char *name, uint8_t arity, RawNativeFn raw_nativ
     native_fn_obj->native_fn = native_fn;
 
     Value value = {
-        .type = OBJ_VTYPE,
+        .type = OBJ_VALUE_TYPE,
         .content.obj = native_fn_obj
     };
 
