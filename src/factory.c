@@ -110,7 +110,7 @@ int factory_add_native_fn(const char *name, uint8_t arity, RawNativeFn raw_nativ
 
     Value value = {
         .type = OBJ_VALUE_TYPE,
-        .content.obj = native_fn_obj
+        .content.obj_val = native_fn_obj
     };
 
     if(lzohtable_put_ckv(strlen(name), name, sizeof(Value), (const void *)&value, module->symbols, NULL)){

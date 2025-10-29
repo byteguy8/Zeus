@@ -15,10 +15,10 @@ typedef struct value{
     ValueType type;
 
     union{
-        uint8_t bool;
-        int64_t ivalue;
-        double fvalue;
-		void *obj;
+        uint8_t bool_val;
+        int64_t int_val;
+        double float_val;
+		void *obj_val;
     }content;
 }Value;
 
