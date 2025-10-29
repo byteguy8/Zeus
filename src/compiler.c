@@ -187,7 +187,7 @@ void scope_out(Compiler *compiler){
 
     if(current->depth > 1){
         for (uint8_t i = 0; i < current->scope_locals; i++){
-            write_chunk(POP_OPCODE, compiler);
+            write_chunk(OP_POP, compiler);
         }
     }
 
@@ -370,7 +370,7 @@ void remove_jmp(JMP *jmp){
 JMP *jif(Compiler *compiler, Token *ref_token, char *fmt, ...){
     size_t bef = chunks_len(compiler);
 
-    write_chunk(JIF_OPCODE, compiler);
+    write_chunk(OP_JIF, compiler);
     write_location(ref_token, compiler);
 
     size_t idx = write_i16(0, compiler);
@@ -405,7 +405,7 @@ JMP *jif(Compiler *compiler, Token *ref_token, char *fmt, ...){
 JMP *jit(Compiler *compiler, Token *ref_token, char *fmt, ...){
     size_t bef = chunks_len(compiler);
 
-    write_chunk(JIT_OPCODE, compiler);
+    write_chunk(OP_JIT, compiler);
     write_location(ref_token, compiler);
 
     size_t idx = write_i16(0, compiler);
@@ -440,7 +440,7 @@ JMP *jit(Compiler *compiler, Token *ref_token, char *fmt, ...){
 JMP *jmp(Compiler *compiler, Token *ref_token, char *fmt, ...){
     size_t bef = chunks_len(compiler);
 
-    write_chunk(JMP_OPCODE, compiler);
+    write_chunk(OP_JMP, compiler);
     write_location(ref_token, compiler);
 
     size_t idx = write_i16(0, compiler);
@@ -585,11 +585,11 @@ void from_symbols_to_global(
     char *name,
     Compiler *compiler
 ){
-    write_chunk(SGET_OPCODE, compiler);
+    write_chunk(OP_SGET, compiler);
     write_location(location_token, compiler);
     write_i32(symbol_index, compiler);
 
-    write_chunk(GDEF_OPCODE, compiler);
+    write_chunk(OP_GDEF, compiler);
     write_location(location_token, compiler);
     write_str_alloc(strlen(name), name, compiler);
 }
@@ -1031,14 +1031,14 @@ void compile_expr(Expr *expr, Compiler *compiler){
     switch (expr->type){
         case EMPTY_EXPRTYPE:{
 			EmptyExpr *empty_expr = (EmptyExpr *)expr->sub_expr;
-            write_chunk(EMPTY_OPCODE, compiler);
+            write_chunk(OP_EMPTY, compiler);
 			write_location(empty_expr->empty_token, compiler);
             break;
         }case BOOL_EXPRTYPE:{
             BoolExpr *bool_expr = (BoolExpr *)expr->sub_expr;
             uint8_t value = bool_expr->value;
 
-            write_chunk(value ? TRUE_OPCODE : FALSE_OPCODE, compiler);
+            write_chunk(value ? OP_TRUE : OP_FALSE, compiler);
 			write_location(bool_expr->bool_token, compiler);
 
             break;
@@ -1047,7 +1047,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             Token *token = int_expr->token;
             int64_t value = *(int64_t *)token->literal;
 
-            write_chunk(INT_OPCODE, compiler);
+            write_chunk(OP_INT, compiler);
 			write_location(token, compiler);
 
             write_iconst(value, compiler);
@@ -1058,7 +1058,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			Token *float_token = float_expr->token;
 			double value = *(double *)float_token->literal;
 
-			write_chunk(FLOAT_OPCODE, compiler);
+			write_chunk(OP_FLOAT, compiler);
 			write_location(float_token, compiler);
 
 			write_fconst(value, compiler);
@@ -1068,7 +1068,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			StrExpr *str_expr = (StrExpr *)expr->sub_expr;
             Token *str_token = str_expr->str_token;
 
-			write_chunk(STRING_OPCODE, compiler);
+			write_chunk(OP_STRING, compiler);
 			write_location(str_token, compiler);
 			write_str(str_token->literal_size, str_token->literal, compiler);
 
@@ -1078,7 +1078,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             Token *template_token = template_expr->template_token;
             DynArr *exprs = template_expr->exprs;
 
-            write_chunk(STTE_OPCODE, compiler);
+            write_chunk(OP_STTE, compiler);
             write_location(template_token, compiler);
 
             if(exprs){
@@ -1088,12 +1088,12 @@ void compile_expr(Expr *expr, Compiler *compiler){
                     Expr *expr = (Expr *)dynarr_get_ptr(i, exprs);
                     compile_expr(expr, compiler);
 
-                    write_chunk(WTTE_OPCODE, compiler);
+                    write_chunk(OP_WTTE, compiler);
                     write_location(template_token, compiler);
                 }
             }
 
-            write_chunk(ETTE_OPCODE, compiler);
+            write_chunk(OP_ETTE, compiler);
             write_location(template_token, compiler);
 
             break;
@@ -1129,10 +1129,10 @@ void compile_expr(Expr *expr, Compiler *compiler){
             }
 
             if(!returned){
-                write_chunk(EMPTY_OPCODE, compiler);
+                write_chunk(OP_EMPTY, compiler);
                 write_location(anon_token, compiler);
 
-                write_chunk(RET_OPCODE, compiler);
+                write_chunk(OP_RET, compiler);
                 write_location(anon_token, compiler);
             }
 
@@ -1154,7 +1154,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
                 set_fn(symbol_index, fn, compiler);
             }
 
-            write_chunk(SGET_OPCODE, compiler);
+            write_chunk(OP_SGET, compiler);
             write_location(anon_token, compiler);
             write_i32((int32_t)symbol_index, compiler);
 
@@ -1167,7 +1167,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             int is_out = resolve_symbol(identifier, symbol, compiler);
 
             if(symbol->type == NATIVE_FN_SYMTYPE){
-                write_chunk(NGET_OPCODE, compiler);
+                write_chunk(OP_NGET, compiler);
                 write_location(identifier, compiler);
                 write_str_alloc(identifier->lexeme_len, identifier->lexeme, compiler);
 
@@ -1175,11 +1175,11 @@ void compile_expr(Expr *expr, Compiler *compiler){
             }
 
             if(symbol->depth == 1){
-                write_chunk(GGET_OPCODE, compiler);
+                write_chunk(OP_GGET, compiler);
                 write_location(identifier, compiler);
                 write_str_alloc(identifier->lexeme_len, identifier->lexeme, compiler);
             }else{
-                uint8_t opcode = is_out ? OGET_OPCODE : LGET_OPCODE;
+                uint8_t opcode = is_out ? OP_OGET : OP_LGET;
 
                 write_chunk(opcode, compiler);
                 write_location(identifier, compiler);
@@ -1209,7 +1209,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
                 }
             }
 
-            write_chunk(CALL_OPCODE, compiler);
+            write_chunk(OP_CALL, compiler);
             write_location(call_expr->left_paren, compiler);
 
             uint8_t args_count = args ? (uint8_t)DYNARR_LEN(args) : 0;
@@ -1223,7 +1223,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             compile_expr(left, compiler);
 
-            write_chunk(ACCESS_OPCODE, compiler);
+            write_chunk(OP_ACCESS, compiler);
 			write_location(access_expr->dot_token, compiler);
             write_str_alloc(symbol_token->lexeme_len, symbol_token->lexeme, compiler);
 
@@ -1237,7 +1237,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             compile_expr(index, compiler);
             compile_expr(target, compiler);
 
-            write_chunk(INDEX_OPCODE, compiler);
+            write_chunk(OP_INDEX, compiler);
             write_location(left_square_token, compiler);
 
             break;
@@ -1250,13 +1250,13 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             switch (operator->type){
                 case MINUS_TOKTYPE:{
-                    write_chunk(NNOT_OPCODE, compiler);
+                    write_chunk(OP_NNOT, compiler);
                     break;
                 }case EXCLAMATION_TOKTYPE:{
-                    write_chunk(NOT_OPCODE, compiler);
+                    write_chunk(OP_NOT, compiler);
                     break;
                 }case NOT_BITWISE_TOKTYPE:{
-                    write_chunk(BNOT_OPCODE, compiler);
+                    write_chunk(OP_BNOT, compiler);
                     break;
                 }default:{
                     assert("Illegal token type");
@@ -1277,23 +1277,23 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             switch (operator->type){
                 case PLUS_TOKTYPE:{
-                    write_chunk(ADD_OPCODE, compiler);
+                    write_chunk(OP_ADD, compiler);
                     break;
                 }
                 case MINUS_TOKTYPE:{
-                    write_chunk(SUB_OPCODE, compiler);
+                    write_chunk(OP_SUB, compiler);
                     break;
                 }
                 case ASTERISK_TOKTYPE:{
-                    write_chunk(MUL_OPCODE, compiler);
+                    write_chunk(OP_MUL, compiler);
                     break;
                 }
                 case SLASH_TOKTYPE:{
-                    write_chunk(DIV_OPCODE, compiler);
+                    write_chunk(OP_DIV, compiler);
                     break;
                 }
 				case MOD_TOKTYPE:{
-					write_chunk(MOD_OPCODE, compiler);
+					write_chunk(OP_MOD, compiler);
 					break;
 				}
                 default:{
@@ -1313,7 +1313,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             compile_expr(left, compiler);
             compile_expr(right, compiler);
 
-            write_chunk(MULSTR_OPCODE, compiler);
+            write_chunk(OP_MULSTR, compiler);
             write_location(operator, compiler);
 
             break;
@@ -1326,7 +1326,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             compile_expr(left, compiler);
             compile_expr(right, compiler);
 
-            write_chunk(CONCAT_OPCODE, compiler);
+            write_chunk(OP_CONCAT, compiler);
             write_location(operator, compiler);
 
             break;
@@ -1342,19 +1342,19 @@ void compile_expr(Expr *expr, Compiler *compiler){
             switch (operator->type)
             {
                 case LEFT_SHIFT_TOKTYPE:{
-                    write_chunk(LSH_OPCODE, compiler);
+                    write_chunk(OP_LSH, compiler);
                     break;
                 }case RIGHT_SHIFT_TOKTYPE:{
-                    write_chunk(RSH_OPCODE, compiler);
+                    write_chunk(OP_RSH, compiler);
                     break;
                 }case AND_BITWISE_TOKTYPE:{
-                    write_chunk(BAND_OPCODE, compiler);
+                    write_chunk(OP_BAND, compiler);
                     break;
                 }case XOR_BITWISE_TOKTYPE:{
-                    write_chunk(BXOR_OPCODE, compiler);
+                    write_chunk(OP_BXOR, compiler);
                     break;
                 }case OR_BITWISE_TOKTYPE:{
-                    write_chunk(BOR_OPCODE, compiler);
+                    write_chunk(OP_BOR, compiler);
                     break;
                 }default:{
                     assert("Illegal token type");
@@ -1375,22 +1375,22 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             switch (operator->type){
                 case LESS_TOKTYPE:{
-                    write_chunk(LT_OPCODE, compiler);
+                    write_chunk(OP_LT, compiler);
                     break;
                 }case GREATER_TOKTYPE:{
-                    write_chunk(GT_OPCODE, compiler);
+                    write_chunk(OP_GT, compiler);
                     break;
                 }case LESS_EQUALS_TOKTYPE:{
-                    write_chunk(LE_OPCODE, compiler);
+                    write_chunk(OP_LE, compiler);
                     break;
                 }case GREATER_EQUALS_TOKTYPE:{
-                    write_chunk(GE_OPCODE, compiler);
+                    write_chunk(OP_GE, compiler);
                     break;
                 }case EQUALS_EQUALS_TOKTYPE:{
-                    write_chunk(EQ_OPCODE, compiler);
+                    write_chunk(OP_EQ, compiler);
                     break;
                 }case NOT_EQUALS_TOKTYPE:{
-                    write_chunk(NE_OPCODE, compiler);
+                    write_chunk(OP_NE, compiler);
                     break;
                 }default:{
                     assert("Illegal token type");
@@ -1410,19 +1410,19 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             switch (operator->type){
                 case OR_TOKTYPE:{
-                    write_chunk(JIT_OPCODE, compiler);
+                    write_chunk(OP_JIT, compiler);
                     write_location(operator, compiler);
                     size_t jit_index = write_i16(0, compiler);
 
                     size_t len_before = chunks_len(compiler);
 
-                    write_chunk(FALSE_OPCODE, compiler);
+                    write_chunk(OP_FALSE, compiler);
                     write_location(operator, compiler);
 
                     compile_expr(right, compiler);
-                    write_chunk(OR_OPCODE, compiler);
+                    write_chunk(OP_OR, compiler);
 
-                    write_chunk(JMP_OPCODE, compiler);
+                    write_chunk(OP_JMP, compiler);
                     write_location(operator, compiler);
                     size_t jmp_index = write_i16(0, compiler);
 
@@ -1433,7 +1433,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
                     len_before = chunks_len(compiler);
 
-                    write_chunk(TRUE_OPCODE, compiler);
+                    write_chunk(OP_TRUE, compiler);
                     write_location(operator, compiler);
 
                     len_after = chunks_len(compiler);
@@ -1444,19 +1444,19 @@ void compile_expr(Expr *expr, Compiler *compiler){
                     break;
                 }
                 case AND_TOKTYPE:{
-                    write_chunk(JIF_OPCODE, compiler);
+                    write_chunk(OP_JIF, compiler);
                     write_location(operator, compiler);
                     size_t jif_index = write_i16(0, compiler);
 
                     size_t len_before = chunks_len(compiler);
 
-                    write_chunk(TRUE_OPCODE, compiler);
+                    write_chunk(OP_TRUE, compiler);
                     write_location(operator, compiler);
 
                     compile_expr(right, compiler);
-                    write_chunk(AND_OPCODE, compiler);
+                    write_chunk(OP_AND, compiler);
 
-                    write_chunk(JMP_OPCODE, compiler);
+                    write_chunk(OP_JMP, compiler);
                     write_location(operator, compiler);
                     size_t jmp_index = write_i16(0, compiler);
 
@@ -1467,7 +1467,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
                     len_before = chunks_len(compiler);
 
-                    write_chunk(FALSE_OPCODE, compiler);
+                    write_chunk(OP_FALSE, compiler);
                     write_location(operator, compiler);
 
                     len_after = chunks_len(compiler);
@@ -1511,11 +1511,11 @@ void compile_expr(Expr *expr, Compiler *compiler){
             	compile_expr(value_expr, compiler);
 
 	            if(symbol->depth == 1){
-                	write_chunk(GSET_OPCODE, compiler);
+                	write_chunk(OP_GSET, compiler);
    					write_location(equals_token, compiler);
                 	write_str_alloc(identifier->lexeme_len, identifier->lexeme, compiler);
             	}else{
-                    uint8_t opcode = is_out ? OSET_OPCODE : LSET_OPCODE;
+                    uint8_t opcode = is_out ? OP_OSET : OP_LSET;
 
                 	write_chunk(opcode, compiler);
 					write_location(equals_token, compiler);
@@ -1533,7 +1533,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 				compile_expr(value_expr, compiler);
                 compile_expr(left, compiler);
 
-				write_chunk(RSET_OPCODE, compiler);
+				write_chunk(OP_RSET, compiler);
 				write_location(equals_token, compiler);
 				write_str_alloc(symbol_token->lexeme_len, symbol_token->lexeme, compiler);
 
@@ -1549,7 +1549,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
                 compile_expr(index, compiler);
                 compile_expr(target, compiler);
 
-                write_chunk(ASET_OPCODE, compiler);
+                write_chunk(OP_ASET, compiler);
                 write_location(equals_token, compiler);
 
                 break;
@@ -1580,11 +1580,11 @@ void compile_expr(Expr *expr, Compiler *compiler){
                     }
 
                     if(symbol->depth == 1){
-                        write_chunk(GGET_OPCODE, compiler);
+                        write_chunk(OP_GGET, compiler);
                         write_location(identifier_token, compiler);
                         write_str_alloc(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
                     }else{
-                        write_chunk(LGET_OPCODE, compiler);
+                        write_chunk(OP_LGET, compiler);
                         write_location(identifier_token, compiler);
                         write_chunk(symbol->local, compiler);
                     }
@@ -1593,16 +1593,16 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
                     switch(operator->type){
                         case COMPOUND_ADD_TOKTYPE:{
-                            write_chunk(ADD_OPCODE, compiler);
+                            write_chunk(OP_ADD, compiler);
                             break;
                         }case COMPOUND_SUB_TOKTYPE:{
-                            write_chunk(SUB_OPCODE, compiler);
+                            write_chunk(OP_SUB, compiler);
                             break;
                         }case COMPOUND_MUL_TOKTYPE:{
-                            write_chunk(MUL_OPCODE, compiler);
+                            write_chunk(OP_MUL, compiler);
                             break;
                         }case COMPOUND_DIV_TOKTYPE:{
-                            write_chunk(DIV_OPCODE, compiler);
+                            write_chunk(OP_DIV, compiler);
                             break;
                         }default:{
                             assert("Illegal compound type");
@@ -1612,11 +1612,11 @@ void compile_expr(Expr *expr, Compiler *compiler){
                     write_location(operator, compiler);
 
                     if(symbol->depth == 1){
-                        write_chunk(GSET_OPCODE, compiler);
+                        write_chunk(OP_GSET, compiler);
                         write_location(identifier_token, compiler);
                         write_str_alloc(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
                     }else{
-                        write_chunk(LSET_OPCODE, compiler);
+                        write_chunk(OP_LSET, compiler);
                         write_location(identifier_token, compiler);
                         write_chunk(symbol->local, compiler);
                     }
@@ -1634,16 +1634,16 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
                     switch(operator->type){
                         case COMPOUND_ADD_TOKTYPE:{
-                            write_chunk(ADD_OPCODE, compiler);
+                            write_chunk(OP_ADD, compiler);
                             break;
                         }case COMPOUND_SUB_TOKTYPE:{
-                            write_chunk(SUB_OPCODE, compiler);
+                            write_chunk(OP_SUB, compiler);
                             break;
                         }case COMPOUND_MUL_TOKTYPE:{
-                            write_chunk(MUL_OPCODE, compiler);
+                            write_chunk(OP_MUL, compiler);
                             break;
                         }case COMPOUND_DIV_TOKTYPE:{
-                            write_chunk(DIV_OPCODE, compiler);
+                            write_chunk(OP_DIV, compiler);
                             break;
                         }default:{
                             assert("Illegal compound type");
@@ -1654,7 +1654,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
                     compile_expr(left, compiler);
 
-                    write_chunk(RSET_OPCODE, compiler);
+                    write_chunk(OP_RSET, compiler);
                     write_location(dot_token, compiler);
                     write_str_alloc(symbol_token->lexeme_len, symbol_token->lexeme, compiler);
 
@@ -1673,16 +1673,16 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
             if(len_expr){
                 compile_expr(len_expr, compiler);
-                write_chunk(ARRAY_OPCODE, compiler);
+                write_chunk(OP_ARRAY, compiler);
                 write_location(array_token, compiler);
             }else{
                 const size_t array_len = values ? DYNARR_LEN(values) : 0;
 
-                write_chunk(INT_OPCODE, compiler);
+                write_chunk(OP_INT, compiler);
                 write_location(array_token, compiler);
                 write_iconst((int64_t)array_len, compiler);
 
-                write_chunk(ARRAY_OPCODE, compiler);
+                write_chunk(OP_ARRAY, compiler);
                 write_location(array_token, compiler);
 
                 for (size_t i = 0 ; i < array_len; i++){
@@ -1690,7 +1690,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
                     compile_expr(expr, compiler);
 
-                    write_chunk(IARRAY_OPCODE, compiler);
+                    write_chunk(OP_IARRAY, compiler);
                     write_location(array_token, compiler);
                     write_i16((int16_t)i, compiler);
                 }
@@ -1702,7 +1702,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			Token *list_token = list_expr->list_token;
 			DynArr *exprs = list_expr->exprs;
 
-            write_chunk(LIST_OPCODE, compiler);
+            write_chunk(OP_LIST, compiler);
 			write_location(list_token, compiler);
 
             if(exprs){
@@ -1713,7 +1713,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
                     compile_expr(expr, compiler);
 
-                    write_chunk(ILIST_OPCODE, compiler);
+                    write_chunk(OP_ILIST, compiler);
                     write_location(list_token, compiler);
 				}
 			}
@@ -1723,7 +1723,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
             DictExpr *dict_expr = (DictExpr *)expr->sub_expr;
             DynArr *key_values = dict_expr->key_values;
 
-            write_chunk(DICT_OPCODE, compiler);
+            write_chunk(OP_DICT, compiler);
 			write_location(dict_expr->dict_token, compiler);
 
             if(key_values){
@@ -1737,7 +1737,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
                     compile_expr(key, compiler);
                     compile_expr(value, compiler);
 
-                    write_chunk(IDICT_OPCODE, compiler);
+                    write_chunk(OP_IDICT, compiler);
 			        write_location(dict_expr->dict_token, compiler);
                 }
             }
@@ -1749,7 +1749,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 			DynArr *key_values = record_expr->key_values;
             size_t key_values_len = key_values ? DYNARR_LEN(key_values) : 0;
 
-            write_chunk(RECORD_OPCODE, compiler);
+            write_chunk(OP_RECORD, compiler);
 			write_location(record_token, compiler);
             write_i16((int16_t)key_values_len, compiler);
 
@@ -1760,7 +1760,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
                 compile_expr(value, compiler);
 
-                write_chunk(IRECORD_OPCODE, compiler);
+                write_chunk(OP_IRECORD, compiler);
                 write_location(record_token, compiler);
                 write_str_alloc(key->lexeme_len, key->lexeme, compiler);
             }
@@ -1774,7 +1774,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
 			compile_expr(left_expr, compiler);
 
-			write_chunk(IS_OPCODE, compiler);
+			write_chunk(OP_IS, compiler);
 			write_location(is_token, compiler);
 
 			switch(type_token->type){
@@ -1823,7 +1823,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
 		     compile_expr(condition, compiler);
 
-		     write_chunk(JIF_OPCODE, compiler);
+		     write_chunk(OP_JIF, compiler);
 		     write_location(mark_token, compiler);
 
              size_t jif_index = write_i16(0, compiler);
@@ -1831,7 +1831,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
              size_t left_before = chunks_len(compiler);
 		     compile_expr(left, compiler);
 
-             write_chunk(JMP_OPCODE, compiler);
+             write_chunk(OP_JMP, compiler);
              write_location(mark_token, compiler);
 
              size_t jmp_index = write_i16(0, compiler);
@@ -1883,7 +1883,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             Expr *expr = expr_stmt->expr;
 
             compile_expr(expr, compiler);
-            write_chunk(POP_OPCODE, compiler);
+            write_chunk(OP_POP, compiler);
 
             break;
         }case VAR_DECL_STMTTYPE:{
@@ -1898,7 +1898,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             }
 
             if(initializer_expr == NULL){
-                write_chunk(EMPTY_OPCODE, compiler);
+                write_chunk(OP_EMPTY, compiler);
             }else{
                 compile_expr(initializer_expr, compiler);
             }
@@ -1906,7 +1906,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             Symbol *symbol = declare(is_const ? IMUT_SYMTYPE : MUT_SYMTYPE, identifier_token, compiler);
 
             if(symbol->depth == 1){
-                write_chunk(GDEF_OPCODE, compiler);
+                write_chunk(OP_GDEF, compiler);
 				write_location(identifier_token, compiler);
                 write_str_alloc(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
             }
@@ -2040,15 +2040,15 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 Symbol *right_symbol = declare_unknown(symbol_token, IMUT_SYMTYPE, compiler);
 
                 label(compiler, "FOR_RANGE_START_%d", for_id);
-                write_chunk(LGET_OPCODE, compiler);
+                write_chunk(OP_LGET, compiler);
                 write_location(symbol_token, compiler);
                 write_chunk(symbol->local, compiler);
 
-                write_chunk(LGET_OPCODE, compiler);
+                write_chunk(OP_LGET, compiler);
                 write_location(for_token, compiler);
                 write_chunk(right_symbol->local, compiler);
 
-                write_chunk(GE_OPCODE, compiler);
+                write_chunk(OP_GE, compiler);
                 write_location(for_token, compiler);
 
                 jit(compiler, for_token, "FOR_RANGE_END_%d", for_id);
@@ -2066,22 +2066,22 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 scope_out(compiler);
 
                 label(compiler, "FOR_RANGE_CONDITION_%d", for_id);
-                write_chunk(LGET_OPCODE, compiler);
+                write_chunk(OP_LGET, compiler);
                 write_location(symbol_token, compiler);
                 write_chunk(symbol->local, compiler);
 
-                write_chunk(CINT_OPCODE, compiler);
+                write_chunk(OP_CINT, compiler);
                 write_location(for_token, compiler);
                 write_chunk(1, compiler);
 
-                write_chunk(ADD_OPCODE, compiler);
+                write_chunk(OP_ADD, compiler);
                 write_location(for_token, compiler);
 
-                write_chunk(LSET_OPCODE, compiler);
+                write_chunk(OP_LSET, compiler);
                 write_location(symbol_token, compiler);
                 write_chunk(symbol->local, compiler);
 
-                write_chunk(POP_OPCODE, compiler);
+                write_chunk(OP_POP, compiler);
                 write_location(for_token, compiler);
 
                 jmp(compiler, for_token, "FOR_RANGE_START_%d", for_id);
@@ -2099,13 +2099,13 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 jmp(compiler, for_token, "FOR_RANGE_CONDITION_%d", for_id);
 
                 label(compiler, "FOR_RANGE_START_%d", for_id);
-                write_chunk(LGET_OPCODE, compiler);
+                write_chunk(OP_LGET, compiler);
                 write_chunk(symbol->local, compiler);
 
-                write_chunk(LGET_OPCODE, compiler);
+                write_chunk(OP_LGET, compiler);
                 write_chunk(left_symbol->local, compiler);
 
-                write_chunk(GE_OPCODE, compiler);
+                write_chunk(OP_GE, compiler);
 
                 jif(compiler, for_token, "FOR_RANGE_END_%d", for_id);
 
@@ -2122,22 +2122,22 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 scope_out(compiler);
 
                 label(compiler, "FOR_RANGE_CONDITION_%d", for_id);
-                write_chunk(LGET_OPCODE, compiler);
+                write_chunk(OP_LGET, compiler);
                 write_location(symbol_token, compiler);
                 write_chunk(symbol->local, compiler);
 
-                write_chunk(CINT_OPCODE, compiler);
+                write_chunk(OP_CINT, compiler);
                 write_location(for_token, compiler);
                 write_chunk(1, compiler);
 
-                write_chunk(SUB_OPCODE, compiler);
+                write_chunk(OP_SUB, compiler);
                 write_location(for_token, compiler);
 
-                write_chunk(LSET_OPCODE, compiler);
+                write_chunk(OP_LSET, compiler);
                 write_location(symbol_token, compiler);
                 write_chunk(symbol->local, compiler);
 
-                write_chunk(POP_OPCODE, compiler);
+                write_chunk(OP_POP, compiler);
                 write_location(for_token, compiler);
 
                 jmp(compiler, for_token, "FOR_RANGE_START_%d", for_id);
@@ -2202,11 +2202,11 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             if(value) compile_expr(value, compiler);
             else {
-                write_chunk(EMPTY_OPCODE, compiler);
+                write_chunk(OP_EMPTY, compiler);
                 write_location(return_token, compiler);
             }
 
-            write_chunk(RET_OPCODE, compiler);
+            write_chunk(OP_RET, compiler);
             write_location(return_token, compiler);
 
             break;
@@ -2253,10 +2253,10 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 }
 
                 if(return_empty){
-                    write_chunk(EMPTY_OPCODE, compiler);
+                    write_chunk(OP_EMPTY, compiler);
                     write_location(identifier_token, compiler);
 
-                    write_chunk(RET_OPCODE, compiler);
+                    write_chunk(OP_RET, compiler);
                     write_location(identifier_token, compiler);
                 }
             }
@@ -2283,12 +2283,12 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             if(!is_normal){to_local(fn_symbol, compiler);}
 
-            write_chunk(SGET_OPCODE, compiler);
+            write_chunk(OP_SGET, compiler);
             write_location(identifier_token, compiler);
             write_i32(symbol_index, compiler);
 
             if(is_normal){
-                write_chunk(GDEF_OPCODE, compiler);
+                write_chunk(OP_GDEF, compiler);
                 write_location(identifier_token, compiler);
                 write_str_alloc(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
             }
@@ -2449,7 +2449,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 compile_expr(value, compiler);
             }
 
-            write_chunk(THROW_OPCODE, compiler);
+            write_chunk(OP_THROW, compiler);
             write_location(throw_token, compiler);
             write_chunk(value ? 1 : 0, compiler);
 
@@ -2464,7 +2464,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
 
             Token *try_token = try_stmt->try_token;
 
-            write_chunk(TRYO_OPCODE, compiler);
+            write_chunk(OP_TRYO, compiler);
             write_location(try_token, compiler);
             size_t catch_ip_idx = write_i16(0, compiler);
 
@@ -2479,7 +2479,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 scope_out(compiler);
             }
 
-            write_chunk(TRYC_OPCODE, compiler);
+            write_chunk(OP_TRYC, compiler);
             write_location(try_token, compiler);
 
 			if(catch_stmts){
@@ -2494,11 +2494,11 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
                 if(err_identifier){
                     Symbol *symbol = declare(IMUT_SYMTYPE, err_identifier, compiler);
 
-                    write_chunk(LSET_OPCODE, compiler);
+                    write_chunk(OP_LSET, compiler);
                     write_chunk(symbol->local, compiler);
                     write_location(err_identifier, compiler);
                 }else{
-                    write_chunk(POP_OPCODE, compiler);
+                    write_chunk(OP_POP, compiler);
                     write_location(try_token, compiler);
                 }
 
@@ -2519,7 +2519,7 @@ void compile_stmt(Stmt *stmt, Compiler *compiler){
             for (size_t i = 0; i < DYNARR_LEN(symbols); i++){
                 Token *symbol_identifier = dynarr_get_ptr(i, symbols);
 
-                write_chunk(GASET_OPCODE, compiler);
+                write_chunk(OP_GASET, compiler);
                 write_location(symbol_identifier, compiler);
                 write_str_alloc(symbol_identifier->lexeme_len, symbol_identifier->lexeme, compiler);
                 write_chunk(1, compiler);
@@ -2663,8 +2663,8 @@ int compiler_compile(
             compile_stmt(stmt, compiler);
         }
 
-        write_chunk(EMPTY_OPCODE, compiler);
-        write_chunk(RET_OPCODE, compiler);
+        write_chunk(OP_EMPTY, compiler);
+        write_chunk(OP_RET, compiler);
 
         set_fn(symbol_index, fn, compiler);
         scope_out_fn(compiler);
@@ -2711,8 +2711,8 @@ int compiler_import(
             compile_stmt(stmt, compiler);
         }
 
-        write_chunk(EMPTY_OPCODE, compiler);
-        write_chunk(RET_OPCODE, compiler);
+        write_chunk(OP_EMPTY, compiler);
+        write_chunk(OP_RET, compiler);
 
         set_fn(symbol_index, fn, compiler);
 		scope_out(compiler);

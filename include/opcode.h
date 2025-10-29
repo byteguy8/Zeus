@@ -3,86 +3,86 @@
 
 typedef enum opcode{
     // PRIMITIVES
-    EMPTY_OPCODE,    // push NULL value equivalent
-    FALSE_OPCODE,    // push FALSE value
-    TRUE_OPCODE,     // push TRUE value
-    CINT_OPCODE,     // push integer of 1 byte
-    INT_OPCODE,      // push integer of 8 bytes
-    FLOAT_OPCODE,    // push float
-    STRING_OPCODE,   // push string
-    STTE_OPCODE, // construct template and push it
-    ETTE_OPCODE,
-    ARRAY_OPCODE,
-	LIST_OPCODE,
-    DICT_OPCODE,
-	RECORD_OPCODE,
+    OP_EMPTY,    // push NULL value equivalent
+    OP_FALSE,    // push FALSE value
+    OP_TRUE,     // push TRUE value
+    OP_CINT,     // push integer of 1 byte
+    OP_INT,      // push integer of 8 bytes
+    OP_FLOAT,    // push float
+    OP_STRING,   // push string
+    OP_STTE,     // start constructing template
+    OP_ETTE,     // end constructing template and push it
+    OP_ARRAY,
+	OP_LIST,
+    OP_DICT,
+	OP_RECORD,
 
-    WTTE_OPCODE,
-    IARRAY_OPCODE,
-    ILIST_OPCODE,
-    IDICT_OPCODE,
-    IRECORD_OPCODE,
+    OP_WTTE,
+    OP_IARRAY,
+    OP_ILIST,
+    OP_IDICT,
+    OP_IRECORD,
 
-    CONCAT_OPCODE,
-    MULSTR_OPCODE,
+    OP_CONCAT,
+    OP_MULSTR,
 
     // ARITHMETIC
-    ADD_OPCODE, // add two integers or floats and push the result
-    SUB_OPCODE, // subtract two integers or floats and push the result
-    MUL_OPCODE, // muliply two integers or floats and push the result
-    DIV_OPCODE, // divide two integers or floats and push the result
-	MOD_OPCODE, // calculate module from two integers and push the result
+    OP_ADD,    // add two integers or floats and push the result
+    OP_SUB,    // subtract two integers or floats and push the result
+    OP_MUL,    // muliply two integers or floats and push the result
+    OP_DIV,    // divide two integers or floats and push the result
+	OP_MOD,    // calculate module from two integers and push the result
 
     // BITWISE
-    BNOT_OPCODE, // not bitwise
-    LSH_OPCODE,  // left shift
-    RSH_OPCODE,  // right shift
-    BAND_OPCODE, // and bitwise
-    BXOR_OPCODE, // xor bitwise
-    BOR_OPCODE,  // or bitwise
+    OP_BNOT,    // not bitwise
+    OP_LSH,     // left shift
+    OP_RSH,     // right shift
+    OP_BAND,    // and bitwise
+    OP_BXOR,    // xor bitwise
+    OP_BOR,     // or bitwise
 
     // COMPARISON
-    LT_OPCODE, // less
-    GT_OPCODE, // greater
-    LE_OPCODE, // less equals
-    GE_OPCODE, // greater equals
-    EQ_OPCODE, // equals
-    NE_OPCODE, // not equals
+    OP_LT,    // less
+    OP_GT,    // greater
+    OP_LE,    // less equals
+    OP_GE,    // greater equals
+    OP_EQ,    // equals
+    OP_NE,    // not equals
 
     // LOGICAL
-    OR_OPCODE,
-    AND_OPCODE,
-    NOT_OPCODE,
-    NNOT_OPCODE,
+    OP_OR,
+    OP_AND,
+    OP_NOT,
+    OP_NNOT,
 
-    LSET_OPCODE,  // set local symbol
-    LGET_OPCODE,  // get local symbol
-    OSET_OPCODE,  // set out value symbol (for closures)
-    OGET_OPCODE,  // get out value symbol (for closures)
-    GDEF_OPCODE,  // define a global symbol
-    GASET_OPCODE, // set global symbol access
-    GSET_OPCODE,  // get global symbol
-    GGET_OPCODE,  // set global symbol
-    NGET_OPCODE,  // get native symbol
-    SGET_OPCODE,  // get symbol from list of symbols
-	ASET_OPCODE,  // set a value inside array
-    RSET_OPCODE,   // set a value inside record
+    OP_LSET,    // set local symbol
+    OP_LGET,    // get local symbol
+    OP_OSET,    // set out value symbol (for closures)
+    OP_OGET,    // get out value symbol (for closures)
+    OP_GDEF,    // define a global symbol
+    OP_GASET,   // set global symbol access
+    OP_GSET,    // get global symbol
+    OP_GGET,    // set global symbol
+    OP_NGET,    // get native symbol
+    OP_SGET,    // get symbol from list of symbols
+	OP_ASET,    // set a value inside array
+    OP_RSET,    // set a value inside record
 
-    POP_OPCODE,
+    OP_POP,
 
-    JMP_OPCODE,
-	JIF_OPCODE,
-	JIT_OPCODE,
+    OP_JMP,
+	OP_JIF,
+	OP_JIT,
 
-    CALL_OPCODE,
-    ACCESS_OPCODE,
-    INDEX_OPCODE,
-    RET_OPCODE,
-	IS_OPCODE,
-    TRYO_OPCODE,
-    TRYC_OPCODE,
-    THROW_OPCODE,
-    HLT_OPCODE,
+    OP_CALL,
+    OP_ACCESS,
+    OP_INDEX,
+    OP_RET,
+	OP_IS,
+    OP_TRYO,
+    OP_TRYC,
+    OP_THROW,
+    OP_HLT,
 }OPCode;
 
 #endif

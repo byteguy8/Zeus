@@ -445,28 +445,28 @@ static int execute(VM *vm){
         uint8_t chunk = advance_save(vm);
 
         switch (chunk){
-            case EMPTY_OPCODE:{
+            case OP_EMPTY:{
                 PUSH_EMPTY(vm);
                 break;
-            }case FALSE_OPCODE:{
+            }case OP_FALSE:{
                 PUSH_BOOL(0, vm);
                 break;
-            }case TRUE_OPCODE:{
+            }case OP_TRUE:{
                 PUSH_BOOL(1, vm);
                 break;
-            }case CINT_OPCODE:{
+            }case OP_CINT:{
                 int64_t i64 = (int64_t)advance(vm);
                 PUSH_INT(i64, vm);
                 break;
-            }case INT_OPCODE:{
+            }case OP_INT:{
                 int64_t i64 = read_i64_const(vm);
                 PUSH_INT(i64, vm);
                 break;
-            }case FLOAT_OPCODE:{
+            }case OP_FLOAT:{
                 double value = read_float_const(vm);
                 PUSH_FLOAT(value, vm);
                 break;
-            }case STRING_OPCODE:{
+            }case OP_STRING:{
                 size_t len;
                 StrObj *str_obj = NULL;
                 char *str = read_str(vm, &len);
@@ -475,7 +475,7 @@ static int execute(VM *vm){
                 PUSH_OBJ(str_obj, vm);
 
                 break;
-            }case STTE_OPCODE:{
+            }case OP_STTE:{
                 LZBStr *str = FACTORY_LZBSTR(vm->allocator);
                 Template *template = MEMORY_ALLOC(vm->allocator, Template, 1);
 
@@ -484,7 +484,7 @@ static int execute(VM *vm){
                 vm->templates = template;
 
                 break;
-            }case ETTE_OPCODE:{
+            }case OP_ETTE:{
                 Template *template = vm->templates;
 
                 if(template){
@@ -514,7 +514,7 @@ static int execute(VM *vm){
                 vmu_internal_error(vm, "Template stack is empty");
 
                 break;
-            }case ARRAY_OPCODE:{
+            }case OP_ARRAY:{
                 Value len_value = pop(vm);
 
                 if(!IS_VALUE_INT(len_value)){
@@ -527,20 +527,20 @@ static int execute(VM *vm){
                 PUSH_OBJ(array_obj, vm);
 
                 break;
-            }case LIST_OPCODE:{
+            }case OP_LIST:{
                 ListObj *list_obj = vmu_create_list(vm);
                 PUSH_OBJ(list_obj, vm);
                 break;
-            }case DICT_OPCODE:{
+            }case OP_DICT:{
                 DictObj *dict_obj = vmu_create_dict(vm);
                 PUSH_OBJ(dict_obj, vm);
                 break;
-            }case RECORD_OPCODE:{
+            }case OP_RECORD:{
                 uint16_t len = (uint16_t)read_i16(vm);
                 RecordObj *record_obj = vmu_create_record(len, vm);
                 PUSH_OBJ(record_obj, vm);
                 break;
-            }case WTTE_OPCODE:{
+            }case OP_WTTE:{
                 Template *template = vm->templates;
                 Value raw_value = pop(vm);
 
@@ -553,7 +553,7 @@ static int execute(VM *vm){
                 vmu_internal_error(vm, "Template stack is empty");
 
                 break;
-            }case IARRAY_OPCODE:{
+            }case OP_IARRAY:{
                 int64_t idx = (int64_t)read_i16(vm);
                 Value value = pop(vm);
                 Value array_value = peek(vm);
@@ -562,7 +562,7 @@ static int execute(VM *vm){
                 vmu_array_set_at(idx, value, array_obj, vm);
 
                 break;
-            }case ILIST_OPCODE:{
+            }case OP_ILIST:{
                 Value value = peek_at(0, vm);
                 Value list_value = peek_at(1, vm);
 
@@ -574,7 +574,7 @@ static int execute(VM *vm){
                 pop(vm);
 
                 break;
-            }case IDICT_OPCODE:{
+            }case OP_IDICT:{
                 Value raw_value = peek_at(0, vm);
                 Value key_value = peek_at(1, vm);
                 Value dict_value = peek_at(2, vm);
@@ -588,7 +588,7 @@ static int execute(VM *vm){
                 pop(vm);
 
                 break;
-            }case IRECORD_OPCODE:{
+            }case OP_IRECORD:{
                 size_t key_size;
                 char *key = read_str(vm, &key_size);
                 Value raw_value = peek_at(0, vm);
@@ -602,7 +602,7 @@ static int execute(VM *vm){
                 pop(vm);
 
                 break;
-            }case CONCAT_OPCODE:{
+            }case OP_CONCAT:{
                 Value right_value = peek_at(0, vm);
                 Value left_value = peek_at(1, vm);
 
@@ -687,7 +687,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Illegal operands for concatenation");
 
                 break;
-            }case MULSTR_OPCODE:{
+            }case OP_MULSTR:{
                 Value right_value = peek_at(0, vm);
                 Value left_value = peek_at(1, vm);
 
@@ -718,7 +718,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Illegal operands for string multiplication");
 
                 break;
-            }case ADD_OPCODE:{
+            }case OP_ADD:{
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
@@ -762,7 +762,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsuported types using + operator");
 
                 break;
-            }case SUB_OPCODE:{
+            }case OP_SUB:{
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
@@ -806,7 +806,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsuported types using - operator");
 
                 break;
-            }case MUL_OPCODE:{
+            }case OP_MUL:{
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
@@ -850,7 +850,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsuported types using * operator");
 
                 break;
-            }case DIV_OPCODE:{
+            }case OP_DIV:{
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
@@ -902,7 +902,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsuported types using / operator");
 
                 break;
-            }case MOD_OPCODE:{
+            }case OP_MOD:{
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
@@ -918,7 +918,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsuported types using 'mod' operator");
 
                 break;
-            }case BNOT_OPCODE:{
+            }case OP_BNOT:{
                 Value value = pop(vm);
 
                 if(IS_VALUE_INT(value)){
@@ -929,7 +929,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsuported types using '~' operator");
 
                 break;
-            }case LSH_OPCODE:{
+            }case OP_LSH:{
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
@@ -945,7 +945,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsuported types using '<<' operator");
 
                 break;
-            }case RSH_OPCODE:{
+            }case OP_RSH:{
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
@@ -961,7 +961,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsuported types using '>>' operator");
 
                 break;
-            }case BAND_OPCODE:{
+            }case OP_BAND:{
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
@@ -977,7 +977,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsuported types using '&' operator");
 
                 break;
-            }case BXOR_OPCODE:{
+            }case OP_BXOR:{
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
@@ -993,7 +993,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsuported types using '^' operator");
 
                 break;
-            }case BOR_OPCODE:{
+            }case OP_BOR:{
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
@@ -1009,7 +1009,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsuported types using '|' operator");
 
                 break;
-            }case LT_OPCODE:{
+            }case OP_LT:{
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
@@ -1053,7 +1053,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsuported types using < operator");
 
                 break;
-            }case GT_OPCODE:{
+            }case OP_GT:{
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
@@ -1097,7 +1097,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsuported types using > operator");
 
                 break;
-            }case LE_OPCODE:{
+            }case OP_LE:{
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
@@ -1141,7 +1141,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsuported types using <= operator");
 
                 break;
-            }case GE_OPCODE:{
+            }case OP_GE:{
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
@@ -1185,7 +1185,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsuported types using >= operator");
 
                 break;
-            }case EQ_OPCODE:{
+            }case OP_EQ:{
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
@@ -1247,7 +1247,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsuported types using == operator");
 
                 break;
-            }case NE_OPCODE:{
+            }case OP_NE:{
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
@@ -1309,7 +1309,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsuported types using != operator");
 
                 break;
-            }case OR_OPCODE:{
+            }case OP_OR:{
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
@@ -1325,7 +1325,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsupported types using 'or' operator");
 
                 break;
-            }case AND_OPCODE:{
+            }case OP_AND:{
                 Value right_value = pop(vm);
                 Value left_value = pop(vm);
 
@@ -1341,7 +1341,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Unsupported types using 'and' operator");
 
                 break;
-            }case NOT_OPCODE:{
+            }case OP_NOT:{
                 Value value = pop(vm);
 
                 if(!IS_VALUE_BOOL(value)){
@@ -1351,7 +1351,7 @@ static int execute(VM *vm){
                 PUSH_BOOL(!VALUE_TO_BOOL(value), vm);
 
                 break;
-            }case NNOT_OPCODE:{
+            }case OP_NNOT:{
                 Value value = pop(vm);
 
                 if(IS_VALUE_INT(value)){
@@ -1367,21 +1367,21 @@ static int execute(VM *vm){
                 vmu_error(vm, "Expect integer or float at right side");
 
                 break;
-            }case LSET_OPCODE:{
+            }case OP_LSET:{
                 Value value = peek(vm);
                 uint8_t index = advance(vm);
 
                 *frame_local(index, vm) = value;
 
                 break;
-            }case LGET_OPCODE:{
+            }case OP_LGET:{
                 uint8_t index = advance(vm);
                 Value value = *frame_local(index, vm);
 
                 push(value, vm);
 
                 break;
-            }case OSET_OPCODE:{
+            }case OP_OSET:{
                 uint8_t index = advance(vm);
                 Value value = peek(vm);
                 Closure *closure = VM_CURRENT_CLOSURE(vm);
@@ -1401,7 +1401,7 @@ static int execute(VM *vm){
                 pop(vm);
 
                 break;
-            }case OGET_OPCODE:{
+            }case OP_OGET:{
                 uint8_t index = advance(vm);
                 Closure *closure = VM_CURRENT_CLOSURE(vm);
                 OutValue *out_values = closure->out_values;
@@ -1418,7 +1418,7 @@ static int execute(VM *vm){
                 }
 
                 break;
-            }case GDEF_OPCODE:{
+            }case OP_GDEF:{
                 size_t key_size;
                 char *key = read_str(vm, &key_size);
                 Value value = pop(vm);
@@ -1436,7 +1436,7 @@ static int execute(VM *vm){
                 lzohtable_put_ckv(key_size, key, sizeof(GlobalValue), &global_value, globals, NULL);
 
                 break;
-            }case GASET_OPCODE:{
+            }case OP_GASET:{
                 Module *module = VM_CURRENT_MODULE(vm);
                 LZOHTable *globals = MODULE_GLOBALS(module);
 
@@ -1466,7 +1466,7 @@ static int execute(VM *vm){
                 }
 
                 break;
-            }case GSET_OPCODE:{
+            }case OP_GSET:{
                 size_t key_size;
                 char *key = read_str(vm, &key_size);
                 Value value = peek(vm);
@@ -1481,7 +1481,7 @@ static int execute(VM *vm){
                 vmu_error(vm, "Global '%s' does not exists", key);
 
                 break;
-            }case GGET_OPCODE:{
+            }case OP_GGET:{
                 size_t key_size;
                 char *key = read_str(vm, &key_size);
                 GlobalValue *global_value = NULL;
@@ -1494,7 +1494,7 @@ static int execute(VM *vm){
                 push(global_value->value, vm);
 
                 break;
-            }case NGET_OPCODE:{
+            }case OP_NGET:{
                 size_t key_size;
                 char *key = read_str(vm, &key_size);
                 NativeFn *native_fn = NULL;
@@ -1508,7 +1508,7 @@ static int execute(VM *vm){
                 vmu_internal_error(vm, "Unknown native symbol '%s'", key);
 
                 break;
-            }case SGET_OPCODE:{
+            }case OP_SGET:{
                 size_t index = (size_t)read_i32(vm);
                 Module *module = VM_CURRENT_MODULE(vm);
                 DynArr *symbols = MODULE_SYMBOLS(module);
@@ -1563,7 +1563,7 @@ static int execute(VM *vm){
                 }
 
                 break;
-            }case ASET_OPCODE:{
+            }case OP_ASET:{
                 Value indexable_value = peek_at(0, vm);
                 Value idx_value = peek_at(1, vm);
                 Value value = peek_at(2, vm);
@@ -1641,7 +1641,7 @@ static int execute(VM *vm){
                 pop(vm);
 
                 break;
-            }case RSET_OPCODE:{
+            }case OP_RSET:{
                 size_t key_size;
                 char *key = read_str(vm, &key_size);
                 Value target_value = pop(vm);
@@ -1656,10 +1656,10 @@ static int execute(VM *vm){
                 vmu_record_set_attr(key_size, key, raw_value, record_obj, vm);
 
                 break;
-            }case POP_OPCODE:{
+            }case OP_POP:{
                 pop(vm);
                 break;
-            }case JMP_OPCODE:{
+            }case OP_JMP:{
                 int16_t jmp_value = read_i16(vm);
 
                 if(jmp_value == 0){
@@ -1673,7 +1673,7 @@ static int execute(VM *vm){
                 }
 
                 break;
-            }case JIF_OPCODE:{
+            }case OP_JIF:{
                 Value value = pop(vm);
 
                 if(!IS_VALUE_BOOL(value)){
@@ -1694,7 +1694,7 @@ static int execute(VM *vm){
                 }
 
                 break;
-            }case JIT_OPCODE:{
+            }case OP_JIT:{
                 Value value = pop(vm);
 
                 if(!IS_VALUE_BOOL(value)){
@@ -1715,7 +1715,7 @@ static int execute(VM *vm){
                 }
 
                 break;
-            }case CALL_OPCODE:{
+            }case OP_CALL:{
                 uint8_t args_count = advance(vm);
                 Value callable_value = peek_at(args_count, vm);
 
@@ -1782,7 +1782,7 @@ static int execute(VM *vm){
                 }
 
                 break;
-            }case ACCESS_OPCODE:{
+            }case OP_ACCESS:{
                 Value target_value = peek(vm);
 
                 if(!IS_VALUE_OBJ(target_value)){
@@ -1898,7 +1898,7 @@ static int execute(VM *vm){
                 }
 
                 break;
-            }case INDEX_OPCODE:{
+            }case OP_INDEX:{
                 Value target_value = peek_at(0, vm);
                 Value idx_value = peek_at(1, vm);
                 Value out_value = {0};
@@ -1984,7 +1984,7 @@ static int execute(VM *vm){
                 push(out_value, vm);
 
                 break;
-            }case RET_OPCODE:{
+            }case OP_RET:{
                 OutValue *current_out = NULL;
                 OutValue *next_out = NULL;
 
@@ -2023,7 +2023,7 @@ static int execute(VM *vm){
                 push(result_value, vm);
 
                 break;
-            }case IS_OPCODE:{
+            }case OP_IS:{
                 Value value = pop(vm);
                 uint8_t type = advance(vm);
 
@@ -2078,7 +2078,7 @@ static int execute(VM *vm){
                 }
 
                 break;
-            }case TRYO_OPCODE:{
+            }case OP_TRYO:{
                 size_t catch_ip = (size_t)read_i16(vm);
                 Exception *ex = MEMORY_ALLOC(vm->allocator, Exception, 1);
 
@@ -2089,7 +2089,7 @@ static int execute(VM *vm){
                 vm->exception_stack = ex;
 
                 break;
-            }case TRYC_OPCODE:{
+            }case OP_TRYC:{
                 Exception *ex = vm->exception_stack;
 
                 if(ex){
@@ -2101,7 +2101,7 @@ static int execute(VM *vm){
                 vmu_internal_error(vm, "Exception stack is empty");
 
                 break;
-            }case THROW_OPCODE:{
+            }case OP_THROW:{
                 uint8_t has_value = advance(vm);
                 Value raw_value = {0};
                 StrObj *throw_msg = NULL;
@@ -2145,7 +2145,7 @@ static int execute(VM *vm){
                 vmu_error(vm, raw_throw_msg);
 
                 break;
-            }case HLT_OPCODE:{
+            }case OP_HLT:{
                 return 0;
             }default:{
                 assert("Illegal opcode");
