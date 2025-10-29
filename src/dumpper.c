@@ -319,12 +319,22 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 
             break;
 		}case OP_OR:{
+            int16_t value = read_i16(dumpper);
+            size_t to = dumpper->ip + value;
             size_t end = dumpper->ip;
-			printf("%8.8s %.7zu\n", "OR", end - start);
+
+			printf("%8.8s %.7zu", "OR", end - start);
+            printf(" | value: %d to: %zu\n", value, to);
+
            	break;
         }case OP_AND:{
+            int16_t value = read_i16(dumpper);
+            size_t to = dumpper->ip + value;
             size_t end = dumpper->ip;
-			printf("%8.8s %.7zu\n", "AND", end - start);
+
+			printf("%8.8s %.7zu", "AND", end - start);
+            printf(" | value: %d to: %zu\n", value, to);
+
             break;
         }case OP_NNOT:{
             size_t end = dumpper->ip;
@@ -340,12 +350,8 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             break;
         }case OP_JMP:{
 			int16_t value = read_i16(dumpper);
-			size_t to = dumpper->ip;
+			size_t to = dumpper->ip + value;
             size_t end = dumpper->ip;
-
-			if(value == 0) to -= 3;
-			else if(value > 0) to += value - 1;
-			else to += value - 3;
 
 			printf("%8.8s %.7zu", "JMP", end - start);
             printf(" | value: %d to: %zu\n", value, to);
@@ -353,12 +359,8 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
             break;
         }case OP_JIF:{
 			int16_t value = read_i16(dumpper);
-			size_t to = dumpper->ip;
+			size_t to = dumpper->ip + value;
             size_t end = dumpper->ip;
-
-			if(value == 0) to -= 3;
-			else if(value > 0) to += value - 1;
-			else to += value - 3;
 
 			printf("%8.8s %.7zu", "JIF", end - start);
             printf(" | value: %d to: %zu\n", value, to);
@@ -366,12 +368,8 @@ static void execute(uint8_t chunk, Dumpper *dumpper){
 			break;
 		}case OP_JIT:{
             int16_t value = read_i16(dumpper);
-			size_t to = dumpper->ip;
+			size_t to = dumpper->ip + value;
             size_t end = dumpper->ip;
-
-			if(value == 0) to -= 3;
-			else if(value > 0) to += value - 1;
-			else to += value - 3;
 
 			printf("%8.8s %.7zu", "JIT", end - start);
             printf(" | value: %d to: %zu\n", value, to);

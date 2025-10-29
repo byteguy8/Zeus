@@ -50,6 +50,8 @@ void insert_jmp(Scope *scope, JMP *jmp);
 void remove_jmp(JMP *jmp);
 JMP *jif(Compiler *compiler, Token *ref_token, char *fmt, ...);
 JMP *jmp(Compiler *compiler, Token *ref_token, char *fmt, ...);
+JMP *or(Compiler *compiler, Token *ref_token, char *fmt, ...);
+JMP *and(Compiler *compiler, Token *ref_token, char *fmt, ...);
 void resolve_jmps(Scope *current, Compiler *compiler);
 //--------------------------------  SYMBOL  --------------------------------//
 int resolve_symbol(Token *identifier, Symbol *symbol, Compiler *compiler);
@@ -368,13 +370,10 @@ void remove_jmp(JMP *jmp){
 }
 
 JMP *jif(Compiler *compiler, Token *ref_token, char *fmt, ...){
-    size_t bef = chunks_len(compiler);
-
     write_chunk(OP_JIF, compiler);
     write_location(ref_token, compiler);
-
-    size_t idx = write_i16(0, compiler);
-    size_t af = chunks_len(compiler);
+    size_t update_offset = write_i16(0, compiler);
+    size_t jump_offset = chunks_len(compiler);
 
     va_list args;
     va_start(args, fmt);
@@ -390,9 +389,8 @@ JMP *jif(Compiler *compiler, Token *ref_token, char *fmt, ...){
 
     JMP *jmp = (JMP *)MEMORY_ALLOC(allocator, JMP, 1);
 
-    jmp->bef = bef;
-    jmp->af = af;
-    jmp->idx = idx;
+    jmp->jmp_offset = jump_offset;
+    jmp->update_offset = update_offset;
     jmp->label = label;
     jmp->prev = NULL;
     jmp->next = NULL;
@@ -403,13 +401,10 @@ JMP *jif(Compiler *compiler, Token *ref_token, char *fmt, ...){
 }
 
 JMP *jit(Compiler *compiler, Token *ref_token, char *fmt, ...){
-    size_t bef = chunks_len(compiler);
-
     write_chunk(OP_JIT, compiler);
     write_location(ref_token, compiler);
-
-    size_t idx = write_i16(0, compiler);
-    size_t af = chunks_len(compiler);
+    size_t update_offset = write_i16(0, compiler);
+    size_t jmp_offset = chunks_len(compiler);
 
     va_list args;
     va_start(args, fmt);
@@ -425,9 +420,8 @@ JMP *jit(Compiler *compiler, Token *ref_token, char *fmt, ...){
 
     JMP *jmp = (JMP *)MEMORY_ALLOC(allocator, JMP, 1);
 
-    jmp->bef = bef;
-    jmp->af = af;
-    jmp->idx = idx;
+    jmp->jmp_offset = jmp_offset;
+    jmp->update_offset = update_offset;
     jmp->label = label;
     jmp->prev = NULL;
     jmp->next = NULL;
@@ -438,13 +432,10 @@ JMP *jit(Compiler *compiler, Token *ref_token, char *fmt, ...){
 }
 
 JMP *jmp(Compiler *compiler, Token *ref_token, char *fmt, ...){
-    size_t bef = chunks_len(compiler);
-
     write_chunk(OP_JMP, compiler);
     write_location(ref_token, compiler);
-
-    size_t idx = write_i16(0, compiler);
-    size_t af = chunks_len(compiler);
+    size_t update_offset = write_i16(0, compiler);
+    size_t jmp_offset = chunks_len(compiler);
 
     va_list args;
     va_start(args, fmt);
@@ -460,9 +451,70 @@ JMP *jmp(Compiler *compiler, Token *ref_token, char *fmt, ...){
 
     JMP *jmp = (JMP *)MEMORY_ALLOC(allocator, JMP, 1);
 
-    jmp->bef = bef;
-    jmp->af = af;
-    jmp->idx = idx;
+    jmp->jmp_offset = jmp_offset;
+    jmp->update_offset = update_offset;
+    jmp->label = label;
+    jmp->prev = NULL;
+    jmp->next = NULL;
+
+    insert_jmp(scope, jmp);
+
+    return jmp;
+}
+
+JMP *or(Compiler *compiler, Token *ref_token, char *fmt, ...){
+    write_chunk(OP_OR, compiler);
+    write_location(ref_token, compiler);
+    size_t update_offset = write_i16(0, compiler);
+    size_t jmp_offset = chunks_len(compiler);
+
+    va_list args;
+    va_start(args, fmt);
+
+    Scope *scope = current_scope(compiler);
+    Allocator *allocator = scope->depth == 1 ? CTALLOCATOR : LABELS_ALLOCATOR;
+
+    char *label = MEMORY_ALLOC(allocator, char, LABEL_NAME_LENGTH);
+    int out_count = vsnprintf(label, LABEL_NAME_LENGTH, fmt, args);
+
+    va_end(args);
+    assert(out_count < LABEL_NAME_LENGTH);
+
+    JMP *jmp = (JMP *)MEMORY_ALLOC(allocator, JMP, 1);
+
+    jmp->jmp_offset = jmp_offset;
+    jmp->update_offset = update_offset;
+    jmp->label = label;
+    jmp->prev = NULL;
+    jmp->next = NULL;
+
+    insert_jmp(scope, jmp);
+
+    return jmp;
+}
+
+JMP *and(Compiler *compiler, Token *ref_token, char *fmt, ...){
+    write_chunk(OP_AND, compiler);
+    write_location(ref_token, compiler);
+    size_t update_offset = write_i16(0, compiler);
+    size_t jmp_offset = chunks_len(compiler);
+
+    va_list args;
+    va_start(args, fmt);
+
+    Scope *scope = current_scope(compiler);
+    Allocator *allocator = scope->depth == 1 ? CTALLOCATOR : LABELS_ALLOCATOR;
+
+    char *label = MEMORY_ALLOC(allocator, char, LABEL_NAME_LENGTH);
+    int out_count = vsnprintf(label, LABEL_NAME_LENGTH, fmt, args);
+
+    va_end(args);
+    assert(out_count < LABEL_NAME_LENGTH);
+
+    JMP *jmp = (JMP *)MEMORY_ALLOC(allocator, JMP, 1);
+
+    jmp->jmp_offset = jmp_offset;
+    jmp->update_offset = update_offset;
     jmp->label = label;
     jmp->prev = NULL;
     jmp->next = NULL;
@@ -487,11 +539,11 @@ void resolve_jmps(Scope *current, Compiler *compiler){
         }
 
         if(selected){
-            if(jmp->idx > selected->location){
-                update_i16(jmp->idx, -(jmp->bef - selected->location), compiler);
-            }else{
-                update_i16(jmp->idx, selected->location - jmp->af + 1, compiler);
-            }
+            update_i16(
+                jmp->update_offset,
+                selected->location - jmp->jmp_offset,
+                compiler
+            );
 
             remove_jmp(jmp);
         }else{
@@ -1402,78 +1454,28 @@ void compile_expr(Expr *expr, Compiler *compiler){
             break;
         }case LOGICAL_EXPRTYPE:{
             LogicalExpr *logical_expr = (LogicalExpr *)expr->sub_expr;
-            Expr *left = logical_expr->left;
-            Token *operator = logical_expr->operator;
-            Expr *right = logical_expr->right;
+            Expr *left_expr = logical_expr->left;
+            Token *operator_token = logical_expr->operator;
+            Expr *right_expr = logical_expr->right;
 
-            compile_expr(left, compiler);
+            compile_expr(left_expr, compiler);
 
-            switch (operator->type){
+            switch (operator_token->type){
                 case OR_TOKTYPE:{
-                    write_chunk(OP_JIT, compiler);
-                    write_location(operator, compiler);
-                    size_t jit_index = write_i16(0, compiler);
+                    uint32_t id = generate_id(compiler);
 
-                    size_t len_before = chunks_len(compiler);
-
-                    write_chunk(OP_FALSE, compiler);
-                    write_location(operator, compiler);
-
-                    compile_expr(right, compiler);
-                    write_chunk(OP_OR, compiler);
-
-                    write_chunk(OP_JMP, compiler);
-                    write_location(operator, compiler);
-                    size_t jmp_index = write_i16(0, compiler);
-
-                    size_t len_after = chunks_len(compiler);
-                    size_t len = len_after - len_before;
-
-                    update_i16(jit_index, len + 1, compiler);
-
-                    len_before = chunks_len(compiler);
-
-                    write_chunk(OP_TRUE, compiler);
-                    write_location(operator, compiler);
-
-                    len_after = chunks_len(compiler);
-                    len = len_after - len_before;
-
-                    update_i16(jmp_index, len + 1, compiler);
+                    or(compiler, operator_token, "OR_END_%"PRId32, id);
+                    compile_expr(right_expr, compiler);
+                    label(compiler, "OR_END_%"PRId32, id);
 
                     break;
                 }
                 case AND_TOKTYPE:{
-                    write_chunk(OP_JIF, compiler);
-                    write_location(operator, compiler);
-                    size_t jif_index = write_i16(0, compiler);
+                    uint32_t id = generate_id(compiler);
 
-                    size_t len_before = chunks_len(compiler);
-
-                    write_chunk(OP_TRUE, compiler);
-                    write_location(operator, compiler);
-
-                    compile_expr(right, compiler);
-                    write_chunk(OP_AND, compiler);
-
-                    write_chunk(OP_JMP, compiler);
-                    write_location(operator, compiler);
-                    size_t jmp_index = write_i16(0, compiler);
-
-                    size_t len_after = chunks_len(compiler);
-                    size_t len = len_after - len_before;
-
-                    update_i16(jif_index, len + 1, compiler);
-
-                    len_before = chunks_len(compiler);
-
-                    write_chunk(OP_FALSE, compiler);
-                    write_location(operator, compiler);
-
-                    len_after = chunks_len(compiler);
-                    len = len_after - len_before;
-
-                    update_i16(jmp_index, len + 1, compiler);
+                    and(compiler, operator_token, "AND_END_%"PRId32, id);
+                    compile_expr(right_expr, compiler);
+                    label(compiler, "AND_END_%"PRId32, id);
 
                     break;
                 }
@@ -1482,7 +1484,7 @@ void compile_expr(Expr *expr, Compiler *compiler){
                 }
             }
 
-			write_location(operator, compiler);
+			write_location(operator_token, compiler);
 
             break;
         }case ASSIGN_EXPRTYPE:{
@@ -1815,39 +1817,26 @@ void compile_expr(Expr *expr, Compiler *compiler){
 
 			break;
 		}case TENARY_EXPRTYPE:{
-		     TenaryExpr *tenary_expr = (TenaryExpr *)expr->sub_expr;
-		     Expr *condition = tenary_expr->condition;
-		     Expr *left = tenary_expr->left;
-		     Token *mark_token = tenary_expr->mark_token;
-		     Expr *right = tenary_expr->right;
+		    TenaryExpr *tenary_expr = (TenaryExpr *)expr->sub_expr;
+		    Expr *condition = tenary_expr->condition;
+		    Expr *left = tenary_expr->left;
+		    Token *mark_token = tenary_expr->mark_token;
+		    Expr *right = tenary_expr->right;
 
-		     compile_expr(condition, compiler);
+            int32_t id = generate_id(compiler);
 
-		     write_chunk(OP_JIF, compiler);
-		     write_location(mark_token, compiler);
+		    compile_expr(condition, compiler);
+            jif(compiler, mark_token, "TENARY_RIGHT_%"PRId32, id);
 
-             size_t jif_index = write_i16(0, compiler);
+            compile_expr(left, compiler);
+            jmp(compiler, mark_token, "TENARY_END_%"PRId32, id);
 
-             size_t left_before = chunks_len(compiler);
-		     compile_expr(left, compiler);
+            label(compiler, "TENARY_RIGHT_%"PRId32, id);
+            compile_expr(right, compiler);
 
-             write_chunk(OP_JMP, compiler);
-             write_location(mark_token, compiler);
+            label(compiler, "TENARY_END_%"PRId32, id);
 
-             size_t jmp_index = write_i16(0, compiler);
-
-		     size_t left_after = chunks_len(compiler);
-		     size_t left_len = left_after - left_before;
-
-		     size_t right_before =chunks_len(compiler);
-		     compile_expr(right, compiler);
-		     size_t right_after = chunks_len(compiler);
-		     size_t right_len = right_after - right_before;
-
-             update_i16(jmp_index, (int16_t)right_len + 1, compiler);
-		     update_i16(jif_index, (int16_t)left_len + 1, compiler);
-
-		     break;
+		    break;
 		}default:{
             assert("Illegal expression type");
         }

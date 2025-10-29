@@ -1310,35 +1310,35 @@ static int execute(VM *vm){
 
                 break;
             }case OP_OR:{
-                Value right_value = pop(vm);
-                Value left_value = pop(vm);
+                int16_t jmp_value = read_i16(vm);
+                Value value = peek(vm);
 
-                if(IS_VALUE_BOOL(left_value) && IS_VALUE_BOOL(right_value)){
-                    uint8_t left = VALUE_TO_BOOL(left_value);
-                    uint8_t right = VALUE_TO_BOOL(right_value);
+                if(!IS_VALUE_BOOL(value)){
+                    vmu_error(vm, "Unsupported types using 'or' operator");
+                }
 
-                    PUSH_BOOL(left || right, vm);
-
+                if(VALUE_TO_BOOL(value)){
+                    current_frame(vm)->ip += jmp_value;
                     break;
                 }
 
-                vmu_error(vm, "Unsupported types using 'or' operator");
+                pop(vm);
 
                 break;
             }case OP_AND:{
-                Value right_value = pop(vm);
-                Value left_value = pop(vm);
+                int16_t jmp_value = read_i16(vm);
+                Value value = peek(vm);
 
-                if(IS_VALUE_BOOL(left_value) && IS_VALUE_BOOL(right_value)){
-                    uint8_t left = VALUE_TO_BOOL(left_value);
-                    uint8_t right = VALUE_TO_BOOL(right_value);
+                if(!IS_VALUE_BOOL(value)){
+                    vmu_error(vm, "Unsupported types using 'and' operator");
+                }
 
-                    PUSH_BOOL(left && right, vm);
-
+                if(!VALUE_TO_BOOL(value)){
+                    current_frame(vm)->ip += jmp_value;
                     break;
                 }
 
-                vmu_error(vm, "Unsupported types using 'and' operator");
+                pop(vm);
 
                 break;
             }case OP_NOT:{
@@ -1661,58 +1661,28 @@ static int execute(VM *vm){
                 break;
             }case OP_JMP:{
                 int16_t jmp_value = read_i16(vm);
-
-                if(jmp_value == 0){
-                    break;
-                }
-
-                if(jmp_value > 0){
-                    current_frame(vm)->ip += jmp_value - 1;
-                }else{
-                    current_frame(vm)->ip += jmp_value - 3;
-                }
-
+                current_frame(vm)->ip += jmp_value;
                 break;
             }case OP_JIF:{
+                int16_t jmp_value = read_i16(vm);
                 Value value = pop(vm);
 
                 if(!IS_VALUE_BOOL(value)){
                     vmu_error(vm, "Expect boolean as conditional value");
                 }
 
-                uint8_t condition = VALUE_TO_BOOL(value);
-                int16_t jmp_value = read_i16(vm);
-
-                if(jmp_value == 0){break;}
-
-                if(!condition){
-                    if(jmp_value > 0){
-                        current_frame(vm)->ip += jmp_value - 1;
-                    }else{
-                        current_frame(vm)->ip += jmp_value - 3;
-                    }
-                }
+                current_frame(vm)->ip += VALUE_TO_BOOL(value) ? 0 : jmp_value;
 
                 break;
             }case OP_JIT:{
+                int16_t jmp_value = read_i16(vm);
                 Value value = pop(vm);
 
                 if(!IS_VALUE_BOOL(value)){
                     vmu_error(vm, "Expect boolean as conditional value");
                 }
 
-                uint8_t condition = VALUE_TO_BOOL(value);
-                int16_t jmp_value = read_i16(vm);
-
-                if(jmp_value == 0){break;}
-
-                if(condition){
-                    if(jmp_value > 0){
-                        current_frame(vm)->ip += jmp_value - 1;
-                    }else{
-                        current_frame(vm)->ip += jmp_value - 3;
-                    }
-                }
+                current_frame(vm)->ip += VALUE_TO_BOOL(value) ? jmp_value : 0;
 
                 break;
             }case OP_CALL:{

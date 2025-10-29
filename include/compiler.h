@@ -55,9 +55,8 @@ typedef struct label_list{
 }LabelList;
 
 typedef struct jmp{
-    size_t bef;
-    size_t af;
-    size_t idx;
+    size_t jmp_offset;
+    size_t update_offset;
     char *label;
     struct jmp *prev;
     struct jmp *next;
