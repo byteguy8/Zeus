@@ -100,12 +100,12 @@ Stmt *create_stmt(StmtType type, void *sub_stmt, Parser *parser){
 
 static inline Token *peek(Parser *parser){
 	DynArr *tokens = parser->tokens;
-	return DYNARR_GET_PTR_AS(Token, parser->current, tokens);
+	return DYNARR_GET_PTR_AS(tokens, Token, parser->current);
 }
 
 static inline Token *previous(Parser *parser){
 	DynArr *tokens = parser->tokens;
-	return DYNARR_GET_PTR_AS(Token, parser->current - 1, tokens);
+	return DYNARR_GET_PTR_AS(tokens, Token, parser->current - 1);
 }
 
 static inline int is_at_end(Parser *parser){
@@ -162,7 +162,7 @@ DynArr *record_key_values(Token *record_token, Parser *parser){
 	DynArr *key_values = MEMORY_DYNARR_PTR(CTALLOCATOR);
 
 	do{
-		if(DYNARR_LEN(key_values) >= 255){
+		if(dynarr_len(key_values) >= 255){
             error(parser, record_token, "Record expressions only accept up to %d values", 255);
         }
 
@@ -175,7 +175,7 @@ DynArr *record_key_values(Token *record_token, Parser *parser){
 		key_value->key = key;
 		key_value->value = value;
 
-        dynarr_insert_ptr(key_value, key_values);
+        dynarr_insert_ptr(key_values, key_value);
 	}while(match(parser, 1, COMMA_TOKTYPE));
 
 	return key_values;
@@ -571,7 +571,7 @@ Expr *parse_call(Parser *parser){
 
                         do{
                             Expr *expr = parse_expr(parser);
-                            dynarr_insert_ptr(expr, args);
+                            dynarr_insert_ptr(args, expr);
                         } while (match(parser, 1, COMMA_TOKTYPE));
                     }
 
@@ -647,7 +647,7 @@ Expr *parse_dict(Parser *parser){
             key_values = MEMORY_DYNARR_PTR(CTALLOCATOR);
 
             do{
-                if(DYNARR_LEN(key_values) >= INT16_MAX){
+                if(dynarr_len(key_values) >= INT16_MAX){
                     error(parser, dict_token, "Dict expressions only accept up to %d values", INT16_MAX);
                 }
 
@@ -660,7 +660,7 @@ Expr *parse_dict(Parser *parser){
                 key_value->key = key;
                 key_value->value = value;
 
-                dynarr_insert_ptr(key_value, key_values);
+                dynarr_insert_ptr(key_values, key_value);
             }while(match(parser, 1, COMMA_TOKTYPE));
         }
 
@@ -689,12 +689,12 @@ Expr *parse_list(Parser *parser){
             exprs = MEMORY_DYNARR_PTR(CTALLOCATOR);
 
             do{
-                if(DYNARR_LEN(exprs) >= INT16_MAX){
+                if(dynarr_len(exprs) >= INT16_MAX){
                     error(parser, list_token, "List expressions only accept up to %d values", INT16_MAX);
                 }
 
                 Expr *expr = parse_expr(parser);
-                dynarr_insert_ptr(expr, exprs);
+                dynarr_insert_ptr(exprs, expr);
             }while(match(parser, 1, COMMA_TOKTYPE));
         }
 
@@ -729,12 +729,12 @@ Expr *parse_array(Parser *parser){
                 values = MEMORY_DYNARR_PTR(CTALLOCATOR);
 
                 do{
-                    if(DYNARR_LEN(values) >= INT32_MAX){
+                    if(dynarr_len(values) >= INT32_MAX){
                         error(parser, array_token, "Array expressions only accept up to %d values", INT16_MAX);
                     }
 
                     Expr *expr = parse_expr(parser);
-                    dynarr_insert_ptr(expr, values);
+                    dynarr_insert_ptr(values, expr);
                 } while (match(parser, 1, COMMA_TOKTYPE));
             }
 
@@ -846,7 +846,7 @@ Expr *parse_literal(Parser *parser){
 
             do{
                 Token *param_identifier = consume(parser, IDENTIFIER_TOKTYPE, "Expect parameter identifier");
-                dynarr_insert_ptr(param_identifier, params);
+                dynarr_insert_ptr(params, param_identifier);
             } while (match(parser, 1, COMMA_TOKTYPE));
         }
 
@@ -996,7 +996,7 @@ DynArr *parse_block_stmt(Parser *parser){
 
     while (!check(parser, RIGHT_BRACKET_TOKTYPE)){
         Stmt *stmt = parse_stmt(parser);
-        dynarr_insert_ptr(stmt, stmts);
+        dynarr_insert_ptr(stmts, stmt);
     }
 
     consume(
@@ -1038,7 +1038,7 @@ IfStmtBranch *parse_if_stmt_branch(Token *branch_token, Parser *parser){
 			stmt = parse_expr_stmt(parser);
 		}
 
-		dynarr_insert_ptr(stmt, stmts);
+		dynarr_insert_ptr(stmts, stmt);
 	}else{
 		consume(
 			parser,
@@ -1075,7 +1075,7 @@ Stmt *parse_if_stmt(Parser *parser){
              	parser
             );
 
-            dynarr_insert_ptr(branch, elif_branches);
+            dynarr_insert_ptr(elif_branches, branch);
         }
     }
 
@@ -1090,7 +1090,7 @@ Stmt *parse_if_stmt(Parser *parser){
 				stmt = parse_expr_stmt(parser);
 			}
 
-            dynarr_insert_ptr(stmt, else_stmts);
+            dynarr_insert_ptr(else_stmts, stmt);
 		}else{
 			consume(
 				parser,
@@ -1303,7 +1303,7 @@ Stmt *parse_function_stmt(Parser *parser){
                 "Expect function parameter name."
             );
 
-            dynarr_insert_ptr(param_token, params);
+            dynarr_insert_ptr(params, param_token);
         } while (match(parser, 1, COMMA_TOKTYPE));
     }
 
@@ -1312,7 +1312,7 @@ Stmt *parse_function_stmt(Parser *parser){
     if(match(parser, 1, COLON_TOKTYPE)){
 		stmts = MEMORY_DYNARR_PTR(CTALLOCATOR);
 		Stmt *stmt = parse_return_stmt(parser);
-        dynarr_insert_ptr(stmt, stmts);
+        dynarr_insert_ptr(stmts, stmt);
 	}else{
 		consume(parser, LEFT_BRACKET_TOKTYPE, "Expect '{' at start of function body.");
 		stmts = parse_block_stmt(parser);
@@ -1321,7 +1321,7 @@ Stmt *parse_function_stmt(Parser *parser){
     parser->fns_stack_count--;
 
     if(parser->fns_stack_count == 0){
-        dynarr_insert_ptr(name_token, parser->fns_prototypes);
+        dynarr_insert_ptr(parser->fns_prototypes, name_token);
     }
 
     FunctionStmt *function_stmt = MEMORY_ALLOC(CTALLOCATOR, FunctionStmt, 1);
@@ -1343,7 +1343,7 @@ Stmt *parse_import_stmt(Parser *parser){
 
     do{
         Token *name = consume(parser, IDENTIFIER_TOKTYPE, "Expect module name");
-        dynarr_insert_ptr(name, names);
+        dynarr_insert_ptr(names, name);
     } while (match(parser, 1, DOT_TOKTYPE));
 
     if(match(parser, 1, AS_TOKTYPE)){
@@ -1376,7 +1376,7 @@ Stmt *parse_export_stmt(Parser *parser){
 
     do{
         Token *identifier = consume(parser, IDENTIFIER_TOKTYPE, "Expect symbol name");
-        dynarr_insert_ptr(identifier, symbols);
+        dynarr_insert_ptr(symbols, identifier);
     } while (match(parser, 1, COMMA_TOKTYPE));
 
     consume(parser, RIGHT_BRACKET_TOKTYPE, "Expect '}' at end of export symbols");
@@ -1413,7 +1413,7 @@ int parser_parse(DynArr *tokens, DynArr *fns_prototypes, DynArr *stmts, Parser *
 
         while(!is_at_end(parser)){
             Stmt *stmt = parse_stmt(parser);
-            dynarr_insert_ptr(stmt, stmts);
+            dynarr_insert_ptr(stmts, stmt);
         }
 
         return 0;
@@ -1431,7 +1431,7 @@ int parser_parse_str_interpolation(DynArr *tokens, DynArr *exprs, Parser *parser
 
         while(!is_at_end(parser)){
             Expr *expr = parse_tenary_expr(parser);
-            dynarr_insert_ptr(expr, exprs);
+            dynarr_insert_ptr(exprs, expr);
         }
 
         return 0;

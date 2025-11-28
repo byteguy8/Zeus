@@ -19,11 +19,11 @@ Value native_fn_list_clear(uint8_t argsc, Value *values, Value target, void *con
 Value native_fn_list_to_array(uint8_t argsc, Value *values, Value target, void *context){
     ListObj *list_obj = VALUE_TO_LIST(target);
     DynArr *items = list_obj->items;
-    size_t len = DYNARR_LEN(items);
+    size_t len = dynarr_len(items);
     ArrayObj *array_obj = vmu_create_array(len, VMU_VM);
 
     for (size_t i = 0; i < len; i++){
-        array_obj->values[i] = DYNARR_GET_AS(Value, i, items);
+        array_obj->values[i] = DYNARR_GET_AS(items, Value, i);
     }
 
     return OBJ_VALUE(array_obj);
@@ -32,25 +32,25 @@ Value native_fn_list_to_array(uint8_t argsc, Value *values, Value target, void *
 Value native_fn_list_first(uint8_t argsc, Value *values, Value target, void *context){
     ListObj *list_obj = VALUE_TO_LIST(target);
     DynArr *items = list_obj->items;
-    size_t len = DYNARR_LEN(items);
+    size_t len = dynarr_len(items);
 
     if(len == 0){
         vmu_error(VMU_VM, "Failed to get fist list item: list is empty");
     }
 
-    return DYNARR_GET_AS(Value, 0, items);
+    return DYNARR_GET_AS(items, Value, 0);
 }
 
 Value native_fn_list_last(uint8_t argsc, Value *values, Value target, void *context){
     ListObj *list_obj = VALUE_TO_LIST(target);
     DynArr *items = list_obj->items;
-    size_t len = DYNARR_LEN(items);
+    size_t len = dynarr_len(items);
 
     if(len == 0){
         vmu_error(VMU_VM, "Failed to get fist list item: list is empty");
     }
 
-    return DYNARR_GET_AS(Value, len - 1, items);
+    return DYNARR_GET_AS(items, Value, len - 1);
 }
 
 Value native_fn_list_insert(uint8_t argsc, Value *values, Value target, void *context){
@@ -83,7 +83,7 @@ NativeFn *native_list_get(size_t key_size, const char *key, VM *vm){
         Allocator *allocator = &vm->front_allocator;
         list_symbols = MEMORY_LZOHTABLE(allocator);
 
-        dynarr_insert_ptr(list_symbols, vm->native_symbols);
+        dynarr_insert_ptr(vm->native_symbols, list_symbols);
 
         vm_factory_native_fn_add_info(list_symbols, allocator, "len", 0, native_fn_list_size);
         vm_factory_native_fn_add_info(list_symbols, allocator, "clear", 0, native_fn_list_clear);

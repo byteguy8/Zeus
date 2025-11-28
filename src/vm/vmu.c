@@ -51,7 +51,7 @@
 #define ALLOC_MODULE_OBJ()(lzpool_alloc_x(POOL_DEFAULT_ALLOC_LEN, VMU_MODULE_OBJS_POOL))
 #define DEALLOC_MODULE_OBJ(_ptr)(lzpool_dealloc(_ptr))
 
-#define FIND_LOCATION(index, arr)(dynarr_find(&((OPCodeLocation){.offset = index, .line = -1}), compare_locations, arr))
+#define FIND_LOCATION(index, arr)(dynarr_find(arr, &((OPCodeLocation){.offset = index, .line = -1}), compare_locations))
 #define FRAME_AT(at, vm)(&vm->frame_stack[at])
 
 typedef struct pass_value{
@@ -175,10 +175,10 @@ void mark_objs(VM *vm){
             }case LIST_OBJ_TYPE:{
                 ListObj *list_obj = OBJ_TO_LIST(current);
                 DynArr *items = list_obj->items;
-                size_t len = DYNARR_LEN(items);
+                size_t len = dynarr_len(items);
 
                 for (size_t i = 0; i < len; i++){
-                    Value raw_value = DYNARR_GET_AS(Value, i, items);
+                    Value raw_value = DYNARR_GET_AS(items, Value, i);
 
                     if(IS_VALUE_OBJ(raw_value) && VALUE_TO_OBJ(raw_value)->color == WHITE_OBJ_COLOR){
                         Obj *obj = VALUE_TO_OBJ(raw_value);
@@ -377,7 +377,7 @@ int prepare_stacktrace_new(unsigned int spaces, LZBStr *str, VM *vm){
         const Fn *fn = frame->fn;
 		DynArr *locations = fn->locations;
 		int idx = FIND_LOCATION(frame->last_offset, locations);
-		OPCodeLocation *location = idx == -1 ? NULL : (OPCodeLocation *)dynarr_get_raw(idx, locations);
+		OPCodeLocation *location = idx == -1 ? NULL : (OPCodeLocation *)dynarr_get_raw(locations, idx);
 
 		if(location){
             if(lzbstr_append_args(
@@ -450,12 +450,12 @@ void obj_to_str(PassValue pass, Obj *obj, LZBStr *str){
         }case LIST_OBJ_TYPE:{
             ListObj *list_obj = OBJ_TO_LIST(obj);
             DynArr *items = list_obj->items;
-            size_t len = DYNARR_LEN(items);
+            size_t len = dynarr_len(items);
 
             lzbstr_append("(", str);
 
             for (size_t i = 0; i < len; i++){
-                Value value = DYNARR_GET_AS(Value, i, items);
+                Value value = DYNARR_GET_AS(items, Value, i);
 
                 if(is_value_str(value)){
                     lzbstr_append("'", str);
@@ -767,12 +767,12 @@ void obj_to_json(
         }case LIST_OBJ_TYPE:{
             ListObj *list_obj = OBJ_TO_LIST(obj);
             DynArr *items = list_obj->items;
-            size_t len = DYNARR_LEN(items);
+            size_t len = dynarr_len(items);
 
             lzbstr_append("[", str);
 
             for (size_t i = 0; i < len; i++){
-                Value value = DYNARR_GET_AS(Value, i, items);
+                Value value = DYNARR_GET_AS(items, Value, i);
 
                 if(is_value_str(value)){
                     lzbstr_append("\"", str);
@@ -1414,7 +1414,7 @@ void vmu_print_obj(FILE *stream, Obj *object){
 		}case LIST_OBJ_TYPE:{
 			ListObj *list_obj = OBJ_TO_LIST(object);
             DynArr *list = list_obj->items;
-            fprintf(stream, "<list %zu at %p>", list->used, list);
+            fprintf(stream, "<list %zu at %p>", dynarr_len(list), list);
 			break;
 		}case DICT_OBJ_TYPE:{
             DictObj *dict_obj = OBJ_TO_DICT(object);
@@ -1923,12 +1923,12 @@ inline void vmu_destroy_list(ListObj *list_obj, VM *vm){
 }
 
 inline int64_t vmu_list_len(ListObj *list_obj){
-    return (int64_t)DYNARR_LEN(list_obj->items);
+    return (int64_t)dynarr_len(list_obj->items);
 }
 
 inline int64_t vmu_list_clear(ListObj *list_obj){
     DynArr *items = list_obj->items;
-    int64_t len = (int64_t)DYNARR_LEN(items);
+    int64_t len = (int64_t)dynarr_len(items);
 
     dynarr_remove_all(items);
 
@@ -1938,10 +1938,11 @@ inline int64_t vmu_list_clear(ListObj *list_obj){
 inline ListObj *vmu_list_join(ListObj *a_list_obj, ListObj *b_list_obj, VM *vm){
     DynArr *a_list = a_list_obj->items;
     DynArr *b_list = b_list_obj->items;
-    DynArr *c_list = dynarr_append_new(a_list, b_list, (DynArrAllocator *)VMU_FRONT_ALLOCATOR);
+    DynArr *c_list = NULL;
     ListObj *list_obj = ALLOC_LIST_OBJ();
     Obj *obj = (Obj *)list_obj;
 
+    dynarr_join((DynArrAllocator *)VMU_FRONT_ALLOCATOR, a_list, b_list, &c_list);
     init_obj(LIST_OBJ_TYPE, obj, vm);
     list_obj->items = c_list;
 
@@ -1955,29 +1956,32 @@ inline Value vmu_list_get_at(int64_t idx, ListObj *list_obj, VM *vm){
 
     size_t at = (size_t)idx;
     DynArr *items = list_obj->items;
-    size_t len = DYNARR_LEN(items);
+    size_t len = dynarr_len(items);
 
     if(at >= len){
         vmu_error(vm, "Failed to get item from list: 'at' index (%zu) out of bounds", at);
     }
 
-    return DYNARR_GET_AS(Value, (size_t)idx, items);
+    return DYNARR_GET_AS(items, Value, (size_t)idx);
 }
 
 inline void vmu_list_insert(Value value, ListObj *list_obj, VM *vm){
     DynArr *items = list_obj->items;
-    dynarr_insert(&value, items);
+    dynarr_insert(items, &value);
 }
 
 inline ListObj *vmu_list_insert_new(Value value, ListObj *list_obj, VM *vm){
     DynArr *items = list_obj->items;
-    size_t items_len = DYNARR_LEN(items);
-    DynArr *new_items = dynarr_create_by(items->rsize, items_len + 1, (DynArrAllocator *)VMU_FRONT_ALLOCATOR);
+    DynArr *new_items = dynarr_create_by(
+        (DynArrAllocator *)VMU_FRONT_ALLOCATOR,
+        dynarr_item_size(items),
+        dynarr_len(items) + 1
+    );
     ListObj *new_list_obj = ALLOC_LIST_OBJ();
     Obj *obj = (Obj *)new_list_obj;
 
-    dynarr_append(items, new_items);
-    dynarr_insert(&value, new_items);
+    dynarr_append(new_items, items);
+    dynarr_insert(new_items, &value);
 
     init_obj(LIST_OBJ_TYPE, obj, vm);
     new_list_obj->items = new_items;
@@ -1992,13 +1996,13 @@ void vmu_list_insert_at(int64_t idx, Value value, ListObj *list_obj, VM *vm){
 
     size_t at = (size_t)idx;
     DynArr *items = list_obj->items;
-    size_t len = DYNARR_LEN(items);
+    size_t len = dynarr_len(items);
 
     if(at > len){
         vmu_error(vm, "Failed to insert item to list: 'at' index (%zu) out of bounds", at);
     }
 
-    dynarr_insert_at(at, &value, items);
+    dynarr_insert_at(items, at, &value);
 }
 
 inline Value vmu_list_set_at(int64_t idx, Value value, ListObj *list_obj, VM *vm){
@@ -2008,15 +2012,15 @@ inline Value vmu_list_set_at(int64_t idx, Value value, ListObj *list_obj, VM *vm
 
     size_t at = (size_t)idx;
     DynArr *items = list_obj->items;
-    size_t len = DYNARR_LEN(items);
+    size_t len = dynarr_len(items);
 
     if(at >= len){
         vmu_error(vm, "Failed to set item to list: 'at' index (%zu) out of bounds", at);
     }
 
-    Value out_value = DYNARR_GET_AS(Value, at, items);
+    Value out_value = DYNARR_GET_AS(items, Value, at);
 
-    dynarr_set_at(idx, &value, items);
+    dynarr_set_at(items, idx, &value);
 
     return out_value;
 }
@@ -2028,15 +2032,15 @@ inline Value vmu_list_remove_at(int64_t idx, ListObj *list_obj, VM *vm){
 
     size_t at = (size_t)idx;
     DynArr *items = list_obj->items;
-    size_t len = DYNARR_LEN(items);
+    size_t len = dynarr_len(items);
 
     if(at >= len){
         vmu_error(vm, "Failed to remove item from list: 'at' index out of bounds");
     }
 
-    Value value = DYNARR_GET_AS(Value, at, items);
+    Value value = DYNARR_GET_AS(items, Value, at);
 
-    dynarr_remove_index(at, items);
+    dynarr_remove_index(items, at);
     dynarr_reduce(items);
 
     return value;

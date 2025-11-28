@@ -29,12 +29,12 @@ static int32_t compose_i32(uint8_t *bytes){
 
 static int is_at_end(Dumpper *dumpper){
     DynArr *chunks = CURRENT_CHUNKS(dumpper);
-    return dumpper->ip >= chunks->used;
+    return dumpper->ip >= dynarr_len(chunks);
 }
 
 static uint8_t advance(Dumpper *dumpper){
     DynArr *chunks = CURRENT_CHUNKS(dumpper);
-    return DYNARR_GET_AS(uint8_t, dumpper->ip++, chunks);
+    return DYNARR_GET_AS(chunks, uint8_t, dumpper->ip++);
 }
 
 static int16_t read_i16(Dumpper *dumpper){
@@ -58,19 +58,19 @@ static int32_t read_i32(Dumpper *dumpper){
 static int64_t read_i64_const(Dumpper *dumpper){
     DynArr *constants = CURRENT_CONSTANTS(dumpper);
     size_t index = (size_t)read_i16(dumpper);
-    return DYNARR_GET_AS(int64_t, index, constants);
+    return DYNARR_GET_AS(constants, int64_t, index);
 }
 
 static double read_float_const(Dumpper *dumpper){
     DynArr *float_values = CURRENT_FLOAT_VALUES(dumpper);
     size_t idx = (size_t)read_i16(dumpper);
-    return DYNARR_GET_AS(double, idx, float_values);
+    return DYNARR_GET_AS(float_values, double, idx);
 }
 
 static char *read_str(Dumpper *dumpper, size_t *out_len){
     DynArr *static_strs = CURRENT_STRINGS(dumpper);
     size_t idx = (size_t)read_i16(dumpper);
-    DStr str = DYNARR_GET_AS(DStr, idx, static_strs);
+    DStr str = DYNARR_GET_AS(static_strs, DStr, idx);
 
     if(out_len){
         *out_len = str.len;
@@ -513,8 +513,8 @@ static void dump_module(Module *module, Dumpper *dumpper){
 
     DynArr *symbols = submodule->symbols;
 
-    for (size_t i = 0; i < DYNARR_LEN(symbols); i++){
-        SubModuleSymbol symbol = DYNARR_GET_AS(SubModuleSymbol, i, symbols);
+    for (size_t i = 0; i < dynarr_len(symbols); i++){
+        SubModuleSymbol symbol = DYNARR_GET_AS(symbols, SubModuleSymbol, i);
 
         if(symbol.type == FUNCTION_SUBMODULE_SYM_TYPE){
             Fn *fn = symbol.value;

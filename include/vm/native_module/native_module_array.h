@@ -52,7 +52,7 @@ NativeFn *native_array_get(size_t key_size, const char *key, VM *vm){
         Allocator *allocator = &vm->front_allocator;
         array_symbols = MEMORY_LZOHTABLE(allocator);
 
-        dynarr_insert_ptr(array_symbols, vm->native_symbols);
+        dynarr_insert_ptr(vm->native_symbols, array_symbols);
 
         vm_factory_native_fn_add_info(array_symbols, allocator, "len", 0, native_fn_array_len);
         vm_factory_native_fn_add_info(array_symbols, allocator, "grow", 1, native_fn_array_make_room);

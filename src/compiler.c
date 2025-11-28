@@ -209,11 +209,11 @@ Fn *pop_unit(Compiler *compiler){
     DynArr *marks = unit->marks;
 	Fn *fn = unit->fn;
 
-    size_t jmps_len = DYNARR_LEN(jmps);
+    size_t jmps_len = dynarr_len(jmps);
 
     for (size_t i = 0; i < jmps_len; i++){
         Label *label = NULL;
-        Jmp *jmp = dynarr_get_ptr(i, jmps);
+        Jmp *jmp = dynarr_get_ptr(jmps, i);
 
         if(!lzohtable_lookup(
             jmp->label_name_len,
@@ -233,11 +233,11 @@ Fn *pop_unit(Compiler *compiler){
         update_i16(compiler, jmp->update_offset, (uint16_t)jmp_value);
     }
 
-    size_t marks_len = DYNARR_LEN(marks);
+    size_t marks_len = dynarr_len(marks);
 
     for (size_t i = 0; i < marks_len; i++){
         Label *label = NULL;
-        Mark *mark = dynarr_get_ptr(i, marks);
+        Mark *mark = dynarr_get_ptr(marks, i);
 
         if(!lzohtable_lookup(
             mark->label_name_len,
@@ -386,15 +386,15 @@ inline void descompose_i32(int32_t value, uint8_t *bytes){
 }
 
 inline size_t chunks_len(Compiler *compiler){
-	return DYNARR_LEN(current_chunks(compiler));
+	return dynarr_len(current_chunks(compiler));
 }
 
 inline size_t write_chunk(Compiler *compiler, uint8_t chunk){
 	DynArr *chunks = current_chunks(compiler);
 
-	dynarr_insert(&chunk, chunks);
+	dynarr_insert(chunks, &chunk);
 
-	return DYNARR_LEN(chunks) - 1;
+	return dynarr_len(chunks) - 1;
 }
 
 size_t write_i16(Compiler *compiler, int16_t value){
@@ -402,10 +402,10 @@ size_t write_i16(Compiler *compiler, int16_t value){
 	uint8_t bytes[2];
 
 	descompose_i16(value, bytes);
-	dynarr_insert(&bytes[0], chunks);
-	dynarr_insert(&bytes[1], chunks);
+	dynarr_insert(chunks, &bytes[0]);
+	dynarr_insert(chunks, &bytes[1]);
 
-	return DYNARR_LEN(chunks) - 2;
+	return dynarr_len(chunks) - 2;
 }
 
 size_t write_i32(Compiler *compiler, int32_t value){
@@ -413,17 +413,17 @@ size_t write_i32(Compiler *compiler, int32_t value){
 	uint8_t bytes[4];
 
 	descompose_i32(value, bytes);
-	dynarr_insert(&bytes[0], chunks);
-	dynarr_insert(&bytes[1], chunks);
-	dynarr_insert(&bytes[2], chunks);
-	dynarr_insert(&bytes[3], chunks);
+	dynarr_insert(chunks, &bytes[0]);
+	dynarr_insert(chunks, &bytes[1]);
+	dynarr_insert(chunks, &bytes[2]);
+	dynarr_insert(chunks, &bytes[3]);
 
-	return DYNARR_LEN(chunks) - 4;
+	return dynarr_len(chunks) - 4;
 }
 
 size_t write_iconst(Compiler *compiler, int64_t value){
 	DynArr *iconsts = current_iconsts(compiler);
-	size_t iconsts_len = DYNARR_LEN(iconsts);
+	size_t iconsts_len = dynarr_len(iconsts);
 
 	if(iconsts_len >= UINT16_MAX){
 		internal_error(
@@ -433,14 +433,14 @@ size_t write_iconst(Compiler *compiler, int64_t value){
 		);
 	}
 
-	dynarr_insert(&value, iconsts);
+	dynarr_insert(iconsts, &value);
 
-	return write_i16(compiler, (int16_t)(DYNARR_LEN(iconsts) - 1));
+	return write_i16(compiler, (int16_t)(dynarr_len(iconsts) - 1));
 }
 
 size_t write_fconst(Compiler *compiler, double value){
 	DynArr *fconsts = current_fconsts(compiler);
-	size_t fconsts_len = DYNARR_LEN(fconsts);
+	size_t fconsts_len = dynarr_len(fconsts);
 
 	if(fconsts_len >= UINT16_MAX){
 		internal_error(
@@ -450,14 +450,14 @@ size_t write_fconst(Compiler *compiler, double value){
 		);
 	}
 
-	dynarr_insert(&value, fconsts);
+	dynarr_insert(fconsts, &value);
 
-	return write_i16(compiler, (int16_t)(DYNARR_LEN(fconsts) - 1));
+	return write_i16(compiler, (int16_t)(dynarr_len(fconsts) - 1));
 }
 
 void update_i16(Compiler *compiler, size_t offset, uint16_t value){
     DynArr *chunks = current_chunks(compiler);
-    size_t chunks_len = DYNARR_LEN(chunks);
+    size_t chunks_len = dynarr_len(chunks);
     uint8_t bytes[2];
 
     if(offset >= chunks_len){
@@ -469,14 +469,14 @@ void update_i16(Compiler *compiler, size_t offset, uint16_t value){
     }
 
     descompose_i16(value, bytes);
-    dynarr_set_at(offset, &bytes[0], chunks);
-    dynarr_set_at(offset + 1, &bytes[1], chunks);
+    dynarr_set_at(chunks, offset, &bytes[0]);
+    dynarr_set_at(chunks, offset + 1, &bytes[1]);
 }
 
 void write_str(Compiler *compiler, size_t raw_str_len, char *raw_str){
 	Module *module = current_module(compiler);
 	DynArr *static_strs = MODULE_STRINGS(module);
-    size_t static_strs_len = DYNARR_LEN(static_strs);
+    size_t static_strs_len = dynarr_len(static_strs);
 
     if(static_strs_len >= UINT16_MAX){}
 
@@ -485,7 +485,7 @@ void write_str(Compiler *compiler, size_t raw_str_len, char *raw_str){
         .buff = raw_str
     };
 
-    dynarr_insert(&str, static_strs);
+    dynarr_insert(static_strs, &str);
     write_i16(compiler, (int16_t)static_strs_len);
 }
 
@@ -493,7 +493,7 @@ void write_str_alloc(Compiler *compiler, size_t raw_str_len, char *raw_str){
 	Module *module = current_module(compiler);
 	char *new_raw_str = MEMORY_ALLOC(compiler->rtallocator, char, raw_str_len + 1);
     DynArr *static_strs = MODULE_STRINGS(module);
-    size_t static_strs_len = DYNARR_LEN(static_strs);
+    size_t static_strs_len = dynarr_len(static_strs);
 
     memcpy(new_raw_str, raw_str, raw_str_len);
     new_raw_str[raw_str_len] = 0;
@@ -505,7 +505,7 @@ void write_str_alloc(Compiler *compiler, size_t raw_str_len, char *raw_str){
         .buff = raw_str
     };
 
-    dynarr_insert(&str, static_strs);
+    dynarr_insert(static_strs, &str);
     write_i16(compiler, (int16_t)static_strs_len);
 }
 
@@ -514,7 +514,7 @@ void write_location(Compiler *compiler, const Token *token){
 	DynArr *locations = current_locations(compiler);
 	OPCodeLocation location = {0};
 
-	location.offset = DYNARR_LEN(chunks) - 1;
+	location.offset = dynarr_len(chunks) - 1;
 	location.line = token->line;
     location.filepath = memory_clone_cstr(
     	compiler->rtallocator,
@@ -522,7 +522,7 @@ void write_location(Compiler *compiler, const Token *token){
       	NULL
     );
 
-	dynarr_insert(&location, locations);
+	dynarr_insert(locations, &location);
 }
 
 void label(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
@@ -580,7 +580,7 @@ void mark(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
 	mark->label_name_len = name_len;
 	mark->label_name = cloned_name;
 
-	dynarr_insert_ptr(mark, unit->marks);
+	dynarr_insert_ptr(unit->marks, mark);
 }
 
 void jmp(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
@@ -610,7 +610,7 @@ void jmp(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
 	jmp->label_name_len = name_len;
 	jmp->label_name = cloned_name;
 
-	dynarr_insert_ptr(jmp, unit->jmps);
+	dynarr_insert_ptr(unit->jmps, jmp);
 }
 
 void jif(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
@@ -640,7 +640,7 @@ void jif(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
 	jmp->label_name_len = name_len;
 	jmp->label_name = cloned_name;
 
-	dynarr_insert_ptr(jmp, unit->jmps);
+	dynarr_insert_ptr(unit->jmps, jmp);
 }
 
 void jit(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
@@ -670,7 +670,7 @@ void jit(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
 	jmp->label_name_len = name_len;
 	jmp->label_name = cloned_name;
 
-	dynarr_insert_ptr(jmp, unit->jmps);
+	dynarr_insert_ptr(unit->jmps, jmp);
 }
 
 void or(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
@@ -700,7 +700,7 @@ void or(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
 	jmp->label_name_len = name_len;
 	jmp->label_name = cloned_name;
 
-	dynarr_insert_ptr(jmp, unit->jmps);
+	dynarr_insert_ptr(unit->jmps, jmp);
 }
 
 void and(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
@@ -730,7 +730,7 @@ void and(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
 	jmp->label_name_len = name_len;
 	jmp->label_name = cloned_name;
 
-	dynarr_insert_ptr(jmp, unit->jmps);
+	dynarr_insert_ptr(unit->jmps, jmp);
 }
 
 void compile_expr(Compiler *compiler, Expr *expr){
@@ -789,10 +789,10 @@ void compile_expr(Compiler *compiler, Expr *expr){
             write_location(compiler, template_token);
 
             if(exprs){
-                size_t len = DYNARR_LEN(exprs);
+                size_t len = dynarr_len(exprs);
 
                 for (size_t i = 0; i < len; i++){
-                    Expr *expr = (Expr *)dynarr_get_ptr(i, exprs);
+                    Expr *expr = (Expr *)dynarr_get_ptr(exprs, i);
 
                     compile_expr(compiler, expr);
 
@@ -810,8 +810,8 @@ void compile_expr(Compiler *compiler, Expr *expr){
             DynArr *params = anon_expr->params;
             DynArr *stmts = anon_expr->stmts;
 
-            size_t params_len = params ? DYNARR_LEN(params) : 0;
-            size_t stmts_len = stmts ? DYNARR_LEN(stmts) : 0;
+            size_t params_len = params ? dynarr_len(params) : 0;
+            size_t stmts_len = stmts ? dynarr_len(stmts) : 0;
 
             Fn *fn = vm_factory_fn_create(
                 compiler->rtallocator,
@@ -825,7 +825,7 @@ void compile_expr(Compiler *compiler, Expr *expr){
             push_unit(compiler, fn);
 
             for (size_t i = 0; i < params_len; i++){
-                Token *param_identifier_token = dynarr_get_ptr(i, params);
+                Token *param_identifier_token = dynarr_get_ptr(params, i);
 
                 scope_manager_define_local(
                     manager,
@@ -838,7 +838,7 @@ void compile_expr(Compiler *compiler, Expr *expr){
             uint8_t must_return = 1;
 
             for (size_t i = 0; i < stmts_len; i++){
-                Stmt *stmt = dynarr_get_ptr(i, stmts);
+                Stmt *stmt = dynarr_get_ptr(stmts, i);
                 compile_stmt(compiler, stmt);
 
                 if(i + 1 >= stmts_len && stmt->type == RETURN_STMTTYPE){
@@ -980,7 +980,7 @@ void compile_expr(Compiler *compiler, Expr *expr){
             CallExpr *call_expr = expr->sub_expr;
             Expr *left_expr = call_expr->left_expr;
             DynArr *args = call_expr->args;
-            size_t args_count = args ? DYNARR_LEN(args) : 0;
+            size_t args_count = args ? dynarr_len(args) : 0;
 
             if(left_expr->type == IDENTIFIER_EXPRTYPE){
                 IdentifierExpr *identifier_expr = left_expr->sub_expr;
@@ -1027,7 +1027,7 @@ void compile_expr(Compiler *compiler, Expr *expr){
             compile_expr(compiler, call_expr->left_expr);
 
             for (size_t i = 0; i < args_count; i++){
-                compile_expr(compiler, dynarr_get_ptr(i, args));
+                compile_expr(compiler, dynarr_get_ptr(args, i));
             }
 
             write_chunk(compiler, OP_CALL);
@@ -1578,7 +1578,7 @@ void compile_expr(Compiler *compiler, Expr *expr){
                 write_chunk(compiler, OP_ARRAY);
                 write_location(compiler, array_token);
             }else{
-                const size_t array_len = values ? DYNARR_LEN(values) : 0;
+                const size_t array_len = values ? dynarr_len(values) : 0;
 
                 write_chunk(compiler, OP_INT);
                 write_location(compiler, array_token);
@@ -1588,7 +1588,7 @@ void compile_expr(Compiler *compiler, Expr *expr){
                 write_location(compiler, array_token);
 
                 for (size_t i = 0 ; i < array_len; i++){
-                    Expr *expr = (Expr *)dynarr_get_ptr(i, values);
+                    Expr *expr = (Expr *)dynarr_get_ptr(values, i);
 
                     compile_expr(compiler, expr);
 
@@ -1608,10 +1608,10 @@ void compile_expr(Compiler *compiler, Expr *expr){
 			write_location(compiler, list_token);
 
             if(exprs){
-                size_t len = DYNARR_LEN(exprs);
+                size_t len = dynarr_len(exprs);
 
 				for(size_t i = 0; i < len; i++){
-                    Expr *expr = dynarr_get_ptr(i, exprs);
+                    Expr *expr = dynarr_get_ptr(exprs, i);
 
                     compile_expr(compiler, expr);
 
@@ -1629,10 +1629,10 @@ void compile_expr(Compiler *compiler, Expr *expr){
 			write_location(compiler, dict_expr->dict_token);
 
             if(key_values){
-                size_t len = DYNARR_LEN(key_values);
+                size_t len = dynarr_len(key_values);
 
                 for (size_t i = 0; i < len; i++){
-                    DictKeyValue *key_value = dynarr_get_ptr(i, key_values);
+                    DictKeyValue *key_value = dynarr_get_ptr(key_values, i);
                     Expr *key = key_value->key;
                     Expr *value = key_value->value;
 
@@ -1649,14 +1649,14 @@ void compile_expr(Compiler *compiler, Expr *expr){
 			RecordExpr *record_expr = expr->sub_expr;
             Token *record_token = record_expr->record_token;
 			DynArr *key_values = record_expr->key_values;
-            size_t key_values_len = key_values ? DYNARR_LEN(key_values) : 0;
+            size_t key_values_len = key_values ? dynarr_len(key_values) : 0;
 
             write_chunk(compiler, OP_RECORD);
 			write_location(compiler, record_token);
             write_i16(compiler, (int16_t)key_values_len);
 
 			for(size_t i = 0; i < key_values_len; i++){
-                RecordExprValue *key_value = dynarr_get_ptr(i, key_values);
+                RecordExprValue *key_value = dynarr_get_ptr(key_values, i);
                 Token *key = key_value->key;
                 Expr *value = key_value->value;
 
@@ -1761,7 +1761,7 @@ int compile_if_branch(
     Token *branch_token = if_branch->branch_token;
     Expr *condition = if_branch->condition_expr;
     DynArr *stmts = if_branch->stmts;
-    size_t stmts_len = stmts ? DYNARR_LEN(stmts) : 0;
+    size_t stmts_len = stmts ? dynarr_len(stmts) : 0;
 
     compile_expr(compiler, condition);
     jif(compiler, branch_token, ".IFB(%"PRId32")_END_%"PRId32, id, which);
@@ -1781,7 +1781,7 @@ int compile_if_branch(
     		);
     	}
 
-        Stmt *stmt = dynarr_get_ptr(i, stmts);
+        Stmt *stmt = dynarr_get_ptr(stmts, i);
         block->current_stmt = i + 1;
 
         compile_stmt(compiler, stmt);
@@ -1905,11 +1905,11 @@ char *resolve_import_names(
 
     lzbstr_grow_by(1024, lzbstr);
 
-    size_t names_len = DYNARR_LEN(names);
-    char *module_name = ((Token *)dynarr_get_ptr(names_len - 1, names))->lexeme;
+    size_t names_len = dynarr_len(names);
+    char *module_name = ((Token *)dynarr_get_ptr(names, names_len - 1))->lexeme;
 
     for (size_t i = 0; i < names_len; i++){
-        Token *name_token = dynarr_get_ptr(i, names);
+        Token *name_token = dynarr_get_ptr(names, i);
         lzbstr_append(name_token->lexeme, lzbstr);
 
         if(i + 1 < names_len){
@@ -1923,11 +1923,11 @@ char *resolve_import_names(
 
     lzbstr_reset(lzbstr);
 
-    size_t search_pathnames_len = DYNARR_LEN(search_pathnames);
+    size_t search_pathnames_len = dynarr_len(search_pathnames);
     char *pathname = NULL;
 
     for (size_t i = 0; i < search_pathnames_len; i++){
-        DStr search_pathname = DYNARR_GET_AS(DStr, i, search_pathnames);
+        DStr search_pathname = DYNARR_GET_AS(search_pathnames, DStr, i);
 
         lzbstr_append(search_pathname.buff, lzbstr);
 
@@ -2151,7 +2151,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
         }case BLOCK_STMTTYPE:{
             BlockStmt *block_stmt = stmt->sub_stmt;
             DynArr *stmts = block_stmt->stmts;
-            size_t stmts_len = stmts ? DYNARR_LEN(stmts) : 0;
+            size_t stmts_len = stmts ? dynarr_len(stmts) : 0;
 
             Scope *scope = scope_manager_push(manager, BLOCK_SCOPE_TYPE);
             Block *block = push_block(compiler);
@@ -2167,7 +2167,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
              		);
              	}
 
-             	Stmt *stmt = dynarr_get_ptr(i, stmts);
+             	Stmt *stmt = dynarr_get_ptr(stmts, i);
                 block->current_stmt = i + 1;
 
                 compile_stmt(compiler, stmt);
@@ -2185,14 +2185,14 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             IfStmtBranch *if_branch = if_stmt->if_branch;
             DynArr *elif_branches = if_stmt->elif_branches;
             DynArr *else_stmts = if_stmt->else_stmts;
-            size_t elif_branches_len = elif_branches ? DYNARR_LEN(elif_branches) : 0;
+            size_t elif_branches_len = elif_branches ? dynarr_len(elif_branches) : 0;
             int32_t if_id = generate_id(compiler);
 
-            size_t branches_len = 1 + (elif_branches ? DYNARR_LEN(elif_branches) : 0) + (else_stmts ? 1 : 0);
+            size_t branches_len = 1 + (elif_branches ? dynarr_len(elif_branches) : 0) + (else_stmts ? 1 : 0);
             uint16_t returns = compile_if_branch(compiler, if_branch, IF_SCOPE_TYPE, if_id, 0) ? 1 : 0;
 
             for (size_t i = 0; i < elif_branches_len; i++){
-                IfStmtBranch *elif_branch = dynarr_get_ptr(i, elif_branches);
+                IfStmtBranch *elif_branch = dynarr_get_ptr(elif_branches, i);
 
                 if(compile_if_branch(
                 	compiler,
@@ -2206,7 +2206,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             }
 
             if(else_stmts){
-                size_t else_stmts_len = DYNARR_LEN(else_stmts);
+                size_t else_stmts_len = dynarr_len(else_stmts);
 
                 Scope *scope = scope_manager_push(manager, ELSE_SCOPE_TYPE);
                 Block *block = push_block(compiler);
@@ -2222,7 +2222,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
 	               		);
 	               	}
 
-                    Stmt *stmt = dynarr_get_ptr(i, else_stmts);
+                    Stmt *stmt = dynarr_get_ptr(else_stmts, i);
                     block->current_stmt = i + 1;
 
                     compile_stmt(compiler, stmt);
@@ -2301,7 +2301,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             Token *while_token = while_stmt->while_token;
             Expr *condition_expr = while_stmt->condition_expr;
             DynArr *stmts = while_stmt->stmts;
-            size_t stmts_len = DYNARR_LEN(stmts);
+            size_t stmts_len = dynarr_len(stmts);
             int32_t while_id = generate_id(compiler);
 
             label(compiler, while_token, ".WHILE(%"PRId32")_TEST", while_id);
@@ -2325,7 +2325,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
 	           		);
 	           	}
 
-                Stmt *stmt = dynarr_get_ptr(i, stmts);
+                Stmt *stmt = dynarr_get_ptr(stmts, i);
                 block->current_stmt = i + 1;
 
                 compile_stmt(compiler, stmt);
@@ -2349,7 +2349,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             Token *for_type_token = for_range_stmt->for_type_token;
             Expr *right_expr = for_range_stmt->right_expr;
             DynArr *stmts = for_range_stmt->stmts;
-            size_t stmts_len = DYNARR_LEN(stmts);
+            size_t stmts_len = dynarr_len(stmts);
             int32_t for_id = generate_id(compiler);
 
             // BLOCK_SCOPE
@@ -2394,7 +2394,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
 	           		);
 	           	}
 
-                Stmt *stmt = dynarr_get_ptr(i, stmts);
+                Stmt *stmt = dynarr_get_ptr(stmts, i);
                 block->current_stmt = i + 1;
 
                 compile_stmt(compiler, stmt);
@@ -2491,7 +2491,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
                 write_location(compiler, try_token);
                 mark(compiler, try_token, "CATCH(%"PRId32")", try_id);
 
-                size_t len = DYNARR_LEN(try_stmts);
+                size_t len = dynarr_len(try_stmts);
                 block->stmts_len = len;
 
                 for (size_t i = 0; i < len; i++){
@@ -2503,7 +2503,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
                  		);
                 	}
 
-                    Stmt *try_stmt = dynarr_get_ptr(i, try_stmts);
+                    Stmt *try_stmt = dynarr_get_ptr(try_stmts, i);
                     block->current_stmt = i + 1;
 
                     compile_stmt(compiler, try_stmt);
@@ -2529,7 +2529,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
              	label(compiler, catch_token, "CATCH(%"PRId32")", try_id);
                 pop_scope_locals(compiler, AS_LOCAL_SCOPE(try_scope));
 
-                size_t len = DYNARR_LEN(catch_stmts);
+                size_t len = dynarr_len(catch_stmts);
                 block->stmts_len = len;
 
                 for (size_t i = 0; i < len; i++){
@@ -2541,7 +2541,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
                   		);
                  	}
 
-                 	Stmt *catch_stmt = dynarr_get_ptr(i, catch_stmts);
+                 	Stmt *catch_stmt = dynarr_get_ptr(catch_stmts, i);
                     block->current_stmt = i + 1;
 
                     compile_stmt(compiler, catch_stmt);
@@ -2613,8 +2613,8 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             Token *identifier_token = fn_stmt->identifier_token;
             DynArr *params = fn_stmt->params;
             DynArr *stmts = fn_stmt->stmts;
-            size_t params_len = params ? DYNARR_LEN(params) : 0;
-            size_t stmts_len = stmts ? DYNARR_LEN(stmts) : 0;
+            size_t params_len = params ? dynarr_len(params) : 0;
+            size_t stmts_len = stmts ? dynarr_len(stmts) : 0;
 
             if(!scope_manager_is_global_scope(manager)){
                 error(
@@ -2644,7 +2644,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             Block *block = push_block(compiler);
 
             for (size_t i = 0; i < params_len; i++){
-                Token *param_identifier = dynarr_get_ptr(i, params);
+                Token *param_identifier = dynarr_get_ptr(params, i);
 
                 scope_manager_define_local(
                     manager,
@@ -2666,7 +2666,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
              		);
              	}
 
-             	Stmt *stmt = dynarr_get_ptr(i, stmts);
+             	Stmt *stmt = dynarr_get_ptr(stmts, i);
                 block->current_stmt = i + 1;
 
                 compile_stmt(compiler, stmt);
@@ -2690,10 +2690,10 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
          	ImportStmt *import_stmt = stmt->sub_stmt;
             Token *import_token = import_stmt->import_token;
             DynArr *names = import_stmt->names;
-            size_t names_len = DYNARR_LEN(names);
+            size_t names_len = dynarr_len(names);
             Token *alt_name_token = import_stmt->alt_name;
             Token *name_token = alt_name_token ? alt_name_token->lexeme :
-                dynarr_get_ptr(DYNARR_LEN(names) - 1, names);
+                dynarr_get_ptr(names, dynarr_len(names) - 1);
 
             if(!scope_manager_is_global_scope(manager)){
           		error(
@@ -2730,15 +2730,19 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
                 name_token->lexeme,
                 &imported_manager
             );
-            scope_manager_define_module(manager, name_token);
 
+            scope_manager_define_module(manager, name_token);
             lzarena_restore(arena, state);
 
             vm_factory_module_add_module(current_module(compiler), imported_module);
+
             vm_factory_module_globals_add_obj(
             	current_module(compiler),
-             	(Obj *)vm_factory_module_obj_create(compiler->rtallocator, imported_module),
-              	alt_name_token->lexeme,
+             	(Obj *)vm_factory_module_obj_create(
+                    compiler->rtallocator,
+                    imported_module
+                ),
+              	name_token->lexeme,
                	PRIVATE_GLOVAL_VALUE_TYPE
             );
 
@@ -2747,10 +2751,10 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             ExportStmt *export_stmt = stmt->sub_stmt;
             Token *export_token = export_stmt->export_token;
             DynArr *symbols = export_stmt->symbols;
-            size_t symbols_len = symbols ? DYNARR_LEN(symbols) : 0;
+            size_t symbols_len = symbols ? dynarr_len(symbols) : 0;
 
             for (size_t i = 0; i < symbols_len; i++){
-                Token *symbol_token = dynarr_get_ptr(i, symbols);
+                Token *symbol_token = dynarr_get_ptr(symbols, i);
 
                 write_chunk(compiler, OP_GASET);
                 write_location(compiler, export_token);
@@ -2841,7 +2845,7 @@ Module *compiler_compile(
 
         declare_defaults(compiler);
 
-        size_t len = DYNARR_LEN(stmts);
+        size_t len = dynarr_len(stmts);
         Fn *entry_fn = vm_factory_fn_create(compiler->rtallocator, "entry", 0);
 
         main_module->entry_fn = entry_fn;
@@ -2850,7 +2854,7 @@ Module *compiler_compile(
         push_unit(compiler, entry_fn);
 
         for (size_t i = 0; i < len; i++){
-            Stmt *stmt = dynarr_get_ptr(i, stmts);
+            Stmt *stmt = dynarr_get_ptr(stmts, i);
             compile_stmt(compiler, stmt);
         }
 
@@ -2892,7 +2896,7 @@ Module *compiler_import(
 
         declare_defaults(compiler);
 
-        size_t len = DYNARR_LEN(stmts);
+        size_t len = dynarr_len(stmts);
         Fn *import_entry_fn = vm_factory_fn_create(compiler->rtallocator, "import entry", 0);
 
         import_module->entry_fn = import_entry_fn;
@@ -2901,7 +2905,7 @@ Module *compiler_import(
         push_unit(compiler, import_entry_fn);
 
         for (size_t i = 0; i < len; i++){
-            Stmt *stmt = dynarr_get_ptr(i, stmts);
+            Stmt *stmt = dynarr_get_ptr(stmts, i);
             compile_stmt(compiler, stmt);
         }
 

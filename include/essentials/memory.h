@@ -39,7 +39,7 @@ typedef struct complex_context{
 #define MEMORY_DEALLOC(allocator, type, count, ptr)                ((allocator)->dealloc((ptr), (sizeof(type) * count), (allocator)->ctx))
 
 #define MEMORY_LZBSTR(_allocator)                                  (lzbstr_create((LZBStrAllocator *)(_allocator)))
-#define MEMORY_DYNARR_TYPE(_allocator, _type)                      (DYNARR_CREATE_TYPE(_type, (DynArrAllocator *)(_allocator)))
+#define MEMORY_DYNARR_TYPE(_allocator, _type)                      (DYNARR_CREATE_TYPE((DynArrAllocator *)(_allocator), _type))
 #define MEMORY_DYNARR_PTR(_allocator)                              (DYNARR_CREATE_PTR((DynArrAllocator *)(_allocator)))
 #define MEMORY_LZOHTABLE(_allocator)                               (lzohtable_create(64, 0.8, (LZOHTableAllocator *)(_allocator)))
 #define MEMORY_LZOHTABLE_LEN(_allocator, _len)                     (lzohtable_create((_len), 0.8, (LZOHTableAllocator *)(_allocator)))

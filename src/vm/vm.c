@@ -170,24 +170,24 @@ static inline int32_t read_i32(VM *vm){
 int64_t read_i64_const(VM *vm){
     DynArr *constants = VM_CURRENT_ICONSTS(vm);
     int16_t idx = read_i16(vm);
-    return DYNARR_GET_AS(int64_t, (size_t)idx, constants);
+    return DYNARR_GET_AS(constants, int64_t, (size_t)idx);
 }
 
 double read_float_const(VM *vm){
 	DynArr *float_values = VM_CURRENT_FCONSTS(vm);
 	int16_t idx = read_i16(vm);
-	return DYNARR_GET_AS(double, (size_t)idx, float_values);
+	return DYNARR_GET_AS(float_values, double, (size_t)idx);
 }
 
 static char *read_str(VM *vm, size_t *out_len){
     DynArr *static_strs = MODULE_STRINGS(VM_CURRENT_MODULE(vm));
     size_t idx = (size_t)read_i16(vm);
 
-    if(idx >= DYNARR_LEN(static_strs)){
+    if(idx >= dynarr_len(static_strs)){
         vmu_error(vm, "Illegal module static strings access index");
     }
 
-    DStr raw_str = DYNARR_GET_AS(DStr, idx, static_strs);
+    DStr raw_str = DYNARR_GET_AS(static_strs, DStr, idx);
 
     if(out_len){
         *out_len = raw_str.len;
@@ -199,11 +199,11 @@ static char *read_str(VM *vm, size_t *out_len){
 static inline void *get_symbol(size_t index, SubModuleSymbolType type, Module *module, VM *vm){
     DynArr *symbols = MODULE_SYMBOLS(module);
 
-    if(index >= DYNARR_LEN(symbols)){
+    if(index >= dynarr_len(symbols)){
         vmu_error(vm, "Failed to get module symbol: index out of bounds");
     }
 
-    SubModuleSymbol *symbol = &DYNARR_GET_AS(SubModuleSymbol, index, symbols);
+    SubModuleSymbol *symbol = &DYNARR_GET_AS(symbols, SubModuleSymbol, index);
 
     if(symbol->type != type){
         vmu_error(vm, "Failed to get module symbol: mismatch types");
@@ -309,22 +309,22 @@ static inline uint8_t advance(VM *vm){
     Frame *frame = current_frame(vm);
     DynArr *chunks = frame->fn->chunks;
 
-    if(frame->ip >= DYNARR_LEN(chunks)){
+    if(frame->ip >= dynarr_len(chunks)){
         vmu_error(vm, "IP excceded chunks length");
     }
 
-    return DYNARR_GET_AS(uint8_t, frame->ip++, chunks);
+    return DYNARR_GET_AS(chunks, uint8_t, frame->ip++);
 }
 
 static inline uint8_t advance_save(VM *vm){
     Frame *frame = current_frame(vm);
     DynArr *chunks = frame->fn->chunks;
 
-    if(frame->ip >= DYNARR_LEN(chunks)){
+    if(frame->ip >= dynarr_len(chunks)){
         vmu_error(vm, "IP excceded chunks length");
     }
 
-    uint8_t chunk = DYNARR_GET_AS(uint8_t, frame->ip++, chunks);
+    uint8_t chunk = DYNARR_GET_AS(chunks, uint8_t, frame->ip++);
     frame->last_offset = frame->ip - 1;
 
     return chunk;
@@ -1540,7 +1540,7 @@ static int execute(VM *vm){
                 size_t index = (size_t)read_i32(vm);
                 Module *module = VM_CURRENT_MODULE(vm);
                 DynArr *symbols = MODULE_SYMBOLS(module);
-                size_t symbols_len = DYNARR_LEN(symbols);
+                size_t symbols_len = dynarr_len(symbols);
 
                 if(index >= symbols_len){
                     vmu_error(
@@ -1550,7 +1550,7 @@ static int execute(VM *vm){
                     );
                 }
 
-                SubModuleSymbol symbol = DYNARR_GET_AS(SubModuleSymbol, index, symbols);
+                SubModuleSymbol symbol = DYNARR_GET_AS(symbols, SubModuleSymbol, index);
 
                 switch (symbol.type){
                     case FUNCTION_SUBMODULE_SYM_TYPE:{
@@ -2208,10 +2208,10 @@ void vm_destroy(VM *vm){
     vmu_clean_up(vm);
 
     DynArr *native_symbols = vm->native_symbols;
-    const size_t native_symbols_len = DYNARR_LEN(native_symbols);
+    const size_t native_symbols_len = dynarr_len(native_symbols);
 
     for (size_t i = 0; i < native_symbols_len; i++){
-        LZOHTable *symbols = (LZOHTable *)dynarr_get_ptr(i, native_symbols);
+        LZOHTable *symbols = (LZOHTable *)dynarr_get_ptr(native_symbols, i);
         LZOHTABLE_DESTROY(symbols);
     }
 

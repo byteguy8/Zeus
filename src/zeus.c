@@ -166,14 +166,14 @@ DStr get_cwd(Allocator *allocator){
 
 DynArr *parse_search_paths(char *source_pathname, char *raw_search_paths, Allocator *allocator){
     DynArr *search_paths = DYNARR_CREATE_TYPE_BY(
+        (DynArrAllocator *)allocator,
         DStr,
-        DEFAULT_INITIAL_SEARCH_PATHS_BUFF_LEN,
-        (DynArrAllocator *)allocator
+        DEFAULT_INITIAL_SEARCH_PATHS_BUFF_LEN
     );
 
     DStr cwd_rstr = get_cwd(allocator);
 
-    dynarr_insert(&cwd_rstr, search_paths);
+    dynarr_insert(search_paths, &cwd_rstr);
 
     size_t source_pathname_len = strlen(source_pathname);
     size_t result_pathname_len = cwd_rstr.len + 1 + source_pathname_len;
@@ -192,7 +192,7 @@ DynArr *parse_search_paths(char *source_pathname, char *raw_search_paths, Alloca
             .buff = buff
         };
 
-        dynarr_insert(&parent_rstr, search_paths);
+        dynarr_insert(search_paths, &parent_rstr);
     }
 
     if(!raw_search_paths){
@@ -221,7 +221,7 @@ DynArr *parse_search_paths(char *source_pathname, char *raw_search_paths, Alloca
         buff[buff_len] = 0;
 
         DStr rstr = (DStr){.len = buff_len, .buff = buff};
-        dynarr_insert(&rstr, search_paths);
+        dynarr_insert(search_paths, &rstr);
 
         a_idx = i + 1;
     }

@@ -51,7 +51,7 @@ static inline Token *create_token_literal(
 	Lexer *lexer
 );
 static inline Token *create_token(TokType type, Lexer *lexer);
-#define ADD_TOKEN_RAW(_token)(dynarr_insert_ptr((_token), lexer->tokens))
+#define ADD_TOKEN_RAW(_token)(dynarr_insert_ptr(lexer->tokens, (_token)))
 
 static void comment(Lexer *lexer);
 static Token *decimal(Lexer *lexer);
@@ -498,7 +498,7 @@ int interpolation(DynArr *tokens, Lexer *lexer){
         }
 
         if(token){
-            dynarr_insert_ptr(token, tokens);
+            dynarr_insert_ptr(tokens, token);
             lexer->start = lexer->current;
             continue;
         }
@@ -563,7 +563,7 @@ Token *string(Lexer *lexer){
                     lexer
                 );
 
-                dynarr_insert_ptr(token, template_tokens);
+                dynarr_insert_ptr(template_tokens, token);
 
                 from_inner = to;
             }
@@ -650,16 +650,21 @@ Token *string(Lexer *lexer){
                 lexer
             );
 
-            dynarr_insert_ptr(token, template_tokens);
+            dynarr_insert_ptr(template_tokens, token);
         }
 
         size_t lexeme_len;
         char *lexeme = create_lexeme("EOF", lexer, &lexeme_len);
         Token *token = create_token_raw(-1, EOF_TOKTYPE, lexeme_len, lexeme, 0, NULL, lexer);
 
-        dynarr_insert_ptr(token, template_tokens);
+        dynarr_insert_ptr(template_tokens, token);
 
-        return create_token_literal(TEMPLATE_TYPE_TOKTYPE, sizeof(DynArr), template_tokens, lexer);
+        return create_token_literal(
+            TEMPLATE_TYPE_TOKTYPE,
+            sizeof(DynArr *),
+            template_tokens,
+            lexer
+        );
     }
 
     size_t literal_size;

@@ -198,14 +198,14 @@ int vm_factory_module_add_fn(Module *module, Fn *fn, size_t *out_idx){
         .value = fn
     };
 
-    if(dynarr_insert(&symbol, symbols)){
+    if(dynarr_insert(symbols, &symbol)){
         return 1;
     }
 
     fn->module = module;
 
     if(out_idx){
-        *out_idx = DYNARR_LEN(symbols) - 1;
+        *out_idx = dynarr_len(symbols) - 1;
     }
 
     return 0;
@@ -219,12 +219,12 @@ int vm_factory_module_add_closure(Module *module, MetaClosure *closure, size_t *
         .value = closure
     };
 
-    if(dynarr_insert(&symbol, symbols)){
+    if(dynarr_insert(symbols, &symbol)){
         return 1;
     }
 
     if(out_idx){
-        *out_idx = DYNARR_LEN(symbols) - 1;
+        *out_idx = dynarr_len(symbols) - 1;
     }
 
     return 0;
@@ -239,7 +239,7 @@ int vm_factory_module_add_module(Module *target_module, Module *module){
         .value = module
     };
 
-    if(dynarr_insert(&symbol, symbols)){
+    if(dynarr_insert(symbols, &symbol)){
         return 1;
     }
 

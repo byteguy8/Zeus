@@ -42,7 +42,7 @@ NativeFn *native_dict_get(size_t key_size, const char *key, VM *vm){
         Allocator *allocator = &vm->front_allocator;
         dict_symbols = MEMORY_LZOHTABLE(allocator);
 
-        dynarr_insert_ptr(dict_symbols, vm->native_symbols);
+        dynarr_insert_ptr(vm->native_symbols, dict_symbols);
 
         vm_factory_native_fn_add_info(dict_symbols, allocator, "len", 0, native_dict_fn_len);
         vm_factory_native_fn_add_info(dict_symbols, allocator, "contains", 1, native_dict_fn_contains);

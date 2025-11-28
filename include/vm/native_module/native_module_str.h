@@ -76,7 +76,7 @@ NativeFn *native_str_get(size_t key_size, const char *key, VM *vm){
         Allocator *allocator = &vm->front_allocator;
         str_symbols = MEMORY_LZOHTABLE(allocator);
 
-        dynarr_insert_ptr(str_symbols, vm->native_symbols);
+        dynarr_insert_ptr(vm->native_symbols, str_symbols);
 
         vm_factory_native_fn_add_info(str_symbols, allocator, "len", 0, native_fn_str_len);
         vm_factory_native_fn_add_info(str_symbols, allocator, "code", 1, native_fn_str_code);
