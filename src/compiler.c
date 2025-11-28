@@ -11,11 +11,11 @@
 #include "scope_manager/symbol.h"
 
 #include "value.h"
-#include "vm/native_module/native_module_os.h"
-#include "vm/native_module/native_module_math.h"
-#include "vm/native_module/native_module_random.h"
-#include "vm/native_module/native_module_time.h"
-#include "vm/native_module/native_module_io.h"
+#include "native_module/native_module_os.h"
+#include "native_module/native_module_math.h"
+#include "native_module/native_module_random.h"
+#include "native_module/native_module_time.h"
+#include "native_module/native_module_io.h"
 
 #include "utils.h"
 #include "types.h"

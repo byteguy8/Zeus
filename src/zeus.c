@@ -9,9 +9,9 @@
 #include "dumpper.h"
 
 #include "scope_manager/scope_manager.h"
+#include "native_module/native_module_default.h"
 
 #include "vm/vm_factory.h"
-#include "vm/native_module/native_module_default.h"
 #include "vm/vmu.h"
 #include "vm/vm.h"
 
