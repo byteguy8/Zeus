@@ -911,7 +911,7 @@ Stmt *parse_stmt(Parser *parser){
         block_stmt->left_bracket_token = left_bracket_token;
         block_stmt->stmts = stmts;
 
-        return create_stmt(BLOCK_STMTTYPE, block_stmt, parser);
+        return create_stmt(BLOCK_STMT_TYPE, block_stmt, parser);
     }
 
 	if(match(parser, 1, IF_TOKTYPE)){
@@ -934,7 +934,7 @@ Stmt *parse_stmt(Parser *parser){
 
 		stop_stmt->stop_token = stop_token;
 
-		return create_stmt(STOP_STMTTYPE, stop_stmt, parser);
+		return create_stmt(STOP_STMT_TYPE, stop_stmt, parser);
 	}
 
     if(match(parser, 1, CONTINUE_TOKTYPE)){
@@ -945,7 +945,7 @@ Stmt *parse_stmt(Parser *parser){
 
         continue_stmt->continue_token = continue_token;
 
-        return create_stmt(CONTINUE_STMTTYPE, continue_stmt, parser);
+        return create_stmt(CONTINUE_STMT_TYPE, continue_stmt, parser);
     }
 
     if(match(parser, 1, RET_TOKTYPE)){
@@ -985,7 +985,7 @@ Stmt *parse_expr_stmt(Parser *parser){
 
     Stmt *stmt = MEMORY_ALLOC(CTALLOCATOR, Stmt, 1);
 
-    stmt->type = EXPR_STMTTYPE;
+    stmt->type = EXPR_STMT_TYPE;
     stmt->sub_stmt = expr_stmt;
 
     return stmt;
@@ -1108,7 +1108,7 @@ Stmt *parse_if_stmt(Parser *parser){
     if_stmt->elif_branches = elif_branches;
     if_stmt->else_stmts = else_stmts;
 
-	return create_stmt(IF_STMTTYPE, if_stmt, parser);
+	return create_stmt(IF_STMT_TYPE, if_stmt, parser);
 }
 
 Stmt *parse_while_stmt(Parser *parser){
@@ -1130,7 +1130,7 @@ Stmt *parse_while_stmt(Parser *parser){
 	while_stmt->condition_expr = condition;
 	while_stmt->stmts = stmts;
 
-	return create_stmt(WHILE_STMTTYPE, while_stmt, parser);
+	return create_stmt(WHILE_STMT_TYPE, while_stmt, parser);
 }
 
 Stmt *parse_for_stmt(Parser *parser){
@@ -1171,7 +1171,7 @@ Stmt *parse_for_stmt(Parser *parser){
     for_range_stmt->right_expr = right_expr;
     for_range_stmt->stmts = stmts;
 
-    return create_stmt(FOR_RANGE_STMTTYPE, for_range_stmt, parser);
+    return create_stmt(FOR_RANGE_STMT_TYPE, for_range_stmt, parser);
 }
 
 Stmt *parse_throw_stmt(Parser *parser){
@@ -1191,7 +1191,7 @@ Stmt *parse_throw_stmt(Parser *parser){
     throw_stmt->throw_token = throw_token;
 	throw_stmt->value_expr = value;
 
-    return create_stmt(THROW_STMTTYPE, throw_stmt, parser);
+    return create_stmt(THROW_STMT_TYPE, throw_stmt, parser);
 }
 
 Stmt *parse_try_stmt(Parser *parser){
@@ -1224,7 +1224,7 @@ Stmt *parse_try_stmt(Parser *parser){
 	try_stmt->err_identifier = err_identifier;
 	try_stmt->catch_stmts = catch_stmts;
 
-    return create_stmt(TRY_STMTTYPE, try_stmt, parser);
+    return create_stmt(TRY_STMT_TYPE, try_stmt, parser);
 }
 
 Stmt *parse_return_stmt(Parser *parser){
@@ -1243,7 +1243,7 @@ Stmt *parse_return_stmt(Parser *parser){
     return_stmt->return_token = return_token;
     return_stmt->ret_expr = value;
 
-    return create_stmt(RETURN_STMTTYPE, return_stmt, parser);
+    return create_stmt(RETURN_STMT_TYPE, return_stmt, parser);
 }
 
 Stmt *parse_var_decl_stmt(Parser *parser){
@@ -1276,7 +1276,7 @@ Stmt *parse_var_decl_stmt(Parser *parser){
     var_decl_stmt->identifier_token = identifier_token;
     var_decl_stmt->initial_value_expr = initializer_expr;
 
-    return create_stmt(VAR_DECL_STMTTYPE, var_decl_stmt, parser);
+    return create_stmt(VAR_DECL_STMT_TYPE, var_decl_stmt, parser);
 }
 
 Stmt *parse_function_stmt(Parser *parser){
@@ -1330,7 +1330,7 @@ Stmt *parse_function_stmt(Parser *parser){
     function_stmt->params = params;
     function_stmt->stmts = stmts;
 
-    return create_stmt(FUNCTION_STMTTYPE, function_stmt, parser);
+    return create_stmt(FUNCTION_STMT_TYPE, function_stmt, parser);
 }
 
 Stmt *parse_import_stmt(Parser *parser){
@@ -1362,7 +1362,7 @@ Stmt *parse_import_stmt(Parser *parser){
     import_stmt->names = names;
     import_stmt->alt_name = alt_name;
 
-    return create_stmt(IMPORT_STMTTYPE, import_stmt, parser);
+    return create_stmt(IMPORT_STMT_TYPE, import_stmt, parser);
 }
 
 Stmt *parse_export_stmt(Parser *parser){
@@ -1386,7 +1386,7 @@ Stmt *parse_export_stmt(Parser *parser){
     export_stmt->export_token = export_token;
     export_stmt->symbols = symbols;
 
-    return create_stmt(EXPORT_STMTTYPE, export_stmt, parser);
+    return create_stmt(EXPORT_STMT_TYPE, export_stmt, parser);
 }
 //--------------------------------------------------------------------------//
 //                          PUBLIC IMPLEMENTATION                           //

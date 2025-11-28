@@ -841,7 +841,7 @@ void compile_expr(Compiler *compiler, Expr *expr){
                 Stmt *stmt = dynarr_get_ptr(stmts, i);
                 compile_stmt(compiler, stmt);
 
-                if(i + 1 >= stmts_len && stmt->type == RETURN_STMTTYPE){
+                if(i + 1 >= stmts_len && stmt->type == RETURN_STMT_TYPE){
                     must_return = 0;
                 }
             }
@@ -2083,7 +2083,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
     ScopeManager *manager = compiler->manager;
 
     switch (stmt->type){
-        case EXPR_STMTTYPE:{
+        case EXPR_STMT_TYPE:{
             ExprStmt *expr_stmt = stmt->sub_stmt;
             Expr *sub_expr = expr_stmt->expr;
 
@@ -2091,7 +2091,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             write_chunk(compiler, OP_POP);
 
             break;
-        }case VAR_DECL_STMTTYPE:{
+        }case VAR_DECL_STMT_TYPE:{
             VarDeclStmt *var_decl_stmt = stmt->sub_stmt;
             uint8_t is_mutable = var_decl_stmt->is_mutable;
             uint8_t is_initialized = var_decl_stmt->is_initialized;
@@ -2148,7 +2148,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             }
 
             break;
-        }case BLOCK_STMTTYPE:{
+        }case BLOCK_STMT_TYPE:{
             BlockStmt *block_stmt = stmt->sub_stmt;
             DynArr *stmts = block_stmt->stmts;
             size_t stmts_len = stmts ? dynarr_len(stmts) : 0;
@@ -2180,7 +2180,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             scope_manager_pop(manager);
 
             break;
-        }case IF_STMTTYPE:{
+        }case IF_STMT_TYPE:{
             IfStmt *if_stmt = stmt->sub_stmt;
             IfStmtBranch *if_branch = if_stmt->if_branch;
             DynArr *elif_branches = if_stmt->elif_branches;
@@ -2244,7 +2244,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             label(compiler, if_branch->branch_token, ".IF(%"PRId32")_END", if_id);
 
             break;
-        }case STOP_STMTTYPE:{
+        }case STOP_STMT_TYPE:{
             StopStmt *stop_stmt = stmt->sub_stmt;
             Token *stop_token = stop_stmt->stop_token;
 
@@ -2265,7 +2265,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             );
 
             break;
-        }case CONTINUE_STMTTYPE:{
+        }case CONTINUE_STMT_TYPE:{
             ContinueStmt *continue_stmt = stmt->sub_stmt;
             Token *continue_token = continue_stmt->continue_token;
 
@@ -2296,7 +2296,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             );
 
             break;
-        }case WHILE_STMTTYPE:{
+        }case WHILE_STMT_TYPE:{
             WhileStmt *while_stmt = stmt->sub_stmt;
             Token *while_token = while_stmt->while_token;
             Expr *condition_expr = while_stmt->condition_expr;
@@ -2341,7 +2341,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             scope_manager_pop(manager);
 
             break;
-        }case FOR_RANGE_STMTTYPE:{
+        }case FOR_RANGE_STMT_TYPE:{
             ForRangeStmt *for_range_stmt = stmt->sub_stmt;
             Token *for_token = for_range_stmt->for_token;
             Token *symbol_token = for_range_stmt->symbol_token;
@@ -2444,7 +2444,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             scope_manager_pop(manager);
 
             break;
-        }case THROW_STMTTYPE:{
+        }case THROW_STMT_TYPE:{
             ThrowStmt *throw_stmt = stmt->sub_stmt;
             Token *throw_token = throw_stmt->throw_token;
             Expr *throw_value_expr = throw_stmt->value_expr;
@@ -2466,7 +2466,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             write_chunk(compiler, throw_value_expr != NULL);
 
             break;
-        }case TRY_STMTTYPE:{
+        }case TRY_STMT_TYPE:{
             TryStmt *try_stmt = stmt->sub_stmt;
             Token *try_token = try_stmt->try_token;
             DynArr *try_stmts = try_stmt->try_stmts;
@@ -2559,7 +2559,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             scope_manager_pop(manager);
 
             break;
-        }case RETURN_STMTTYPE:{
+        }case RETURN_STMT_TYPE:{
             ReturnStmt *ret_stmt = stmt->sub_stmt;
             Token *ret_token = ret_stmt->return_token;
             Expr *ret_expr = ret_stmt->ret_expr;
@@ -2608,7 +2608,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             write_location(compiler, ret_token);
 
             break;
-        }case FUNCTION_STMTTYPE:{
+        }case FUNCTION_STMT_TYPE:{
             FunctionStmt *fn_stmt = stmt->sub_stmt;
             Token *identifier_token = fn_stmt->identifier_token;
             DynArr *params = fn_stmt->params;
@@ -2671,7 +2671,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
 
                 compile_stmt(compiler, stmt);
 
-                if(i + 1 >= stmts_len && stmt->type == RETURN_STMTTYPE){
+                if(i + 1 >= stmts_len && stmt->type == RETURN_STMT_TYPE){
                     must_return = 0;
                 }
             }
@@ -2686,7 +2686,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             scope_manager_pop(manager);
 
             break;
-        }case IMPORT_STMTTYPE:{
+        }case IMPORT_STMT_TYPE:{
          	ImportStmt *import_stmt = stmt->sub_stmt;
             Token *import_token = import_stmt->import_token;
             DynArr *names = import_stmt->names;
@@ -2747,7 +2747,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             );
 
             break;
-        }case EXPORT_STMTTYPE:{
+        }case EXPORT_STMT_TYPE:{
             ExportStmt *export_stmt = stmt->sub_stmt;
             Token *export_token = export_stmt->export_token;
             DynArr *symbols = export_stmt->symbols;

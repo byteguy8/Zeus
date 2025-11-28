@@ -1,26 +1,26 @@
 #ifndef STMT_H
 #define STMT_H
 
-#include "token.h"
-#include "expr.h"
 #include "essentials/dynarr.h"
 
-typedef enum stmt_type{
-    EXPR_STMTTYPE,
-    BLOCK_STMTTYPE,
-    IF_STMTTYPE,
-    STOP_STMTTYPE,
-    CONTINUE_STMTTYPE,
-    WHILE_STMTTYPE,
-    FOR_RANGE_STMTTYPE,
-    THROW_STMTTYPE,
-    TRY_STMTTYPE,
-    RETURN_STMTTYPE,
+#include "token.h"
+#include "expr.h"
 
-    VAR_DECL_STMTTYPE,
-    FUNCTION_STMTTYPE,
-    IMPORT_STMTTYPE,
-    EXPORT_STMTTYPE,
+typedef enum stmt_type{
+    EXPR_STMT_TYPE,
+    VAR_DECL_STMT_TYPE,
+    BLOCK_STMT_TYPE,
+    IF_STMT_TYPE,
+    STOP_STMT_TYPE,
+    CONTINUE_STMT_TYPE,
+    WHILE_STMT_TYPE,
+    FOR_RANGE_STMT_TYPE,
+    THROW_STMT_TYPE,
+    TRY_STMT_TYPE,
+    RETURN_STMT_TYPE,
+    FUNCTION_STMT_TYPE,
+    IMPORT_STMT_TYPE,
+    EXPORT_STMT_TYPE,
 }StmtType;
 
 typedef struct stmt{
