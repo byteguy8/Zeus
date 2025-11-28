@@ -1,17 +1,22 @@
 #include "dumpper.h"
-#include "memory.h"
-#include "opcode.h"
-#include "closure.h"
+
+#include "essentials/memory.h"
+
+#include "types.h"
+
+#include "vm/opcode.h"
+#include "vm/closure.h"
+
 #include <stdio.h>
 #include <assert.h>
 #include <inttypes.h>
 
 static int16_t compose_i16(uint8_t *bytes){
-    return (int16_t)((uint16_t)bytes[1] << 8) | ((uint16_t)bytes[0]);
+    return (int16_t)((uint16_t)bytes[0] << 8) | ((uint16_t)bytes[1]);
 }
 
 static int32_t compose_i32(uint8_t *bytes){
-    return (int32_t)((uint32_t)bytes[3] << 24) | ((uint32_t)bytes[2] << 16) | ((uint32_t)bytes[1] << 8) | ((uint32_t)bytes[0]);
+    return (int32_t)((uint32_t)bytes[0] << 24) | ((uint32_t)bytes[1] << 16) | ((uint32_t)bytes[2] << 8) | ((uint32_t)bytes[3]);
 }
 
 #define CURRENT_MODULE(d)(d->current_module)

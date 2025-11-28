@@ -81,25 +81,25 @@ typedef struct identifier_expr{
 }IdentifierExpr;
 
 typedef struct call_expr{
-    Expr *left;
+    Expr *left_expr;
     Token *left_paren;
     DynArr *args;
 }CallExpr;
 
 typedef struct access_expr{
-	Expr *left;
+	Expr *left_expr;
 	Token *dot_token;
 	Token *symbol_token;
 }AccessExpr;
 
 typedef struct index_expr{
-    Expr *target;
+    Expr *target_expr;
     Token *left_square_token;
     Expr *index_expr;
 }IndexExpr;
 
 typedef struct unary_expr{
-    Token *operator;
+    Token *operator_token;
     Expr *right;
 }UnaryExpr;
 
@@ -111,25 +111,25 @@ typedef struct binary_expr{
 
 typedef struct concat_expr{
     Expr *left;
-	Token *operator;
+	Token *operator_token;
 	Expr *right;
 }ConcatExpr;
 
 typedef struct mul_str_expr{
     Expr *left;
-	Token *operator;
+	Token *operator_token;
 	Expr *right;
 }MulStrExpr;
 
 typedef struct bitwise_expr{
     Expr *left;
-	Token *operator;
+	Token *operator_token;
 	Expr *right;
 }BitWiseExpr;
 
 typedef struct comparison_expr{
     Expr *left;
-	Token *operator;
+	Token *operator_token;
 	Expr *right;
 }ComparisonExpr;
 
@@ -140,15 +140,15 @@ typedef struct logical_expr{
 }LogicalExpr;
 
 typedef struct assign_expr{
-	Expr *left;
+	Expr *left_expr;
 	Token *equals_token;
     Expr *value_expr;
 }AssignExpr;
 
 typedef struct compound_expr{
-	Expr *left;
-	Token *operator;
-	Expr *right;
+	Expr *left_expr;
+	Token *operator_token;
+	Expr *right_expr;
 }CompoundExpr;
 
 typedef struct array_expr{

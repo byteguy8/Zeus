@@ -22,6 +22,16 @@ typedef struct value{
     }content;
 }Value;
 
+typedef enum global_value_access_type{
+    PRIVATE_GLOVAL_VALUE_TYPE,
+    PUBLIC_GLOBAL_VALUE_TYPE,
+}GlobalValueAccessType;
+
+typedef struct global_value{
+    GlobalValueAccessType access;
+    Value value;
+}GlobalValue;
+
 #define VALUE_SIZE sizeof(Value)
 #define VALUE_TYPE(_value)((_value)->type)
 #define IS_VALUE_MARKED(_object)(((ObjHeader *)(_object))->marked == 1)

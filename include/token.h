@@ -1,6 +1,8 @@
 #ifndef TOKEN_H
 #define TOKEN_H
 
+#include <stddef.h>
+
 typedef enum tok_type{
     EXCLAMATION_TOKTYPE,
     QUESTION_MARK_TOKTYPE,
@@ -33,7 +35,7 @@ typedef enum tok_type{
     // keywords
 	MOD_TOKTYPE, EMPTY_TOKTYPE,
     FALSE_TOKTYPE, TRUE_TOKTYPE,
-    MUT_TOKTYPE, IMUT_TOKTYPE,
+    MAKE_TOKTYPE, MUT_TOKTYPE,
     IF_TOKTYPE, ELIF_TOKTYPE, ELSE_TOKTYPE,
     WHILE_TOKTYPE, FOR_TOKTYPE,
     UPTO_TOKTYPE,DOWNTO_TOKTYPE,
@@ -58,14 +60,14 @@ typedef enum tok_type{
 }TokType;
 
 typedef struct token{
-    int line;
-    TokType type;
-    size_t lexeme_len;
-    char *lexeme;
-    size_t literal_size;
-	void *literal;
-    char *pathname;
-    void *extra;
+    int        line;
+    TokType    type;
+    size_t     lexeme_len;
+    char       *lexeme;
+    size_t     literal_size;
+	void       *literal;
+    const char *pathname;
+    void       *extra;
 }Token;
 
 typedef enum template_item_type{
@@ -75,7 +77,7 @@ typedef enum template_item_type{
 
 typedef struct template_item{
     TemplateItemType type;
-    void *value;
+    void             *value;
 }TemplateItem;
 
 #endif

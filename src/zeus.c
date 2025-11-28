@@ -1,22 +1,32 @@
-#include "memory.h"
+#include "essentials/memory.h"
+
 #include "utils.h"
-#include "factory.h"
+
 #include "token.h"
 #include "lexer.h"
 #include "parser.h"
 #include "compiler.h"
 #include "dumpper.h"
-#include "native_module/native_module_default.h"
-#include "vm.h"
-#include "vmu.h"
+
+#include "scope_manager/scope_manager.h"
+
+#include "vm/vm_factory.h"
+#include "vm/native_module/native_module_default.h"
+#include "vm/vmu.h"
+#include "vm/vm.h"
 
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/stat.h>
 
-#define DEFAULT_INITIAL_COMPILE_TIME_MEMORY 4194304
-#define DEFAULT_INITIAL_RUNTIME_MEMORY 8388608
+#define DEFAULT_INITIAL_COMPILE_TIME_MEMORY MEMORY_MIBIBYTES(8)
+#define DEFAULT_INITIAL_RUNTIME_MEMORY MEMORY_MIBIBYTES(8)
 #define DEFAULT_INITIAL_SEARCH_PATHS_BUFF_LEN 256
+
+static LZFList *ctflist = NULL;
+static LZFList *rtflist = NULL;
+static Allocator ctallocator = {0};
+static Allocator rtallocator = {0};
 
 typedef struct args{
 	unsigned char lex;
@@ -59,11 +69,11 @@ void lzdealloc_link_flist(void *ptr, size_t size, void *ctx){
 }
 
 void *lzalloc_link_arena(size_t size, void *ctx){
-    return LZARENA_ALLOC(size, ctx);
+    return LZARENA_ALLOC(ctx, size);
 }
 
 void *lzrealloc_link_arena(void *ptr, size_t old_size, size_t new_size, void *ctx){
-    return LZARENA_REALLOC(ptr, old_size, new_size, ctx);
+    return LZARENA_REALLOC(ctx, ptr, old_size, new_size);
 }
 
 void lzdealloc_link_arena(void *ptr, size_t size, void *ctx){
@@ -220,7 +230,7 @@ DynArr *parse_search_paths(char *source_pathname, char *raw_search_paths, Alloca
 }
 
 void add_native(const char *name, int arity, RawNativeFn raw_native, LZOHTable *natives, const Allocator *allocator){
-    NativeFn *native_fn = factory_create_native_fn(1, name, arity, raw_native, allocator);
+    NativeFn *native_fn = vm_factory_native_fn_create(allocator, 1, name, arity, raw_native);
     lzohtable_put_ck(strlen(name), name, native_fn, natives, NULL);
 }
 
@@ -229,14 +239,14 @@ void add_keyword(const char *name, TokType type, LZOHTable *keywords, const Allo
 }
 
 LZOHTable *create_keywords_table(const Allocator *allocator){
-	LZOHTable *keywords = FACTORY_LZOHTABLE_LEN(64, allocator);
+	LZOHTable *keywords = MEMORY_LZOHTABLE_LEN(allocator, 64);
 
 	add_keyword("mod", MOD_TOKTYPE, keywords, allocator);
 	add_keyword("empty", EMPTY_TOKTYPE, keywords, allocator);
     add_keyword("false", FALSE_TOKTYPE, keywords, allocator);
     add_keyword("true", TRUE_TOKTYPE, keywords, allocator);
+    add_keyword("make", MAKE_TOKTYPE, keywords, allocator);
     add_keyword("mut", MUT_TOKTYPE, keywords, allocator);
-    add_keyword("imut", IMUT_TOKTYPE, keywords, allocator);
     add_keyword("or", OR_TOKTYPE, keywords, allocator);
     add_keyword("and", AND_TOKTYPE, keywords, allocator);
 	add_keyword("if", IF_TOKTYPE, keywords, allocator);
@@ -303,64 +313,84 @@ static void print_help(){
     exit(EXIT_FAILURE);
 }
 
-static void init_memory(LZArena **out_ctarena, LZFList **out_rtflist, Allocator *ctallocator, Allocator *rtallocator){
-    LZFList *rtflist = lzflist_create(NULL);
+static void init_memory(){
+    ctflist = lzflist_create(NULL);
+    rtflist = lzflist_create(NULL);
 
-    if(!rtflist || lzflist_prealloc(DEFAULT_INITIAL_RUNTIME_MEMORY, rtflist)){
-        fprintf(stderr, "Failed to init memory");
+    if(!ctflist || !rtflist){
         lzflist_destroy(rtflist);
+        fprintf(stderr, "Failed to init memory");
         exit(EXIT_FAILURE);
     }
+
+    if(lzflist_prealloc(DEFAULT_INITIAL_COMPILE_TIME_MEMORY, ctflist) ||
+       lzflist_prealloc(DEFAULT_INITIAL_RUNTIME_MEMORY, ctflist)
+    ){
+        lzflist_destroy(ctflist);
+        lzflist_destroy(rtflist);
+        fprintf(stderr, "Failed to init memory");
+        exit(EXIT_FAILURE);
+    }
+
+    MEMORY_INIT_ALLOCATOR(
+        ctflist,
+        lzalloc_link_flist,
+        lzrealloc_link_flist,
+        lzdealloc_link_flist,
+        &ctallocator
+    );
 
     MEMORY_INIT_ALLOCATOR(
         rtflist,
         lzalloc_link_flist,
         lzrealloc_link_flist,
         lzdealloc_link_flist,
-        rtallocator
+        &rtallocator
     );
-
-    LZArena *ctarena = lzarena_create((LZArenaAllocator *)rtallocator);
-
-    lzarena_append_region(DEFAULT_INITIAL_COMPILE_TIME_MEMORY, ctarena);
-
-    MEMORY_INIT_ALLOCATOR(
-        ctarena,
-        lzalloc_link_arena,
-        lzrealloc_link_arena,
-        lzdealloc_link_arena,
-        ctallocator
-    );
-
-    *out_ctarena = ctarena;
-    *out_rtflist = rtflist;
 }
 
-static LZOHTable *init_default_native_fns(Allocator *rtallocator){
-    LZOHTable *native_fns = FACTORY_LZOHTABLE_LEN(64, rtallocator);
+static void add_native_fn_obj(
+    LZOHTable *natives,
+    const Allocator *allocator,
+    const char *name,
+    uint8_t arity,
+    RawNativeFn raw_native_fn
+){
+    NativeFn *native_fn = vm_factory_native_fn_create(allocator, 1, name, arity, raw_native_fn);
+    NativeFnObj *native_fn_obj = vm_factory_native_fn_obj_create(allocator, native_fn);
 
-    add_native("exit", 1, native_fn_exit, native_fns, rtallocator);
-	add_native("assert", 1, native_fn_assert, native_fns, rtallocator);
-    add_native("assertm", 2, native_fn_assertm, native_fns, rtallocator);
+    lzohtable_put_ckv(
+        strlen(name),
+        name,
+        sizeof(Value),
+        &((Value){.type = OBJ_VALUE_TYPE, .content.obj_val = native_fn_obj}),
+        natives,
+        NULL
+    );
+}
 
-    add_native("is_str_int", 1, native_fn_is_str_int, native_fns, rtallocator);
-    add_native("is_str_float", 1, native_fn_is_str_float, native_fns, rtallocator);
-    add_native("to_str", 1, native_fn_to_str, native_fns, rtallocator);
-    add_native("to_json", 1, native_fn_to_json, native_fns, rtallocator);
-    add_native("to_int", 1, native_fn_to_int, native_fns, rtallocator);
-    add_native("to_float", 1, native_fn_to_float, native_fns, rtallocator);
+static LZOHTable *create_default_native_fns(Allocator *allocator){
+    LZOHTable *default_natives = MEMORY_LZOHTABLE(allocator);
 
-    add_native("print", 1, native_fn_print, native_fns, rtallocator);
-    add_native("println", 1, native_fn_println, native_fns, rtallocator);
-    add_native("eprint", 1, native_fn_eprint, native_fns, rtallocator);
-    add_native("eprintln", 1, native_fn_eprintln, native_fns, rtallocator);
-    add_native("print_stack", 0, native_fn_print_stack, native_fns, rtallocator);
-    add_native("readln", 0, native_fn_readln, native_fns, rtallocator);
+    add_native_fn_obj(default_natives, allocator, "exit", 1, native_fn_exit);
+	add_native_fn_obj(default_natives, allocator, "assert", 1, native_fn_assert);
+    add_native_fn_obj(default_natives, allocator, "assertm", 2, native_fn_assert);
+    add_native_fn_obj(default_natives, allocator, "is_str_int", 1, native_fn_is_str_int);
+    add_native_fn_obj(default_natives, allocator, "is_str_float", 1, native_fn_is_str_float);
+    add_native_fn_obj(default_natives, allocator, "to_str", 1, native_fn_to_str);
+    add_native_fn_obj(default_natives, allocator, "to_json", 1, native_fn_to_json);
+    add_native_fn_obj(default_natives, allocator, "to_int", 1, native_fn_to_int);
+    add_native_fn_obj(default_natives, allocator, "to_float", 1, native_fn_to_float);
+    add_native_fn_obj(default_natives, allocator, "print", 1, native_fn_print);
+    add_native_fn_obj(default_natives, allocator, "println", 1, native_fn_println);
+    add_native_fn_obj(default_natives, allocator, "eprint", 1, native_fn_eprint);
+    add_native_fn_obj(default_natives, allocator, "eprintln", 1, native_fn_eprintln);
+    add_native_fn_obj(default_natives, allocator, "print_stack", 0, native_fn_print_stack);
+    add_native_fn_obj(default_natives, allocator, "readln", 0, native_fn_readln);
+    add_native_fn_obj(default_natives, allocator, "gc", 0, native_fn_gc);
+    add_native_fn_obj(default_natives, allocator, "halt", 0, native_fn_halt);
 
-    add_native("gc", 0, native_fn_gc, native_fns, rtallocator);
-    add_native("halt", 0, native_fn_halt, native_fns, rtallocator);
-
-    return native_fns;
+    return default_natives;
 }
 
 static void print_size(size_t size){
@@ -413,158 +443,106 @@ int main(int argc, const char *argv[]){
 		exit(EXIT_FAILURE);
 	}
 
-    LZArena *ctarena = NULL;
-    LZFList *rtflist = NULL;
-    Allocator ctallocator = {0};
-    Allocator rtallocator = {0};
+    init_memory();
 
-    init_memory(&ctarena, &rtflist, &ctallocator, &rtallocator);
-
-    DynArr *search_paths = parse_search_paths(source_pathname, args.search_paths, &ctallocator);
-    LZOHTable *import_paths = FACTORY_LZOHTABLE(&ctallocator);
+    DynArr *search_pathnames = parse_search_paths(source_pathname, args.search_paths, &ctallocator);
+    LZOHTable *import_paths = MEMORY_LZOHTABLE(&ctallocator);
     LZOHTable *keywords = create_keywords_table(&ctallocator);
 	DStr *source = utils_read_source(source_pathname, &ctallocator);
-    char *module_path = factory_clone_raw_str(source_pathname, &ctallocator, NULL);
+    char *module_path = memory_clone_cstr(&ctallocator, source_pathname, NULL);
 
-    LZOHTable *modules = FACTORY_LZOHTABLE(&ctallocator);
-	DynArr *tokens = FACTORY_DYNARR_PTR(&ctallocator);
-    DynArr *fns_prototypes = FACTORY_DYNARR_PTR(&ctallocator);
-	DynArr *stmts = FACTORY_DYNARR_PTR(&ctallocator);
+    LZOHTable *default_native = create_default_native_fns(&rtallocator);
+    ScopeManager *manager = scope_manager_create(&ctallocator);
+    LZOHTable *modules = MEMORY_LZOHTABLE(&ctallocator);
+	DynArr *tokens = MEMORY_DYNARR_PTR(&ctallocator);
+    DynArr *fns_prototypes = MEMORY_DYNARR_PTR(&ctallocator);
+	DynArr *stmts = MEMORY_DYNARR_PTR(&ctallocator);
 	Lexer *lexer = lexer_create(&ctallocator, &rtallocator);
 	Parser *parser = parser_create(&ctallocator);
     Compiler *compiler = compiler_create(&ctallocator, &rtallocator);
     Dumpper *dumpper = dumpper_create(&ctallocator);
 
-    LZOHTable *native_fns = init_default_native_fns(&rtallocator);
-    Module *module = factory_create_module("main", module_path, &rtallocator);
+    Module *main_module = NULL;
     VM *vm = vm_create(&rtallocator);
 
     if(args.lex){
         if(lexer_scan(source, tokens, keywords, module_path, lexer)){
             result = 1;
-			goto CLEAN_UP;
+			goto CLEAN_UP_COMPTIME;
 		}
-
-        printf("STATISTICS:\n");
-		printf("    %-20s%zu\n", "Tokens:", DYNARR_LEN(tokens));
-        printf("    %-20s", "Memory usage:");
-        print_size(ctarena->allocted_bytes);
-        printf("\n");
     }else if(args.parse){
         if(lexer_scan(source, tokens, keywords, module_path, lexer)){
             result = 1;
-			goto CLEAN_UP;
+			goto CLEAN_UP_COMPTIME;
 		}
         if(parser_parse(tokens, fns_prototypes, stmts, parser)){
             result = 1;
-			goto CLEAN_UP;
+			goto CLEAN_UP_COMPTIME;
 		}
-
-		printf("STATISTICS:\n");
-		printf("    %-20s%zu\n", "Tokens:", DYNARR_LEN(tokens));
-        printf("    %-20s%zu\n", "Statements:", DYNARR_LEN(stmts));
-        printf("    %-20s", "Memory usage:");
-        print_size(ctarena->allocted_bytes);
-        printf("\n");
     }else if(args.compile){
         if(lexer_scan(source, tokens, keywords, module_path, lexer)){
             result = 1;
-			goto CLEAN_UP;
-		}
-        if(parser_parse(tokens, fns_prototypes, stmts, parser)){
-            result = 1;
-			goto CLEAN_UP;
-		}
-        if(compiler_compile(
-            search_paths,
-            import_paths,
-            keywords,
-            native_fns,
-            fns_prototypes,
-            stmts,
-            module,
-            modules,
-            compiler
-        )){
-            result = 1;
-			goto CLEAN_UP;
+			goto CLEAN_UP_COMPTIME;
 		}
 
-		printf("STATISTICS:\n");
-		printf("    %-20s%zu\n", "Tokens:", DYNARR_LEN(tokens));
-        printf("    %-20s%zu\n", "Statements:", DYNARR_LEN(stmts));
-        printf("    %-20s%zu\n", "Symbols:", DYNARR_LEN(MODULE_SYMBOLS(module)));
-        printf("    %-20s", "Memory usage:");
-        print_size(ctarena->allocted_bytes);
-        printf("\n");
+        if(parser_parse(tokens, fns_prototypes, stmts, parser)){
+            result = 1;
+			goto CLEAN_UP_COMPTIME;
+		}
+
+        main_module = compiler_compile(compiler, keywords, search_pathnames, default_native, manager, stmts, module_path);
+
+        if(!main_module){
+            result = 1;
+			goto CLEAN_UP_COMPTIME;
+		}
     }else if(args.dump){
         if(lexer_scan(source, tokens, keywords, module_path, lexer)){
             result = 1;
-			goto CLEAN_UP;
+			goto CLEAN_UP_COMPTIME;
 		}
+
         if(parser_parse(tokens, fns_prototypes, stmts, parser)){
             result = 1;
-			goto CLEAN_UP;
+			goto CLEAN_UP_COMPTIME;
 		}
-        if(compiler_compile(
-            search_paths,
-            import_paths,
-            keywords,
-            native_fns,
-            fns_prototypes,
-            stmts,
-            module,
-            modules,
-            compiler
-        )){
+
+        main_module = compiler_compile(compiler, keywords, search_pathnames, default_native, manager, stmts, module_path);
+
+        if(!main_module){
             result = 1;
-			goto CLEAN_UP;
+			goto CLEAN_UP_COMPTIME;
 		}
 
-        dumpper_dump(modules, module, dumpper);
-
-        printf("\nSTATISTICS:\n");
-		printf("    %-20s%zu\n", "Tokens:", DYNARR_LEN(tokens));
-        printf("    %-20s%zu\n", "Statements:", DYNARR_LEN(stmts));
-        printf("    %-20s%zu\n", "Symbols:", DYNARR_LEN(MODULE_SYMBOLS(module)));
-        printf("    %-20s", "Memory usage:");
-        print_size(ctarena->allocted_bytes);
-        printf("\n");
+        dumpper_dump(modules, main_module, dumpper);
     }else{
         if(lexer_scan(source, tokens, keywords, module_path, lexer)){
 			result = 1;
-            goto CLEAN_UP;
+            goto CLEAN_UP_COMPTIME;
 		}
+
         if(parser_parse(tokens, fns_prototypes, stmts, parser)){
             result = 1;
-			goto CLEAN_UP;
-		}
-        if(compiler_compile(
-            search_paths,
-            import_paths,
-            keywords,
-            native_fns,
-            fns_prototypes,
-            stmts,
-            module,
-            modules,
-            compiler
-        )){
-            result = 1;
-			goto CLEAN_UP;
+			goto CLEAN_UP_COMPTIME;
 		}
 
-        lzarena_destroy(ctarena);
+        main_module = compiler_compile(compiler, keywords, search_pathnames, default_native, manager, stmts, module_path);
+
+        if(!main_module){
+            result = 1;
+			goto CLEAN_UP_COMPTIME;
+		}
+
+        lzflist_destroy(ctflist);
         vm_initialize(vm);
 
-        result = vm_execute(native_fns, module, vm);
+        result = vm_execute(default_native, main_module, vm);
 
         goto CLEAN_UP_RUNTIME;
     }
 
-CLEAN_UP:
-//    vm_destroy(vm);
-    lzarena_destroy(ctarena);
+CLEAN_UP_COMPTIME:
+    lzflist_destroy(ctflist);
 CLEAN_UP_RUNTIME:
     lzflist_destroy(rtflist);
 

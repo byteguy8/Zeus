@@ -3,7 +3,7 @@
 
 #include "token.h"
 #include "expr.h"
-#include "dynarr.h"
+#include "essentials/dynarr.h"
 
 typedef enum stmt_type{
     EXPR_STMTTYPE,
@@ -33,6 +33,7 @@ typedef struct expr_stmt{
 }ExprStmt;
 
 typedef struct block_stmt{
+	Token  *left_bracket_token;
     DynArr *stmts;
 }BlockStmt;
 
@@ -58,7 +59,7 @@ typedef struct continue_stmt{
 
 typedef struct while_stmt{
     Token *while_token;
-	Expr *condition;
+	Expr *condition_expr;
 	DynArr *stmts;
 }WhileStmt;
 
@@ -73,7 +74,7 @@ typedef struct for_range_stmt{
 
 typedef struct throw_stmt{
     Token *throw_token;
-	Expr *value;
+	Expr *value_expr;
 }ThrowStmt;
 
 typedef struct try_stmt{
@@ -86,14 +87,14 @@ typedef struct try_stmt{
 
 typedef struct return_stmt{
     Token *return_token;
-    Expr *value;
+    Expr *ret_expr;
 }ReturnStmt;
 
 typedef struct var_decl_stmt{
-    char is_const;
+    char is_mutable;
     char is_initialized;
     Token *identifier_token;
-    Expr *initializer_expr;
+    Expr *initial_value_expr;
 }VarDeclStmt;
 
 typedef struct function_stmt{

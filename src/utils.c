@@ -1,6 +1,7 @@
 #include "utils.h"
-#include "memory.h"
-#include "factory.h"
+
+#include "essentials/memory.h"
+
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -75,7 +76,7 @@
     }
 
     char *utils_files_parent_pathname(char *pathname, Allocator *allocator){
-        char *cloned_pathname = allocator ? factory_clone_raw_str(pathname, allocator, NULL) : pathname;
+        char *cloned_pathname = allocator ? memory_clone_cstr(allocator, pathname, NULL) : pathname;
         return dirname(cloned_pathname);
     }
 
@@ -288,7 +289,7 @@ int utils_str_to_double(char *raw_str, double *out_value){
     return 0;
 }
 
-DStr *utils_read_source(char *pathname, Allocator *allocator){
+DStr *utils_read_source(const char *pathname, const Allocator *allocator){
 	FILE *source_file = fopen(pathname, "r");
 
     if(!source_file){

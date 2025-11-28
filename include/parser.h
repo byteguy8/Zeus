@@ -1,8 +1,8 @@
 #ifndef PARSER_H
 #define PARSER_H
 
-#include "dynarr.h"
-#include "memory.h"
+#include "essentials/dynarr.h"
+#include "essentials/memory.h"
 
 #include <stddef.h>
 #include <setjmp.h>
@@ -13,10 +13,10 @@ typedef struct parser{
 	size_t current;
 	DynArr *tokens;
     DynArr *fns_prototypes;
-    Allocator *ctallocator;
+    const Allocator *ctallocator;
 }Parser;
 
-Parser *parser_create(Allocator *allocator);
+Parser *parser_create(const Allocator *allocator);
 int parser_parse(DynArr *tokens, DynArr *fns_prototypes, DynArr *stmt, Parser *parser);
 int parser_parse_str_interpolation(DynArr *tokens, DynArr *exprs, Parser *parser);
 

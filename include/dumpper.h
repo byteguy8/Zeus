@@ -1,9 +1,9 @@
 #ifndef DUMPPER_H
 #define DUMPPER_H
 
-#include "dynarr.h"
-#include "fn.h"
-#include "module.h"
+#include "essentials/dynarr.h"
+#include "vm/fn.h"
+#include "vm/module.h"
 
 typedef struct dumpper{
     size_t ip;

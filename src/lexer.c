@@ -1,7 +1,8 @@
 #include "lexer.h"
-#include "lzarena.h"
-#include "memory.h"
-#include "factory.h"
+
+#include "essentials/lzarena.h"
+#include "essentials/memory.h"
+
 #include "utils.h"
 #include "token.h"
 #include <stdint.h>
@@ -79,7 +80,7 @@ void error(Lexer *lexer, char *msg, ...){
 }
 
 static inline int is_at_end(Lexer *lexer){
-    DStr *source = lexer->source;
+    const DStr *source = lexer->source;
     return lexer->current >= ((int)source->len);
 }
 
@@ -104,7 +105,7 @@ static inline char peek(Lexer *lexer){
 		return '\0';
 	}
 
-    DStr *source = lexer->source;
+    const DStr *source = lexer->source;
 
     return source->buff[lexer->current];
 }
@@ -114,7 +115,7 @@ static inline char peek_at(uint16_t offset, Lexer *lexer){
 		return '\0';
 	}
 
-    DStr *source = lexer->source;
+    const DStr *source = lexer->source;
 
     return source->buff[(size_t)offset];
 }
@@ -124,7 +125,7 @@ int match(char c, Lexer *lexer){
 		return '\0';
 	}
 
-    DStr *source = lexer->source;
+    const DStr *source = lexer->source;
     char cc = source->buff[lexer->current];
 
     if(c != cc){
@@ -140,13 +141,14 @@ char advance(Lexer *lexer){
 		return '\0';
 	}
 
-    DStr *source = lexer->source;
+    const DStr *source = lexer->source;
+
     return source->buff[lexer->current++];
 }
 
 // the output str is valid only during compilation allocated
 static char *copy_source_range(size_t start, size_t end, Lexer *lexer, size_t *out_len){
-    DStr *source = lexer->source;
+    const DStr *source = lexer->source;
 
     assert(end > start && (size_t)end <= source->len);
 
@@ -189,7 +191,7 @@ static inline void put_current_lexeme(char *buff, Lexer *lexer){
     size_t start = lexer->start;
     size_t current = lexer->current;
     size_t len = current - start;
-    DStr *source = lexer->source;
+    const DStr *source = lexer->source;
 
     memcpy(buff, source->buff + start, len);
     buff[len] = 0;
@@ -346,7 +348,7 @@ Token *identifier(Lexer *lexer){
     TokType *type = NULL;
 
     put_current_lexeme(lexeme, lexer);
-    lzohtable_lookup(lexeme_len, lexeme, lexer->keywords, (void **)(&type));
+    lzohtable_lookup(lexeme_len, lexeme, (LZOHTable *)lexer->keywords, (void **)(&type));
 
     if(type){
         return create_token(*type, lexer);
@@ -528,7 +530,7 @@ Token *string(Lexer *lexer){
 
         if(c == '{'){
             if(!template_tokens){
-                template_tokens = FACTORY_DYNARR_PTR(COMPILE_ALLOCATOR);
+                template_tokens = MEMORY_DYNARR_PTR(COMPILE_ALLOCATOR);
             }
 
             if(lexer->current - 1 > from_outer){
@@ -796,7 +798,7 @@ Token *scan_token(char c, Lexer *lexer){
 //--------------------------------------------------------------------------//
 //                          PUBLIC IMPLEMENTATION                           //
 //--------------------------------------------------------------------------//
-Lexer *lexer_create(Allocator *ctallocator, Allocator *rtallocator){
+Lexer *lexer_create(const Allocator *ctallocator, const Allocator *rtallocator){
     Lexer *lexer = (Lexer *)MEMORY_ALLOC(ctallocator, Lexer, 1);
 
     if(!lexer){
@@ -811,10 +813,10 @@ Lexer *lexer_create(Allocator *ctallocator, Allocator *rtallocator){
 }
 
 int lexer_scan(
-	DStr *source,
+	const DStr *source,
 	DynArr *tokens,
-	LZOHTable *keywords,
-    char *pathname,
+	const LZOHTable *keywords,
+    const char *pathname,
 	Lexer *lexer
 ){
     if(setjmp(lexer->err_buf) == 0){
@@ -844,7 +846,7 @@ int lexer_scan(
 
             lexer->start = lexer->current;
 
-            if(ctarena->allocted_bytes > 0){
+            if(lzarena_used_memory(ctarena) > 0){
             	lzarena_free_all(ctarena);
             }
         }

@@ -1,7 +1,9 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-#include "memory.h"
+#include "essentials/memory.h"
+
+#include "types.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -65,7 +67,7 @@ int utils_decimal_str_to_i64(char *str, int64_t *out_value);
 int utils_hexadecimal_str_to_i64(char *str, int64_t *out_value);
 int utils_str_to_double(char *raw_str, double *out_value);
 
-DStr *utils_read_source(char *pathname, Allocator *allocator);
+DStr *utils_read_source(const char *pathname, const Allocator *allocator);
 char *utils_read_file_as_text(char *pathname, Allocator *allocator, size_t *out_len);
 
 #endif

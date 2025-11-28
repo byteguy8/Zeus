@@ -1,2607 +1,2809 @@
 #include "compiler.h"
-#include "memory.h"
-#include "factory.h"
-#include "native_module/native_module_nbarray.h"
+
+#include "essentials/lzbstr.h"
+#include "essentials/dynarr.h"
+#include "essentials/lzohtable.h"
+#include "essentials/lzpool.h"
+#include "essentials/memory.h"
+
+#include "scope_manager/scope.h"
+#include "scope_manager/scope_manager.h"
+#include "scope_manager/symbol.h"
+
+#include "value.h"
+#include "vm/native_module/native_module_os.h"
+#include "vm/native_module/native_module_math.h"
+#include "vm/native_module/native_module_random.h"
+#include "vm/native_module/native_module_time.h"
+#include "vm/native_module/native_module_io.h"
+
 #include "utils.h"
+#include "types.h"
+
 #include "token.h"
 #include "expr.h"
 #include "stmt.h"
-#include "opcode.h"
 #include "lexer.h"
 #include "parser.h"
-#include "native_module/native_module_math.h"
-#include "native_module/native_module_random.h"
-#include "native_module/native_module_time.h"
-#include "native_module/native_module_io.h"
-#include "native_module/native_module_os.h"
-#include <stdint.h>
-#include <assert.h>
-#include <stdarg.h>
+
+#include "vm/fn.h"
+#include "vm/module.h"
+#include "vm/native_module.h"
+#include "vm/obj.h"
+#include "vm/vm_factory.h"
+#include "vm/opcode.h"
+
+#include <bits/stdint-uintn.h>
 #include <stdio.h>
-#include <inttypes.h>
+#include <stdarg.h>
+#include <stdint.h>
 #include <string.h>
+#include <assert.h>
+#include <inttypes.h>
 
-#define CTALLOCATOR (compiler->ctallocator)
-#define RTALLOCATOR (compiler->rtallocator)
-#define LABELS_ALLOCATOR (compiler->labels_allocator)
-#define CURRENT_MODULE (compiler->current_module)
-//--------------------------------------------------------------------------//
-//                            PRIVATE INTERFACE                             //
-//--------------------------------------------------------------------------//
-//--------------------------------  ERROR  ---------------------------------//
-static void error(Compiler *compiler, Token *token, char *msg, ...);
-static void fatal_error(Compiler *compiler, char *fmt, ...);
-//--------------------------------  SCOPE  ---------------------------------//
-Scope *scope_in(ScopeType type, Compiler *compiler);
-Scope *scope_in_soft(ScopeType type, Compiler *compiler);
-Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function, size_t *out_fn_index);
-void scope_out(Compiler *compiler);
-void scope_out_fn(Compiler *compiler);
-Scope *inside_loop(Compiler *compiler);
-Scope *inside_fn(Compiler *compiler);
-Scope *inside_fn_from_symbol(Symbol *symbol, Compiler *compiler);
-int count_fn_scopes(int from, int to, Compiler *compiler);
-Scope *current_scope(Compiler *compiler);
-Scope *previous_scope(Scope *scope, Compiler *compiler);
-//--------------------------------  LABEL  ---------------------------------//
-void insert_label(Scope *scope, Label *label);
-Label *label(Compiler *compiler, char *fmt, ...);
-void insert_jmp(Scope *scope, JMP *jmp);
-void remove_jmp(JMP *jmp);
-JMP *jif(Compiler *compiler, Token *ref_token, char *fmt, ...);
-JMP *jmp(Compiler *compiler, Token *ref_token, char *fmt, ...);
-JMP *or(Compiler *compiler, Token *ref_token, char *fmt, ...);
-JMP *and(Compiler *compiler, Token *ref_token, char *fmt, ...);
-void resolve_jmps(Scope *current, Compiler *compiler);
-//--------------------------------  SYMBOL  --------------------------------//
-int resolve_symbol(Token *identifier, Symbol *symbol, Compiler *compiler);
-Symbol *exists_scope(char *name, Scope *scope, Compiler *compiler);
-Symbol *exists_local(char *name, Compiler *compiler);
-int exists_global(char *name, Compiler *compiler);
-Symbol *get(Token *identifier_token, Compiler *compiler);
-void to_local(Symbol *symbol, Compiler *compiler);
-void from_symbols_to_global(size_t symbol_index, Token *location_token, char *name, Compiler *compiler);
-Symbol *declare_native_fn(char *identifier, Compiler *compiler);
-Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler);
-DynArr *current_chunks(Compiler *compiler);
-DynArr *current_locations(Compiler *compiler);
-DynArr *current_constants(Compiler *compiler);
-DynArr *current_float_values(Compiler *compiler);
-//--------------------------------  CHUNKS  --------------------------------//
-void descompose_i16(int16_t value, uint8_t *bytes);
-void descompose_i32(int32_t value, uint8_t *bytes);
-size_t chunks_len(Compiler *compiler);
-size_t write_chunk(uint8_t chunk, Compiler *compiler);
-void write_location(Token *token, Compiler *compiler);
-void update_chunk(size_t index, uint8_t chunk, Compiler *compiler);
-size_t write_i16(int16_t i16, Compiler *compiler);
-size_t write_i32(int32_t i32, Compiler *compiler);
-size_t write_iconst(int64_t i64, Compiler *compiler);
-size_t write_fconst(double value, Compiler *compiler);
-void write_str(size_t len, char *rstr, Compiler *compiler);
-void write_str_alloc(size_t len, char *rstr, Compiler *compiler);
-void update_i16(size_t index, int16_t i16, Compiler *compiler);
-void update_i32(size_t index, int32_t i32, Compiler *compiler);
-//--------------------------------  OTHER  ---------------------------------//
-int32_t generate_id(Compiler *compiler);
-uint32_t generate_trycatch_id(Compiler *compiler);
-char *names_to_pathname(DynArr *names, Compiler *compiler, size_t *out_name_len, Token **out_name_token);
-NativeModule *resolve_native_module(char *module_name, Compiler *compiler);
-char *resolve_module_location(
-    Token *import_token,
-    char *module_name,
-    Module *previous_module,
-    Module *current_module,
+static void error(Compiler *compiler, const Token *token, const char *fmt, ...);
+static void internal_error(Compiler *compiler, const char *fmt, ...);
+
+static Unit *create_unit(Compiler *compiler, Fn *fn);
+static Unit *push_unit(Compiler *compiler, Fn *fn);
+static Fn *pop_unit(Compiler *compiler);
+
+static void pop_scope_locals(Compiler *compiler, LocalScope *scope);
+static void pop_locals(Compiler *compiler);
+
+static Loop *current_loop(Compiler *compiler);
+static void push_loop(Compiler *compiler, int32_t loop_id);
+static void pop_loop(Compiler *compiler);
+
+static Block *peek_block(Compiler *compiler);
+static Block *push_block(Compiler *compiler);
+static void pop_block(Compiler *compiler);
+
+static Module *current_module(Compiler *compiler);
+static Unit *current_unit(Compiler *compiler);
+static int32_t generate_id(Compiler *compiler);
+static Fn *current_fn(Compiler *compiler);
+static DynArr *current_chunks(Compiler *compiler);
+static DynArr *current_locations(Compiler *compiler);
+static DynArr *current_iconsts(Compiler *compiler);
+static DynArr *current_fconsts(Compiler *compiler);
+
+static void descompose_i16(int16_t value, uint8_t *bytes);
+static void descompose_i32(int32_t value, uint8_t *bytes);
+static size_t chunks_len(Compiler *compiler);
+static size_t write_chunk(Compiler *compiler, uint8_t chunk);
+static size_t write_i16(Compiler *compiler, int16_t value);
+static size_t write_i32(Compiler *compiler, int32_t value);
+static size_t write_iconst(Compiler *compiler, int64_t value);
+static size_t write_fconst(Compiler *compiler, double value);
+static void update_i16(Compiler *compiler, size_t offset, uint16_t value);
+static void write_str(Compiler *compiler, size_t raw_str_len, char *raw_str);
+static void write_str_alloc(Compiler *compiler, size_t raw_str_len, char *raw_str);
+static void write_location(Compiler *compiler, const Token *token);
+
+static void label(Compiler *compiler, const Token *ref_token, const char *fmt, ...);
+static void mark(Compiler *compiler, const Token *ref_token, const char *fmt, ...);
+static void jmp(Compiler *compiler, const Token *ref_token, const char *fmt, ...);
+static void jif(Compiler *compiler, const Token *ref_token, const char *fmt, ...);
+static void jit(Compiler *compiler, const Token *ref_token, const char *fmt, ...);
+static void or(Compiler *compiler, const Token *ref_token, const char *fmt, ...);
+static void and(Compiler *compiler, const Token *ref_token, const char *fmt, ...);
+
+static void compile_expr(Compiler *compiler, Expr *expr);
+static void propagate_return(Compiler *compiler, Scope *scope);
+static int compile_if_branch(
     Compiler *compiler,
-    size_t *out_module_name_len,
-    size_t *out_module_pathname_len
+    IfStmtBranch *if_branch,
+    ScopeType type,
+    int32_t id,
+    int32_t which
 );
-void compile_expr(Expr *expr, Compiler *compiler);
-size_t add_native_module_symbol(NativeModule *module, DynArr *symbols);
-size_t add_module_symbol(Module *module, DynArr *symbols);
-void compile_stmt(Stmt *stmt, Compiler *compiler);
-void define_natives(Compiler *compiler);
-void define_fns_prototypes(DynArr *fns_prototypes, Compiler *compiler);
-void add_captured_symbol(Token *identifier, Symbol *symbol, Scope *scope, Compiler *compiler);
-void set_fn(size_t index, Fn *fn, Compiler *compiler);
-void set_closure(size_t index, MetaClosure *closure, Compiler *compiler);
-//--------------------------------------------------------------------------//
-//                          PRIVATE IMPLEMENTATION                          //
-//--------------------------------------------------------------------------//
-static void error(Compiler *compiler, Token *token, char *msg, ...){
-    va_list args;
-    va_start(args, msg);
+static int import_native(Compiler *compiler, const Token *name_token);
+static char *resolve_import_names(
+    Compiler *compiler,
+    DynArr *names,
+    DynArr *search_pathnames,
+    Token *import_token,
+    Allocator *allocator
+);
+static Module *import_module(
+    Compiler *compiler,
+    const Allocator *dynallocator,
+    const Token *import_token,
+    const char *pathname,
+    const char *name,
+    ScopeManager **out_manager
+);
+static Symbol *clone_symbol(const Symbol *symbol, const Allocator *allocator);
+static void compile_stmt(Compiler *compiler, Stmt *stmt);
+static void declare_defaults(Compiler *compiler);
 
-    fprintf(stderr, "Compiler error at line %d in file '%s':\n\t", token->line, token->pathname);
-    vfprintf(stderr, msg, args);
-    fprintf(stderr, "\n");
-
-    va_end(args);
-    longjmp(compiler->err_jmp, 1);
-}
-
-static void fatal_error(Compiler *compiler, char *fmt, ...){
+void error(Compiler *compiler, const Token *token, const char *fmt, ...){
     va_list args;
     va_start(args, fmt);
 
-    fprintf(stderr, "COMPILER FATAL ERROR:\n\t");
+    fprintf(
+    	stderr,
+     	"COMPILER ERROR at line %d in file '%s':\n\t",
+      	token->line,
+       	token->pathname
+    );
     vfprintf(stderr, fmt, args);
     fprintf(stderr, "\n");
 
     va_end(args);
-    longjmp(compiler->err_jmp, 1);
+
+    longjmp(compiler->buf, 1);
 }
 
-Scope *scope_in(ScopeType type, Compiler *compiler){
-    Scope *scope = &compiler->scopes[compiler->depth++];
-
-    scope->id = -1;
-    scope->depth = compiler->depth;
-    scope->locals = 0;
-    scope->scope_locals = 0;
-	scope->type = type;
-    scope->symbols_len = 0;
-    scope->captured_symbols_len = 0;
-
-    return scope;
-}
-
-Scope *scope_in_soft(ScopeType type, Compiler *compiler){
-    Scope *enclosing = &compiler->scopes[compiler->depth - 1];
-    Scope *scope = &compiler->scopes[compiler->depth++];
-
-    scope->id = -1;
-    scope->depth = compiler->depth;
-    scope->locals = enclosing->locals;
-    scope->scope_locals = 0;
-	scope->type = type;
-    scope->symbols_len = 0;
-
-    return scope;
-}
-
-Scope *scope_in_fn(char *name, Compiler *compiler, Fn **out_function, size_t *out_symbol_index){
-    assert(compiler->fn_ptr < FUNCTIONS_LENGTH);
-
-    Fn *fn = factory_create_fn(name, compiler->current_module, RTALLOCATOR);
-    compiler->fn_stack[compiler->fn_ptr++] = fn;
-
-    DynArr *symbols = MODULE_SYMBOLS(compiler->current_module);
-
-    SubModuleSymbol module_symbol = {0};
-    dynarr_insert(&module_symbol, symbols);
-
-    if(out_function){
-        *out_function = fn;
-    }
-
-    if(out_symbol_index){
-        *out_symbol_index = DYNARR_LEN(symbols) - 1;
-    }
-
-    return scope_in(FUNCTION_SCOPE, compiler);
-}
-
-void scope_out(Compiler *compiler){
-    Scope *current = current_scope(compiler);
-
-    resolve_jmps(current, compiler);
-
-    if(current->depth > 1){
-        for (uint8_t i = 0; i < current->scope_locals; i++){
-            write_chunk(OP_POP, compiler);
-        }
-    }
-
-    compiler->depth--;
-}
-
-void scope_out_fn(Compiler *compiler){
-    assert(compiler->fn_ptr > 0);
-
-    Scope *scope = current_scope(compiler);
-
-    resolve_jmps(scope, compiler);
-
-    // A scope with depth 2 is any function which parent scope is GLOBAL.
-    // Iff scope's depth == 2, we clean up labels arena to be able to reuse it
-    if(scope->depth == 2){
-        lzarena_free_all((LZArena *)LABELS_ALLOCATOR->ctx);
-    }
-
-    compiler->fn_ptr--;
-    compiler->depth--;
-}
-
-Scope *inside_loop(Compiler *compiler){
-	assert(compiler->depth > 0);
-
-	for(int i = (int)compiler->depth - 1; i >= 0; i--){
-		Scope *scope = compiler->scopes + i;
-
-		if(scope->type == WHILE_SCOPE || scope->type == FOR_SCOPE){
-            return scope;
-        }
-
-		if(scope->type == FUNCTION_SCOPE){
-            return NULL;
-        }
-	}
-
-	return NULL;
-}
-
-Scope *inside_fn(Compiler *compiler){
-	assert(compiler->depth > 0);
-
-	for(int i = (int)compiler->depth - 1; i >= 0; i--){
-		Scope *scope = compiler->scopes + i;
-
-		if(scope->type == FUNCTION_SCOPE){
-            if(i == 0){
-                return NULL;
-            }
-
-            return scope;
-        }
-	}
-
-	return NULL;
-}
-
-Scope *inside_fn_from_symbol(Symbol *symbol, Compiler *compiler){
-    assert(compiler->depth > 0);
-
-	for(int i = (int)symbol->depth - 1; i >= 0; i--){
-		Scope *scope = compiler->scopes + i;
-
-		if(scope->type == FUNCTION_SCOPE){
-            if(i == 0){
-                return NULL;
-            }
-
-            return scope;
-        }
-	}
-
-	return NULL;
-}
-
-int count_fn_scopes(int from, int to, Compiler *compiler){
-    assert(compiler->depth > 1);
-
-    assert(from < to);
-    assert(to < compiler->depth);
-    assert(compiler->scopes[from].type == FUNCTION_SCOPE);
-    assert(compiler->scopes[to].type == FUNCTION_SCOPE);
-
-    int count = 0;
-
-    for(int i = from + 1; i < to; i++){
-		Scope *scope = compiler->scopes + i;
-
-        if(scope->type == FUNCTION_SCOPE){
-            count++;
-        }
-	}
-
-    return count;
-}
-
-Scope *current_scope(Compiler *compiler){
-    assert(compiler->depth > 0);
-    return &compiler->scopes[compiler->depth - 1];
-}
-
-Scope *previous_scope(Scope *scope, Compiler *compiler){
-    if(scope->depth == 1) return NULL;
-    return &compiler->scopes[scope->depth - 1];
-}
-
-void insert_label(Scope *scope, Label *label){
-    LabelList *list = &scope->labels;
-
-    if(list->tail){
-        list->tail->next = label;
-        label->prev = list->tail;
-    }else{
-        list->head = label;
-    }
-
-    list->tail = label;
-}
-
-Label *label(Compiler *compiler, char *fmt, ...){
+void internal_error(Compiler *compiler, const char *fmt, ...){
     va_list args;
     va_start(args, fmt);
 
-    Scope *scope = current_scope(compiler);
-    Allocator *allocator = scope->depth == 1 ? CTALLOCATOR : LABELS_ALLOCATOR;
-
-    char *name = MEMORY_ALLOC(allocator, char, LABEL_NAME_LENGTH);
-    int out_count = vsnprintf(name, LABEL_NAME_LENGTH, fmt, args);
+    fprintf(stderr, "INTERNAL COMPILER ERROR:\n\t");
+    vfprintf(stderr, fmt, args);
+    fprintf(stderr, "\n");
 
     va_end(args);
-    assert(out_count < LABEL_NAME_LENGTH);
 
-    Label *label = MEMORY_ALLOC(allocator, Label, 1);
-
-    label->name = name;
-    label->location = chunks_len(compiler);
-    label->prev = NULL;
-    label->next = NULL;
-
-    insert_label(scope, label);
-
-    return label;
+    longjmp(compiler->buf, 1);
 }
 
-void insert_jmp(Scope *scope, JMP *jmp){
-    JMPList *list = &scope->jmps;
+Unit *create_unit(Compiler *compiler, Fn *fn){
+    LZArena *arena = compiler->compiler_arena;
+    Allocator *arena_allocator = compiler->arena_allocator;
 
-    if(list->tail){
-        list->tail->next = jmp;
-        jmp->prev = list->tail;
-    }else{
-        list->head = jmp;
-    }
+    void *arena_state = lzarena_save(arena);
+    LZPool *labels_pool = MEMORY_LZPOOL(arena_allocator, Label);
+    LZPool *jmps_pool = MEMORY_LZPOOL(arena_allocator, Jmp);
+    LZPool *marks_pool = MEMORY_LZPOOL(arena_allocator, Mark);
+    LZPool *loops_pool = MEMORY_LZPOOL(arena_allocator, Loop);
+    LZPool *blocks_pool = MEMORY_LZPOOL(arena_allocator, Block);
+    Allocator *lzflist_allocator = memory_lzflist_allocator(arena_allocator, NULL);
 
-    list->tail = jmp;
-    jmp->scope = scope;
+	LZOHTable *labels = MEMORY_LZOHTABLE(lzflist_allocator);
+	DynArr *jmps = MEMORY_DYNARR_PTR(lzflist_allocator);
+    DynArr *marks = MEMORY_DYNARR_PTR(lzflist_allocator);
+    LZOHTable *captured_symbols = MEMORY_LZOHTABLE(lzflist_allocator);
+	Unit *unit = lzpool_alloc_x(16, compiler->units_pool);
+
+	unit->counter = 0;
+
+    unit->labels = labels;
+	unit->jmps = jmps;
+    unit->marks = marks;
+    unit->loops = NULL;
+    unit->blocks = NULL;
+    unit->captured_symbols = captured_symbols;
+
+    unit->fn = fn;
+
+    unit->labels_pool = labels_pool;
+    unit->jmps_pool = jmps_pool;
+    unit->marks_pool = marks_pool;
+    unit->loops_pool = loops_pool;
+    unit->blocks_pool = blocks_pool;
+
+    unit->arena_state = arena_state;
+    unit->lzarena_allocator = arena_allocator;
+    unit->lzflist_allocator = lzflist_allocator;
+
+	unit->prev = NULL;
+
+	return unit;
 }
 
-void remove_jmp(JMP *jmp){
-    Scope *scope = (Scope *)jmp->scope;
-    JMPList *list = &scope->jmps;
+static Unit *push_unit(Compiler *compiler, Fn *fn){
+	Unit *unit = create_unit(compiler, fn);
 
-    if(jmp == list->head){
-        list->head = jmp->next;
-    }
-    if(jmp == list->tail){
-        list->tail = jmp->prev;
-    }
+	unit->prev = compiler->units_stack;
+	compiler->units_stack = unit;
 
-    if(jmp->prev){
-        jmp->prev->next = jmp->next;
-    }
-    if(jmp->next){
-        jmp->next->prev = jmp->prev;
-    }
+	return unit;
 }
 
-JMP *jif(Compiler *compiler, Token *ref_token, char *fmt, ...){
-    write_chunk(OP_JIF, compiler);
-    write_location(ref_token, compiler);
-    size_t update_offset = write_i16(0, compiler);
-    size_t jump_offset = chunks_len(compiler);
+Fn *pop_unit(Compiler *compiler){
+	Unit *unit = compiler->units_stack;
+    LZOHTable *labels = unit->labels;
+    DynArr *jmps = unit->jmps;
+    DynArr *marks = unit->marks;
+	Fn *fn = unit->fn;
 
-    va_list args;
-    va_start(args, fmt);
+    size_t jmps_len = DYNARR_LEN(jmps);
 
-    Scope *scope = current_scope(compiler);
-    Allocator *allocator = scope->depth == 1 ? CTALLOCATOR : LABELS_ALLOCATOR;
+    for (size_t i = 0; i < jmps_len; i++){
+        Label *label = NULL;
+        Jmp *jmp = dynarr_get_ptr(i, jmps);
 
-    char *label = MEMORY_ALLOC(allocator, char, LABEL_NAME_LENGTH);
-    int out_count = vsnprintf(label, LABEL_NAME_LENGTH, fmt, args);
-
-    va_end(args);
-    assert(out_count < LABEL_NAME_LENGTH);
-
-    JMP *jmp = (JMP *)MEMORY_ALLOC(allocator, JMP, 1);
-
-    jmp->jmp_offset = jump_offset;
-    jmp->update_offset = update_offset;
-    jmp->label = label;
-    jmp->prev = NULL;
-    jmp->next = NULL;
-
-    insert_jmp(scope, jmp);
-
-    return jmp;
-}
-
-JMP *jit(Compiler *compiler, Token *ref_token, char *fmt, ...){
-    write_chunk(OP_JIT, compiler);
-    write_location(ref_token, compiler);
-    size_t update_offset = write_i16(0, compiler);
-    size_t jmp_offset = chunks_len(compiler);
-
-    va_list args;
-    va_start(args, fmt);
-
-    Scope *scope = current_scope(compiler);
-    Allocator *allocator = LABELS_ALLOCATOR;
-
-    char *label = MEMORY_ALLOC(allocator, char, LABEL_NAME_LENGTH);
-    int out_count = vsnprintf(label, LABEL_NAME_LENGTH, fmt, args);
-
-    va_end(args);
-    assert(out_count < LABEL_NAME_LENGTH);
-
-    JMP *jmp = (JMP *)MEMORY_ALLOC(allocator, JMP, 1);
-
-    jmp->jmp_offset = jmp_offset;
-    jmp->update_offset = update_offset;
-    jmp->label = label;
-    jmp->prev = NULL;
-    jmp->next = NULL;
-
-    insert_jmp(scope, jmp);
-
-    return jmp;
-}
-
-JMP *jmp(Compiler *compiler, Token *ref_token, char *fmt, ...){
-    write_chunk(OP_JMP, compiler);
-    write_location(ref_token, compiler);
-    size_t update_offset = write_i16(0, compiler);
-    size_t jmp_offset = chunks_len(compiler);
-
-    va_list args;
-    va_start(args, fmt);
-
-    Scope *scope = current_scope(compiler);
-    Allocator *allocator = scope->depth == 1 ? CTALLOCATOR : LABELS_ALLOCATOR;
-
-    char *label = MEMORY_ALLOC(allocator, char, LABEL_NAME_LENGTH);
-    int out_count = vsnprintf(label, LABEL_NAME_LENGTH, fmt, args);
-
-    va_end(args);
-    assert(out_count < LABEL_NAME_LENGTH);
-
-    JMP *jmp = (JMP *)MEMORY_ALLOC(allocator, JMP, 1);
-
-    jmp->jmp_offset = jmp_offset;
-    jmp->update_offset = update_offset;
-    jmp->label = label;
-    jmp->prev = NULL;
-    jmp->next = NULL;
-
-    insert_jmp(scope, jmp);
-
-    return jmp;
-}
-
-JMP *or(Compiler *compiler, Token *ref_token, char *fmt, ...){
-    write_chunk(OP_OR, compiler);
-    write_location(ref_token, compiler);
-    size_t update_offset = write_i16(0, compiler);
-    size_t jmp_offset = chunks_len(compiler);
-
-    va_list args;
-    va_start(args, fmt);
-
-    Scope *scope = current_scope(compiler);
-    Allocator *allocator = scope->depth == 1 ? CTALLOCATOR : LABELS_ALLOCATOR;
-
-    char *label = MEMORY_ALLOC(allocator, char, LABEL_NAME_LENGTH);
-    int out_count = vsnprintf(label, LABEL_NAME_LENGTH, fmt, args);
-
-    va_end(args);
-    assert(out_count < LABEL_NAME_LENGTH);
-
-    JMP *jmp = (JMP *)MEMORY_ALLOC(allocator, JMP, 1);
-
-    jmp->jmp_offset = jmp_offset;
-    jmp->update_offset = update_offset;
-    jmp->label = label;
-    jmp->prev = NULL;
-    jmp->next = NULL;
-
-    insert_jmp(scope, jmp);
-
-    return jmp;
-}
-
-JMP *and(Compiler *compiler, Token *ref_token, char *fmt, ...){
-    write_chunk(OP_AND, compiler);
-    write_location(ref_token, compiler);
-    size_t update_offset = write_i16(0, compiler);
-    size_t jmp_offset = chunks_len(compiler);
-
-    va_list args;
-    va_start(args, fmt);
-
-    Scope *scope = current_scope(compiler);
-    Allocator *allocator = scope->depth == 1 ? CTALLOCATOR : LABELS_ALLOCATOR;
-
-    char *label = MEMORY_ALLOC(allocator, char, LABEL_NAME_LENGTH);
-    int out_count = vsnprintf(label, LABEL_NAME_LENGTH, fmt, args);
-
-    va_end(args);
-    assert(out_count < LABEL_NAME_LENGTH);
-
-    JMP *jmp = (JMP *)MEMORY_ALLOC(allocator, JMP, 1);
-
-    jmp->jmp_offset = jmp_offset;
-    jmp->update_offset = update_offset;
-    jmp->label = label;
-    jmp->prev = NULL;
-    jmp->next = NULL;
-
-    insert_jmp(scope, jmp);
-
-    return jmp;
-}
-
-void resolve_jmps(Scope *current, Compiler *compiler){
-    LabelList *labels = &current->labels;
-    JMPList *jmps = &current->jmps;
-
-    for(JMP *jmp = jmps->head; jmp; jmp = jmp->next){
-        Label *selected = NULL;
-
-        for (Label *label = labels->head; label; label = label->next){
-            if(strcmp(jmp->label, label->name) == 0){
-                selected = label;
-                break;
-            }
-        }
-
-        if(selected){
-            update_i16(
-                jmp->update_offset,
-                selected->location - jmp->jmp_offset,
-                compiler
+        if(!lzohtable_lookup(
+            jmp->label_name_len,
+            jmp->label_name,
+            labels,
+            (void **)(&label)
+        )){
+            internal_error(
+                compiler,
+                "Unknown label '%s'",
+                jmp->label_name
             );
-
-            remove_jmp(jmp);
-        }else{
-            assert(compiler->depth > 1 && "All jmps must be resolved");
-
-            Scope *enclosing = &compiler->scopes[current->depth - 2];
-
-            remove_jmp(jmp);
-            insert_jmp(enclosing, jmp);
         }
+
+        size_t jmp_value = label->offset - jmp->jump_offset;
+
+        update_i16(compiler, jmp->update_offset, (uint16_t)jmp_value);
     }
 
-    labels->head = NULL;
-    labels->tail = NULL;
-}
+    size_t marks_len = DYNARR_LEN(marks);
 
-int resolve_symbol(Token *identifier, Symbol *symbol, Compiler *compiler){
-    int is_out = 0;
+    for (size_t i = 0; i < marks_len; i++){
+        Label *label = NULL;
+        Mark *mark = dynarr_get_ptr(i, marks);
 
-    if(symbol->depth > 1 && compiler->depth >= 2){
-        // depth 1 means we are in the global scope or the main function
-        Scope *fn_scope = inside_fn(compiler);
-
-        if(fn_scope && symbol->depth < fn_scope->depth){
-            is_out = 1;
-            add_captured_symbol(identifier, symbol, fn_scope, compiler);
+        if(!lzohtable_lookup(
+            mark->label_name_len,
+            mark->label_name,
+            labels,
+            (void **)(&label)
+        )){
+            internal_error(
+                compiler,
+                "Unknown label '%s'",
+                mark->label_name
+            );
         }
+
+        update_i16(compiler, mark->update_offset, (uint16_t)label->offset);
     }
 
-    return is_out;
+	compiler->units_stack = unit->prev;
+
+    lzpool_dealloc(unit);
+    lzarena_restore(compiler->compiler_arena, unit->arena_state);
+
+	return fn;
 }
 
-Symbol *exists_scope(char *name, Scope *scope, Compiler *compiler){
-    for (int i = scope->symbols_len - 1; i >= 0; i--){
-        Symbol *symbol = &scope->symbols[i];
+inline void pop_scope_locals(Compiler *compiler, LocalScope *scope){
+    local_t locals_count = LOCAL_SCOPE_LOCALS_COUNT(scope);
 
-        if(strcmp(symbol->name, name) == 0)
-            return symbol;
-    }
-
-    return NULL;
-}
-
-Symbol *exists_local(char *name, Compiler *compiler){
-    Scope *scope = current_scope(compiler);
-    return exists_scope(name, scope, compiler);
-}
-
-int exists_global(char *name, Compiler *compiler){
-    assert(compiler->depth > 0);
-
-    Scope *scope = &compiler->scopes[0];
-
-    return exists_scope(name, scope, compiler) != NULL;
-}
-
-Symbol *get(Token *identifier_token, Compiler *compiler){
-    assert(compiler->depth > 0);
-
-    char *identifier = identifier_token->lexeme;
-
-    for (int i = compiler->depth - 1; i >= 0; i--){
-        Scope *scope = &compiler->scopes[i];
-        Symbol *symbol = exists_scope(identifier, scope, compiler);
-        if(symbol != NULL) return symbol;
-    }
-
-    error(compiler, identifier_token, "Symbol '%s' doesn't exists.", identifier);
-
-    return NULL;
-}
-
-void to_local(Symbol *symbol, Compiler *compiler){
-    assert(symbol->identifier_token);
-
-    Scope *scope = &compiler->scopes[symbol->depth - 1];
-
-    if(scope->symbols_len >= SYMBOLS_LENGTH){
-        error(compiler, symbol->identifier_token, "Cannot define more than %d symbols per scope", SYMBOLS_LENGTH);
-    }
-    if(scope->locals >= LOCALS_LENGTH){
-        error(compiler, symbol->identifier_token, "Cannot define more than %d locals", LOCALS_LENGTH);
-    }
-
-    symbol->local = scope->locals++;
-}
-
-void from_symbols_to_global(
-    size_t symbol_index,
-    Token *location_token,
-    char *name,
-    Compiler *compiler
-){
-    write_chunk(OP_SGET, compiler);
-    write_location(location_token, compiler);
-    write_i32(symbol_index, compiler);
-
-    write_chunk(OP_GDEF, compiler);
-    write_location(location_token, compiler);
-    write_str_alloc(strlen(name), name, compiler);
-}
-
-Symbol *declare_native_fn(char *identifier, Compiler *compiler){
-    size_t identifier_len = strlen(identifier);
-    Scope *scope = current_scope(compiler);
-    Symbol *symbol = &scope->symbols[scope->symbols_len++];
-
-    symbol->depth = scope->depth;
-    symbol->local = -1;
-    symbol->type = NATIVE_FN_SYMTYPE;
-    memcpy(symbol->name, identifier, identifier_len);
-    symbol->name[identifier_len] = '\0';
-    symbol->identifier_token = NULL;
-
-    return symbol;
-}
-
-Symbol *declare_unknown(Token *ref_token, SymbolType type, Compiler *compiler){
-    Scope *scope = current_scope(compiler);
-
-    if(scope->symbols_len >= SYMBOLS_LENGTH){
-        error(compiler, ref_token, "Cannot define more than %d symbols per scope", SYMBOLS_LENGTH);
-    }
-
-    int local = 0;
-    Symbol *symbol = &scope->symbols[scope->symbols_len++];
-
-	if(type == MUT_SYMTYPE || type == IMUT_SYMTYPE){
-        if(scope->depth == 1){
-            local = -1;
-        }else{
-            if(scope->locals >= LOCALS_LENGTH){
-                error(compiler, ref_token, "Cannot define more than %d locals", LOCALS_LENGTH);
-            }
-
-            local = scope->locals++;
-        }
-    }
-
-    symbol->depth = scope->depth;
-    symbol->local = local;
-    symbol->index = -1;
-    symbol->type = type;
-    symbol->name[0] = 0;
-    symbol->identifier_token = NULL;
-
-    scope->scope_locals++;
-
-    return symbol;
-}
-
-Symbol *declare(SymbolType type, Token *identifier_token, Compiler *compiler){
-    Scope *scope = current_scope(compiler);
-
-    if(scope->symbols_len >= SYMBOLS_LENGTH){
-        error(compiler, identifier_token, "Cannot define more than %d symbols per scope", SYMBOLS_LENGTH);
-    }
-
-    char *identifier = identifier_token->lexeme;
-    size_t identifier_len = strlen(identifier);
-
-	if(identifier_len + 1 >= SYMBOL_NAME_LENGTH){
-        error(compiler, identifier_token, "Symbol name '%s' too long.", identifier);
-    }
-    if(exists_local(identifier, compiler) != NULL){
-        error(compiler, identifier_token, "Already exists a symbol named as '%s'.", identifier);
-    }
-
-    int local = 0;
-    Symbol *symbol = &scope->symbols[scope->symbols_len++];
-
-	if(type == MUT_SYMTYPE || type == IMUT_SYMTYPE){
-        if(scope->depth == 1){
-            local = -1;
-        }else{
-            if(scope->locals >= LOCALS_LENGTH){
-                error(compiler, identifier_token, "Cannot define more than %d locals", LOCALS_LENGTH);
-            }
-
-            local = scope->locals++;
-        }
-    }
-
-    symbol->depth = scope->depth;
-    symbol->local = local;
-    symbol->index = -1;
-    symbol->type = type;
-    memcpy(symbol->name, identifier, identifier_len);
-    symbol->name[identifier_len] = '\0';
-    symbol->identifier_token = identifier_token;
-
-    scope->scope_locals++;
-
-    return symbol;
-}
-
-DynArr *current_chunks(Compiler *compiler){
-	assert(compiler->fn_ptr > 0 && compiler->fn_ptr < FUNCTIONS_LENGTH);
-	Fn *fn = compiler->fn_stack[compiler->fn_ptr - 1];
-
-    return fn->chunks;
-}
-
-DynArr *current_locations(Compiler *compiler){
-	assert(compiler->fn_ptr > 0 && compiler->fn_ptr < FUNCTIONS_LENGTH);
-	Fn *fn = compiler->fn_stack[compiler->fn_ptr - 1];
-
-    return fn->locations;
-}
-
-DynArr *current_constants(Compiler *compiler){
-    assert(compiler->fn_ptr > 0 && compiler->fn_ptr < FUNCTIONS_LENGTH);
-    Fn *fn = compiler->fn_stack[compiler->fn_ptr - 1];
-    return fn->iconsts;
-}
-
-DynArr *current_float_values(Compiler *compiler){
-    assert(compiler->fn_ptr > 0 && compiler->fn_ptr < FUNCTIONS_LENGTH);
-    Fn *fn = compiler->fn_stack[compiler->fn_ptr - 1];
-    return fn->fconsts;
-}
-
-void descompose_i16(int16_t value, uint8_t *bytes){
-    uint8_t mask = 0b11111111;
-
-    for (size_t i = 0; i < 2; i++){
-        uint8_t r = value & mask;
-        value = value >> 8;
-        bytes[i] = r;
+    for (size_t i = 0; i < locals_count; i++){
+        write_chunk(compiler, OP_POP);
     }
 }
 
-void descompose_i32(int32_t value, uint8_t *bytes){
-    uint8_t mask = 0b11111111;
+inline void pop_locals(Compiler *compiler){
+    size_t len = scope_manager_locals_count(compiler->manager);
 
-    for (size_t i = 0; i < 4; i++){
-        uint8_t r = value & mask;
-        value = value >> 8;
-        bytes[i] = r;
+    for (size_t i = 0; i < len; i++){
+        write_chunk(compiler, OP_POP);
     }
 }
 
-size_t chunks_len(Compiler *compiler){
-	return current_chunks(compiler)->used;
+inline Loop *current_loop(Compiler *compiler){
+    Unit *unit = current_unit(compiler);
+    Loop *loop = unit->loops;
+
+    assert(loop && "Loops stack is empty");
+
+    return loop;
 }
 
-size_t write_chunk(uint8_t chunk, Compiler *compiler){
+inline void push_loop(Compiler *compiler, int32_t loop_id){
+    Unit *unit = current_unit(compiler);
+    Loop *loop = lzpool_alloc_x(8, unit->loops_pool);
+
+    loop->id = loop_id;
+    loop->prev = unit->loops;
+    unit->loops = loop;
+}
+
+inline void pop_loop(Compiler *compiler){
+    Unit *unit = current_unit(compiler);
+    Loop *loop = unit->loops;
+
+    assert(loop && "Loops stack is empty");
+
+    unit->loops = loop->prev;
+
+    lzpool_dealloc(loop);
+}
+
+static Block *peek_block(Compiler *compiler){
+	Unit *unit = current_unit(compiler);
+	Block *block = unit->blocks;
+
+	assert(block && "Blocks stack is empty");
+
+	return block;
+}
+
+inline Block *push_block(Compiler *compiler){
+	Unit *unit = current_unit(compiler);
+	Block *block = lzpool_alloc_x(64, unit->blocks_pool);
+
+	block->stmts_len = 0;
+	block->current_stmt = 0;
+	block->prev = unit->blocks;
+
+	unit->blocks = block;
+
+	return block;
+}
+
+inline void pop_block(Compiler *compiler){
+	Unit *unit = current_unit(compiler);
+	Block *block = unit->blocks;
+
+	assert(block != NULL && "Blocks stack is empty");
+
+	unit->blocks = block->prev;
+
+	lzpool_dealloc(block);
+}
+
+inline Module *current_module(Compiler *compiler){
+	return compiler->module;
+}
+
+inline Unit *current_unit(Compiler *compiler){
+	return compiler->units_stack;
+}
+
+inline int32_t generate_id(Compiler *compiler){
+	return current_unit(compiler)->counter++;
+}
+
+inline Fn *current_fn(Compiler *compiler){
+	return current_unit(compiler)->fn;
+}
+
+inline DynArr *current_chunks(Compiler *compiler){
+	return current_fn(compiler)->chunks;
+}
+
+inline DynArr *current_locations(Compiler *compiler){
+	return current_fn(compiler)->locations;
+}
+
+inline DynArr *current_iconsts(Compiler *compiler){
+	return current_fn(compiler)->iconsts;
+}
+
+inline DynArr *current_fconsts(Compiler *compiler){
+	return current_fn(compiler)->fconsts;
+}
+
+inline void descompose_i16(int16_t value, uint8_t *bytes){
+	bytes[0] = (value >> 8) & 0xff;
+	bytes[1] = value & 0xff;
+}
+
+inline void descompose_i32(int32_t value, uint8_t *bytes){
+	bytes[0] = (value >> 24) & 0xff;
+	bytes[1] = (value >> 16) & 0xff;
+	bytes[2] = (value >> 8) & 0xff;
+	bytes[3] = value & 0xff;
+}
+
+inline size_t chunks_len(Compiler *compiler){
+	return DYNARR_LEN(current_chunks(compiler));
+}
+
+inline size_t write_chunk(Compiler *compiler, uint8_t chunk){
+	DynArr *chunks = current_chunks(compiler);
+
+	dynarr_insert(&chunk, chunks);
+
+	return DYNARR_LEN(chunks) - 1;
+}
+
+size_t write_i16(Compiler *compiler, int16_t value){
+	DynArr *chunks = current_chunks(compiler);
+	uint8_t bytes[2];
+
+	descompose_i16(value, bytes);
+	dynarr_insert(&bytes[0], chunks);
+	dynarr_insert(&bytes[1], chunks);
+
+	return DYNARR_LEN(chunks) - 2;
+}
+
+size_t write_i32(Compiler *compiler, int32_t value){
+	DynArr *chunks = current_chunks(compiler);
+	uint8_t bytes[4];
+
+	descompose_i32(value, bytes);
+	dynarr_insert(&bytes[0], chunks);
+	dynarr_insert(&bytes[1], chunks);
+	dynarr_insert(&bytes[2], chunks);
+	dynarr_insert(&bytes[3], chunks);
+
+	return DYNARR_LEN(chunks) - 4;
+}
+
+size_t write_iconst(Compiler *compiler, int64_t value){
+	DynArr *iconsts = current_iconsts(compiler);
+	size_t iconsts_len = DYNARR_LEN(iconsts);
+
+	if(iconsts_len >= UINT16_MAX){
+		internal_error(
+			compiler,
+			"Number of constants exceeded in '%s' procedure",
+			current_fn(compiler)->name
+		);
+	}
+
+	dynarr_insert(&value, iconsts);
+
+	return write_i16(compiler, (int16_t)(DYNARR_LEN(iconsts) - 1));
+}
+
+size_t write_fconst(Compiler *compiler, double value){
+	DynArr *fconsts = current_fconsts(compiler);
+	size_t fconsts_len = DYNARR_LEN(fconsts);
+
+	if(fconsts_len >= UINT16_MAX){
+		internal_error(
+			compiler,
+			"Number of constants exceeded in '%s' procedure",
+			current_fn(compiler)->name
+		);
+	}
+
+	dynarr_insert(&value, fconsts);
+
+	return write_i16(compiler, (int16_t)(DYNARR_LEN(fconsts) - 1));
+}
+
+void update_i16(Compiler *compiler, size_t offset, uint16_t value){
     DynArr *chunks = current_chunks(compiler);
-	size_t index = chunks->used;
-    dynarr_insert(&chunk, chunks);
-	return index;
+    size_t chunks_len = DYNARR_LEN(chunks);
+    uint8_t bytes[2];
+
+    if(offset >= chunks_len){
+        internal_error(
+			compiler,
+			"Index out of bounds while updating chunks in '%s' procedure",
+			current_fn(compiler)->name
+		);
+    }
+
+    descompose_i16(value, bytes);
+    dynarr_set_at(offset, &bytes[0], chunks);
+    dynarr_set_at(offset + 1, &bytes[1], chunks);
 }
 
-void write_location(Token *token, Compiler *compiler){
+void write_str(Compiler *compiler, size_t raw_str_len, char *raw_str){
+	Module *module = current_module(compiler);
+	DynArr *static_strs = MODULE_STRINGS(module);
+    size_t static_strs_len = DYNARR_LEN(static_strs);
+
+    if(static_strs_len >= UINT16_MAX){}
+
+    DStr str = (DStr){
+        .len = raw_str_len,
+        .buff = raw_str
+    };
+
+    dynarr_insert(&str, static_strs);
+    write_i16(compiler, (int16_t)static_strs_len);
+}
+
+void write_str_alloc(Compiler *compiler, size_t raw_str_len, char *raw_str){
+	Module *module = current_module(compiler);
+	char *new_raw_str = MEMORY_ALLOC(compiler->rtallocator, char, raw_str_len + 1);
+    DynArr *static_strs = MODULE_STRINGS(module);
+    size_t static_strs_len = DYNARR_LEN(static_strs);
+
+    memcpy(new_raw_str, raw_str, raw_str_len);
+    new_raw_str[raw_str_len] = 0;
+
+    if(static_strs_len >= UINT16_MAX){}
+
+    DStr str = (DStr){
+        .len = raw_str_len,
+        .buff = raw_str
+    };
+
+    dynarr_insert(&str, static_strs);
+    write_i16(compiler, (int16_t)static_strs_len);
+}
+
+void write_location(Compiler *compiler, const Token *token){
 	DynArr *chunks = current_chunks(compiler);
 	DynArr *locations = current_locations(compiler);
 	OPCodeLocation location = {0};
 
-	location.offset = chunks->used - 1;
+	location.offset = DYNARR_LEN(chunks) - 1;
 	location.line = token->line;
-    location.filepath = factory_clone_raw_str(token->pathname, RTALLOCATOR, NULL);
+    location.filepath = memory_clone_cstr(
+    	compiler->rtallocator,
+        token->pathname,
+      	NULL
+    );
 
 	dynarr_insert(&location, locations);
 }
 
-void update_chunk(size_t index, uint8_t chunk, Compiler *compiler){
-	DynArr *chunks = current_chunks(compiler);
-    dynarr_set_at(index, &chunk, chunks);
-}
+void label(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
+	Unit *unit = current_unit(compiler);
+	LZOHTable *labels = unit->labels;
+	va_list args;
 
-size_t write_i16(int16_t i16, Compiler *compiler){
-    size_t index = chunks_len(compiler);
+	va_start(args, fmt);
 
-	uint8_t bytes[2];
-	descompose_i16(i16, bytes);
+	size_t name_len = (size_t)(vsnprintf(NULL, 0, fmt, args) + 1);
+	char *cloned_name = MEMORY_ALLOC(unit->lzarena_allocator, char, name_len);
 
-	for(size_t i = 0; i < 2; i++)
-		write_chunk(bytes[i], compiler);
+	va_end(args);
 
-	return index;
-}
+	va_start(args, fmt);
+	vsnprintf(cloned_name, name_len, fmt, args);
+	va_end(args);
 
-size_t write_i32(int32_t i32, Compiler *compiler){
-	size_t index = chunks_len(compiler);
+	Label *label = lzpool_alloc_x(1024, unit->labels_pool);
 
-	uint8_t bytes[4];
-	descompose_i32(i32, bytes);
+	label->offset = chunks_len(compiler);
+	label->name_len = name_len;
+	label->name = cloned_name;
 
-	for(size_t i = 0; i < 4; i++)
-		write_chunk(bytes[i], compiler);
-
-	return index;
-}
-
-size_t write_iconst(int64_t i64, Compiler *compiler){
-    DynArr *constants = current_constants(compiler);
-    int32_t used = (int32_t) constants->used;
-
-    assert(used < 32767 && "Too many constants");
-
-    dynarr_insert(&i64, constants);
-
-	return write_i16(used, compiler);
-}
-
-size_t write_fconst(double value, Compiler *compiler){
-	DynArr *float_values = current_float_values(compiler);
-	int32_t length = (int32_t) float_values->used;
-
-	assert(length < 32767 && "Too many constants");
-
-	dynarr_insert(&value, float_values);
-
-	return write_i16(length, compiler);
-}
-
-void write_str(size_t len, char *rstr, Compiler *compiler){
-    DynArr *static_strs = MODULE_STRINGS(CURRENT_MODULE);
-    size_t idx = DYNARR_LEN(static_strs);
-
-    if(idx >= UINT16_MAX){
-        fatal_error(compiler, "Only " PRIu16 " strings literals per module are allowed", UINT16_MAX);
-    }
-
-    DStr str = (DStr){
-        .len = len,
-        .buff = rstr
-    };
-
-    dynarr_insert(&str, static_strs);
-    write_i16((int16_t)idx, compiler);
-}
-
-void write_str_alloc(size_t len, char *rstr, Compiler *compiler){
-    assert(len > 0 && "'len' must be greater than 0");
-
-    char *new_rstr = MEMORY_ALLOC(RTALLOCATOR, char, len + 1);
-    DynArr *static_strs = MODULE_STRINGS(CURRENT_MODULE);
-    size_t idx = DYNARR_LEN(static_strs);
-
-    memcpy(new_rstr, rstr, len);
-    new_rstr[len] = 0;
-
-    if(idx >= UINT16_MAX){
-        fatal_error(compiler, "Only " PRIu16 " strings literals per module are allowed", UINT16_MAX);
-    }
-
-    DStr str = (DStr){
-        .len = len,
-        .buff = new_rstr
-    };
-
-    dynarr_insert(&str, static_strs);
-    write_i16((int16_t)idx, compiler);
-}
-
-void update_i16(size_t index, int16_t i16, Compiler *compiler){
-    uint8_t bytes[2];
-	DynArr *chunks = current_chunks(compiler);
-
-	descompose_i16(i16, bytes);
-
-	for(size_t i = 0; i < 2; i++){
-        dynarr_set_at(index + i, bytes + i, chunks);
-    }
-}
-
-void update_i32(size_t index, int32_t i32, Compiler *compiler){
-	uint8_t bytes[4];
-	DynArr *chunks = current_chunks(compiler);
-
-	descompose_i32(i32, bytes);
-
-	for(size_t i = 0; i < 4; i++){
-        dynarr_set_at(index + i, bytes + i, chunks);
-    }
-}
-
-inline int32_t generate_id(Compiler *compiler){
-    return ++compiler->counter_id;
-}
-
-inline uint32_t generate_trycatch_id(Compiler *compiler){
-    return ++(compiler->trycatch_counter);
-}
-
-char *names_to_pathname(DynArr *names, Compiler *compiler, size_t *out_name_len, Token **out_name_token){
-    size_t names_len = DYNARR_LEN(names);
-
-    if(names_len == 1){
-        Token *name_token = (Token *)dynarr_get_raw(0, names);
-
-        *out_name_len = name_token->lexeme_len;
-        *out_name_token = name_token;
-
-        return factory_clone_raw_str(name_token->lexeme, CTALLOCATOR, out_name_len);
-    }
-
-    LZBStr *str_buff = FACTORY_LZBSTR(CTALLOCATOR);
-    Token *name_token;
-
-    for (size_t i = 0; i < names_len; i++){
-        name_token = (Token *)dynarr_get_raw(i, names);
-
-        lzbstr_append(name_token->lexeme, str_buff);
-
-        if(i + 1 < names_len){
-            lzbstr_append("/", str_buff);
-        }
-    }
-
-    *out_name_token = name_token;
-
-    return lzbstr_rclone_buff((LZBStrAllocator *)CTALLOCATOR, str_buff, out_name_len);
-}
-
-NativeModule *resolve_native_module(char *module_name, Compiler *compiler){
-	if(strcmp("math", module_name) == 0){
-		if(!math_native_module){
-			math_module_init(RTALLOCATOR);
-		}
-
-		return math_native_module;
+	if(lzohtable_lookup(name_len, cloned_name, labels, NULL)){
+		internal_error(
+			compiler,
+			"Already exists label '%s' in current unit",
+			cloned_name
+		);
 	}
 
-    if(strcmp("random", module_name) == 0){
-        if(!random_native_module){
-            random_module_init(RTALLOCATOR);
-        }
-
-        return random_native_module;
-    }
-
-    if(strcmp("time", module_name) == 0){
-        if(!time_native_module){
-            time_module_init(RTALLOCATOR);
-        }
-
-        return time_native_module;
-    }
-
-    if(strcmp("io", module_name) == 0){
-        if(!io_native_module){
-            io_module_init(RTALLOCATOR);
-        }
-
-        return io_native_module;
-    }
-
-    if(strcmp("os", module_name) == 0){
-        if(!os_native_module){
-            os_module_init(RTALLOCATOR);
-        }
-
-        return os_native_module;
-    }
-
-    if(strcmp("nbarray", module_name) == 0){
-    	if(!nbarray_native_module){
-   			nbarray_module_init(RTALLOCATOR);
-     	}
-
-     	return nbarray_native_module;
-    }
-
-	return NULL;
+	lzohtable_put(name_len, cloned_name, label, labels, NULL);
 }
 
-char *resolve_module_location(
-    Token *import_token,
-    char *module_name,
-    Module *previous_module,
-    Module *current_module,
-    Compiler *compiler,
-    size_t *out_module_name_len,
-    size_t *out_module_pathname_len
-){
-    size_t module_name_len = strlen(module_name);
-    DynArr *search_paths = compiler->search_paths;
-    size_t search_paths_len = DYNARR_LEN(search_paths);
+void mark(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
+	size_t update_offset = write_i16(compiler, 0);
+	Unit *unit = current_unit(compiler);
+	va_list args;
 
-    for (size_t i = 0; i < search_paths_len; i++){
-        DStr search_path_rstr = DYNARR_GET_AS(DStr, i, search_paths);
-        size_t search_pathname_len = search_path_rstr.len;
-        char *search_pathname = search_path_rstr.buff;
+	va_start(args, fmt);
 
-        size_t module_pathname_len = search_pathname_len + module_name_len + 4;
-        char module_pathname[module_pathname_len + 1];
+	size_t name_len = (size_t)(vsnprintf(NULL, 0, fmt, args) + 1);
+	char *cloned_name = MEMORY_ALLOC(unit->lzarena_allocator, char, name_len);
 
-        memcpy(module_pathname, search_pathname, search_pathname_len);
-        memcpy(module_pathname + search_pathname_len, "/", 1);
-        memcpy(module_pathname + search_pathname_len + 1, module_name, module_name_len);
-        memcpy(module_pathname + search_pathname_len + 1 + module_name_len, ".ze", 3);
-        module_pathname[module_pathname_len] = '\0';
+	va_end(args);
 
-        if(!UTILS_FILES_EXISTS(module_pathname)){
-            continue;
-        }
+	va_start(args, fmt);
+	vsnprintf(cloned_name, name_len, fmt, args);
+	va_end(args);
 
-		if(!UTILS_FILES_CAN_READ(module_pathname)){
-			error(compiler, import_token, "File at '%s' do not exists or cannot be read", module_pathname);
-		}
+	Mark *mark = lzpool_alloc_x(1024, unit->marks_pool);
 
-        if(!utils_files_is_regular(module_pathname)){
-            error(compiler, import_token, "File at '%s' is not a regular file", module_pathname);
-        }
+	mark->update_offset = update_offset;
+	mark->label_name_len = name_len;
+	mark->label_name = cloned_name;
 
-        // detect self module import
-        if(strcmp(module_pathname, current_module->pathname) == 0){
-            error(compiler, import_token, "Trying to import the current module '%s'", module_name);
-        }
-
-        if(previous_module){
-            // detect circular dependency
-            if(strcmp(module_pathname, previous_module->pathname) == 0){
-                error(compiler, import_token, "Circular dependency between '%s' and '%s'", current_module->pathname, previous_module->pathname);
-            }
-        }
-
-        if(out_module_name_len){
-            *out_module_name_len = module_name_len;
-        }
-
-        if(out_module_pathname_len){
-            *out_module_pathname_len = module_pathname_len;
-        }
-
-        return factory_clone_raw_str(module_pathname, CTALLOCATOR, NULL);
-    }
-
-    error(compiler, import_token, "Module %s not found", module_name);
-
-    return NULL;
+	dynarr_insert_ptr(mark, unit->marks);
 }
 
-void compile_expr(Expr *expr, Compiler *compiler){
+void jmp(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
+	write_chunk(compiler, OP_JMP);
+	write_location(compiler, ref_token);
+	size_t update_offset = write_i16(compiler, 0);
+	size_t jmp_offset = chunks_len(compiler);
+
+	Unit *unit = current_unit(compiler);
+	va_list args;
+
+	va_start(args, fmt);
+
+	size_t name_len = (size_t)(vsnprintf(NULL, 0, fmt, args) + 1);
+	char *cloned_name = MEMORY_ALLOC(unit->lzarena_allocator, char, name_len);
+
+	va_end(args);
+
+	va_start(args, fmt);
+	vsnprintf(cloned_name, name_len, fmt, args);
+	va_end(args);
+
+	Jmp *jmp = lzpool_alloc_x(1024, unit->jmps_pool);
+
+	jmp->update_offset = update_offset;
+	jmp->jump_offset = jmp_offset;
+	jmp->label_name_len = name_len;
+	jmp->label_name = cloned_name;
+
+	dynarr_insert_ptr(jmp, unit->jmps);
+}
+
+void jif(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
+	write_chunk(compiler, OP_JIF);
+	write_location(compiler, ref_token);
+	size_t update_offset = write_i16(compiler, 0);
+	size_t jmp_offset = chunks_len(compiler);
+
+	Unit *unit = current_unit(compiler);
+	va_list args;
+
+	va_start(args, fmt);
+
+	size_t name_len = (size_t)(vsnprintf(NULL, 0, fmt, args) + 1);
+	char *cloned_name = MEMORY_ALLOC(unit->lzarena_allocator, char, name_len);
+
+	va_end(args);
+
+	va_start(args, fmt);
+	vsnprintf(cloned_name, name_len, fmt, args);
+	va_end(args);
+
+	Jmp *jmp = lzpool_alloc_x(1024, unit->jmps_pool);
+
+	jmp->update_offset = update_offset;
+	jmp->jump_offset = jmp_offset;
+	jmp->label_name_len = name_len;
+	jmp->label_name = cloned_name;
+
+	dynarr_insert_ptr(jmp, unit->jmps);
+}
+
+void jit(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
+	write_chunk(compiler, OP_JIT);
+	write_location(compiler, ref_token);
+	size_t update_offset = write_i16(compiler, 0);
+	size_t jmp_offset = chunks_len(compiler);
+
+	Unit *unit = current_unit(compiler);
+	va_list args;
+
+	va_start(args, fmt);
+
+	size_t name_len = (size_t)(vsnprintf(NULL, 0, fmt, args) + 1);
+	char *cloned_name = MEMORY_ALLOC(unit->lzarena_allocator, char, name_len);
+
+	va_end(args);
+
+	va_start(args, fmt);
+	vsnprintf(cloned_name, name_len, fmt, args);
+	va_end(args);
+
+	Jmp *jmp = lzpool_alloc_x(1024, unit->jmps_pool);
+
+	jmp->update_offset = update_offset;
+	jmp->jump_offset = jmp_offset;
+	jmp->label_name_len = name_len;
+	jmp->label_name = cloned_name;
+
+	dynarr_insert_ptr(jmp, unit->jmps);
+}
+
+void or(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
+	write_chunk(compiler, OP_OR);
+	write_location(compiler, ref_token);
+	size_t update_offset = write_i16(compiler, 0);
+	size_t jmp_offset = chunks_len(compiler);
+
+	Unit *unit = current_unit(compiler);
+	va_list args;
+
+	va_start(args, fmt);
+
+	size_t name_len = (size_t)(vsnprintf(NULL, 0, fmt, args) + 1);
+	char *cloned_name = MEMORY_ALLOC(unit->lzarena_allocator, char, name_len);
+
+	va_end(args);
+
+	va_start(args, fmt);
+	vsnprintf(cloned_name, name_len, fmt, args);
+	va_end(args);
+
+	Jmp *jmp = lzpool_alloc_x(1024, unit->jmps_pool);
+
+	jmp->update_offset = update_offset;
+	jmp->jump_offset = jmp_offset;
+	jmp->label_name_len = name_len;
+	jmp->label_name = cloned_name;
+
+	dynarr_insert_ptr(jmp, unit->jmps);
+}
+
+void and(Compiler *compiler, const Token *ref_token, const char *fmt, ...){
+	write_chunk(compiler, OP_AND);
+	write_location(compiler, ref_token);
+	size_t update_offset = write_i16(compiler, 0);
+	size_t jmp_offset = chunks_len(compiler);
+
+	Unit *unit = current_unit(compiler);
+	va_list args;
+
+	va_start(args, fmt);
+
+	size_t name_len = (size_t)(vsnprintf(NULL, 0, fmt, args) + 1);
+	char *cloned_name = MEMORY_ALLOC(unit->lzarena_allocator, char, name_len);
+
+	va_end(args);
+
+	va_start(args, fmt);
+	vsnprintf(cloned_name, name_len, fmt, args);
+	va_end(args);
+
+	Jmp *jmp = lzpool_alloc_x(1024, unit->jmps_pool);
+
+	jmp->update_offset = update_offset;
+	jmp->jump_offset = jmp_offset;
+	jmp->label_name_len = name_len;
+	jmp->label_name = cloned_name;
+
+	dynarr_insert_ptr(jmp, unit->jmps);
+}
+
+void compile_expr(Compiler *compiler, Expr *expr){
+    ScopeManager *manager = compiler->manager;
+
     switch (expr->type){
         case EMPTY_EXPRTYPE:{
-			EmptyExpr *empty_expr = (EmptyExpr *)expr->sub_expr;
-            write_chunk(OP_EMPTY, compiler);
-			write_location(empty_expr->empty_token, compiler);
-            break;
-        }case BOOL_EXPRTYPE:{
-            BoolExpr *bool_expr = (BoolExpr *)expr->sub_expr;
-            uint8_t value = bool_expr->value;
+			EmptyExpr *empty_expr = expr->sub_expr;
 
-            write_chunk(value ? OP_TRUE : OP_FALSE, compiler);
-			write_location(bool_expr->bool_token, compiler);
+			write_chunk(compiler, OP_EMPTY);
+			write_location(compiler, empty_expr->empty_token);
+
+			break;
+        }case BOOL_EXPRTYPE:{
+            BoolExpr *bool_expr = expr->sub_expr;
+
+            write_chunk(compiler, bool_expr->value ? OP_TRUE : OP_FALSE);
+			write_location(compiler, bool_expr->bool_token);
 
             break;
         }case INT_EXPRTYPE:{
-            IntExpr *int_expr = (IntExpr *)expr->sub_expr;
-            Token *token = int_expr->token;
-            int64_t value = *(int64_t *)token->literal;
+            IntExpr *int_expr = expr->sub_expr;
+            Token *int_token = int_expr->token;
+            int64_t value = *(int64_t *)int_token->literal;
 
-            write_chunk(OP_INT, compiler);
-			write_location(token, compiler);
-
-            write_iconst(value, compiler);
+            write_chunk(compiler, OP_INT);
+			write_location(compiler, int_token);
+            write_iconst(compiler, value);
 
             break;
         }case FLOAT_EXPRTYPE:{
-			FloatExpr *float_expr = (FloatExpr *)expr->sub_expr;
+			FloatExpr *float_expr = expr->sub_expr;
 			Token *float_token = float_expr->token;
 			double value = *(double *)float_token->literal;
 
-			write_chunk(OP_FLOAT, compiler);
-			write_location(float_token, compiler);
-
-			write_fconst(value, compiler);
+			write_chunk(compiler, OP_FLOAT);
+			write_location(compiler, float_token);
+			write_fconst(compiler, value);
 
 			break;
 		}case STRING_EXPRTYPE:{
-			StrExpr *str_expr = (StrExpr *)expr->sub_expr;
+			StrExpr *str_expr = expr->sub_expr;
             Token *str_token = str_expr->str_token;
 
-			write_chunk(OP_STRING, compiler);
-			write_location(str_token, compiler);
-			write_str(str_token->literal_size, str_token->literal, compiler);
+			write_chunk(compiler, OP_STRING);
+			write_location(compiler, str_token);
+			write_str(compiler, str_token->literal_size, str_token->literal);
 
 			break;
 		}case TEMPLATE_EXPRTYPE:{
-            TemplateExpr *template_expr = (TemplateExpr *)expr->sub_expr;
+            TemplateExpr *template_expr = expr->sub_expr;
             Token *template_token = template_expr->template_token;
             DynArr *exprs = template_expr->exprs;
 
-            write_chunk(OP_STTE, compiler);
-            write_location(template_token, compiler);
+            write_chunk(compiler, OP_STTE);
+            write_location(compiler, template_token);
 
             if(exprs){
                 size_t len = DYNARR_LEN(exprs);
 
                 for (size_t i = 0; i < len; i++){
                     Expr *expr = (Expr *)dynarr_get_ptr(i, exprs);
-                    compile_expr(expr, compiler);
 
-                    write_chunk(OP_WTTE, compiler);
-                    write_location(template_token, compiler);
+                    compile_expr(compiler, expr);
+
+                    write_chunk(compiler, OP_WTTE);
+                    write_location(compiler, template_token);
                 }
             }
 
-            write_chunk(OP_ETTE, compiler);
-            write_location(template_token, compiler);
+            write_chunk(compiler, OP_ETTE);
+            write_location(compiler, template_token);
 
             break;
         }case ANON_EXPRTYPE:{
-            AnonExpr *anon_expr = (AnonExpr *)expr->sub_expr;
-            Token *anon_token = anon_expr->anon_token;
+            AnonExpr *anon_expr = expr->sub_expr;
             DynArr *params = anon_expr->params;
             DynArr *stmts = anon_expr->stmts;
 
-            Fn *fn = NULL;
-            size_t symbol_index = 0;
-            Scope *fn_scope = scope_in_fn("anonymous", compiler, &fn, &symbol_index);
+            size_t params_len = params ? DYNARR_LEN(params) : 0;
+            size_t stmts_len = stmts ? DYNARR_LEN(stmts) : 0;
 
-            if(params){
-                for (size_t i = 0; i < DYNARR_LEN(params); i++){
-                    Token *param_identifier = (Token *)dynarr_get_ptr(i, params);
-                    declare(MUT_SYMTYPE, param_identifier, compiler);
+            Fn *fn = vm_factory_fn_create(
+                compiler->rtallocator,
+                "anonymous",
+                params_len
+            );
+            size_t symbol_idx;
 
-                    char *name = factory_clone_raw_str(param_identifier->lexeme, RTALLOCATOR, NULL);
-                    dynarr_insert_ptr(name, fn->params);
+            vm_factory_module_add_fn(current_module(compiler), fn, &symbol_idx);
+            scope_manager_push(manager, FN_SCOPE_TYPE);
+            push_unit(compiler, fn);
+
+            for (size_t i = 0; i < params_len; i++){
+                Token *param_identifier_token = dynarr_get_ptr(i, params);
+
+                scope_manager_define_local(
+                    manager,
+                    1,
+                    1,
+                    param_identifier_token
+                );
+            }
+
+            uint8_t must_return = 1;
+
+            for (size_t i = 0; i < stmts_len; i++){
+                Stmt *stmt = dynarr_get_ptr(i, stmts);
+                compile_stmt(compiler, stmt);
+
+                if(i + 1 >= stmts_len && stmt->type == RETURN_STMTTYPE){
+                    must_return = 0;
                 }
             }
 
-            char returned = 0;
-
-            for (size_t i = 0; i < DYNARR_LEN(stmts); i++){
-                Stmt *stmt = (Stmt *)dynarr_get_ptr(i, stmts);
-                compile_stmt(stmt, compiler);
-
-                if(i + 1 >= DYNARR_LEN(stmts) && stmt->type == RETURN_STMTTYPE){
-                    returned = 1;
-                }
+            if(must_return){
+                write_chunk(compiler, OP_EMPTY);
+                write_chunk(compiler, OP_RET);
             }
 
-            if(!returned){
-                write_chunk(OP_EMPTY, compiler);
-                write_location(anon_token, compiler);
+            Unit *unit = current_unit(compiler);
+            LZOHTable *outs = unit->captured_symbols;
+            size_t outs_len = outs->n;
+            size_t outs_m = outs->m;
 
-                write_chunk(OP_RET, compiler);
-                write_location(anon_token, compiler);
-            }
+            if(outs_len > 0){
+                size_t outs_counter = 0;
+                MetaClosure *closure = MEMORY_ALLOC(compiler->rtallocator, MetaClosure, 1);
+                MetaOutValue *meta_outs = closure->meta_out_values;
 
-            scope_out_fn(compiler);
-
-            if(fn_scope->captured_symbols_len > 0){
-                MetaClosure *closure = MEMORY_ALLOC(RTALLOCATOR, MetaClosure, 1);
-
-                closure->meta_out_values_len = fn_scope->captured_symbols_len;
-
-                for (int i = 0; i < fn_scope->captured_symbols_len; i++){
-                    closure->meta_out_values[i].at = fn_scope->captured_symbols[i]->local;
-                }
-
+                closure->meta_out_values_len = outs_len;
                 closure->fn = fn;
 
-                set_closure(symbol_index, closure, compiler);
-            }else{
-                set_fn(symbol_index, fn, compiler);
+                for (size_t i = 0; i < outs_m && outs_counter < outs_len; i++){
+                    LZOHTableSlot *slot = &outs->slots[i];
+
+                    if(!slot->used){
+                        continue;
+                    }
+
+                    Symbol *symbol = slot->value;
+
+                    assert(symbol->type == LOCAL_SYMBOL_TYPE);
+
+                    meta_outs[outs_counter++].at = ((LocalSymbol *)symbol)->offset;
+                }
+
+                vm_factory_module_add_closure(
+                    current_module(compiler),
+                    closure,
+                    &symbol_idx
+                );
             }
 
-            write_chunk(OP_SGET, compiler);
-            write_location(anon_token, compiler);
-            write_i32((int32_t)symbol_index, compiler);
+            pop_unit(compiler);
+            scope_manager_pop(manager);
+
+            write_chunk(compiler, OP_SGET);
+            write_location(compiler, anon_expr->anon_token);
+            write_i32(compiler, (int32_t)symbol_idx);
 
             break;
         }case IDENTIFIER_EXPRTYPE:{
-            IdentifierExpr *identifier_expr = (IdentifierExpr *)expr->sub_expr;
-            Token *identifier = identifier_expr->identifier_token;
+            IdentifierExpr *identifier_expr = expr->sub_expr;
+            Token *identifier_token = identifier_expr->identifier_token;
+            Symbol *symbol = scope_manager_get_symbol(manager, identifier_token);
 
-            Symbol *symbol = get(identifier, compiler);
-            int is_out = resolve_symbol(identifier, symbol, compiler);
+            switch (symbol->type){
+                case LOCAL_SYMBOL_TYPE:{
+                    LocalSymbol *local_symbol = (LocalSymbol *)symbol;
+                    Scope *current_scope = scope_manager_peek(manager);
+                    const Scope *symbol_scope = symbol->scope;
 
-            if(symbol->type == NATIVE_FN_SYMTYPE){
-                write_chunk(OP_NGET, compiler);
-                write_location(identifier, compiler);
-                write_str_alloc(identifier->lexeme_len, identifier->lexeme, compiler);
+                    if(IS_LOCAL_SCOPE(current_scope) && IS_LOCAL_SCOPE(symbol_scope)){
+                        LocalScope *local_current_scope = AS_LOCAL_SCOPE(current_scope);
+                        const LocalScope *local_symbol_scope = AS_LOCAL_SCOPE(symbol_scope);
 
-                break;
-            }
+                        if(local_current_scope->depth > local_symbol_scope->depth){
+                            depth_t depth_diff = local_current_scope->depth - local_symbol_scope->depth;
 
-            if(symbol->depth == 1){
-                write_chunk(OP_GGET, compiler);
-                write_location(identifier, compiler);
-                write_str_alloc(identifier->lexeme_len, identifier->lexeme, compiler);
-            }else{
-                uint8_t opcode = is_out ? OP_OGET : OP_LGET;
+                            if(depth_diff > 1){
+                                error(
+                                    compiler,
+                                    identifier_token,
+                                    "Cannot capture locals with more than one jump"
+                                );
+                            }
 
-                write_chunk(opcode, compiler);
-                write_location(identifier, compiler);
-                write_chunk((uint8_t)symbol->local, compiler);
+                            Unit *unit = current_unit(compiler);
+                            LZOHTable *captured_symbols = unit->captured_symbols;
+
+                            lzohtable_put(
+                                identifier_token->lexeme_len,
+                                identifier_token->lexeme,
+                                symbol,
+                                captured_symbols,
+                                NULL
+                            );
+
+                            write_chunk(compiler, OP_OGET);
+                            write_location(compiler, identifier_token);
+                            write_chunk(compiler, local_symbol->offset);
+
+                            break;
+                        }
+                    }
+
+                    write_chunk(compiler, OP_LGET);
+                    write_location(compiler, identifier_token);
+                    write_chunk(compiler, local_symbol->offset);
+
+                    break;
+                }case GLOBAL_SYMBOL_TYPE:
+                 case FN_SYMBOL_TYPE:
+                 case MODULE_SYMBOL_TYPE:{
+                    write_chunk(compiler, OP_GGET);
+                    write_location(compiler, identifier_token);
+                    write_str_alloc(
+                        compiler,
+                        identifier_token->lexeme_len,
+                        identifier_token->lexeme
+                    );
+
+                    break;
+                }case NATIVE_FN_SYMBOL_TYPE:{
+                    write_chunk(compiler, OP_NGET);
+                    write_location(compiler, identifier_expr->identifier_token);
+                    write_str_alloc(
+                        compiler,
+                        identifier_token->lexeme_len,
+                        identifier_token->lexeme
+                    );
+
+                    break;
+                }default:{
+                    assert(0 && "Illegal symbol type");
+                    break;
+                }
             }
 
             break;
         }case GROUP_EXPRTYPE:{
-            GroupExpr *group_expr = (GroupExpr *)expr->sub_expr;
-            Expr *expr = group_expr->expr;
-
-            compile_expr(expr, compiler);
-
+            GroupExpr *group_expr = expr->sub_expr;
+            compile_expr(compiler, group_expr->expr);
             break;
         }case CALL_EXPRTYPE:{
-            CallExpr *call_expr = (CallExpr *)expr->sub_expr;
-            Expr *left = call_expr->left;
+            CallExpr *call_expr = expr->sub_expr;
+            Expr *left_expr = call_expr->left_expr;
             DynArr *args = call_expr->args;
+            size_t args_count = args ? DYNARR_LEN(args) : 0;
 
-            compile_expr(left, compiler);
+            if(left_expr->type == IDENTIFIER_EXPRTYPE){
+                IdentifierExpr *identifier_expr = left_expr->sub_expr;
+                Token *identifier_token = identifier_expr->identifier_token;
+                Symbol *symbol = scope_manager_get_symbol(manager, identifier_token);
 
-            if(args){
-                size_t len = DYNARR_LEN(args);
+                switch(symbol->type){
+                    case NATIVE_FN_SYMBOL_TYPE:{
+                        NativeFnSymbol *native_fn_symbol = (NativeFnSymbol *)symbol;
 
-                for (size_t i = 0; i < len; i++){
-                    compile_expr((Expr *)dynarr_get_ptr(i, args), compiler);
+                        if(native_fn_symbol->params_count != args_count){
+                            error(
+                                compiler,
+                                identifier_expr->identifier_token,
+                                "Native procedure '%s' declares %"PRIu8" parameter(s), but got %zu argument(s)",
+                                native_fn_symbol->name,
+                                native_fn_symbol->params_count,
+                                args_count
+                            );
+                        }
+
+                        break;
+                    }case FN_SYMBOL_TYPE:{
+                        FnSymbol *fn_symbol = (FnSymbol *)symbol;
+
+                        if(fn_symbol->params_count != args_count){
+                            error(
+                                compiler,
+                                identifier_expr->identifier_token,
+                                "Procedure '%s' declares %"PRIu8" parameter(s), but got %zu argument(s)",
+                                symbol->identifier->lexeme,
+                                fn_symbol->params_count,
+                                args_count
+                            );
+                        }
+
+                        break;
+                    }default:{
+                        break;
+                    }
                 }
             }
 
-            write_chunk(OP_CALL, compiler);
-            write_location(call_expr->left_paren, compiler);
+            compile_expr(compiler, call_expr->left_expr);
 
-            uint8_t args_count = args ? (uint8_t)DYNARR_LEN(args) : 0;
-            write_chunk(args_count, compiler);
+            for (size_t i = 0; i < args_count; i++){
+                compile_expr(compiler, dynarr_get_ptr(i, args));
+            }
+
+            write_chunk(compiler, OP_CALL);
+            write_location(compiler, call_expr->left_paren);
+            write_chunk(compiler, args_count);
 
             break;
         }case ACCESS_EXPRTYPE:{
-            AccessExpr *access_expr = (AccessExpr *)expr->sub_expr;
-            Expr *left = access_expr->left;
+            AccessExpr *access_expr = expr->sub_expr;
+            Expr *left_expr = access_expr->left_expr;
+            Token *dot_token =  access_expr->dot_token;
             Token *symbol_token = access_expr->symbol_token;
 
-            compile_expr(left, compiler);
+            compile_expr(compiler, left_expr);
 
-            write_chunk(OP_ACCESS, compiler);
-			write_location(access_expr->dot_token, compiler);
-            write_str_alloc(symbol_token->lexeme_len, symbol_token->lexeme, compiler);
+            write_chunk(compiler, OP_ACCESS);
+			write_location(compiler, dot_token);
+            write_str_alloc(compiler, symbol_token->lexeme_len, symbol_token->lexeme);
 
             break;
         }case INDEX_EXPRTYPE:{
-            IndexExpr *index_expr = (IndexExpr *)expr->sub_expr;
-            Expr *target = index_expr->target;
-            Token *left_square_token = index_expr->left_square_token;
-            Expr *index = index_expr->index_expr;
+            IndexExpr *index_expr = expr->sub_expr;
 
-            compile_expr(index, compiler);
-            compile_expr(target, compiler);
+            compile_expr(compiler, index_expr->index_expr);
+            compile_expr(compiler, index_expr->target_expr);
 
-            write_chunk(OP_INDEX, compiler);
-            write_location(left_square_token, compiler);
+            write_chunk(compiler, OP_INDEX);
+            write_location(compiler, index_expr->left_square_token);
 
             break;
         }case UNARY_EXPRTYPE:{
-            UnaryExpr *unary_expr = (UnaryExpr *)expr->sub_expr;
-            Token *operator = unary_expr->operator;
-            Expr *right = unary_expr->right;
+            UnaryExpr *unary_expr = expr->sub_expr;
+            Token *operator_token = unary_expr->operator_token;
 
-            compile_expr(right, compiler);
+            compile_expr(compiler, unary_expr->right);
 
-            switch (operator->type){
+            switch (operator_token->type){
                 case MINUS_TOKTYPE:{
-                    write_chunk(OP_NNOT, compiler);
+                    write_chunk(compiler, OP_NNOT);
                     break;
                 }case EXCLAMATION_TOKTYPE:{
-                    write_chunk(OP_NOT, compiler);
+                    write_chunk(compiler, OP_NOT);
                     break;
                 }case NOT_BITWISE_TOKTYPE:{
-                    write_chunk(OP_BNOT, compiler);
+                    write_chunk(compiler, OP_BNOT);
                     break;
                 }default:{
                     assert("Illegal token type");
+                    break;
                 }
             }
 
-			write_location(operator, compiler);
+			write_location(compiler, operator_token);
 
             break;
         }case BINARY_EXPRTYPE:{
-            BinaryExpr *binary_expr = (BinaryExpr *)expr->sub_expr;
-            Expr *left = binary_expr->left;
+            BinaryExpr *binary_expr = expr->sub_expr;
             Token *operator = binary_expr->operator;
-            Expr *right = binary_expr->right;
 
-            compile_expr(left, compiler);
-            compile_expr(right, compiler);
+            compile_expr(compiler, binary_expr->left);
+            compile_expr(compiler, binary_expr->right);
 
             switch (operator->type){
                 case PLUS_TOKTYPE:{
-                    write_chunk(OP_ADD, compiler);
+                    write_chunk(compiler, OP_ADD);
                     break;
-                }
-                case MINUS_TOKTYPE:{
-                    write_chunk(OP_SUB, compiler);
+                }case MINUS_TOKTYPE:{
+                    write_chunk(compiler, OP_SUB);
                     break;
-                }
-                case ASTERISK_TOKTYPE:{
-                    write_chunk(OP_MUL, compiler);
+                }case ASTERISK_TOKTYPE:{
+                    write_chunk(compiler, OP_MUL);
                     break;
-                }
-                case SLASH_TOKTYPE:{
-                    write_chunk(OP_DIV, compiler);
+                }case SLASH_TOKTYPE:{
+                    write_chunk(compiler, OP_DIV);
                     break;
-                }
-				case MOD_TOKTYPE:{
-					write_chunk(OP_MOD, compiler);
+                }case MOD_TOKTYPE:{
+					write_chunk(compiler, OP_MOD);
 					break;
-				}
-                default:{
+				}default:{
                     assert("Illegal token type");
+                    break;
                 }
             }
 
-			write_location(operator, compiler);
+			write_location(compiler, operator);
 
             break;
         }case MULSTR_EXPRTYPE:{
-            MulStrExpr *mulstr_expr = (MulStrExpr *)expr->sub_expr;
-            Expr *left = mulstr_expr->left;
-            Token *operator = mulstr_expr->operator;
-            Expr *right = mulstr_expr->right;
+            MulStrExpr *mulstr_expr = expr->sub_expr;
 
-            compile_expr(left, compiler);
-            compile_expr(right, compiler);
+            compile_expr(compiler, mulstr_expr->left);
+            compile_expr(compiler, mulstr_expr->right);
 
-            write_chunk(OP_MULSTR, compiler);
-            write_location(operator, compiler);
+            write_chunk(compiler, OP_MULSTR);
+            write_location(compiler, mulstr_expr->operator_token);
 
             break;
         } case CONCAT_EXPRTYPE:{
-            ConcatExpr *concat_expr = (ConcatExpr *)expr->sub_expr;
-            Expr *left = concat_expr->left;
-            Token *operator = concat_expr->operator;
-            Expr *right = concat_expr->right;
+            ConcatExpr *concat_expr = expr->sub_expr;
 
-            compile_expr(left, compiler);
-            compile_expr(right, compiler);
+            compile_expr(compiler, concat_expr->left);
+            compile_expr(compiler, concat_expr->right);
 
-            write_chunk(OP_CONCAT, compiler);
-            write_location(operator, compiler);
+            write_chunk(compiler, OP_CONCAT);
+            write_location(compiler, concat_expr->operator_token);
 
             break;
         }case BITWISE_EXPRTYPE:{
-            BitWiseExpr *bitwise_expr = (BitWiseExpr *)expr->sub_expr;
-            Expr *left = bitwise_expr->left;
-            Token *operator = bitwise_expr->operator;
-            Expr *right = bitwise_expr->right;
+            BitWiseExpr *bitwise_expr = expr->sub_expr;
+            Token *operator_token = bitwise_expr->operator_token;
 
-            compile_expr(left, compiler);
-            compile_expr(right, compiler);
+            compile_expr(compiler, bitwise_expr->left);
+            compile_expr(compiler, bitwise_expr->right);
 
-            switch (operator->type)
-            {
+            switch (operator_token->type){
                 case LEFT_SHIFT_TOKTYPE:{
-                    write_chunk(OP_LSH, compiler);
+                    write_chunk(compiler, OP_LSH);
                     break;
                 }case RIGHT_SHIFT_TOKTYPE:{
-                    write_chunk(OP_RSH, compiler);
+                    write_chunk(compiler, OP_RSH);
                     break;
                 }case AND_BITWISE_TOKTYPE:{
-                    write_chunk(OP_BAND, compiler);
+                    write_chunk(compiler, OP_BAND);
                     break;
                 }case XOR_BITWISE_TOKTYPE:{
-                    write_chunk(OP_BXOR, compiler);
+                    write_chunk(compiler, OP_BXOR);
                     break;
                 }case OR_BITWISE_TOKTYPE:{
-                    write_chunk(OP_BOR, compiler);
+                    write_chunk(compiler, OP_BOR);
                     break;
                 }default:{
                     assert("Illegal token type");
+                    break;
                 }
             }
 
-            write_location(operator, compiler);
+            write_location(compiler, operator_token);
 
             break;
         }case COMPARISON_EXPRTYPE:{
-            ComparisonExpr *comparison_expr = (ComparisonExpr *)expr->sub_expr;
-            Expr *left = comparison_expr->left;
-            Token *operator = comparison_expr->operator;
-            Expr *right = comparison_expr->right;
+            ComparisonExpr *comparison_expr = expr->sub_expr;
+            Token *operator_token = comparison_expr->operator_token;
 
-            compile_expr(left, compiler);
-            compile_expr(right, compiler);
+            compile_expr(compiler, comparison_expr->left);
+            compile_expr(compiler, comparison_expr->right);
 
-            switch (operator->type){
+            switch (operator_token->type){
                 case LESS_TOKTYPE:{
-                    write_chunk(OP_LT, compiler);
+                    write_chunk(compiler, OP_LT);
                     break;
                 }case GREATER_TOKTYPE:{
-                    write_chunk(OP_GT, compiler);
+                    write_chunk(compiler, OP_GT);
                     break;
                 }case LESS_EQUALS_TOKTYPE:{
-                    write_chunk(OP_LE, compiler);
+                    write_chunk(compiler, OP_LE);
                     break;
                 }case GREATER_EQUALS_TOKTYPE:{
-                    write_chunk(OP_GE, compiler);
+                    write_chunk(compiler, OP_GE);
                     break;
                 }case EQUALS_EQUALS_TOKTYPE:{
-                    write_chunk(OP_EQ, compiler);
+                    write_chunk(compiler, OP_EQ);
                     break;
                 }case NOT_EQUALS_TOKTYPE:{
-                    write_chunk(OP_NE, compiler);
+                    write_chunk(compiler, OP_NE);
                     break;
                 }default:{
                     assert("Illegal token type");
+                    break;
                 }
             }
 
-			write_location(operator, compiler);
+			write_location(compiler, operator_token);
 
             break;
         }case LOGICAL_EXPRTYPE:{
-            LogicalExpr *logical_expr = (LogicalExpr *)expr->sub_expr;
-            Expr *left_expr = logical_expr->left;
+            LogicalExpr *logical_expr = expr->sub_expr;
             Token *operator_token = logical_expr->operator;
             Expr *right_expr = logical_expr->right;
 
-            compile_expr(left_expr, compiler);
+            compile_expr(compiler, logical_expr->left);
 
             switch (operator_token->type){
                 case OR_TOKTYPE:{
                     uint32_t id = generate_id(compiler);
 
                     or(compiler, operator_token, "OR_END_%"PRId32, id);
-                    compile_expr(right_expr, compiler);
-                    label(compiler, "OR_END_%"PRId32, id);
+                    compile_expr(compiler, right_expr);
+                    label(compiler, operator_token, "OR_END_%"PRId32, id);
 
                     break;
-                }
-                case AND_TOKTYPE:{
+                }case AND_TOKTYPE:{
                     uint32_t id = generate_id(compiler);
 
                     and(compiler, operator_token, "AND_END_%"PRId32, id);
-                    compile_expr(right_expr, compiler);
-                    label(compiler, "AND_END_%"PRId32, id);
-
-                    break;
-                }
-                default:{
-                    assert("Illegal token type");
-                }
-            }
-
-			write_location(operator_token, compiler);
-
-            break;
-        }case ASSIGN_EXPRTYPE:{
-            AssignExpr *assign_expr = (AssignExpr *)expr->sub_expr;
-			Expr *left = assign_expr->left;
-			Token *equals_token = assign_expr->equals_token;
-            Expr *value_expr = assign_expr->value_expr;
-
-			if(left->type == IDENTIFIER_EXPRTYPE){
-				IdentifierExpr *identifier_expr = (IdentifierExpr *)left->sub_expr;
-				Token *identifier = identifier_expr->identifier_token;
-	            Symbol *symbol = get(identifier, compiler);
-
-    	        if(symbol->type == IMUT_SYMTYPE){
-                    error(compiler, identifier, "'%s' declared as constant. Can not change its value", identifier->lexeme);
-                }
-                if(symbol->type == FN_SYMTYPE){
-                    error(compiler, identifier, "'%s' declared as function. Functions symbols are protected", identifier->lexeme);
-                }
-                if(symbol->type == MODULE_SYMTYPE){
-                    error(compiler, identifier, "'%s' declared as module. Modules symbols are protected", identifier->lexeme);
-                }
-
-                int is_out = resolve_symbol(identifier, symbol, compiler);
-
-            	compile_expr(value_expr, compiler);
-
-	            if(symbol->depth == 1){
-                	write_chunk(OP_GSET, compiler);
-   					write_location(equals_token, compiler);
-                	write_str_alloc(identifier->lexeme_len, identifier->lexeme, compiler);
-            	}else{
-                    uint8_t opcode = is_out ? OP_OSET : OP_LSET;
-
-                	write_chunk(opcode, compiler);
-					write_location(equals_token, compiler);
-                	write_chunk(symbol->local, compiler);
-            	}
-
-				break;
-			}
-
-			if(left->type == ACCESS_EXPRTYPE){
-				AccessExpr *access_expr = (AccessExpr *)left->sub_expr;
-				Expr *left = access_expr->left;
-				Token *symbol_token = access_expr->symbol_token;
-
-				compile_expr(value_expr, compiler);
-                compile_expr(left, compiler);
-
-				write_chunk(OP_RSET, compiler);
-				write_location(equals_token, compiler);
-				write_str_alloc(symbol_token->lexeme_len, symbol_token->lexeme, compiler);
-
-				break;
-			}
-
-            if(left->type == INDEX_EXPRTYPE){
-                IndexExpr *index_expr = (IndexExpr *)left->sub_expr;
-                Expr *target = index_expr->target;
-                Expr *index = index_expr->index_expr;
-
-                compile_expr(value_expr, compiler);
-                compile_expr(index, compiler);
-                compile_expr(target, compiler);
-
-                write_chunk(OP_ASET, compiler);
-                write_location(equals_token, compiler);
-
-                break;
-            }
-
-			error(compiler, equals_token, "Illegal assign target");
-
-            break;
-        }case COMPOUND_EXPRTYPE:{
-			CompoundExpr *compound_expr = (CompoundExpr *)expr->sub_expr;
-            Expr *left = compound_expr->left;
-			Token *operator = compound_expr->operator;
-			Expr *right = compound_expr->right;
-
-            switch (left->type){
-                case IDENTIFIER_EXPRTYPE:{
-                    IdentifierExpr *identifier_expr = (IdentifierExpr *)left->sub_expr;
-                    Token *identifier_token = identifier_expr->identifier_token;
-                    Symbol *symbol = get(identifier_token, compiler);
-
-                    if(symbol->type == IMUT_SYMTYPE){
-                        error(
-                            compiler,
-                            identifier_token,
-                            "'%s' declared as constant. Can't change its value.",
-                            identifier_token->lexeme
-                        );
-                    }
-
-                    if(symbol->depth == 1){
-                        write_chunk(OP_GGET, compiler);
-                        write_location(identifier_token, compiler);
-                        write_str_alloc(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
-                    }else{
-                        write_chunk(OP_LGET, compiler);
-                        write_location(identifier_token, compiler);
-                        write_chunk(symbol->local, compiler);
-                    }
-
-                    compile_expr(right, compiler);
-
-                    switch(operator->type){
-                        case COMPOUND_ADD_TOKTYPE:{
-                            write_chunk(OP_ADD, compiler);
-                            break;
-                        }case COMPOUND_SUB_TOKTYPE:{
-                            write_chunk(OP_SUB, compiler);
-                            break;
-                        }case COMPOUND_MUL_TOKTYPE:{
-                            write_chunk(OP_MUL, compiler);
-                            break;
-                        }case COMPOUND_DIV_TOKTYPE:{
-                            write_chunk(OP_DIV, compiler);
-                            break;
-                        }default:{
-                            assert("Illegal compound type");
-                        }
-                    }
-
-                    write_location(operator, compiler);
-
-                    if(symbol->depth == 1){
-                        write_chunk(OP_GSET, compiler);
-                        write_location(identifier_token, compiler);
-                        write_str_alloc(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
-                    }else{
-                        write_chunk(OP_LSET, compiler);
-                        write_location(identifier_token, compiler);
-                        write_chunk(symbol->local, compiler);
-                    }
-
-                    break;
-                }case ACCESS_EXPRTYPE:{
-                    compile_expr(left, compiler);
-
-                    AccessExpr *access_expr = (AccessExpr *)left->sub_expr;
-                    Expr *left = access_expr->left;
-                    Token *dot_token = access_expr->dot_token;
-                    Token *symbol_token = access_expr->symbol_token;
-
-                    compile_expr(right, compiler);
-
-                    switch(operator->type){
-                        case COMPOUND_ADD_TOKTYPE:{
-                            write_chunk(OP_ADD, compiler);
-                            break;
-                        }case COMPOUND_SUB_TOKTYPE:{
-                            write_chunk(OP_SUB, compiler);
-                            break;
-                        }case COMPOUND_MUL_TOKTYPE:{
-                            write_chunk(OP_MUL, compiler);
-                            break;
-                        }case COMPOUND_DIV_TOKTYPE:{
-                            write_chunk(OP_DIV, compiler);
-                            break;
-                        }default:{
-                            assert("Illegal compound type");
-                        }
-                    }
-
-                    write_location(operator, compiler);
-
-                    compile_expr(left, compiler);
-
-                    write_chunk(OP_RSET, compiler);
-                    write_location(dot_token, compiler);
-                    write_str_alloc(symbol_token->lexeme_len, symbol_token->lexeme, compiler);
+                    compile_expr(compiler, right_expr);
+                    label(compiler, operator_token, "AND_END_%"PRId32, id);
 
                     break;
                 }default:{
-                    error(compiler, operator, "Illegal compound operator left operand");
+                    assert("Illegal token type");
+                    break;
                 }
             }
 
-			break;
+			write_location(compiler, operator_token);
+
+            break;
+        }case ASSIGN_EXPRTYPE:{
+            AssignExpr *assign_expr = expr->sub_expr;
+            Expr *left_expr = assign_expr->left_expr;
+            Token *equals_token = assign_expr->equals_token;
+            Expr *value_expr = assign_expr->value_expr;
+
+            if(value_expr->type == IDENTIFIER_EXPRTYPE){
+                IdentifierExpr *identifier_expr = value_expr->sub_expr;
+                Token *identifier_token = identifier_expr->identifier_token;
+                Symbol *symbol = scope_manager_get_symbol(manager, identifier_token);
+
+                if(symbol->type == MODULE_SYMBOL_TYPE){
+                    error(
+                        compiler,
+                        equals_token,
+                        "Cannot assign modules to variables"
+                    );
+                }
+            }
+
+            switch (left_expr->type){
+                case IDENTIFIER_EXPRTYPE:{
+                    IdentifierExpr *identifier_expr = left_expr->sub_expr;
+                    Token *identifier_token = identifier_expr->identifier_token;
+                    Symbol *symbol = scope_manager_get_symbol(manager, identifier_token);
+
+                    switch (symbol->type){
+                        case LOCAL_SYMBOL_TYPE:{
+                            LocalSymbol *local_symbol = (LocalSymbol *)symbol;
+
+                            if(!local_symbol->is_mutable && local_symbol->is_initialized){
+                                error(
+                                    compiler,
+                                    assign_expr->equals_token,
+                                    "Local symbol '%s' declared as immutable and already initialized",
+                                    identifier_token->lexeme
+                                );
+                            }
+
+                            compile_expr(compiler, value_expr);
+
+                            write_chunk(compiler, OP_LSET);
+                            write_location(compiler, equals_token);
+                            write_chunk(compiler, local_symbol->offset);
+
+                            if(local_symbol->is_initialized){
+                                break;
+                            }
+
+                            break;
+                        }case GLOBAL_SYMBOL_TYPE:{
+                            GlobalSymbol *global_symbol = (GlobalSymbol *)symbol;
+
+                            if(!global_symbol->is_mutable){
+                                error(
+                                    compiler,
+                                    assign_expr->equals_token,
+                                    "Global variable '%s' declared as immutable",
+                                    identifier_token->lexeme
+                                );
+                            }
+
+                            compile_expr(compiler, value_expr);
+
+                            write_chunk(compiler, OP_GSET);
+                            write_location(compiler, equals_token);
+                            write_str_alloc(compiler, identifier_token->lexeme_len, identifier_token->lexeme);
+
+                            break;
+                        }case FN_SYMBOL_TYPE:{
+                            error(
+                                compiler,
+                                assign_expr->equals_token,
+                                "Procedures name cannot be re-assigned",
+                                identifier_token->lexeme
+                            );
+
+                            break;
+                        }case MODULE_SYMBOL_TYPE:{
+                            error(
+                                compiler,
+                                assign_expr->equals_token,
+                                "Modules name cannot be re-assigned",
+                                identifier_token->lexeme
+                            );
+
+                            break;
+                        }default:{
+                            error(
+                                compiler,
+                                assign_expr->equals_token,
+                                "Illegal assignation target"
+                            );
+
+                            break;
+                        }
+                    }
+
+                    break;
+                }case INDEX_EXPRTYPE:{
+               		IndexExpr *index_expr = left_expr->sub_expr;
+
+                	compile_expr(compiler, value_expr);
+                	compile_expr(compiler, index_expr->index_expr);
+                 	compile_expr(compiler, index_expr->target_expr);
+
+                 	write_chunk(compiler, OP_ASET);
+                 	write_location(compiler, equals_token);
+
+                  	break;
+                }case ACCESS_EXPRTYPE:{
+               		AccessExpr *access_expr = left_expr->sub_expr;
+                	Token *symbol_token = access_expr->symbol_token;
+
+                 	compile_expr(compiler, value_expr);
+                  	compile_expr(compiler, access_expr->left_expr);
+
+                 	write_chunk(compiler, OP_RSET);
+                 	write_location(compiler, equals_token);
+                 	write_str_alloc(
+                  		compiler,
+                   		symbol_token->lexeme_len,
+                    	symbol_token->lexeme
+                  	);
+
+                  	break;
+                }default:{
+                    error(
+                        compiler,
+                        assign_expr->equals_token,
+                        "Illegal assignment target"
+                    );
+
+                    break;
+                }
+            }
+
+            break;
+        }case COMPOUND_EXPRTYPE:{
+       		CompoundExpr *compound_expr = (CompoundExpr *)expr->sub_expr;
+            Expr *left_expr = compound_expr->left_expr;
+			Token *operator_token = compound_expr->operator_token;
+			Expr *right_expr = compound_expr->right_expr;
+
+            switch (left_expr->type){
+                case IDENTIFIER_EXPRTYPE:{
+                    IdentifierExpr *identifier_expr = (IdentifierExpr *)left_expr->sub_expr;
+                    Token *identifier_token = identifier_expr->identifier_token;
+                    Symbol *symbol = scope_manager_get_symbol(manager, identifier_token);
+
+                    switch (symbol->type) {
+                   		case LOCAL_SYMBOL_TYPE:{
+                   			LocalSymbol *local_symbol = (LocalSymbol *)symbol;
+
+                    		if(!local_symbol->is_mutable && local_symbol->is_initialized){
+	                        	error(
+	                            	compiler,
+	                              	operator_token,
+		                            "Local symbol '%s' declared as immutable and already initialized",
+	                              	identifier_token->lexeme
+	                          	);
+	                      	}
+
+                      		write_chunk(compiler, OP_LGET);
+		                    write_location(compiler, identifier_token);
+		                    write_chunk(compiler, local_symbol->offset);
+
+                     		break;
+                     	}case GLOBAL_SYMBOL_TYPE:{
+                      		GlobalSymbol *global_symbol = (GlobalSymbol *)symbol;
+
+                       		if(!global_symbol->is_mutable){
+	                        	error(
+	                            	compiler,
+	                              	operator_token,
+		                            "Local symbol '%s' declared as immutable",
+	                              	identifier_token->lexeme
+	                          	);
+	                      	}
+
+                        	write_chunk(compiler, OP_GGET);
+	                        write_location(compiler, identifier_token);
+	                        write_str_alloc(
+								compiler,
+								identifier_token->lexeme_len,
+								identifier_token->lexeme
+							);
+
+                      		break;
+                      	}default:{
+                       		assert(0 && "Illegal symbol type");
+                       		break;
+                       	}
+                    }
+
+                    compile_expr(compiler, right_expr);
+
+                    switch(operator_token->type){
+                        case COMPOUND_ADD_TOKTYPE:{
+                            write_chunk(compiler, OP_ADD);
+                            break;
+                        }case COMPOUND_SUB_TOKTYPE:{
+                            write_chunk(compiler, OP_SUB);
+                            break;
+                        }case COMPOUND_MUL_TOKTYPE:{
+                            write_chunk(compiler, OP_MUL);
+                            break;
+                        }case COMPOUND_DIV_TOKTYPE:{
+                            write_chunk(compiler, OP_DIV);
+                            break;
+                        }default:{
+                            assert("Illegal compound type");
+                            break;
+                        }
+                    }
+
+                    write_location(compiler, operator_token);
+
+                    switch (symbol->type) {
+                   		case LOCAL_SYMBOL_TYPE:{
+                   			LocalSymbol *local_symbol = (LocalSymbol *)symbol;
+
+                    		write_chunk(compiler, OP_LSET);
+                      		write_location(compiler, identifier_token);
+                        	write_chunk(compiler, local_symbol->offset);
+
+                     		break;
+                     	}case GLOBAL_SYMBOL_TYPE:{
+                        	write_chunk(compiler, OP_GSET);
+                         	write_location(compiler, identifier_token);
+                         	write_str_alloc(
+                          		compiler,
+                            	identifier_token->lexeme_len,
+                             	identifier_token->lexeme
+                          	);
+
+                      		break;
+                      	}default:{
+                       		assert(0 && "Illegal symbol type");
+                       		break;
+                       	}
+                    }
+
+                    break;
+                }case INDEX_EXPRTYPE:{
+                	compile_expr(compiler, left_expr);
+
+                 	IndexExpr *index_expr = left_expr->sub_expr;
+
+                  	compile_expr(compiler, right_expr);
+
+                 	switch(operator_token->type){
+                    	case COMPOUND_ADD_TOKTYPE:{
+                        	write_chunk(compiler, OP_ADD);
+                          	break;
+                      	}case COMPOUND_SUB_TOKTYPE:{
+                          	write_chunk(compiler, OP_SUB);
+                           	break;
+                       	}case COMPOUND_MUL_TOKTYPE:{
+                          	write_chunk(compiler, OP_MUL);
+                           	break;
+                        }case COMPOUND_DIV_TOKTYPE:{
+                          	write_chunk(compiler, OP_DIV);
+                           	break;
+                        }default:{
+                          	assert("Illegal compound type");
+                           	break;
+                        }
+                  	}
+
+                  	write_location(compiler, operator_token);
+
+                  	compile_expr(compiler, index_expr->index_expr);
+                   	compile_expr(compiler, index_expr->target_expr);
+
+                   	write_chunk(compiler, OP_ASET);
+                   	write_location(compiler, operator_token);
+
+                 	break;
+                }case ACCESS_EXPRTYPE:{
+                    compile_expr(compiler, left_expr);
+
+                    AccessExpr *access_expr = left_expr->sub_expr;
+                    Expr *left_expr = access_expr->left_expr;
+                    Token *dot_token = access_expr->dot_token;
+                    Token *symbol_token = access_expr->symbol_token;
+
+                    compile_expr(compiler, right_expr);
+
+                    switch(operator_token->type){
+                        case COMPOUND_ADD_TOKTYPE:{
+                            write_chunk(compiler, OP_ADD);
+                            break;
+                        }case COMPOUND_SUB_TOKTYPE:{
+                            write_chunk(compiler, OP_SUB);
+                            break;
+                        }case COMPOUND_MUL_TOKTYPE:{
+                            write_chunk(compiler, OP_MUL);
+                            break;
+                        }case COMPOUND_DIV_TOKTYPE:{
+                            write_chunk(compiler, OP_DIV);
+                            break;
+                        }default:{
+                            assert("Illegal compound type");
+                            break;
+                        }
+                    }
+
+                    write_location(compiler, operator_token);
+
+                    compile_expr(compiler, left_expr);
+
+                    write_chunk(compiler, OP_RSET);
+                    write_location(compiler, dot_token);
+                    write_str_alloc(
+                    	compiler,
+                     	symbol_token->lexeme_len,
+                      	symbol_token->lexeme
+                    );
+
+                    break;
+                }default:{
+                    error(
+                    	compiler,
+                     	operator_token,
+                      	"Illegal compound operator left operand"
+                    );
+                    break;
+                }
+            }
+
+           	break;
 		}case ARRAY_EXPRTYPE:{
-            ArrayExpr *array_expr = (ArrayExpr *)expr->sub_expr;
+            ArrayExpr *array_expr = expr->sub_expr;
             Token *array_token = array_expr->array_token;
             Expr *len_expr = array_expr->len_expr;
             DynArr *values = array_expr->values;
 
             if(len_expr){
-                compile_expr(len_expr, compiler);
-                write_chunk(OP_ARRAY, compiler);
-                write_location(array_token, compiler);
+                compile_expr(compiler, len_expr);
+                write_chunk(compiler, OP_ARRAY);
+                write_location(compiler, array_token);
             }else{
                 const size_t array_len = values ? DYNARR_LEN(values) : 0;
 
-                write_chunk(OP_INT, compiler);
-                write_location(array_token, compiler);
-                write_iconst((int64_t)array_len, compiler);
+                write_chunk(compiler, OP_INT);
+                write_location(compiler, array_token);
+                write_iconst(compiler, (int64_t)array_len);
 
-                write_chunk(OP_ARRAY, compiler);
-                write_location(array_token, compiler);
+                write_chunk(compiler, OP_ARRAY);
+                write_location(compiler, array_token);
 
                 for (size_t i = 0 ; i < array_len; i++){
                     Expr *expr = (Expr *)dynarr_get_ptr(i, values);
 
-                    compile_expr(expr, compiler);
+                    compile_expr(compiler, expr);
 
-                    write_chunk(OP_IARRAY, compiler);
-                    write_location(array_token, compiler);
-                    write_i16((int16_t)i, compiler);
+                    write_chunk(compiler, OP_IARRAY);
+                    write_location(compiler, array_token);
+                    write_i16(compiler, (int16_t)i);
                 }
             }
 
             break;
         }case LIST_EXPRTYPE:{
-			ListExpr *list_expr = (ListExpr *)expr->sub_expr;
+			ListExpr *list_expr = expr->sub_expr;
 			Token *list_token = list_expr->list_token;
 			DynArr *exprs = list_expr->exprs;
 
-            write_chunk(OP_LIST, compiler);
-			write_location(list_token, compiler);
+            write_chunk(compiler, OP_LIST);
+			write_location(compiler, list_token);
 
             if(exprs){
-                const size_t len = DYNARR_LEN(exprs);
+                size_t len = DYNARR_LEN(exprs);
 
 				for(size_t i = 0; i < len; i++){
-                    Expr *expr = (Expr *)dynarr_get_ptr(i, exprs);
+                    Expr *expr = dynarr_get_ptr(i, exprs);
 
-                    compile_expr(expr, compiler);
+                    compile_expr(compiler, expr);
 
-                    write_chunk(OP_ILIST, compiler);
-                    write_location(list_token, compiler);
+                    write_chunk(compiler, OP_ILIST);
+                    write_location(compiler, list_token);
 				}
 			}
 
 			break;
 		}case DICT_EXPRTYPE:{
-            DictExpr *dict_expr = (DictExpr *)expr->sub_expr;
+            DictExpr *dict_expr = expr->sub_expr;
             DynArr *key_values = dict_expr->key_values;
 
-            write_chunk(OP_DICT, compiler);
-			write_location(dict_expr->dict_token, compiler);
+            write_chunk(compiler, OP_DICT);
+			write_location(compiler, dict_expr->dict_token);
 
             if(key_values){
                 size_t len = DYNARR_LEN(key_values);
 
                 for (size_t i = 0; i < len; i++){
-                    DictKeyValue *key_value = (DictKeyValue *)dynarr_get_ptr(i, key_values);
+                    DictKeyValue *key_value = dynarr_get_ptr(i, key_values);
                     Expr *key = key_value->key;
                     Expr *value = key_value->value;
 
-                    compile_expr(key, compiler);
-                    compile_expr(value, compiler);
+                    compile_expr(compiler, key);
+                    compile_expr(compiler, value);
 
-                    write_chunk(OP_IDICT, compiler);
-			        write_location(dict_expr->dict_token, compiler);
+                    write_chunk(compiler, OP_IDICT);
+			        write_location(compiler, dict_expr->dict_token);
                 }
             }
 
             break;
         }case RECORD_EXPRTYPE:{
-			RecordExpr *record_expr = (RecordExpr *)expr->sub_expr;
+			RecordExpr *record_expr = expr->sub_expr;
             Token *record_token = record_expr->record_token;
 			DynArr *key_values = record_expr->key_values;
             size_t key_values_len = key_values ? DYNARR_LEN(key_values) : 0;
 
-            write_chunk(OP_RECORD, compiler);
-			write_location(record_token, compiler);
-            write_i16((int16_t)key_values_len, compiler);
+            write_chunk(compiler, OP_RECORD);
+			write_location(compiler, record_token);
+            write_i16(compiler, (int16_t)key_values_len);
 
 			for(size_t i = 0; i < key_values_len; i++){
-                RecordExprValue *key_value = (RecordExprValue *)dynarr_get_ptr(i, key_values);
+                RecordExprValue *key_value = dynarr_get_ptr(i, key_values);
                 Token *key = key_value->key;
                 Expr *value = key_value->value;
 
-                compile_expr(value, compiler);
+                compile_expr(compiler, value);
 
-                write_chunk(OP_IRECORD, compiler);
-                write_location(record_token, compiler);
-                write_str_alloc(key->lexeme_len, key->lexeme, compiler);
+                write_chunk(compiler, OP_IRECORD);
+                write_location(compiler, record_token);
+                write_str_alloc(compiler, key->lexeme_len, key->lexeme);
             }
 
 			break;
 		}case IS_EXPRTYPE:{
-			IsExpr *is_expr = (IsExpr *)expr->sub_expr;
-			Expr *left_expr = is_expr->left_expr;
-			Token *is_token = is_expr->is_token;
-			Token *type_token = is_expr->type_token;
+			IsExpr *is_expr = expr->sub_expr;
 
-			compile_expr(left_expr, compiler);
+			compile_expr(compiler, is_expr->left_expr);
 
-			write_chunk(OP_IS, compiler);
-			write_location(is_token, compiler);
+			write_chunk(compiler, OP_IS);
+			write_location(compiler, is_expr->is_token);
 
-			switch(type_token->type){
+			switch(is_expr->type_token->type){
 				case EMPTY_TOKTYPE:{
-					write_chunk(0, compiler);
+					write_chunk(compiler, 0);
 					break;
 				}case BOOL_TOKTYPE:{
-					write_chunk(1, compiler);
+					write_chunk(compiler, 1);
 					break;
 				}case INT_TOKTYPE:{
-					write_chunk(2, compiler);
+					write_chunk(compiler, 2);
 					break;
 				}case FLOAT_TOKTYPE:{
-					write_chunk(3, compiler);
+					write_chunk(compiler, 3);
 					break;
 				}case STR_TOKTYPE:{
-					write_chunk(4, compiler);
+					write_chunk(compiler, 4);
 					break;
 				}case ARRAY_TOKTYPE:{
-					write_chunk(5, compiler);
+					write_chunk(compiler, 5);
 					break;
 				}case LIST_TOKTYPE:{
-					write_chunk(6, compiler);
+					write_chunk(compiler, 6);
 					break;
 				}case DICT_TOKTYPE:{
-					write_chunk(7, compiler);
+					write_chunk(compiler, 7);
 					break;
 				}case RECORD_TOKTYPE:{
-                    write_chunk(8, compiler);
+                    write_chunk(compiler, 8);
 					break;
                 }case PROC_TOKTYPE:{
-                    write_chunk(9, compiler);
+                    write_chunk(compiler, 9);
                     break;
                 }default:{
 					assert("Illegal type value");
+					break;
 				}
 			}
 
 			break;
 		}case TENARY_EXPRTYPE:{
-		    TenaryExpr *tenary_expr = (TenaryExpr *)expr->sub_expr;
-		    Expr *condition = tenary_expr->condition;
-		    Expr *left = tenary_expr->left;
+		    TenaryExpr *tenary_expr = expr->sub_expr;
 		    Token *mark_token = tenary_expr->mark_token;
-		    Expr *right = tenary_expr->right;
-
             int32_t id = generate_id(compiler);
 
-		    compile_expr(condition, compiler);
+		    compile_expr(compiler, tenary_expr->condition);
             jif(compiler, mark_token, "TENARY_RIGHT_%"PRId32, id);
 
-            compile_expr(left, compiler);
+            compile_expr(compiler, tenary_expr->left);
             jmp(compiler, mark_token, "TENARY_END_%"PRId32, id);
 
-            label(compiler, "TENARY_RIGHT_%"PRId32, id);
-            compile_expr(right, compiler);
+            label(compiler, mark_token, "TENARY_RIGHT_%"PRId32, id);
+            compile_expr(compiler, tenary_expr->right);
 
-            label(compiler, "TENARY_END_%"PRId32, id);
+            label(compiler, mark_token, "TENARY_END_%"PRId32, id);
 
 		    break;
 		}default:{
             assert("Illegal expression type");
+            break;
         }
     }
 }
 
-size_t add_native_module_symbol(NativeModule *module, DynArr *symbols){
-    SubModuleSymbol module_symbol = (SubModuleSymbol ){
-        .type = NATIVE_MODULE_SUBMODULE_SYM_TYPE,
-        .value = module
-    };
+void propagate_return(Compiler *compiler, Scope *scope){
+	Scope *current = scope->prev;
 
-    dynarr_insert(&module_symbol, symbols);
+    while(current && IS_BLOCK_SCOPE(current)){
+    	AS_LOCAL_SCOPE(current)->returned = 1;
+       	current = current->prev;
+    }
 
-    return DYNARR_LEN(symbols) - 1;
+    if(IS_LOCAL_SCOPE(current)){
+  		AS_LOCAL_SCOPE(current)->returned = 1;
+    }
 }
 
-size_t add_module_symbol(Module *module, DynArr *symbols){
-	SubModuleSymbol module_symbol = (SubModuleSymbol ){
-        .type = MODULE_SUBMODULE_SYM_TYPE,
-        .value = module
-    };
+int compile_if_branch(
+    Compiler *compiler,
+    IfStmtBranch *if_branch,
+    ScopeType type,
+    int32_t id,
+    int32_t which
+){
+    Token *branch_token = if_branch->branch_token;
+    Expr *condition = if_branch->condition_expr;
+    DynArr *stmts = if_branch->stmts;
+    size_t stmts_len = stmts ? DYNARR_LEN(stmts) : 0;
 
-    dynarr_insert(&module_symbol, symbols);
+    compile_expr(compiler, condition);
+    jif(compiler, branch_token, ".IFB(%"PRId32")_END_%"PRId32, id, which);
 
-    return DYNARR_LEN(symbols) - 1;
+    Scope *scope = scope_manager_push(compiler->manager, type);
+    Block *block = push_block(compiler);
+    uint8_t returned = 0;
+
+    block->stmts_len = stmts_len;
+
+    for (size_t i = 0; i < stmts_len; i++){
+   		if(AS_LOCAL_SCOPE(scope)->returned){
+  			error(
+     			compiler,
+        		branch_token,
+          		"Cannot exists statements after the scope returned"
+    		);
+    	}
+
+        Stmt *stmt = dynarr_get_ptr(i, stmts);
+        block->current_stmt = i + 1;
+
+        compile_stmt(compiler, stmt);
+    }
+
+    pop_locals(compiler);
+
+    jmp(compiler, branch_token, ".IF(%"PRId32")_END", id);
+    label(compiler, branch_token, ".IFB(%"PRId32")_END_%"PRId32, id, which);
+
+    returned = AS_LOCAL_SCOPE(scope)->returned;
+
+    pop_block(compiler);
+    scope_manager_pop(compiler->manager);
+
+    return returned;
 }
 
-void compile_stmt(Stmt *stmt, Compiler *compiler){
+int import_native(Compiler *compiler, const Token *name_token){
+	if(strcmp("os", name_token->lexeme) == 0){
+		if(!os_native_module){
+			os_module_init(compiler->rtallocator);
+
+			vm_factory_module_globals_add_obj(
+				current_module(compiler),
+				(Obj *)vm_factory_native_module_obj_create(
+					compiler->rtallocator,
+					os_native_module
+				),
+				"os",
+				PRIVATE_GLOVAL_VALUE_TYPE
+			);
+		}
+
+		return 1;
+	}
+
+	if(strcmp("math", name_token->lexeme) == 0){
+		if(!math_native_module){
+			math_module_init(compiler->rtallocator);
+
+			vm_factory_module_globals_add_obj(
+				current_module(compiler),
+				(Obj *)vm_factory_native_module_obj_create(
+					compiler->rtallocator,
+					math_native_module
+				),
+				"math",
+				PRIVATE_GLOVAL_VALUE_TYPE
+			);
+		}
+
+		return 1;
+	}
+
+	if(strcmp("random", name_token->lexeme) == 0){
+		if(!random_native_module){
+			random_module_init(compiler->rtallocator);
+
+			vm_factory_module_globals_add_obj(
+				current_module(compiler),
+				(Obj *)vm_factory_native_module_obj_create(
+					compiler->rtallocator,
+					random_native_module
+				),
+				"random",
+				PRIVATE_GLOVAL_VALUE_TYPE
+			);
+		}
+
+		return 1;
+	}
+
+	if(strcmp("time", name_token->lexeme) == 0){
+		if(!time_native_module){
+			time_module_init(compiler->rtallocator);
+
+			vm_factory_module_globals_add_obj(
+				current_module(compiler),
+				(Obj *)vm_factory_native_module_obj_create(
+					compiler->rtallocator,
+					time_native_module
+				),
+				"time",
+				PRIVATE_GLOVAL_VALUE_TYPE
+			);
+		}
+
+		return 1;
+	}
+
+	if(strcmp("io", name_token->lexeme) == 0){
+		if(!io_native_module){
+			io_module_init(compiler->rtallocator);
+
+			vm_factory_module_globals_add_obj(
+				current_module(compiler),
+				(Obj *)vm_factory_native_module_obj_create(
+					compiler->rtallocator,
+					io_native_module
+				),
+				"io",
+				PRIVATE_GLOVAL_VALUE_TYPE
+			);
+		}
+
+		return 1;
+	}
+
+	return 0;
+}
+
+char *resolve_import_names(
+    Compiler *compiler,
+    DynArr *names,
+    DynArr *search_pathnames,
+    Token *import_token,
+    Allocator *allocator
+){
+    LZBStr *lzbstr = MEMORY_LZBSTR(allocator);
+
+    lzbstr_grow_by(1024, lzbstr);
+
+    size_t names_len = DYNARR_LEN(names);
+    char *module_name = ((Token *)dynarr_get_ptr(names_len - 1, names))->lexeme;
+
+    for (size_t i = 0; i < names_len; i++){
+        Token *name_token = dynarr_get_ptr(i, names);
+        lzbstr_append(name_token->lexeme, lzbstr);
+
+        if(i + 1 < names_len){
+            lzbstr_append("/", lzbstr);
+        }
+    }
+
+    lzbstr_append(".ze", lzbstr);
+
+    char *target_pathname = lzbstr_rclone_buff((LZBStrAllocator *)allocator, lzbstr, NULL);
+
+    lzbstr_reset(lzbstr);
+
+    size_t search_pathnames_len = DYNARR_LEN(search_pathnames);
+    char *pathname = NULL;
+
+    for (size_t i = 0; i < search_pathnames_len; i++){
+        DStr search_pathname = DYNARR_GET_AS(DStr, i, search_pathnames);
+
+        lzbstr_append(search_pathname.buff, lzbstr);
+
+        if(search_pathname.buff[search_pathname.len - 1] == '/'){
+            lzbstr_append(target_pathname, lzbstr);
+        }else{
+            lzbstr_append_args(lzbstr, "/%s", target_pathname);
+        }
+
+        if(UTILS_FILES_EXISTS(lzbstr->buff)){
+            pathname = lzbstr_rclone_buff((LZBStrAllocator *)allocator, lzbstr, NULL);
+
+            if(utils_files_is_directory(pathname)){
+                error(
+                    compiler,
+                    import_token,
+                    "file with name '%s' found at '%s' but is a directory",
+                    module_name,
+                    pathname
+                );
+            }
+
+            break;
+        }
+
+        lzbstr_reset(lzbstr);
+    }
+
+    if(!pathname){
+        error(
+            compiler,
+            import_token,
+            "Module '%s' not found",
+            module_name
+        );
+    }
+
+    return pathname;
+}
+
+Module *import_module(
+    Compiler *compiler,
+    const Allocator *dynallocator,
+    const Token *import_token,
+    const char *pathname,
+    const char *name,
+    ScopeManager **out_manager
+){
+    LZArena *compiler_arena = compiler->compiler_arena;
+    Allocator *compiler_arena_allocator = compiler->arena_allocator;
+    const Allocator *rtallocator = compiler->rtallocator;
+
+    DynArr *search_pathnames = compiler->search_pathnames;
+    LZOHTable *keywords = compiler->keywords;
+    DStr *source = utils_read_source(pathname, compiler_arena_allocator);
+    DynArr *tokens = MEMORY_DYNARR_PTR(dynallocator);
+    DynArr *stmts = MEMORY_DYNARR_PTR(dynallocator);
+    DynArr *fns_prototypes = MEMORY_DYNARR_PTR(dynallocator);
+    LZOHTable *default_natives = compiler->default_natives;
+    ScopeManager *manager = scope_manager_create(dynallocator);
+
+    Lexer *lexer = lexer_create(dynallocator, rtallocator);
+    Parser *parser = parser_create(dynallocator);
+    Compiler *import_compiler = compiler_create(dynallocator, rtallocator);
+
+    if(lexer_scan(source, tokens, keywords, pathname, lexer)){
+        error(
+            compiler,
+            import_token,
+            "Failed to import module '%s'",
+            pathname
+        );
+    }
+
+    if(parser_parse(tokens, fns_prototypes, stmts, parser)){
+        error(
+            compiler,
+            import_token,
+            "Failed to import module '%s'",
+            pathname
+        );
+    }
+
+    Module *imported_module = compiler_import(
+        import_compiler,
+        compiler_arena,
+        compiler_arena_allocator,
+        keywords,
+        search_pathnames,
+        default_natives,
+        manager,
+        stmts,
+        pathname,
+        name
+    );
+
+    if(!imported_module){
+        error(
+            compiler,
+            import_token,
+            "Failed to import module '%s'",
+            pathname
+        );
+    }
+
+    if(out_manager){
+        *out_manager = manager;
+    }
+
+    return imported_module;
+}
+
+static Token *clone_token(const Token *token, const Allocator *allocator){
+    char *cloned_lexeme = memory_clone_cstr(allocator, token->lexeme, NULL);
+    Token *cloned_token = MEMORY_ALLOC(allocator, Token, 1);
+
+    *cloned_token = *token;
+    cloned_token->lexeme = cloned_lexeme;
+    cloned_token->literal = NULL;
+    cloned_token->pathname = NULL;
+    cloned_token->extra = NULL;
+
+    return cloned_token;
+}
+
+Symbol *clone_symbol(const Symbol *symbol, const Allocator *allocator){
+    switch (symbol->type){
+        case GLOBAL_SYMBOL_TYPE:{
+            const GlobalSymbol *global_symbol = (GlobalSymbol *)symbol;
+            GlobalSymbol *cloned_global_symbol = MEMORY_ALLOC(allocator, GlobalSymbol, 1);
+
+            *cloned_global_symbol = *global_symbol;
+            cloned_global_symbol->symbol.identifier = clone_token(global_symbol->symbol.identifier, allocator);
+            cloned_global_symbol->symbol.scope = NULL;
+
+            return (Symbol *)cloned_global_symbol;
+        }case FN_SYMBOL_TYPE:{
+            const FnSymbol *fn_symbol = (FnSymbol *)symbol;
+            FnSymbol *cloned_fn_symbol = MEMORY_ALLOC(allocator, FnSymbol, 1);
+
+            *cloned_fn_symbol = *fn_symbol;
+            cloned_fn_symbol->symbol.identifier = clone_token(fn_symbol->symbol.identifier, allocator);
+            cloned_fn_symbol->symbol.scope = NULL;
+
+            return (Symbol *)cloned_fn_symbol;
+        }default:{
+            return NULL;
+        }
+    }
+}
+
+void compile_stmt(Compiler *compiler, Stmt *stmt){
+    ScopeManager *manager = compiler->manager;
+
     switch (stmt->type){
         case EXPR_STMTTYPE:{
-            ExprStmt *expr_stmt = (ExprStmt *)stmt->sub_stmt;
-            Expr *expr = expr_stmt->expr;
+            ExprStmt *expr_stmt = stmt->sub_stmt;
+            Expr *sub_expr = expr_stmt->expr;
 
-            compile_expr(expr, compiler);
-            write_chunk(OP_POP, compiler);
+            compile_expr(compiler, sub_expr);
+            write_chunk(compiler, OP_POP);
 
             break;
         }case VAR_DECL_STMTTYPE:{
-            VarDeclStmt *var_decl_stmt = (VarDeclStmt *)stmt->sub_stmt;
-            char is_const = var_decl_stmt->is_const;
-            char is_initialized = var_decl_stmt->is_initialized;
+            VarDeclStmt *var_decl_stmt = stmt->sub_stmt;
+            uint8_t is_mutable = var_decl_stmt->is_mutable;
+            uint8_t is_initialized = var_decl_stmt->is_initialized;
             Token *identifier_token = var_decl_stmt->identifier_token;
-            Expr *initializer_expr = var_decl_stmt->initializer_expr;
+            Expr *initial_value_expr = var_decl_stmt->initial_value_expr;
 
-            if(is_const && !is_initialized){
-                error(compiler, identifier_token, "'%s' declared as constant, but is not being initialized.", identifier_token->lexeme);
+            if(scope_manager_exists_procedure_name(
+                manager,
+                identifier_token->lexeme_len,
+                identifier_token->lexeme
+            )){
+                error(
+                    compiler,
+                    identifier_token,
+                    "Cannot shadow procedures name"
+                );
             }
 
-            if(initializer_expr == NULL){
-                write_chunk(OP_EMPTY, compiler);
+            if(initial_value_expr){
+                compile_expr(compiler, initial_value_expr);
             }else{
-                compile_expr(initializer_expr, compiler);
+                write_chunk(compiler, OP_EMPTY);
             }
 
-            Symbol *symbol = declare(is_const ? IMUT_SYMTYPE : MUT_SYMTYPE, identifier_token, compiler);
+            if(scope_manager_is_global_scope(manager)){
+                if(!is_mutable && !is_initialized){
+                    error(
+                        compiler,
+                        identifier_token,
+                        "Immutable global variables must be initialized in declaration place"
+                    );
+                }
 
-            if(symbol->depth == 1){
-                write_chunk(OP_GDEF, compiler);
-				write_location(identifier_token, compiler);
-                write_str_alloc(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
+                scope_manager_define_global(
+                    manager,
+                    is_mutable,
+                    identifier_token
+                );
+
+                write_chunk(compiler, OP_GDEF);
+                write_location(compiler, identifier_token);
+                write_str_alloc(
+                    compiler,
+                    identifier_token->lexeme_len,
+                    identifier_token->lexeme
+                );
+            }else{
+                scope_manager_define_local(
+                    manager,
+                    is_mutable,
+                    is_initialized,
+                    identifier_token
+                );
             }
 
             break;
         }case BLOCK_STMTTYPE:{
-            BlockStmt *block_stmt = (BlockStmt *)stmt->sub_stmt;
+            BlockStmt *block_stmt = stmt->sub_stmt;
             DynArr *stmts = block_stmt->stmts;
+            size_t stmts_len = stmts ? DYNARR_LEN(stmts) : 0;
 
-            scope_in_soft(BLOCK_SCOPE, compiler);
+            Scope *scope = scope_manager_push(manager, BLOCK_SCOPE_TYPE);
+            Block *block = push_block(compiler);
 
-            for (size_t i = 0; i < DYNARR_LEN(stmts); i++){
-                compile_stmt((Stmt *)dynarr_get_ptr(i, stmts), compiler);
+            block->stmts_len = stmts_len;
+
+            for (size_t i = 0; i < stmts_len; i++){
+            	if(AS_LOCAL_SCOPE(scope)->returned){
+           			error(
+              			compiler,
+                 		block_stmt->left_bracket_token,
+                   		"Cannot exists statements after the scope returned"
+             		);
+             	}
+
+             	Stmt *stmt = dynarr_get_ptr(i, stmts);
+                block->current_stmt = i + 1;
+
+                compile_stmt(compiler, stmt);
             }
 
-            scope_out(compiler);
+            propagate_return(compiler, scope);
+
+            pop_locals(compiler);
+            pop_block(compiler);
+            scope_manager_pop(manager);
 
             break;
         }case IF_STMTTYPE:{
-            int32_t id = generate_id(compiler);
-
-			IfStmt *if_stmt = (IfStmt *)stmt->sub_stmt;
+            IfStmt *if_stmt = stmt->sub_stmt;
             IfStmtBranch *if_branch = if_stmt->if_branch;
             DynArr *elif_branches = if_stmt->elif_branches;
             DynArr *else_stmts = if_stmt->else_stmts;
+            size_t elif_branches_len = elif_branches ? DYNARR_LEN(elif_branches) : 0;
+            int32_t if_id = generate_id(compiler);
 
-            Token *if_branch_token = if_branch->branch_token;
-            Expr *if_condition = if_branch->condition_expr;
-            DynArr *if_stmts = if_branch->stmts;
+            size_t branches_len = 1 + (elif_branches ? DYNARR_LEN(elif_branches) : 0) + (else_stmts ? 1 : 0);
+            uint16_t returns = compile_if_branch(compiler, if_branch, IF_SCOPE_TYPE, if_id, 0) ? 1 : 0;
 
-            compile_expr(if_condition, compiler);
-            jif(compiler, if_branch_token, "IFB_END_%d", id);
+            for (size_t i = 0; i < elif_branches_len; i++){
+                IfStmtBranch *elif_branch = dynarr_get_ptr(i, elif_branches);
 
-            scope_in_soft(IF_SCOPE, compiler);
-
-            if(if_stmts){
-                for (size_t i = 0; i < DYNARR_LEN(if_stmts); i++){
-                    Stmt *stmt = (Stmt *)dynarr_get_ptr(i, if_stmts);
-                    compile_stmt(stmt, compiler);
-                }
-            }
-
-            scope_out(compiler);
-
-            jmp(compiler, if_branch_token, "IF_END_%d", id);
-            label(compiler, "IFB_END_%d", id);
-
-            if(elif_branches){
-                for (size_t branch_idx = 0; branch_idx < DYNARR_LEN(elif_branches); branch_idx++){
-                    IfStmtBranch *elif_branch = (IfStmtBranch *)dynarr_get_ptr(branch_idx, elif_branches);
-
-                    Token *elif_branch_token = elif_branch->branch_token;
-                    Expr *elif_condition = elif_branch->condition_expr;
-                    DynArr *elif_stmts = elif_branch->stmts;
-
-                    compile_expr(elif_condition, compiler);
-                    jif(compiler, elif_branch_token, "ELIF_END_%d_%zu", id, branch_idx);
-
-                    scope_in_soft(IF_SCOPE, compiler);
-
-                    for (size_t i = 0; i < DYNARR_LEN(elif_stmts); i++){
-                        Stmt *stmt = (Stmt *)dynarr_get_ptr(i, elif_stmts);
-                        compile_stmt(stmt, compiler);
-                    }
-
-                    scope_out(compiler);
-
-                    jmp(compiler, elif_branch_token, "IF_END_%d", id);
-                    label(compiler, "ELIF_END_%d_%zu", id, branch_idx);
+                if(compile_if_branch(
+                	compiler,
+                 	elif_branch,
+                  	ELIF_SCOPE_TYPE,
+                   	if_id,
+                    i + 1
+                )){
+               		returns++;
                 }
             }
 
             if(else_stmts){
-                scope_in_soft(IF_SCOPE, compiler);
+                size_t else_stmts_len = DYNARR_LEN(else_stmts);
 
-                for (size_t i = 0; i < DYNARR_LEN(else_stmts); i++){
-                    Stmt *stmt = (Stmt *)dynarr_get_ptr(i, else_stmts);
-                    compile_stmt(stmt, compiler);
+                Scope *scope = scope_manager_push(manager, ELSE_SCOPE_TYPE);
+                Block *block = push_block(compiler);
+
+                block->current_stmt = else_stmts_len;
+
+                for (size_t i = 0; i < else_stmts_len; i++){
+	               	if(AS_LOCAL_SCOPE(scope)->returned){
+	             		error(
+	                		compiler,
+	                   		if_branch->branch_token,
+	                     	"Cannot exists statements after the scope returned"
+	               		);
+	               	}
+
+                    Stmt *stmt = dynarr_get_ptr(i, else_stmts);
+                    block->current_stmt = i + 1;
+
+                    compile_stmt(compiler, stmt);
                 }
 
-                scope_out(compiler);
+                if(AS_LOCAL_SCOPE(scope)->returned){
+               		returns++;
+                }
+
+                if(returns == branches_len){
+               		propagate_return(compiler, scope);
+                }
+
+                pop_block(compiler);
+                pop_locals(compiler);
+                scope_manager_pop(manager);
             }
 
-            label(compiler, "IF_END_%d", id);
+            label(compiler, if_branch->branch_token, ".IF(%"PRId32")_END", if_id);
 
-			break;
-		}case WHILE_STMTTYPE:{
+            break;
+        }case STOP_STMTTYPE:{
+            StopStmt *stop_stmt = stmt->sub_stmt;
+            Token *stop_token = stop_stmt->stop_token;
+
+            if(scope_manager_is_scope_type(manager, WHILE_SCOPE_TYPE)){
+                jmp(compiler, stop_token, ".WHILE(%"PRId32")_END", current_loop(compiler)->id);
+                break;
+            }
+
+            if(scope_manager_is_scope_type(manager, FOR_SCOPE_TYPE)){
+                jmp(compiler, stop_token, ".FOR(%"PRId32")_END", current_loop(compiler)->id);
+                break;
+            }
+
+            error(
+                compiler,
+                stop_token,
+                "Stop statements only allowed in while and for loops"
+            );
+
+            break;
+        }case CONTINUE_STMTTYPE:{
+            ContinueStmt *continue_stmt = stmt->sub_stmt;
+            Token *continue_token = continue_stmt->continue_token;
+
+            if(scope_manager_is_scope_type(manager, WHILE_SCOPE_TYPE)){
+                jmp(
+                	compiler,
+                 	continue_token,
+                  	".WHILE(%"PRId32")_TEST",
+                   	current_loop(compiler)->id
+                );
+                break;
+            }
+
+            if(scope_manager_is_scope_type(manager, FOR_SCOPE_TYPE)){
+                jmp(
+                	compiler,
+                 	continue_token,
+                  	".FOR(%"PRId32")_TEST",
+                   	current_loop(compiler)->id
+                );
+                break;
+            }
+
+            error(
+                compiler,
+                continue_token,
+                "Continue statements only allowed in while and for loops"
+            );
+
+            break;
+        }case WHILE_STMTTYPE:{
+            WhileStmt *while_stmt = stmt->sub_stmt;
+            Token *while_token = while_stmt->while_token;
+            Expr *condition_expr = while_stmt->condition_expr;
+            DynArr *stmts = while_stmt->stmts;
+            size_t stmts_len = DYNARR_LEN(stmts);
             int32_t while_id = generate_id(compiler);
 
-			WhileStmt *while_stmt = (WhileStmt *)stmt->sub_stmt;
-            Token *while_token = while_stmt->while_token;
-			Expr *condition = while_stmt->condition;
-			DynArr *stmts = while_stmt->stmts;
+            label(compiler, while_token, ".WHILE(%"PRId32")_TEST", while_id);
 
-            jmp(compiler, while_token, "WHILE_CONDITION_%d", while_id);
-            label(compiler, "WHILE_BODY_%d", while_id);
+            compile_expr(compiler, condition_expr);
 
-			Scope *scope = scope_in_soft(WHILE_SCOPE, compiler);
-            scope->id = while_id;
+            jif(compiler, while_token, ".WHILE(%"PRId32")_END", while_id);
 
-			for(size_t i = 0; i < DYNARR_LEN(stmts); i++){
-				compile_stmt((Stmt *)dynarr_get_ptr(i, stmts), compiler);
-			}
+            Scope *scope = scope_manager_push(manager, WHILE_SCOPE_TYPE);
+            push_loop(compiler, while_id);
+            Block *block = push_block(compiler);
 
-			scope_out(compiler);
+            block->stmts_len = stmts_len;
 
-            label(compiler, "WHILE_CONDITION_%d", while_id);
-			compile_expr(condition, compiler);
-            jit(compiler, while_token, "WHILE_BODY_%d", while_id);
-            label(compiler, "WHILE_END_%d", while_id);
+            for (size_t i = 0; i < stmts_len; i++){
+	           	if(AS_LOCAL_SCOPE(scope)->returned){
+	         		error(
+	            		compiler,
+	               		while_token,
+	                 	"Cannot exists statements after the scope returned"
+	           		);
+	           	}
 
-			break;
-		}case FOR_RANGE_STMTTYPE:{
-            int32_t for_id = generate_id(compiler);
+                Stmt *stmt = dynarr_get_ptr(i, stmts);
+                block->current_stmt = i + 1;
 
-            ForRangeStmt *for_range_stmt = (ForRangeStmt *)stmt->sub_stmt;
+                compile_stmt(compiler, stmt);
+            }
+
+            pop_locals(compiler);
+
+            jmp(compiler, while_token, ".WHILE(%"PRId32")_TEST", while_id);
+            label(compiler, while_token, ".WHILE(%"PRId32")_END", while_id);
+
+            pop_block(compiler);
+            pop_loop(compiler);
+            scope_manager_pop(manager);
+
+            break;
+        }case FOR_RANGE_STMTTYPE:{
+            ForRangeStmt *for_range_stmt = stmt->sub_stmt;
             Token *for_token = for_range_stmt->for_token;
             Token *symbol_token = for_range_stmt->symbol_token;
             Expr *left_expr = for_range_stmt->left_expr;
             Token *for_type_token = for_range_stmt->for_type_token;
             Expr *right_expr = for_range_stmt->right_expr;
             DynArr *stmts = for_range_stmt->stmts;
+            size_t stmts_len = DYNARR_LEN(stmts);
+            int32_t for_id = generate_id(compiler);
 
-            scope_in_soft(BLOCK_SCOPE, compiler);
+            // BLOCK_SCOPE
+            scope_manager_push(manager, BLOCK_SCOPE_TYPE);
+            LocalSymbol *local_symbol = scope_manager_define_local(manager, 0, 1, symbol_token);
+
+            // FOR RANGE SCOPE
+            Scope *scope = scope_manager_push(manager, FOR_SCOPE_TYPE);
+            push_loop(compiler, for_id);
+            Block *block = push_block(compiler);
+
+            block->stmts_len = stmts_len;
+
+            // INITIALIZATION SECTION
+            compile_expr(compiler, left_expr);
+
+            // TEST SECTION
+            label(compiler, for_token, ".FOR(%"PRId32")_TEST", for_id);
+
+            write_chunk(compiler, OP_LGET);
+            write_location(compiler, for_token);
+            write_chunk(compiler, local_symbol->offset);
+
+            compile_expr(compiler, right_expr);
 
             if(for_type_token->type == UPTO_TOKTYPE){
-                compile_expr(left_expr, compiler);
-                Symbol *symbol = declare(IMUT_SYMTYPE, symbol_token, compiler);
-
-                compile_expr(right_expr, compiler);
-                Symbol *right_symbol = declare_unknown(symbol_token, IMUT_SYMTYPE, compiler);
-
-                label(compiler, "FOR_RANGE_START_%d", for_id);
-                write_chunk(OP_LGET, compiler);
-                write_location(symbol_token, compiler);
-                write_chunk(symbol->local, compiler);
-
-                write_chunk(OP_LGET, compiler);
-                write_location(for_token, compiler);
-                write_chunk(right_symbol->local, compiler);
-
-                write_chunk(OP_GE, compiler);
-                write_location(for_token, compiler);
-
-                jit(compiler, for_token, "FOR_RANGE_END_%d", for_id);
-
-                Scope *scope = scope_in_soft(FOR_SCOPE, compiler);
-                scope->id = for_id;
-
-                if(stmts){
-                    for (size_t i = 0; i < DYNARR_LEN(stmts); i++){
-                        Stmt *stmt = (Stmt *)dynarr_get_ptr(i, stmts);
-                        compile_stmt(stmt, compiler);
-                    }
-                }
-
-                scope_out(compiler);
-
-                label(compiler, "FOR_RANGE_CONDITION_%d", for_id);
-                write_chunk(OP_LGET, compiler);
-                write_location(symbol_token, compiler);
-                write_chunk(symbol->local, compiler);
-
-                write_chunk(OP_CINT, compiler);
-                write_location(for_token, compiler);
-                write_chunk(1, compiler);
-
-                write_chunk(OP_ADD, compiler);
-                write_location(for_token, compiler);
-
-                write_chunk(OP_LSET, compiler);
-                write_location(symbol_token, compiler);
-                write_chunk(symbol->local, compiler);
-
-                write_chunk(OP_POP, compiler);
-                write_location(for_token, compiler);
-
-                jmp(compiler, for_token, "FOR_RANGE_START_%d", for_id);
-
-                label(compiler, "FOR_RANGE_END_%d", for_id);
-            }
-
-            if(for_type_token->type == DOWNTO_TOKTYPE){
-                compile_expr(right_expr, compiler);
-                Symbol *symbol = declare(IMUT_SYMTYPE, symbol_token, compiler);
-
-                compile_expr(left_expr, compiler);
-                Symbol *left_symbol = declare_unknown(symbol_token, IMUT_SYMTYPE, compiler);
-
-                jmp(compiler, for_token, "FOR_RANGE_CONDITION_%d", for_id);
-
-                label(compiler, "FOR_RANGE_START_%d", for_id);
-                write_chunk(OP_LGET, compiler);
-                write_chunk(symbol->local, compiler);
-
-                write_chunk(OP_LGET, compiler);
-                write_chunk(left_symbol->local, compiler);
-
-                write_chunk(OP_GE, compiler);
-
-                jif(compiler, for_token, "FOR_RANGE_END_%d", for_id);
-
-                Scope *scope = scope_in_soft(FOR_SCOPE, compiler);
-                scope->id = for_id;
-
-                if(stmts){
-                    for (size_t i = 0; i < DYNARR_LEN(stmts); i++){
-                        Stmt *stmt = (Stmt *)dynarr_get_ptr(i, stmts);
-                        compile_stmt(stmt, compiler);
-                    }
-                }
-
-                scope_out(compiler);
-
-                label(compiler, "FOR_RANGE_CONDITION_%d", for_id);
-                write_chunk(OP_LGET, compiler);
-                write_location(symbol_token, compiler);
-                write_chunk(symbol->local, compiler);
-
-                write_chunk(OP_CINT, compiler);
-                write_location(for_token, compiler);
-                write_chunk(1, compiler);
-
-                write_chunk(OP_SUB, compiler);
-                write_location(for_token, compiler);
-
-                write_chunk(OP_LSET, compiler);
-                write_location(symbol_token, compiler);
-                write_chunk(symbol->local, compiler);
-
-                write_chunk(OP_POP, compiler);
-                write_location(for_token, compiler);
-
-                jmp(compiler, for_token, "FOR_RANGE_START_%d", for_id);
-
-                label(compiler, "FOR_RANGE_END_%d", for_id);
-            }
-
-            scope_out(compiler);
-
-            break;
-        } case STOP_STMTTYPE:{
-			StopStmt *stop_stmt = (StopStmt *)stmt->sub_stmt;
-			Token *stop_token = stop_stmt->stop_token;
-
-            Scope *scope = inside_loop(compiler);
-
-            assert(scope->id != -1);
-
-            if(!scope){
-                error(compiler, stop_token, "Can't use 'stop' statement outside loops.");
-            }
-
-            if(scope->type == WHILE_SCOPE){
-                jmp(compiler, stop_token, "WHILE_END_%d", scope->id);
-            }
-
-            if(scope->type == FOR_SCOPE){
-                jmp(compiler, stop_token, "FOR_RANGE_END_%d", scope->id);
-            }
-
-			break;
-		}case CONTINUE_STMTTYPE:{
-            ContinueStmt *continue_stmt = (ContinueStmt *)stmt->sub_stmt;
-            Token *continue_token = continue_stmt->continue_token;
-
-            Scope *scope = inside_loop(compiler);
-
-            assert(scope->id != -1);
-
-            if(!scope){
-                error(compiler, continue_token, "Can't use 'continue' statement outside loops.");
-            }
-
-            if(scope->type == WHILE_SCOPE){
-                jmp(compiler, continue_token, "WHILE_CONDITION_%d", scope->id);
-            }
-
-            if(scope->type == FOR_SCOPE){
-                jmp(compiler, continue_token, "FOR_RANGE_CONDITION_%d", scope->id);
-            }
-
-            break;
-        }case RETURN_STMTTYPE:{
-            ReturnStmt *return_stmt = (ReturnStmt *)stmt->sub_stmt;
-			Token *return_token = return_stmt->return_token;
-            Expr *value = return_stmt->value;
-
-			Scope *scope = inside_fn(compiler);
-
-			if(!scope || scope->depth == 1)
-				error(compiler, return_token, "Can't use 'return' statement outside functions.");
-
-            if(value) compile_expr(value, compiler);
-            else {
-                write_chunk(OP_EMPTY, compiler);
-                write_location(return_token, compiler);
-            }
-
-            write_chunk(OP_RET, compiler);
-            write_location(return_token, compiler);
-
-            break;
-        }case FUNCTION_STMTTYPE:{
-            FunctionStmt *function_stmt = (FunctionStmt *)stmt->sub_stmt;
-            Token *identifier_token = function_stmt->identifier_token;
-            DynArr *params = function_stmt->params;
-            DynArr *stmts = function_stmt->stmts;
-
-            Scope *enclosing = inside_fn(compiler);
-
-            Fn *fn = NULL;
-            size_t symbol_index = 0;
-
-            Symbol *fn_symbol = exists_global(identifier_token->lexeme, compiler) ?
-                                get(identifier_token, compiler) :
-                                declare(FN_SYMTYPE, identifier_token, compiler);
-
-            Scope *fn_scope = scope_in_fn(identifier_token->lexeme, compiler, &fn, &symbol_index);
-
-            fn_symbol->index = ((int)symbol_index);
-
-            if(params){
-                for (size_t i = 0; i < DYNARR_LEN(params); i++){
-                    Token *param_token = (Token *)dynarr_get_ptr(i, params);
-                    char *param_name = factory_clone_raw_str(param_token->lexeme, RTALLOCATOR, NULL);
-
-                    declare(MUT_SYMTYPE, param_token, compiler);
-                    dynarr_insert_ptr(param_name, fn->params);
-                }
-            }
-
-            if(stmts){
-                char return_empty = 1;
-                size_t stmts_len = DYNARR_LEN(stmts);
-
-                for (size_t i = 0; i < stmts_len; i++){
-                    Stmt *stmt = (Stmt *)dynarr_get_ptr(i, stmts);
-                    compile_stmt(stmt, compiler);
-
-                    if(i == stmts_len - 1 && stmt->type == RETURN_STMTTYPE){
-                        return_empty = 0;
-                    }
-                }
-
-                if(return_empty){
-                    write_chunk(OP_EMPTY, compiler);
-                    write_location(identifier_token, compiler);
-
-                    write_chunk(OP_RET, compiler);
-                    write_location(identifier_token, compiler);
-                }
-            }
-
-            scope_out_fn(compiler);
-
-            int is_normal = enclosing == NULL;
-
-            if(fn_scope->captured_symbols_len > 0){
-                MetaClosure *closure = MEMORY_ALLOC(RTALLOCATOR, MetaClosure, 1);
-
-                closure->meta_out_values_len = fn_scope->captured_symbols_len;
-
-                for (int i = 0; i < fn_scope->captured_symbols_len; i++){
-                    closure->meta_out_values[i].at = fn_scope->captured_symbols[i]->local;
-                }
-
-                closure->fn = fn;
-
-                set_closure(symbol_index, closure, compiler);
+                write_chunk(compiler, OP_GE);
+                write_location(compiler, for_token);
             }else{
-                set_fn(symbol_index, fn, compiler);
+                write_chunk(compiler, OP_LT);
+                write_location(compiler, for_token);
             }
 
-            if(!is_normal){to_local(fn_symbol, compiler);}
+            jit(compiler, for_token, ".FOR_RANGE(%"PRId32")_END", for_id);
 
-            write_chunk(OP_SGET, compiler);
-            write_location(identifier_token, compiler);
-            write_i32(symbol_index, compiler);
+            for (size_t i = 0; i < stmts_len; i++){
+           		if(AS_LOCAL_SCOPE(scope)->returned){
+	         		error(
+	            		compiler,
+	               		for_token,
+	                 	"Cannot exists statements after the scope returned"
+	           		);
+	           	}
 
-            if(is_normal){
-                write_chunk(OP_GDEF, compiler);
-                write_location(identifier_token, compiler);
-                write_str_alloc(identifier_token->lexeme_len, identifier_token->lexeme, compiler);
+                Stmt *stmt = dynarr_get_ptr(i, stmts);
+                block->current_stmt = i + 1;
+
+                compile_stmt(compiler, stmt);
             }
 
-            break;
-        }case IMPORT_STMTTYPE:{
-            ImportStmt *import_stmt = (ImportStmt *)stmt->sub_stmt;
-            Token *import_token = import_stmt->import_token;
-            DynArr *names = import_stmt->names;
-            Token *alt_name_token = import_stmt->alt_name;
+            pop_locals(compiler);
 
-            LZOHTable *modules = compiler->modules;
-            Module *current_module = compiler->current_module;
-            Module *previous_module = compiler->previous_module;
-            DynArr *current_symbols = MODULE_SYMBOLS(current_module);
+            // INCREMENT SECTION
+            write_chunk(compiler, OP_LGET);
+            write_location(compiler, for_token);
+            write_chunk(compiler, local_symbol->offset);
 
-            Token *name_token = NULL;
-            size_t module_pathname_len;
-            char *module_pathname = names_to_pathname(names, compiler, &module_pathname_len, &name_token);
+            write_chunk(compiler, OP_CINT);
+            write_location(compiler, for_token);
+            write_chunk(compiler, 1);
 
-            alt_name_token = alt_name_token ? alt_name_token : name_token;
-
-            char *real_name = name_token->lexeme;
-            char *alt_name = alt_name_token->lexeme;
-
-            NativeModule *native_module = resolve_native_module(module_pathname, compiler);
-
-            if(native_module){
-                size_t symbol_idx = add_native_module_symbol(native_module, current_symbols);
-                Symbol *symbol = declare(NATIVE_MODULE_SYMTYPE, alt_name_token, compiler);
-
-                symbol->index = symbol_idx;
-
-                from_symbols_to_global(symbol_idx, import_token, alt_name, compiler);
-
-                break;
+            if(for_type_token->type == UPTO_TOKTYPE){
+                write_chunk(compiler, OP_ADD);
+                write_location(compiler, for_token);
+            }else{
+                write_chunk(compiler, OP_SUB);
+                write_location(compiler, for_token);
             }
 
-            if(compiler->is_importing){
-                char *module_pathname = current_module->pathname;
-                size_t module_pathname_len = strlen(module_pathname);
+            write_chunk(compiler, OP_LSET);
+            write_location(compiler, for_token);
+            write_chunk(compiler, local_symbol->offset);
 
-                char local_module_pathname[module_pathname_len + 1];
-                memcpy(local_module_pathname, module_pathname, module_pathname_len);
-                local_module_pathname[module_pathname_len] = 0;
+            write_chunk(compiler, OP_POP);
+            write_location(compiler, for_token);
 
-                char *parent_pathname = utils_files_parent_pathname(local_module_pathname, NULL);
-                size_t parent_pathname_len = strlen(parent_pathname);
+            // JUMP TO TEST SECTION
+            jmp(compiler, for_token, ".FOR(%"PRId32")_TEST", for_id);
 
-                if(!lzohtable_lookup(parent_pathname_len, parent_pathname, compiler->import_paths, NULL)){
-                    char *cloned_parent_pathname = factory_clone_raw_str(parent_pathname, CTALLOCATOR, NULL);
-                    DStr rstr = {
-                        .len = parent_pathname_len,
-                        .buff = cloned_parent_pathname
-                    };
+            // END OF THE FOR RANGE STATEMENT
+            label(compiler, for_token, ".FOR(%"PRId32")_END", for_id);
 
-                    dynarr_insert(&rstr, compiler->search_paths);
-                    lzohtable_put(parent_pathname_len, cloned_parent_pathname, NULL, compiler->import_paths, NULL);
-                }
-            }
+            // FOR RANGE SCOPE
+            pop_block(compiler);
+            pop_loop(compiler);
+            pop_locals(compiler);
+            scope_manager_pop(manager);
 
-            size_t resolved_module_pathname_len;
-            char *resolved_module_pathname = resolve_module_location(
-                import_token,
-                module_pathname,
-                previous_module,
-                current_module,
-                compiler,
-                NULL,
-                &resolved_module_pathname_len
-            );
-            Module *module = NULL;
-
-            if(lzohtable_lookup(
-                resolved_module_pathname_len,
-                resolved_module_pathname,
-                modules, (void **)(&module))
-            ){
-                size_t symbol_idx = add_module_symbol(module, current_symbols);
-                Symbol *symbol = declare(MODULE_SYMTYPE, alt_name_token, compiler);
-
-                symbol->index = symbol_idx;
-
-                from_symbols_to_global(symbol_idx, import_token, alt_name, compiler);
-
-                break;
-            }
-
-            module = factory_create_module(real_name, resolved_module_pathname, compiler->rtallocator);
-
-            DynArr *search_paths = compiler->search_paths;
-            LZOHTable *import_paths = compiler->import_paths;
-            LZOHTable *keywords = compiler->keywords;
-            LZOHTable *native_fns = compiler->natives_fns;
-            DStr *source = utils_read_source(resolved_module_pathname, CTALLOCATOR);
-            DynArr *tokens = FACTORY_DYNARR_PTR(CTALLOCATOR);
-            DynArr *fns_prototypes = FACTORY_DYNARR_PTR(CTALLOCATOR);
-            DynArr *stmts = FACTORY_DYNARR_PTR(CTALLOCATOR);
-
-            Lexer *lexer = lexer_create(CTALLOCATOR, RTALLOCATOR);
-            Parser *parser = parser_create(CTALLOCATOR);
-            Compiler *import_compiler = compiler_create(compiler->ctallocator, compiler->rtallocator);
-
-            if(lexer_scan(source, tokens, keywords, resolved_module_pathname, lexer)){
-                error(compiler, import_token, "Failed to import module '%s'", resolved_module_pathname);
-            }
-
-            if(parser_parse(tokens, fns_prototypes, stmts, parser)){
-                error(compiler, import_token, "Failed to import module '%s'", resolved_module_pathname);
-            }
-
-            if(compiler_import(
-                search_paths,
-                import_paths,
-                keywords,
-                native_fns,
-                fns_prototypes,
-                stmts,
-                current_module,
-                module,
-                modules,
-                import_compiler
-            )){
-                error(compiler, import_token, "Failed to import module '%s'", resolved_module_pathname);
-            }
-
-            lzohtable_put_ck(
-                resolved_module_pathname_len,
-                resolved_module_pathname,
-                module,
-                modules,
-                NULL
-            );
-
-            size_t symbol_idx = add_module_symbol(module, current_symbols);
-            Symbol *symbol = declare(MODULE_SYMTYPE, alt_name_token, compiler);
-
-            symbol->index = symbol_idx;
-
-            from_symbols_to_global(symbol_idx, import_token, alt_name, compiler);
+            // BLOCK SCOPE
+            label(compiler, for_token, ".FOR_RANGE(%"PRId32")_END", for_id);
+            pop_locals(compiler);
+            scope_manager_pop(manager);
 
             break;
         }case THROW_STMTTYPE:{
-            ThrowStmt *throw_stmt = (ThrowStmt *)stmt->sub_stmt;
+            ThrowStmt *throw_stmt = stmt->sub_stmt;
             Token *throw_token = throw_stmt->throw_token;
-			Expr *value = throw_stmt->value;
+            Expr *throw_value_expr = throw_stmt->value_expr;
 
-            Scope *scope = current_scope(compiler);
-
-            if(!inside_fn(compiler)){
-                error(compiler, throw_token, "Can not use 'throw' statement in global scope.");
-            }
-            if(scope->type == CATCH_SCOPE){
-                error(compiler, throw_token, "Can not use 'throw' statement inside catch blocks.");
-            }
-
-			if(value){
-                compile_expr(value, compiler);
+            if(IS_GLOBAL_SCOPE(scope_manager_peek(manager))){
+                error(
+                    compiler,
+                    throw_token,
+                    "Cannot use throw statements in global scope"
+                );
             }
 
-            write_chunk(OP_THROW, compiler);
-            write_location(throw_token, compiler);
-            write_chunk(value ? 1 : 0, compiler);
+            if(throw_value_expr){
+                compile_expr(compiler, throw_value_expr);
+            }
+
+            write_chunk(compiler, OP_THROW);
+            write_location(compiler, throw_token);
+            write_chunk(compiler, throw_value_expr != NULL);
 
             break;
         }case TRY_STMTTYPE:{
-            uint32_t trycatch_id = generate_trycatch_id(compiler);
-
-            TryStmt *try_stmt = (TryStmt *)stmt->sub_stmt;
-            DynArr *try_stmts = try_stmt->try_stmts;
-			Token *err_identifier = try_stmt->err_identifier;
-			DynArr *catch_stmts = try_stmt->catch_stmts;
-
+            TryStmt *try_stmt = stmt->sub_stmt;
             Token *try_token = try_stmt->try_token;
+            DynArr *try_stmts = try_stmt->try_stmts;
+            Token *catch_token = try_stmt->catch_token;
+            DynArr *catch_stmts = try_stmt->catch_stmts;
 
-            write_chunk(OP_TRYO, compiler);
-            write_location(try_token, compiler);
-            size_t catch_ip_idx = write_i16(0, compiler);
-
-            if(try_stmts){
-                scope_in_soft(TRY_SCOPE, compiler);
-                size_t stmts_len = DYNARR_LEN(try_stmts);
-
-                for (size_t i = 0; i < stmts_len; i++){
-                    compile_stmt((Stmt *)dynarr_get_ptr(i, try_stmts), compiler);
-                }
-
-                scope_out(compiler);
+            if(scope_manager_peek(manager)->type == CATCH_SCOPE_TYPE){
+                error(
+                    compiler,
+                    try_token,
+                    "Cannot use try statements inside catch scopes"
+                );
             }
 
-            write_chunk(OP_TRYC, compiler);
-            write_location(try_token, compiler);
+            uint32_t try_id = generate_id(compiler);
+            Scope *try_scope = scope_manager_push(manager, TRY_SCOPE_TYPE);
 
-			if(catch_stmts){
-                size_t stmts_len = DYNARR_LEN(catch_stmts);
+            if(try_stmts){
+          		Block *block = push_block(compiler);
 
-                scope_in_soft(CATCH_SCOPE, compiler);
-                jmp(compiler, try_token, "CATCH_END_%" PRIu32, trycatch_id);
+            	write_chunk(compiler, OP_TRYO);
+                write_location(compiler, try_token);
+                mark(compiler, try_token, "CATCH(%"PRId32")", try_id);
 
-                size_t current_ip = chunks_len(compiler);
-                update_i16(catch_ip_idx, (int16_t)current_ip, compiler);
+                size_t len = DYNARR_LEN(try_stmts);
+                block->stmts_len = len;
 
-                if(err_identifier){
-                    Symbol *symbol = declare(IMUT_SYMTYPE, err_identifier, compiler);
+                for (size_t i = 0; i < len; i++){
+               		if(AS_LOCAL_SCOPE(try_scope)->returned){
+              			error(
+                 			compiler,
+                  			try_token,
+                   			"Cannot exists statements after the scope returned"
+                 		);
+                	}
 
-                    write_chunk(OP_LSET, compiler);
-                    write_chunk(symbol->local, compiler);
-                    write_location(err_identifier, compiler);
-                }else{
-                    write_chunk(OP_POP, compiler);
-                    write_location(try_token, compiler);
+                    Stmt *try_stmt = dynarr_get_ptr(i, try_stmts);
+                    block->current_stmt = i + 1;
+
+                    compile_stmt(compiler, try_stmt);
                 }
 
-				for (size_t i = 0; i < stmts_len; i++){
-                    Stmt *stmt = (Stmt *)dynarr_get_ptr(i, catch_stmts);
-                    compile_stmt(stmt, compiler);
+                pop_locals(compiler);
+                write_chunk(compiler, OP_TRYC);
+                write_location(compiler, try_token);
+
+                if(catch_stmts){
+                    jmp(compiler, try_token, "CATCH(%"PRId32")_END", try_id);
                 }
 
-                label(compiler, "CATCH_END_%" PRIu32, trycatch_id);
-                scope_out(compiler);
-			}
+                pop_block(compiler);
+            }
+
+            scope_manager_pop(manager);
+            Scope *catch_scope = scope_manager_push(manager, CATCH_SCOPE_TYPE);
+
+            if(catch_stmts){
+           		Block *block = push_block(compiler);
+
+             	label(compiler, catch_token, "CATCH(%"PRId32")", try_id);
+                pop_scope_locals(compiler, AS_LOCAL_SCOPE(try_scope));
+
+                size_t len = DYNARR_LEN(catch_stmts);
+                block->stmts_len = len;
+
+                for (size_t i = 0; i < len; i++){
+                	if(AS_LOCAL_SCOPE(catch_scope)->returned){
+               			error(
+                  			compiler,
+                   			catch_token,
+                    		"Cannot exists statements after the scope returned"
+                  		);
+                 	}
+
+                 	Stmt *catch_stmt = dynarr_get_ptr(i, catch_stmts);
+                    block->current_stmt = i + 1;
+
+                    compile_stmt(compiler, catch_stmt);
+                }
+
+                pop_locals(compiler);
+                label(compiler, catch_token, "CATCH(%"PRId32")_END", try_id);
+
+                pop_block(compiler);
+            }else{
+                label(compiler, catch_token, "CATCH(%"PRId32")", try_id);
+                pop_scope_locals(compiler, AS_LOCAL_SCOPE(try_scope));
+            }
+
+            scope_manager_pop(manager);
+
+            break;
+        }case RETURN_STMTTYPE:{
+            ReturnStmt *ret_stmt = stmt->sub_stmt;
+            Token *ret_token = ret_stmt->return_token;
+            Expr *ret_expr = ret_stmt->ret_expr;
+
+            if(scope_manager_is_global_scope(manager)){
+                error(
+                    compiler,
+                    ret_token,
+                    "Return statements not allowed in global scope"
+                );
+            }
+
+            Block *block = peek_block(compiler);
+            Scope *scope = scope_manager_peek(compiler->manager);
+
+            if(block->current_stmt < block->stmts_len){
+           		error(
+             		compiler,
+               		ret_token,
+                 	"Return statements must be the last in the scope"
+             	);
+            }
+
+            assert(IS_LOCAL_SCOPE(scope) && "Scope must be local");
+            AS_LOCAL_SCOPE(scope)->returned = 1;
+
+            if(ret_expr){
+                if(ret_expr->type == IDENTIFIER_EXPRTYPE){
+                    IdentifierExpr *identifier_expr = ret_expr->sub_expr;
+                    Token *identifier_token = identifier_expr->identifier_token;
+                    Symbol *symbol = scope_manager_get_symbol(compiler->manager, identifier_token);
+
+                    if(symbol->type == MODULE_SYMBOL_TYPE){
+                        error(
+                            compiler,
+                            identifier_token,
+                            "Cannot return modules"
+                        );
+                    }
+                }
+
+                compile_expr(compiler, ret_expr);
+            }
+
+            write_chunk(compiler, OP_RET);
+            write_location(compiler, ret_token);
+
+            break;
+        }case FUNCTION_STMTTYPE:{
+            FunctionStmt *fn_stmt = stmt->sub_stmt;
+            Token *identifier_token = fn_stmt->identifier_token;
+            DynArr *params = fn_stmt->params;
+            DynArr *stmts = fn_stmt->stmts;
+            size_t params_len = params ? DYNARR_LEN(params) : 0;
+            size_t stmts_len = stmts ? DYNARR_LEN(stmts) : 0;
+
+            if(!scope_manager_is_global_scope(manager)){
+                error(
+                    compiler,
+                    identifier_token,
+                    "Procedures declarations only allowed in global scope"
+                );
+            }
+
+            Fn *fn = vm_factory_fn_create(
+                compiler->rtallocator,
+                identifier_token->lexeme,
+                params_len
+            );
+
+            vm_factory_module_add_fn(compiler->module, fn, NULL);
+            vm_factory_module_globals_add_obj(
+            	current_module(compiler),
+             	(Obj *)vm_factory_fn_obj_create(compiler->rtallocator, fn),
+              	identifier_token->lexeme,
+               	PRIVATE_GLOVAL_VALUE_TYPE
+            );
+
+            scope_manager_define_fn(manager, params_len, identifier_token);
+            Scope *scope = scope_manager_push(manager, FN_SCOPE_TYPE);
+            push_unit(compiler, fn);
+            Block *block = push_block(compiler);
+
+            for (size_t i = 0; i < params_len; i++){
+                Token *param_identifier = dynarr_get_ptr(i, params);
+
+                scope_manager_define_local(
+                    manager,
+                    1,
+                    1,
+                    param_identifier
+                );
+            }
+
+            block->stmts_len = stmts_len;
+            uint8_t must_return = 1;
+
+            for (size_t i = 0; i < stmts_len; i++){
+            	if(AS_LOCAL_SCOPE(scope)->returned){
+           			error(
+              			compiler,
+                 		identifier_token,
+                 		"Cannot exists statements after the scope returned"
+             		);
+             	}
+
+             	Stmt *stmt = dynarr_get_ptr(i, stmts);
+                block->current_stmt = i + 1;
+
+                compile_stmt(compiler, stmt);
+
+                if(i + 1 >= stmts_len && stmt->type == RETURN_STMTTYPE){
+                    must_return = 0;
+                }
+            }
+
+            if(must_return){
+                write_chunk(compiler, OP_EMPTY);
+                write_chunk(compiler, OP_RET);
+            }
+
+            pop_block(compiler);
+            pop_unit(compiler);
+            scope_manager_pop(manager);
+
+            break;
+        }case IMPORT_STMTTYPE:{
+         	ImportStmt *import_stmt = stmt->sub_stmt;
+            Token *import_token = import_stmt->import_token;
+            DynArr *names = import_stmt->names;
+            size_t names_len = DYNARR_LEN(names);
+            Token *alt_name_token = import_stmt->alt_name;
+            Token *name_token = alt_name_token ? alt_name_token->lexeme :
+                dynarr_get_ptr(DYNARR_LEN(names) - 1, names);
+
+            if(!scope_manager_is_global_scope(manager)){
+          		error(
+            		compiler,
+              		import_token,
+                	"Import statements only allowed in global scope"
+            	);
+            }
+
+            if(names_len == 1){
+           		if(import_native(compiler, name_token)){
+           			scope_manager_define_module(manager, name_token);
+            		return;
+             	}
+            }
+
+            LZArena *arena = compiler->compiler_arena;
+            Allocator *arena_allocator = compiler->arena_allocator;
+            Allocator *dynallocator = memory_lzflist_allocator(arena_allocator, NULL);
+            void *state = lzarena_save(arena);
+            char *pathname = resolve_import_names(
+                compiler,
+                names,
+                compiler->search_pathnames,
+                import_token,
+                arena_allocator
+            );
+            ScopeManager *imported_manager = NULL;
+            Module *imported_module = import_module(
+                compiler,
+                dynallocator,
+                import_token,
+                pathname,
+                name_token->lexeme,
+                &imported_manager
+            );
+            scope_manager_define_module(manager, name_token);
+
+            lzarena_restore(arena, state);
+
+            vm_factory_module_add_module(current_module(compiler), imported_module);
+            vm_factory_module_globals_add_obj(
+            	current_module(compiler),
+             	(Obj *)vm_factory_module_obj_create(compiler->rtallocator, imported_module),
+              	alt_name_token->lexeme,
+               	PRIVATE_GLOVAL_VALUE_TYPE
+            );
 
             break;
         }case EXPORT_STMTTYPE:{
-            ExportStmt *export_stmt = (ExportStmt *)stmt->sub_stmt;
+            ExportStmt *export_stmt = stmt->sub_stmt;
+            Token *export_token = export_stmt->export_token;
             DynArr *symbols = export_stmt->symbols;
+            size_t symbols_len = symbols ? DYNARR_LEN(symbols) : 0;
 
-            for (size_t i = 0; i < DYNARR_LEN(symbols); i++){
-                Token *symbol_identifier = dynarr_get_ptr(i, symbols);
+            for (size_t i = 0; i < symbols_len; i++){
+                Token *symbol_token = dynarr_get_ptr(i, symbols);
 
-                write_chunk(OP_GASET, compiler);
-                write_location(symbol_identifier, compiler);
-                write_str_alloc(symbol_identifier->lexeme_len, symbol_identifier->lexeme, compiler);
-                write_chunk(1, compiler);
+                write_chunk(compiler, OP_GASET);
+                write_location(compiler, export_token);
+                write_str_alloc(compiler, symbol_token->lexeme_len, symbol_token->lexeme);
+                write_chunk(compiler, 1);
             }
 
             break;
         }default:{
-            assert("Illegal stmt type");
+            assert(0 && "Illegal token type");
+            break;
         }
     }
 }
 
-void define_natives(Compiler *compiler){
-    assert(compiler->depth > 0);
+void declare_defaults(Compiler *compiler){
+    LZOHTable *default_natives = compiler->default_natives;
+    size_t len = default_natives->m;
 
-    LZOHTable *native_fns = compiler->natives_fns;
+    for (size_t i = 0; i < len; i++){
+        LZOHTableSlot slot = default_natives->slots[i];
 
-    for (size_t i = 0; i < native_fns->m; i++){
-        LZOHTableSlot *slot = &native_fns->slots[i];
-
-        if(!slot->used){
+        if(!slot.used){
             continue;
         }
 
-        NativeFn *native_fn = (NativeFn *)slot->value;
+        NativeFnObj *native_fn_obj = ((Value *)slot.value)->content.obj_val;
+        NativeFn *native_fn = native_fn_obj->native_fn;
 
-        declare_native_fn(native_fn->name, compiler);
+        scope_manager_define_native_fn(
+            compiler->manager,
+            native_fn->arity,
+            native_fn->name
+        );
     }
 }
 
-void define_fns_prototypes(DynArr *fns_prototypes, Compiler *compiler){
-    size_t len = DYNARR_LEN(fns_prototypes);
-
-    for (size_t i = 0; i < len; i++){
-        Token *token = (Token *)dynarr_get_ptr(i, fns_prototypes);
-        declare(FN_SYMTYPE, token, compiler);
-    }
-}
-
-void add_captured_symbol(Token *identifier, Symbol *symbol, Scope *scope, Compiler *compiler){
-    if(scope->captured_symbols_len >= SYMBOLS_LENGTH){
-        error(compiler, identifier, "Cannot capture more than %d symbols", SYMBOLS_LENGTH);
-    }
-
-    Scope *sfn_scope = inside_fn_from_symbol(symbol, compiler);
-    int fns_between = count_fn_scopes(sfn_scope->depth - 1, scope->depth - 1, compiler);
-
-    if(fns_between > 0){
-        error(compiler, identifier, "Cannot capture symbols from a distance greater than 1");
-    }
-
-    scope->captured_symbols[scope->captured_symbols_len++] = symbol;
-}
-
-void set_fn(size_t index, Fn *fn, Compiler *compiler){
-    Module *module = compiler->current_module;
-	DynArr *symbols = MODULE_SYMBOLS(module);
-	SubModuleSymbol symbol = (SubModuleSymbol){
-        .type = FUNCTION_SUBMODULE_SYM_TYPE,
-        .value = fn
-    };
-
-    dynarr_set_at(index, &symbol, symbols);
-}
-
-void set_closure(size_t index, MetaClosure *closure, Compiler *compiler){
-    Module *module = compiler->current_module;
-	DynArr *symbols = MODULE_SYMBOLS(module);
-	SubModuleSymbol symbol = (SubModuleSymbol){
-        .type = CLOSURE_SUBMODULE_SYM_TYPE,
-        .value = closure
-    };
-
-    dynarr_set_at(index, &symbol, symbols);
-}
-//--------------------------------------------------------------------------//
-//                          PUBLIC IMPLEMENTATION                           //
-//--------------------------------------------------------------------------//
-Compiler *compiler_create(Allocator *ctallocator, Allocator *rtallocator){
-    Allocator *labels_allocator = memory_arena_allocator(ctallocator, NULL);
+Compiler *compiler_create(const Allocator *ctallocator, const Allocator *rtallocator){
+    LZPool *units_pool = MEMORY_LZPOOL(ctallocator, Unit);
     Compiler *compiler = MEMORY_ALLOC(ctallocator, Compiler, 1);
 
-    if(!labels_allocator || !compiler){
-        memory_destroy_arena_allocator(labels_allocator);
+    if(!units_pool || !compiler){
+        lzpool_dealloc(units_pool);
         MEMORY_DEALLOC(ctallocator, Compiler, 1, compiler);
 
         return NULL;
     }
 
-    memset(compiler, 0, sizeof(Compiler));
-    compiler->ctallocator = ctallocator;
-    compiler->rtallocator = rtallocator;
-    compiler->labels_allocator = labels_allocator;
+    *compiler = (Compiler){
+        .units_pool = units_pool,
+        .ctallocator = ctallocator,
+        .rtallocator = rtallocator
+    };
 
     return compiler;
 }
@@ -2611,102 +2813,106 @@ void compiler_destroy(Compiler *compiler){
         return;
     }
 
-    memory_destroy_arena_allocator(compiler->labels_allocator);
-    MEMORY_DEALLOC(compiler->ctallocator, Compiler, 1, compiler);
+    lzpool_destroy(compiler->units_pool);
 }
 
-int compiler_compile(
-    DynArr *search_paths,
-    LZOHTable *import_paths,
+Module *compiler_compile(
+    Compiler *compiler,
     LZOHTable *keywords,
-    LZOHTable *native_fns,
-    DynArr *fns_prototypes,
+    DynArr *seatch_pathnames,
+    LZOHTable *default_natives,
+    ScopeManager *manager,
     DynArr *stmts,
-    Module *current_module,
-    LZOHTable *modules,
-    Compiler *compiler
+    const char *pathname
 ){
-    if(setjmp(compiler->err_jmp) == 1){
-        return 1;
-    }else{
-        compiler->is_importing = 0;
-        compiler->symbols = 1;
-        compiler->search_paths = search_paths;
-        compiler->import_paths = import_paths;
+    if(setjmp(compiler->buf) == 0){
+        LZArena *compiler_arena = NULL;
+        Allocator *arena_allocator = memory_arena_allocator(compiler->ctallocator, &compiler_arena);
+        Module *main_module = vm_factory_module_create(compiler->rtallocator, "main", pathname);
+
+        manager->buf = &compiler->buf;
         compiler->keywords = keywords;
-        compiler->natives_fns = native_fns;
-        compiler->current_module = current_module;
-        compiler->modules = modules;
-        compiler->fns_prototypes = fns_prototypes;
-        compiler->stmts = stmts;
+        compiler->search_pathnames = seatch_pathnames;
+        compiler->default_natives = default_natives;
+        compiler->manager = manager;
+        compiler->module = main_module;
+        compiler->compiler_arena = compiler_arena;
+        compiler->arena_allocator = arena_allocator;
 
-        Fn *fn = NULL;
-        size_t symbol_index = 0;
+        declare_defaults(compiler);
 
-        scope_in_fn("main", compiler, &fn, &symbol_index);
-        define_natives(compiler);
-        define_fns_prototypes(fns_prototypes, compiler);
+        size_t len = DYNARR_LEN(stmts);
+        Fn *entry_fn = vm_factory_fn_create(compiler->rtallocator, "entry", 0);
 
-        for (size_t i = 0; i < stmts->used; i++){
-            Stmt *stmt = (Stmt *)dynarr_get_ptr(i, stmts);
-            compile_stmt(stmt, compiler);
+        main_module->entry_fn = entry_fn;
+
+        vm_factory_module_add_fn(main_module, entry_fn, NULL);
+        push_unit(compiler, entry_fn);
+
+        for (size_t i = 0; i < len; i++){
+            Stmt *stmt = dynarr_get_ptr(i, stmts);
+            compile_stmt(compiler, stmt);
         }
 
-        write_chunk(OP_EMPTY, compiler);
-        write_chunk(OP_RET, compiler);
+        write_chunk(compiler, OP_EMPTY);
+        write_chunk(compiler, OP_RET);
+        pop_unit(compiler);
 
-        set_fn(symbol_index, fn, compiler);
-        scope_out_fn(compiler);
-
-        return compiler->is_err;
+        return main_module;
+    }else{
+        return NULL;
     }
+
+    return NULL;
 }
 
-int compiler_import(
-    DynArr *search_paths,
-    LZOHTable *import_paths,
+Module *compiler_import(
+    Compiler *compiler,
+    LZArena *compiler_arena,
+    Allocator *arena_allocator,
     LZOHTable *keywords,
-    LZOHTable *native_fns,
-    DynArr *fns_prototypes,
+    DynArr *search_pathnames,
+    LZOHTable *default_natives,
+    ScopeManager *manager,
     DynArr *stmts,
-    Module *previous_module,
-    Module *current_module,
-    LZOHTable *modules,
-    Compiler *compiler
+    const char *pathname,
+    const char *name
 ){
-    if(setjmp(compiler->err_jmp) == 1){
-        return 1;
-    }else{
-        compiler->is_importing = 1;
-        compiler->search_paths = search_paths;
-        compiler->import_paths = import_paths;
+    if(setjmp(compiler->buf) == 0){
+        Module *import_module = vm_factory_module_create(compiler->rtallocator, name, pathname);
+
+        manager->buf = &compiler->buf;
         compiler->keywords = keywords;
-        compiler->natives_fns = native_fns;
-        compiler->fns_prototypes = fns_prototypes;
-        compiler->stmts = stmts;
-        compiler->previous_module = previous_module;
-        compiler->current_module = current_module;
-        compiler->modules = modules;
+        compiler->search_pathnames = search_pathnames;
+        compiler->default_natives = default_natives;
+        compiler->manager = manager;
+        compiler->module = import_module;
+        compiler->compiler_arena = compiler_arena;
+        compiler->arena_allocator = arena_allocator;
 
-        Fn *fn = NULL;
-        size_t symbol_index = 0;
+        declare_defaults(compiler);
 
-        scope_in_fn("import", compiler, &fn, &symbol_index);
-        define_natives(compiler);
-        define_fns_prototypes(fns_prototypes, compiler);
+        size_t len = DYNARR_LEN(stmts);
+        Fn *import_entry_fn = vm_factory_fn_create(compiler->rtallocator, "import entry", 0);
 
-        for (size_t i = 0; i < stmts->used; i++){
-            Stmt *stmt = (Stmt *)dynarr_get_ptr(i, stmts);
-            compile_stmt(stmt, compiler);
+        import_module->entry_fn = import_entry_fn;
+
+        vm_factory_module_add_fn(import_module, import_entry_fn, NULL);
+        push_unit(compiler, import_entry_fn);
+
+        for (size_t i = 0; i < len; i++){
+            Stmt *stmt = dynarr_get_ptr(i, stmts);
+            compile_stmt(compiler, stmt);
         }
 
-        write_chunk(OP_EMPTY, compiler);
-        write_chunk(OP_RET, compiler);
+        write_chunk(compiler, OP_EMPTY);
+        write_chunk(compiler, OP_RET);
+        pop_unit(compiler);
 
-        set_fn(symbol_index, fn, compiler);
-		scope_out(compiler);
-
-        return compiler->is_err;
+        return import_module;
+    }else{
+        return NULL;
     }
+
+    return NULL;
 }
-//<PUBLIC IMPLEMENTATION

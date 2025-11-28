@@ -1,149 +1,120 @@
 #ifndef COMPILER_H
 #define COMPILER_H
 
-#include "dynarr.h"
-#include "fn.h"
-#include "module.h"
+#include "essentials/dynarr.h"
+#include "essentials/lzarena.h"
+#include "essentials/lzflist.h"
+#include "essentials/lzohtable.h"
+#include "essentials/lzpool.h"
+#include "essentials/memory.h"
+
+#include "scope_manager/scope_manager.h"
+
 #include "token.h"
+#include "vm/fn.h"
+#include "vm/module.h"
+
+#include <stdint.h>
 #include <setjmp.h>
 
-#define LABEL_NAME_LENGTH 64
-#define SCOPES_LENGTH 32
-#define SYMBOLS_LENGTH 255
-#define SYMBOL_NAME_LENGTH 64
-#define FUNCTIONS_LENGTH 16
-
-typedef enum symbol_type{
-    MUT_SYMTYPE,
-    IMUT_SYMTYPE,
-    FN_SYMTYPE,
-    CLOSURE_SYMTYPE,
-    NATIVE_FN_SYMTYPE,
-    MODULE_SYMTYPE,
-    NATIVE_MODULE_SYMTYPE,
-}SymbolType;
-
-typedef struct symbol{
-    int depth;
-    int local;
-    int index;
-    SymbolType type;
-    char name[SYMBOL_NAME_LENGTH];
-    Token *identifier_token;
-}Symbol;
-
-typedef enum scope_type{
-    BLOCK_SCOPE,
-    IF_SCOPE,
-	WHILE_SCOPE,
-    FOR_SCOPE,
-    TRY_SCOPE,
-    CATCH_SCOPE,
-    FUNCTION_SCOPE
-}ScopeType;
-
 typedef struct label{
-    char *name;
-    size_t location;
-    struct label *prev;
-    struct label *next;
+	size_t offset;
+	size_t name_len;
+	char   *name;
 }Label;
 
-typedef struct label_list{
-    Label *head;
-    Label *tail;
-}LabelList;
-
 typedef struct jmp{
-    size_t jmp_offset;
+	size_t update_offset;
+	size_t jump_offset;
+	size_t label_name_len;
+	char   *label_name;
+}Jmp;
+
+typedef struct mark{
     size_t update_offset;
-    char *label;
-    struct jmp *prev;
-    struct jmp *next;
-    void *scope;
-}JMP;
+	size_t label_name_len;
+	char   *label_name;
+}Mark;
 
-typedef struct jmp_list{
-    JMP *head;
-    JMP *tail;
-}JMPList;
+typedef struct loop{
+    int32_t     id;
+    struct loop *prev;
+}Loop;
 
-typedef struct scope{
-    int32_t id;
+typedef struct block{
+	size_t       stmts_len;
+	size_t       current_stmt;
+	struct block *prev;
+}Block;
 
-    int depth;
-    int locals;
-    int scope_locals;
-    ScopeType type;
+typedef struct unit{
+	int32_t     counter;
 
-    uint8_t symbols_len;
-    Symbol symbols[SYMBOLS_LENGTH];
+	LZOHTable   *labels;
+	DynArr      *jmps;
+    DynArr      *marks;
+    Loop        *loops;
+    Block       *blocks;
+    LZOHTable   *captured_symbols;
 
-    int captured_symbols_len;
-    Symbol *captured_symbols[SYMBOLS_LENGTH];
+	Fn          *fn;
 
-    LabelList labels;
-    JMPList jmps;
-}Scope;
+    LZPool      *labels_pool;
+	LZPool      *jmps_pool;
+    LZPool      *marks_pool;
+    LZPool      *loops_pool;
+    LZPool      *blocks_pool;
+
+    void        *arena_state;
+
+	Allocator   *lzarena_allocator;
+    Allocator   *lzflist_allocator;
+
+	struct unit *prev;
+}Unit;
 
 typedef struct compiler{
-    char is_err;
-    jmp_buf err_jmp;
+    jmp_buf         buf;
+	Unit            *units_stack;
 
-    char is_importing;
-    DynArr *search_paths;
-    LZOHTable *import_paths;
+    LZOHTable       *keywords;
+    DynArr          *search_pathnames;
+    LZOHTable       *default_natives;
+    ScopeManager    *manager;
+    Module          *module;
 
-    int32_t counter_id;
-    uint32_t trycatch_counter;
+    LZArena         *compiler_arena;
+    LZPool          *units_pool;
 
-    int symbols;
-
-    uint8_t depth;
-    Scope scopes[SCOPES_LENGTH];
-
-    uint8_t fn_ptr;
-    Fn *fn_stack[FUNCTIONS_LENGTH];
-
-    LZOHTable *keywords;
-    LZOHTable *natives_fns;
-    DynArr *fns_prototypes;
-    DynArr *stmts;
-    Module *previous_module;
-    Module *current_module;
-    LZOHTable *modules;
-
-    Allocator *ctallocator;
-    Allocator *rtallocator;
-    Allocator *labels_allocator;
+    Allocator       *arena_allocator;
+	const Allocator *ctallocator;
+	const Allocator *rtallocator;
 }Compiler;
 
-Compiler *compiler_create(Allocator *ctallocator, Allocator *rtallocator);
+Compiler *compiler_create(const Allocator *ctallocator, const Allocator *rtallocator);
 void compiler_destroy(Compiler *compiler);
 
-int compiler_compile(
-    DynArr *search_paths,
-    LZOHTable *import_paths,
+Module *compiler_compile(
+    Compiler *compiler,
     LZOHTable *keywords,
-    LZOHTable *native_fns,
-    DynArr *fns_prototypes,
+    DynArr *search_pathnames,
+    LZOHTable *default_natives,
+    ScopeManager *manager,
     DynArr *stmts,
-    Module *module,
-    LZOHTable *modules,
-    Compiler *compiler
+    const char *pathname
 );
 
-int compiler_import(
-    DynArr *search_paths,
-    LZOHTable *import_paths,
+Module *compiler_import(
+    Compiler *compiler,
+    LZArena *compiler_arena,
+    Allocator *arena_allocator,
     LZOHTable *keywords,
-    LZOHTable *native_fns,
-    DynArr *fns_prototypes,
+    DynArr *search_pathnames,
+    LZOHTable *default_natives,
+    ScopeManager *manager,
     DynArr *stmts,
-    Module *previous_module,
-    Module *module,
-    LZOHTable *modules,
-    Compiler *compiler
+    const char *pathname,
+    const char *name
 );
 
 #endif

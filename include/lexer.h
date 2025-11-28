@@ -1,11 +1,13 @@
 #ifndef LEXER_H
 #define LEXER_H
 
-#include "dynarr.h"
-#include "lzbstr.h"
-#include "lzohtable.h"
-#include "lzarena.h"
-#include "memory.h"
+#include "essentials/dynarr.h"
+#include "essentials/lzbstr.h"
+#include "essentials/lzohtable.h"
+#include "essentials/lzarena.h"
+#include "essentials/memory.h"
+
+#include "types.h"
 
 #include <setjmp.h>
 
@@ -15,23 +17,24 @@ typedef struct lexer{
 	int line;
 	int start;
 	int current;
-    char *pathname;
-    DStr *source;
+    const char *pathname;
+    const DStr *source;
 	DynArr *tokens;
-    LZOHTable *keywords;
+    const LZOHTable *keywords;
     LZArena *ctarena;
     Allocator *ctarena_allocator;
-    Allocator *rtallocator;
-    Allocator *ctallocator;
+
+    const Allocator *rtallocator;
+    const Allocator *ctallocator;
 }Lexer;
 
-Lexer *lexer_create(Allocator *compile_time_allocator, Allocator *runtime_allocator);
+Lexer *lexer_create(const Allocator *compile_time_allocator, const Allocator *runtime_allocator);
 
 int lexer_scan(
-    DStr *source,
+    const DStr *source,
     DynArr *tokens,
-    LZOHTable *keywords,
-    char *pathname,
+    const LZOHTable *keywords,
+    const char *pathname,
     Lexer *lexer
 );
 
