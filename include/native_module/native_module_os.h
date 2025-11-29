@@ -15,7 +15,7 @@ Value native_fn_os_name(uint8_t argsc, Value *values, Value target, void *contex
     StrObj *str_obj = NULL;
 
     vmu_create_str(
-        1,
+        0,
         strlen(os_name),
         os_name,
         VMU_VM,
@@ -29,7 +29,7 @@ Value native_fn_os_path_separator(uint8_t argsc, Value *values, Value target, vo
     StrObj *str_obj = NULL;
 
     vmu_create_str(
-        1,
+        0,
         1,
         path_separator,
         VMU_VM,

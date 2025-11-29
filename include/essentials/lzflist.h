@@ -30,53 +30,22 @@ typedef struct lzflist_allocator{
     void (*dealloc)(void *ptr, size_t size, void *ctx);
 }LZFListAllocator;
 
-typedef struct lzflregion{
-    size_t used_bytes;
-    size_t consumed_bytes;
-    size_t subregion_size;
-    void *offset;
-    void *subregion;
-    struct lzflregion *prev;
-    struct lzflregion *next;
-}LZFLRegion;
-
-typedef struct lzflregion_list{
-    size_t len;
-    struct lzflregion *head;
-    struct lzflregion *tail;
-}LZFLRegionList;
-
-typedef struct lzflheader{
-    size_t magic;
-    size_t size;
-    char used;
-    struct lzflheader *prev;
-    struct lzflheader *next;
-    struct lzflregion *region;
-}LZFLHeader;
-
-typedef struct lzflarea_list{
-    size_t len;
-    struct lzflheader *head;
-    struct lzflheader *tail;
-}LZFLAreaList;
-
-typedef struct lzflist{
-    LZFLRegionList regions;
-    LZFLAreaList free_areas;
-    LZFLRegion *current_region;
-    LZFListAllocator *allocator;
-}LZFList;
+typedef struct lzflist LZFList;
 
 LZFList *lzflist_create(LZFListAllocator *allocator);
 void lzflist_destroy(LZFList *list);
 
-size_t lzflist_ptr_size(void *ptr);
-int lzflist_prealloc(size_t size, LZFList *list);
+size_t lzflist_ptr_size(const void *ptr);
+int lzflist_prealloc(LZFList *list, size_t size);
+size_t lzflist_regions_count(const LZFList *list);
+size_t lzflist_free_areas_count(const LZFList *list);
+size_t lzflist_allocable_used_bytes(const LZFList *list);
+size_t lzflist_allocable_reserved_bytes(const LZFList *list);
+size_t lzflist_allocable_free_bytes(const LZFList *list);
 
-void *lzflist_alloc(size_t size, LZFList *list);
-void *lzflist_calloc(size_t size, LZFList *list);
-void *lzflist_realloc(void *ptr, size_t new_size, LZFList *list);
-void lzflist_dealloc(void *ptr, LZFList *list);
+void *lzflist_alloc(LZFList *list, size_t size);
+void *lzflist_calloc(LZFList *list, size_t size);
+void *lzflist_realloc(LZFList *list, void *ptr, size_t new_size);
+void lzflist_dealloc(LZFList *list, void *ptr);
 
 #endif

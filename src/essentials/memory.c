@@ -18,15 +18,15 @@ void lzarena_link_dealloc(void *ptr, size_t size, void *ctx){
 }
 
 void *lzflist_link_alloc(size_t size, void *ctx){
-    return lzflist_alloc(size, ctx);
+    return lzflist_alloc(ctx, size);
 }
 
 void *lzflist_link_realloc(void *ptr, size_t old_size, size_t new_size, void *ctx){
-    return lzflist_realloc(ptr, new_size, ctx);
+    return lzflist_realloc(ctx, ptr, new_size);
 }
 
 void lzflist_link_dealloc(void *ptr, size_t size, void *ctx){
-	lzflist_dealloc(ptr, ctx);
+	lzflist_dealloc(ctx, ptr);
 }
 
 char *memory_clone_cstr(const Allocator *allocator, const char *cstr, size_t *out_len){

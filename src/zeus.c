@@ -41,7 +41,7 @@ typedef struct args{
 static LZFList *allocator = NULL;
 
 void *lzalloc_link_flist(size_t size, void *ctx){
-    void *ptr = lzflist_alloc(size, ctx);
+    void *ptr = lzflist_alloc(ctx, size);
 
     if(!ptr){
         fprintf(stderr, "It seems the system ran out of memory");
@@ -53,7 +53,7 @@ void *lzalloc_link_flist(size_t size, void *ctx){
 }
 
 void *lzrealloc_link_flist(void *ptr, size_t old_size, size_t new_size, void *ctx){
-    void *new_ptr = lzflist_realloc(ptr, new_size, ctx);
+    void *new_ptr = lzflist_realloc(ctx, ptr, new_size);
 
     if(!new_ptr){
         fprintf(stderr, "It seems the system ran out of memory");
@@ -65,7 +65,7 @@ void *lzrealloc_link_flist(void *ptr, size_t old_size, size_t new_size, void *ct
 }
 
 void lzdealloc_link_flist(void *ptr, size_t size, void *ctx){
-    lzflist_dealloc(ptr, ctx);
+    lzflist_dealloc(ctx, ptr);
 }
 
 void *lzalloc_link_arena(size_t size, void *ctx){
@@ -323,8 +323,8 @@ static void init_memory(){
         exit(EXIT_FAILURE);
     }
 
-    if(lzflist_prealloc(DEFAULT_INITIAL_COMPILE_TIME_MEMORY, ctflist) ||
-       lzflist_prealloc(DEFAULT_INITIAL_RUNTIME_MEMORY, ctflist)
+    if(lzflist_prealloc(ctflist, DEFAULT_INITIAL_COMPILE_TIME_MEMORY) ||
+       lzflist_prealloc(ctflist, DEFAULT_INITIAL_RUNTIME_MEMORY)
     ){
         lzflist_destroy(ctflist);
         lzflist_destroy(rtflist);
