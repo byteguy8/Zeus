@@ -19,8 +19,8 @@
 #include <unistd.h>
 #include <sys/stat.h>
 
-#define DEFAULT_INITIAL_COMPILE_TIME_MEMORY MEMORY_MIBIBYTES(8)
-#define DEFAULT_INITIAL_RUNTIME_MEMORY MEMORY_MIBIBYTES(8)
+#define DEFAULT_INITIAL_COMPILE_TIME_MEMORY MEMORY_MIBIBYTES(2)
+#define DEFAULT_INITIAL_RUNTIME_MEMORY MEMORY_MIBIBYTES(3)
 #define DEFAULT_INITIAL_SEARCH_PATHS_BUFF_LEN 256
 
 static LZFList *ctflist = NULL;
@@ -324,7 +324,7 @@ static void init_memory(){
     }
 
     if(lzflist_prealloc(ctflist, DEFAULT_INITIAL_COMPILE_TIME_MEMORY) ||
-       lzflist_prealloc(ctflist, DEFAULT_INITIAL_RUNTIME_MEMORY)
+       lzflist_prealloc(rtflist, DEFAULT_INITIAL_RUNTIME_MEMORY)
     ){
         lzflist_destroy(ctflist);
         lzflist_destroy(rtflist);
@@ -490,7 +490,15 @@ int main(int argc, const char *argv[]){
 			goto CLEAN_UP_COMPTIME;
 		}
 
-        main_module = compiler_compile(compiler, keywords, search_pathnames, default_native, manager, stmts, module_path);
+        main_module = compiler_compile(
+            compiler,
+            keywords,
+            search_pathnames,
+            default_native,
+            manager,
+            stmts,
+            module_path
+        );
 
         if(!main_module){
             result = 1;
@@ -507,7 +515,15 @@ int main(int argc, const char *argv[]){
 			goto CLEAN_UP_COMPTIME;
 		}
 
-        main_module = compiler_compile(compiler, keywords, search_pathnames, default_native, manager, stmts, module_path);
+        main_module = compiler_compile(
+            compiler,
+            keywords,
+            search_pathnames,
+            default_native,
+            manager,
+            stmts,
+            module_path
+        );
 
         if(!main_module){
             result = 1;
@@ -526,7 +542,15 @@ int main(int argc, const char *argv[]){
 			goto CLEAN_UP_COMPTIME;
 		}
 
-        main_module = compiler_compile(compiler, keywords, search_pathnames, default_native, manager, stmts, module_path);
+        main_module = compiler_compile(
+            compiler,
+            keywords,
+            search_pathnames,
+            default_native,
+            manager,
+            stmts,
+            module_path
+        );
 
         if(!main_module){
             result = 1;
