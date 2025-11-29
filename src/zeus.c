@@ -477,7 +477,6 @@ int main(int argc, const char *argv[]){
     init_memory();
 
     DynArr *search_pathnames = parse_search_paths(source_pathname, args.search_paths, &ctallocator);
-    LZOHTable *import_paths = MEMORY_LZOHTABLE(&ctallocator);
     LZOHTable *keywords = create_keywords_table(&ctallocator);
 	DStr *source = utils_read_source(source_pathname, &ctallocator);
     char *module_path = memory_clone_cstr(&ctallocator, source_pathname, NULL);
