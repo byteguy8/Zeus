@@ -29,14 +29,16 @@ static Allocator ctallocator = {0};
 static Allocator rtallocator = {0};
 
 typedef struct args{
-	unsigned char lex;
-	unsigned char parse;
-	unsigned char compile;
-	unsigned char dump;
-    unsigned char help;
-    char *search_paths;
-    char *source_pathname;
+    uint8_t help;
+    uint8_t exclusives;
+    char    *search_paths;
+    char    *source_pathname;
 }Args;
+
+#define ARGS_LEX     0b00000001
+#define ARGS_PARSE   0b00000010
+#define ARGS_COMPILE 0b00000100
+#define ARGS_DUMP    0b00001000
 
 static LZFList *allocator = NULL;
 
@@ -81,66 +83,79 @@ void lzdealloc_link_arena(void *ptr, size_t size, void *ctx){
 }
 
 static void get_args(int argc, const char *argv[], Args *args){
-    unsigned char exclusives = 0;
-
     for(int i = 1; i < argc; i++){
 		const char *arg = argv[i];
 
 		if(strcmp("-l", arg) == 0){
-            if(args->lex){
-                fprintf(stderr, "-l flag already used");
+            if(args->exclusives != 0){
+                fprintf(stderr, "ERROR: flags '-l', '-p', '-c' and '-d' are mutually exclusive\n");
                 exit(EXIT_FAILURE);
             }
 
-            args->lex = 1;
-            exclusives |= 0b10000000;
+            if(args->exclusives & ARGS_LEX){
+                fprintf(stderr, "ERROR: -l flag already used\n");
+                exit(EXIT_FAILURE);
+            }
+
+            args->exclusives |= ARGS_LEX;
         }else if(strcmp("-p", arg) == 0){
-            if(args->parse){
-                fprintf(stderr, "-l flag already used");
+            if(args->exclusives != 0){
+                fprintf(stderr, "ERROR: flags '-l', '-p', '-c' and -d are mutually exclusive\n");
                 exit(EXIT_FAILURE);
             }
 
-            args->parse = 1;
-            exclusives |= 0b01000000;
+            if(args->exclusives & ARGS_PARSE){
+                fprintf(stderr, "ERROR: '-p' flag already used\n");
+                exit(EXIT_FAILURE);
+            }
+
+            args->exclusives |= ARGS_PARSE;
         }else if(strcmp("-c", arg) == 0){
-            if(args->compile){
-                fprintf(stderr, "-l flag already used");
+            if(args->exclusives != 0){
+                fprintf(stderr, "ERROR: flags '-l', '-p', '-c' and '-d' are mutually exclusive\n");
                 exit(EXIT_FAILURE);
             }
 
-            args->compile = 1;
-            exclusives |= 0b00100000;
+            if(args->exclusives & ARGS_COMPILE){
+                fprintf(stderr, "ERROR: '-c' flag already used\n");
+                exit(EXIT_FAILURE);
+            }
+
+            args->exclusives |= ARGS_COMPILE;
         }else if(strcmp("-d", arg) == 0){
-            if(args->dump){
-                fprintf(stderr, "-l flag already used");
+            if(args->exclusives != 0){
+                fprintf(stderr, "ERROR: flags '-l', '-p', '-c' and '-d' are mutually exclusive\n");
                 exit(EXIT_FAILURE);
             }
 
-            args->dump = 1;
-            exclusives |= 0b00010000;
+            if(args->exclusives & ARGS_DUMP){
+                fprintf(stderr, "ERROR: '-d' flag already used\n");
+                exit(EXIT_FAILURE);
+            }
+
+            args->exclusives |= ARGS_COMPILE;
         }else if(strcmp("-h", arg) == 0){
             if(args->help){
-                fprintf(stderr, "-h flag already used");
+                fprintf(stderr, "ERROR: '-h' flag already used\n");
                 exit(EXIT_FAILURE);
             }
 
             args->help = 1;
-            exclusives |= 0b00001000;
-        }else if(strcmp("--spaths", arg) == 0){
+        }else if(strcmp("--search-paths", arg) == 0){
             if(args->search_paths){
-                fprintf(stderr, "search path already set");
+                fprintf(stderr, "ERROR: 'search paths' already set\n");
                 exit(EXIT_FAILURE);
             }
 
             if(i + 1 >= argc){
-                fprintf(stderr, "expect search paths string after --spaths flag");
+                fprintf(stderr, "ERROR: expect 'search paths' after '--search-paths' flag\n");
                 exit(EXIT_FAILURE);
             }
 
             args->search_paths = (char *)argv[++i];
         }else{
             if(args->source_pathname){
-                fprintf(stderr, "source pathname set");
+                fprintf(stderr, "ERROR: 'Source pathname' already set\n");
                 exit(EXIT_FAILURE);
             }
 
@@ -148,8 +163,24 @@ static void get_args(int argc, const char *argv[], Args *args){
         }
 	}
 
-    if(exclusives >= 136){
-        fprintf(stderr, "Can only use one of this flags at time: -l -p -c -d -h\n");
+    if(args->help && (args->exclusives || args->search_paths || args->source_pathname)){
+        fprintf(stderr, "ERROR: flag '-h' must be used alone\n");
+        exit(EXIT_FAILURE);
+    }
+
+    if(args->exclusives && !args->source_pathname){
+        fprintf(
+            stderr,
+            "ERROR: expect 'source pathname' with flags: '-l', '-p', '-c' and '-d'\n"
+        );
+        exit(EXIT_FAILURE);
+    }
+
+    if(args->search_paths && !args->source_pathname){
+        fprintf(
+            stderr,
+            "ERROR: expect 'source pathname' with flag '--search-paths'\n"
+        );
         exit(EXIT_FAILURE);
     }
 }
@@ -282,7 +313,7 @@ LZOHTable *create_keywords_table(const Allocator *allocator){
 }
 
 static void print_help(){
-    fprintf(stderr, "Usage: zeus /path/to/source/file.ze [-[l | p | c | d]]\n");
+    fprintf(stderr, "Usage: zeus [ /path/to/source/file.ze [Options] | -h ]\n");
 
     fprintf(stderr, "\n    The Zeus Programming Language\n");
     fprintf(stderr, "        Zeus is a dynamic programming language made for learning purposes\n\n");
@@ -301,10 +332,10 @@ static void print_help(){
     fprintf(stderr, "    -d\n");
     fprintf(stderr, "                      Run the disassembler (executing: lexer, parser and compiler)\n");
 
-    fprintf(stderr, "    --spaths\n");
-    fprintf(stderr, "                      Make compiler aware of the paths it must look for imports.\n");
-    fprintf(stderr, "                      The paths must be separated by the OS;s paths separator.\n");
-    fprintf(stderr, "                      In Windows is ;, while in Linux is :. For example:\n");
+    fprintf(stderr, "    --search-paths\n");
+    fprintf(stderr, "                      Make compiler aware of the paths it must use for imports.\n");
+    fprintf(stderr, "                      The paths must be separated by the OS's paths separator.\n");
+    fprintf(stderr, "                      In Windows is ';', while in Linux is ':'. For example:\n");
     fprintf(stderr, "                          Windows:\n");
     fprintf(stderr, "                              D:\\path\\a;D:\\path\\b;D:\\path\\c\n");
     fprintf(stderr, "                          Linux:\n");
@@ -465,104 +496,123 @@ int main(int argc, const char *argv[]){
     Module *main_module = NULL;
     VM *vm = vm_create(&rtallocator);
 
-    if(args.lex){
-        if(lexer_scan(source, tokens, keywords, module_path, lexer)){
-            result = 1;
-			goto CLEAN_UP_COMPTIME;
-		}
-    }else if(args.parse){
-        if(lexer_scan(source, tokens, keywords, module_path, lexer)){
-            result = 1;
-			goto CLEAN_UP_COMPTIME;
-		}
-        if(parser_parse(tokens, fns_prototypes, stmts, parser)){
-            result = 1;
-			goto CLEAN_UP_COMPTIME;
-		}
-    }else if(args.compile){
-        if(lexer_scan(source, tokens, keywords, module_path, lexer)){
-            result = 1;
-			goto CLEAN_UP_COMPTIME;
-		}
+    switch (args.exclusives){
+        case ARGS_LEX:{
+            if(lexer_scan(source, tokens, keywords, module_path, lexer)){
+                result = 1;
+                goto CLEAN_UP_COMPTIME;
+            }
 
-        if(parser_parse(tokens, fns_prototypes, stmts, parser)){
-            result = 1;
-			goto CLEAN_UP_COMPTIME;
-		}
+            break;
+        }case ARGS_PARSE:{
+            if(lexer_scan(source, tokens, keywords, module_path, lexer)){
+                result = 1;
+                goto CLEAN_UP_COMPTIME;
+            }
 
-        main_module = compiler_compile(
-            compiler,
-            keywords,
-            search_pathnames,
-            default_native,
-            manager,
-            stmts,
-            module_path
-        );
+            if(parser_parse(tokens, fns_prototypes, stmts, parser)){
+                result = 1;
+                goto CLEAN_UP_COMPTIME;
+            }
 
-        if(!main_module){
-            result = 1;
-			goto CLEAN_UP_COMPTIME;
-		}
-    }else if(args.dump){
-        if(lexer_scan(source, tokens, keywords, module_path, lexer)){
-            result = 1;
-			goto CLEAN_UP_COMPTIME;
-		}
+            break;
+        }case ARGS_COMPILE:{
+            if(lexer_scan(source, tokens, keywords, module_path, lexer)){
+                result = 1;
+                goto CLEAN_UP_COMPTIME;
+            }
 
-        if(parser_parse(tokens, fns_prototypes, stmts, parser)){
-            result = 1;
-			goto CLEAN_UP_COMPTIME;
-		}
+            if(parser_parse(tokens, fns_prototypes, stmts, parser)){
+                result = 1;
+                goto CLEAN_UP_COMPTIME;
+            }
 
-        main_module = compiler_compile(
-            compiler,
-            keywords,
-            search_pathnames,
-            default_native,
-            manager,
-            stmts,
-            module_path
-        );
+            main_module = compiler_compile(
+                compiler,
+                keywords,
+                search_pathnames,
+                default_native,
+                manager,
+                stmts,
+                module_path
+            );
 
-        if(!main_module){
-            result = 1;
-			goto CLEAN_UP_COMPTIME;
-		}
+            if(!main_module){
+                result = 1;
+                goto CLEAN_UP_COMPTIME;
+            }
 
-        dumpper_dump(modules, main_module, dumpper);
-    }else{
-        if(lexer_scan(source, tokens, keywords, module_path, lexer)){
-			result = 1;
-            goto CLEAN_UP_COMPTIME;
-		}
+            break;
+        }case ARGS_DUMP:{
+            if(lexer_scan(source, tokens, keywords, module_path, lexer)){
+                result = 1;
+                goto CLEAN_UP_COMPTIME;
+            }
 
-        if(parser_parse(tokens, fns_prototypes, stmts, parser)){
-            result = 1;
-			goto CLEAN_UP_COMPTIME;
-		}
+            if(parser_parse(tokens, fns_prototypes, stmts, parser)){
+                result = 1;
+                goto CLEAN_UP_COMPTIME;
+            }
 
-        main_module = compiler_compile(
-            compiler,
-            keywords,
-            search_pathnames,
-            default_native,
-            manager,
-            stmts,
-            module_path
-        );
+            main_module = compiler_compile(
+                compiler,
+                keywords,
+                search_pathnames,
+                default_native,
+                manager,
+                stmts,
+                module_path
+            );
 
-        if(!main_module){
-            result = 1;
-			goto CLEAN_UP_COMPTIME;
-		}
+            if(!main_module){
+                result = 1;
+                goto CLEAN_UP_COMPTIME;
+            }
 
-        lzflist_destroy(ctflist);
-        vm_initialize(vm);
+            dumpper_dump(modules, main_module, dumpper);
 
-        result = vm_execute(default_native, main_module, vm);
+            break;
+        }default:{
+            if(args.help){
+                print_help();
+            }else if(args.source_pathname){
+                if(lexer_scan(source, tokens, keywords, module_path, lexer)){
+                    result = 1;
+                    goto CLEAN_UP_COMPTIME;
+                }
 
-        goto CLEAN_UP_RUNTIME;
+                if(parser_parse(tokens, fns_prototypes, stmts, parser)){
+                    result = 1;
+                    goto CLEAN_UP_COMPTIME;
+                }
+
+                main_module = compiler_compile(
+                    compiler,
+                    keywords,
+                    search_pathnames,
+                    default_native,
+                    manager,
+                    stmts,
+                    module_path
+                );
+
+                if(!main_module){
+                    result = 1;
+                    goto CLEAN_UP_COMPTIME;
+                }
+
+                lzflist_destroy(ctflist);
+                vm_initialize(vm);
+
+                result = vm_execute(default_native, main_module, vm);
+
+                goto CLEAN_UP_RUNTIME;
+            }
+
+            print_help();
+
+            break;
+        }
     }
 
 CLEAN_UP_COMPTIME:
