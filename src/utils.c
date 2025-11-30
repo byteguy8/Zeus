@@ -30,8 +30,8 @@
         return attributes & FILE_ATTRIBUTE_ARCHIVE;
     }
 
-    char *utils_files_parent_pathname(char *pathname, Allocator *allocator){
-        char *cloned_pathname = allocator ? memory_clone_cstr(allocator, pathname, NULL) : pathname;
+    inline char *utils_files_parent_pathname(const Allocator *allocator, char *pathname){
+        char *cloned_pathname = memory_clone_cstr(allocator, pathname, NULL);
         PathRemoveFileSpecA(cloned_pathname);
         return cloned_pathname;
     }
@@ -75,12 +75,12 @@
         return S_ISREG(file.st_mode);
     }
 
-    char *utils_files_parent_pathname(char *pathname, Allocator *allocator){
-        char *cloned_pathname = allocator ? memory_clone_cstr(allocator, pathname, NULL) : pathname;
+    inline char *utils_files_parent_pathname(const Allocator *allocator, const char *pathname){
+        char *cloned_pathname = memory_clone_cstr(allocator, pathname, NULL);
         return dirname(cloned_pathname);
     }
 
-    char *utils_files_cwd(Allocator *allocator){
+    char *utils_files_cwd(const Allocator *allocator){
         char *pathname = getcwd(NULL, 0);
         size_t pathname_len = strlen(pathname);
         char *cloned_pathname = MEMORY_ALLOC(allocator, char, pathname_len + 1);

@@ -53,8 +53,8 @@
     int utils_files_is_regular(char *pathname);
 #endif
 
-char *utils_files_parent_pathname(char *pathname, Allocator *allocator);
-char *utils_files_cwd(Allocator *allocator);
+char *utils_files_parent_pathname(const Allocator *allocator, const char *pathname);
+char *utils_files_cwd(const Allocator *allocator);
 //---------------------------------  TIME  ---------------------------------//
 int64_t utils_millis();
 void utils_sleep(int64_t time);

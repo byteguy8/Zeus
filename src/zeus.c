@@ -256,7 +256,7 @@ DynArr *parse_search_paths(Allocator *allocator, DStr *main_search_pathname, cha
 }
 
 static DStr *create_main_search_pathname(const Allocator *allocator, const char *source_pathname){
-    char *parent_source_pathname = utils_files_parent_pathname((char *)source_pathname, (Allocator *)allocator);
+    char *parent_source_pathname = utils_files_parent_pathname(allocator, source_pathname);
     DStr *main_search_pathname = MEMORY_ALLOC(allocator, DStr, 1);
 
     *main_search_pathname = (DStr){
