@@ -98,18 +98,23 @@ static int compile_if_branch(
     int32_t which
 );
 static int import_native(Compiler *compiler, const Token *name_token);
+static DStr *add_new_search_path(
+    Compiler *compiler,
+    DynArr *search_pathnames,
+    const char *source_pathname
+);
 static char *resolve_import_names(
     Compiler *compiler,
     DynArr *names,
     DStr *main_search_pathname,
     DynArr *search_pathnames,
     Token *import_token,
-    Allocator *allocator,
     DStr **out_main_search_pathname
 );
 static Module *import_module(
     Compiler *compiler,
-    const Allocator *dynallocator,
+    const Allocator *ctallocator,
+    const Allocator *pssallocator,
     const Token *import_token,
     DStr *main_search_pathname,
     const char *pathname,
@@ -1896,20 +1901,45 @@ int import_native(Compiler *compiler, const Token *name_token){
 	return 0;
 }
 
+DStr *add_new_search_path(Compiler *compiler, DynArr *search_pathnames, const char *source_pathname){
+    const Allocator *pssallocator = compiler->pssallocator;
+    size_t search_pathnames_len = dynarr_len(search_pathnames);
+    char *parent_pathname = utils_files_parent_pathname(pssallocator, source_pathname);
+
+    for (size_t i = 0; i < search_pathnames_len; i++){
+        DStr *search_pathname = dynarr_get_raw(search_pathnames, i);
+
+        if(strcmp(parent_pathname, search_pathname->buff) == 0){
+            memory_destroy_cstr(pssallocator, parent_pathname);
+            return search_pathname;
+        }
+    }
+
+    dynarr_insert(
+        search_pathnames,
+        &((DStr){
+            .len = strlen(parent_pathname),
+            .buff = parent_pathname
+        })
+    );
+
+    return dynarr_get_raw(search_pathnames, dynarr_len(search_pathnames) - 1);
+}
+
 char *resolve_import_names(
     Compiler *compiler,
     DynArr *names,
     DStr *main_search_pathname,
     DynArr *search_pathnames,
     Token *import_token,
-    Allocator *allocator,
     DStr **out_main_search_pathname
 ){
-    LZBStr *lzbstr = MEMORY_LZBSTR(allocator);
+    const Allocator *arena_allocator = compiler->arena_allocator;
+    void *arena_state = lzarena_save(arena_allocator->ctx);
+    LZBStr *lzbstr = MEMORY_LZBSTR(arena_allocator);
+    size_t names_len = dynarr_len(names);
 
     lzbstr_grow_by(1024, lzbstr);
-
-    size_t names_len = dynarr_len(names);
 
     for (size_t i = 0; i < names_len; i++){
         Token *name_token = dynarr_get_ptr(names, i);
@@ -1922,14 +1952,14 @@ char *resolve_import_names(
 
     lzbstr_append(".ze", lzbstr);
 
-    char *target_pathname = lzbstr_rclone_buff((LZBStrAllocator *)allocator, lzbstr, NULL);
+    char *target_pathname = lzbstr_rclone_buff((LZBStrAllocator *)arena_allocator, lzbstr, NULL);
     char *module_name = ((Token *)dynarr_get_ptr(names, names_len - 1))->lexeme;
 
     lzbstr_reset(lzbstr);
 
     size_t search_pathnames_len = dynarr_len(search_pathnames);
     DStr *search_pathname = main_search_pathname;
-    char *pathname = NULL;
+    char *source_pathname = NULL;
     size_t i = 0;
 
     do{
@@ -1942,15 +1972,18 @@ char *resolve_import_names(
         }
 
         if(UTILS_FILES_EXISTS(lzbstr->buff)){
-            pathname = lzbstr_rclone_buff((LZBStrAllocator *)allocator, lzbstr, NULL);
+            lzarena_restore(arena_allocator->ctx, arena_state);
 
-            if(utils_files_is_directory(pathname)){
+            source_pathname = lzbstr_rclone_buff((LZBStrAllocator *)arena_allocator, lzbstr, NULL);
+            search_pathname = add_new_search_path(compiler, search_pathnames, source_pathname);
+
+            if(utils_files_is_directory(source_pathname)){
                 error(
                     compiler,
                     import_token,
                     "file with name '%s' found at '%s' but is a directory",
                     module_name,
-                    pathname
+                    source_pathname
                 );
             }
 
@@ -1962,7 +1995,7 @@ char *resolve_import_names(
         lzbstr_reset(lzbstr);
     }while(i++ < search_pathnames_len);
 
-    if(!pathname){
+    if(!source_pathname){
         error(
             compiler,
             import_token,
@@ -1975,12 +2008,13 @@ char *resolve_import_names(
         *out_main_search_pathname = search_pathname;
     }
 
-    return pathname;
+    return source_pathname;
 }
 
 Module *import_module(
     Compiler *compiler,
-    const Allocator *dynallocator,
+    const Allocator *ctallocator,
+    const Allocator *pssallocator,
     const Token *import_token,
     DStr *main_search_pathname,
     const char *pathname,
@@ -1990,19 +2024,18 @@ Module *import_module(
     LZArena *compiler_arena = compiler->compiler_arena;
     Allocator *compiler_arena_allocator = compiler->arena_allocator;
     const Allocator *rtallocator = compiler->rtallocator;
-
     DynArr *search_pathnames = compiler->search_pathnames;
-    LZOHTable *keywords = compiler->keywords;
-    DStr *source = utils_read_source(pathname, compiler_arena_allocator);
-    DynArr *tokens = MEMORY_DYNARR_PTR(dynallocator);
-    DynArr *stmts = MEMORY_DYNARR_PTR(dynallocator);
-    DynArr *fns_prototypes = MEMORY_DYNARR_PTR(dynallocator);
     LZOHTable *default_natives = compiler->default_natives;
-    ScopeManager *manager = scope_manager_create(dynallocator);
+    LZOHTable *keywords = compiler->keywords;
 
-    Lexer *lexer = lexer_create(dynallocator, rtallocator);
-    Parser *parser = parser_create(dynallocator);
-    Compiler *import_compiler = compiler_create(dynallocator, rtallocator);
+    DStr *source = utils_read_source(pathname, compiler_arena_allocator);
+    DynArr *tokens = MEMORY_DYNARR_PTR(ctallocator);
+    DynArr *stmts = MEMORY_DYNARR_PTR(ctallocator);
+    DynArr *fns_prototypes = MEMORY_DYNARR_PTR(ctallocator);
+    ScopeManager *manager = scope_manager_create(ctallocator);
+    Lexer *lexer = lexer_create(ctallocator, rtallocator);
+    Parser *parser = parser_create(ctallocator);
+    Compiler *import_compiler = compiler_create(ctallocator, rtallocator);
 
     if(lexer_scan(source, tokens, keywords, pathname, lexer)){
         error(
@@ -2026,6 +2059,7 @@ Module *import_module(
         import_compiler,
         compiler_arena,
         compiler_arena_allocator,
+        pssallocator,
         keywords,
         main_search_pathname,
         search_pathnames,
@@ -2723,10 +2757,10 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
              	}
             }
 
-            LZArena *arena = compiler->compiler_arena;
-            Allocator *arena_allocator = compiler->arena_allocator;
-            Allocator *dynallocator = memory_lzflist_allocator(arena_allocator, NULL);
-            void *state = lzarena_save(arena);
+            LZArena *compiler_arena = compiler->compiler_arena;
+            void *compiler_arena_state = lzarena_save(compiler_arena);
+            Allocator *import_ctallocator = memory_lzflist_allocator(compiler->arena_allocator, NULL);
+
             DStr *main_search_pathname = NULL;
             char *pathname = resolve_import_names(
                 compiler,
@@ -2734,13 +2768,13 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
                 compiler->main_search_pathname,
                 compiler->search_pathnames,
                 import_token,
-                arena_allocator,
                 &main_search_pathname
             );
             ScopeManager *imported_manager = NULL;
             Module *imported_module = import_module(
                 compiler,
-                dynallocator,
+                import_ctallocator,
+                compiler->ctallocator,
                 import_token,
                 main_search_pathname,
                 pathname,
@@ -2748,21 +2782,23 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
                 &imported_manager
             );
 
+            Module *actual_module = current_module(compiler);
+            ModuleObj *imported_module_obj = vm_factory_module_obj_create(
+                compiler->rtallocator,
+                imported_module
+            );
+
             scope_manager_define_module(manager, declaration_name_token);
 
-            lzarena_restore(arena, state);
-
-            vm_factory_module_add_module(current_module(compiler), imported_module);
-
+            vm_factory_module_add_module(actual_module, imported_module);
             vm_factory_module_globals_add_obj(
-            	current_module(compiler),
-             	(Obj *)vm_factory_module_obj_create(
-                    compiler->rtallocator,
-                    imported_module
-                ),
+            	actual_module,
+             	(Obj *)imported_module_obj,
               	declaration_name_token->lexeme,
                	PRIVATE_GLOVAL_VALUE_TYPE
             );
+
+            lzarena_restore(compiler_arena, compiler_arena_state);
 
             break;
         }case EXPORT_STMT_TYPE:{
@@ -2862,6 +2898,7 @@ Module *compiler_compile(
         compiler->module = main_module;
         compiler->compiler_arena = compiler_arena;
         compiler->arena_allocator = arena_allocator;
+        compiler->pssallocator = compiler->ctallocator;
 
         declare_defaults(compiler);
 
@@ -2894,6 +2931,7 @@ Module *compiler_import(
     Compiler *compiler,
     LZArena *compiler_arena,
     Allocator *arena_allocator,
+    const Allocator *pssallocator,
     LZOHTable *keywords,
     DStr *main_search_pathname,
     DynArr *search_pathnames,
@@ -2915,6 +2953,7 @@ Module *compiler_import(
         compiler->module = import_module;
         compiler->compiler_arena = compiler_arena;
         compiler->arena_allocator = arena_allocator;
+        compiler->pssallocator = pssallocator;
 
         declare_defaults(compiler);
 

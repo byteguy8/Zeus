@@ -30,13 +30,13 @@
         return attributes & FILE_ATTRIBUTE_ARCHIVE;
     }
 
-    inline char *utils_files_parent_pathname(const Allocator *allocator, char *pathname){
+    inline char *utils_files_parent_pathname(const Allocator *allocator, const char *pathname){
         char *cloned_pathname = memory_clone_cstr(allocator, pathname, NULL);
         PathRemoveFileSpecA(cloned_pathname);
         return cloned_pathname;
     }
 
-    char *utils_files_cwd(Allocator *allocator){
+    char *utils_files_cwd(const Allocator *allocator){
         DWORD buff_len = 0;
         LPTSTR buff = NULL;
 

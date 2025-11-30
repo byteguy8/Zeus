@@ -91,6 +91,7 @@ typedef struct compiler{
     Allocator       *arena_allocator;
 	const Allocator *ctallocator;
 	const Allocator *rtallocator;
+    const Allocator *pssallocator;
 }Compiler;
 
 Compiler *compiler_create(const Allocator *ctallocator, const Allocator *rtallocator);
@@ -111,6 +112,7 @@ Module *compiler_import(
     Compiler *compiler,
     LZArena *compiler_arena,
     Allocator *arena_allocator,
+    const Allocator *pssallocator,
     LZOHTable *keywords,
     DStr *main_search_pathname,
     DynArr *search_pathnames,
