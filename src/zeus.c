@@ -133,7 +133,7 @@ static void get_args(int argc, const char *argv[], Args *args){
                 exit(EXIT_FAILURE);
             }
 
-            args->exclusives |= ARGS_COMPILE;
+            args->exclusives |= ARGS_DUMP;
         }else if(strcmp("-h", arg) == 0){
             if(args->help){
                 fprintf(stderr, "ERROR: '-h' flag already used\n");
