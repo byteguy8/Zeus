@@ -1,6 +1,4 @@
 #include "lzarena.h"
-#include <bits/stdint-intn.h>
-#include <bits/stdint-uintn.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>

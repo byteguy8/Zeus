@@ -9,7 +9,6 @@
 #include "token.h"
 #include "symbol.h"
 
-#include <bits/stdint-uintn.h>
 #include <setjmp.h>
 #include <inttypes.h>
 

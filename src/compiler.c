@@ -33,7 +33,6 @@
 #include "vm/vm_factory.h"
 #include "vm/opcode.h"
 
-#include <bits/stdint-uintn.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdint.h>
