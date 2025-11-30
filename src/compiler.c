@@ -102,14 +102,17 @@ static int import_native(Compiler *compiler, const Token *name_token);
 static char *resolve_import_names(
     Compiler *compiler,
     DynArr *names,
+    DStr *main_search_pathname,
     DynArr *search_pathnames,
     Token *import_token,
-    Allocator *allocator
+    Allocator *allocator,
+    DStr **out_main_search_pathname
 );
 static Module *import_module(
     Compiler *compiler,
     const Allocator *dynallocator,
     const Token *import_token,
+    DStr *main_search_pathname,
     const char *pathname,
     const char *name,
     ScopeManager **out_manager
@@ -1897,16 +1900,17 @@ int import_native(Compiler *compiler, const Token *name_token){
 char *resolve_import_names(
     Compiler *compiler,
     DynArr *names,
+    DStr *main_search_pathname,
     DynArr *search_pathnames,
     Token *import_token,
-    Allocator *allocator
+    Allocator *allocator,
+    DStr **out_main_search_pathname
 ){
     LZBStr *lzbstr = MEMORY_LZBSTR(allocator);
 
     lzbstr_grow_by(1024, lzbstr);
 
     size_t names_len = dynarr_len(names);
-    char *module_name = ((Token *)dynarr_get_ptr(names, names_len - 1))->lexeme;
 
     for (size_t i = 0; i < names_len; i++){
         Token *name_token = dynarr_get_ptr(names, i);
@@ -1920,18 +1924,19 @@ char *resolve_import_names(
     lzbstr_append(".ze", lzbstr);
 
     char *target_pathname = lzbstr_rclone_buff((LZBStrAllocator *)allocator, lzbstr, NULL);
+    char *module_name = ((Token *)dynarr_get_ptr(names, names_len - 1))->lexeme;
 
     lzbstr_reset(lzbstr);
 
     size_t search_pathnames_len = dynarr_len(search_pathnames);
+    DStr *search_pathname = main_search_pathname;
     char *pathname = NULL;
+    size_t i = 0;
 
-    for (size_t i = 0; i < search_pathnames_len; i++){
-        DStr search_pathname = DYNARR_GET_AS(search_pathnames, DStr, i);
+    do{
+        lzbstr_append(search_pathname->buff, lzbstr);
 
-        lzbstr_append(search_pathname.buff, lzbstr);
-
-        if(search_pathname.buff[search_pathname.len - 1] == '/'){
+        if(search_pathname->buff[search_pathname->len - 1] == '/'){
             lzbstr_append(target_pathname, lzbstr);
         }else{
             lzbstr_append_args(lzbstr, "/%s", target_pathname);
@@ -1953,8 +1958,10 @@ char *resolve_import_names(
             break;
         }
 
+        search_pathname = dynarr_get_raw(search_pathnames, i);
+
         lzbstr_reset(lzbstr);
-    }
+    }while(i++ < search_pathnames_len);
 
     if(!pathname){
         error(
@@ -1965,6 +1972,10 @@ char *resolve_import_names(
         );
     }
 
+    if(out_main_search_pathname){
+        *out_main_search_pathname = search_pathname;
+    }
+
     return pathname;
 }
 
@@ -1972,6 +1983,7 @@ Module *import_module(
     Compiler *compiler,
     const Allocator *dynallocator,
     const Token *import_token,
+    DStr *main_search_pathname,
     const char *pathname,
     const char *name,
     ScopeManager **out_manager
@@ -2016,6 +2028,7 @@ Module *import_module(
         compiler_arena,
         compiler_arena_allocator,
         keywords,
+        main_search_pathname,
         search_pathnames,
         default_natives,
         manager,
@@ -2690,10 +2703,11 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
          	ImportStmt *import_stmt = stmt->sub_stmt;
             Token *import_token = import_stmt->import_token;
             DynArr *names = import_stmt->names;
-            size_t names_len = dynarr_len(names);
             Token *alt_name_token = import_stmt->alt_name;
-            Token *name_token = alt_name_token ? alt_name_token->lexeme :
-                dynarr_get_ptr(names, dynarr_len(names) - 1);
+
+            size_t names_len = dynarr_len(names);
+            Token *search_name_token = dynarr_get_ptr(names, names_len - 1);
+            Token *declaration_name_token = alt_name_token ? alt_name_token : search_name_token;
 
             if(!scope_manager_is_global_scope(manager)){
           		error(
@@ -2704,8 +2718,8 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             }
 
             if(names_len == 1){
-           		if(import_native(compiler, name_token)){
-           			scope_manager_define_module(manager, name_token);
+           		if(import_native(compiler, search_name_token)){
+           			scope_manager_define_module(manager, declaration_name_token);
             		return;
              	}
             }
@@ -2714,24 +2728,29 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
             Allocator *arena_allocator = compiler->arena_allocator;
             Allocator *dynallocator = memory_lzflist_allocator(arena_allocator, NULL);
             void *state = lzarena_save(arena);
+            DStr *main_search_pathname = NULL;
             char *pathname = resolve_import_names(
                 compiler,
                 names,
+                compiler->main_search_pathname,
                 compiler->search_pathnames,
                 import_token,
-                arena_allocator
+                arena_allocator,
+                &main_search_pathname
             );
             ScopeManager *imported_manager = NULL;
             Module *imported_module = import_module(
                 compiler,
                 dynallocator,
                 import_token,
+                main_search_pathname,
                 pathname,
-                name_token->lexeme,
+                search_name_token->lexeme,
                 &imported_manager
             );
 
-            scope_manager_define_module(manager, name_token);
+            scope_manager_define_module(manager, declaration_name_token);
+
             lzarena_restore(arena, state);
 
             vm_factory_module_add_module(current_module(compiler), imported_module);
@@ -2742,7 +2761,7 @@ void compile_stmt(Compiler *compiler, Stmt *stmt){
                     compiler->rtallocator,
                     imported_module
                 ),
-              	name_token->lexeme,
+              	declaration_name_token->lexeme,
                	PRIVATE_GLOVAL_VALUE_TYPE
             );
 
@@ -2823,6 +2842,7 @@ void compiler_destroy(Compiler *compiler){
 Module *compiler_compile(
     Compiler *compiler,
     LZOHTable *keywords,
+    DStr *main_search_pathname,
     DynArr *seatch_pathnames,
     LZOHTable *default_natives,
     ScopeManager *manager,
@@ -2836,6 +2856,7 @@ Module *compiler_compile(
 
         manager->buf = &compiler->buf;
         compiler->keywords = keywords;
+        compiler->main_search_pathname = main_search_pathname;
         compiler->search_pathnames = seatch_pathnames;
         compiler->default_natives = default_natives;
         compiler->manager = manager;
@@ -2875,6 +2896,7 @@ Module *compiler_import(
     LZArena *compiler_arena,
     Allocator *arena_allocator,
     LZOHTable *keywords,
+    DStr *main_search_pathname,
     DynArr *search_pathnames,
     LZOHTable *default_natives,
     ScopeManager *manager,
@@ -2887,6 +2909,7 @@ Module *compiler_import(
 
         manager->buf = &compiler->buf;
         compiler->keywords = keywords;
+        compiler->main_search_pathname = main_search_pathname;
         compiler->search_pathnames = search_pathnames;
         compiler->default_natives = default_natives;
         compiler->manager = manager;

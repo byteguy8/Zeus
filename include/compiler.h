@@ -10,6 +10,7 @@
 
 #include "scope_manager/scope_manager.h"
 
+#include "types.h"
 #include "token.h"
 #include "vm/fn.h"
 #include "vm/module.h"
@@ -78,6 +79,7 @@ typedef struct compiler{
 	Unit            *units_stack;
 
     LZOHTable       *keywords;
+    DStr            *main_search_pathname;
     DynArr          *search_pathnames;
     LZOHTable       *default_natives;
     ScopeManager    *manager;
@@ -97,6 +99,7 @@ void compiler_destroy(Compiler *compiler);
 Module *compiler_compile(
     Compiler *compiler,
     LZOHTable *keywords,
+    DStr *main_search_pathname,
     DynArr *search_pathnames,
     LZOHTable *default_natives,
     ScopeManager *manager,
@@ -109,6 +112,7 @@ Module *compiler_import(
     LZArena *compiler_arena,
     Allocator *arena_allocator,
     LZOHTable *keywords,
+    DStr *main_search_pathname,
     DynArr *search_pathnames,
     LZOHTable *default_natives,
     ScopeManager *manager,

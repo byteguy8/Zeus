@@ -195,69 +195,76 @@ DStr get_cwd(Allocator *allocator){
     };
 }
 
-DynArr *parse_search_paths(char *source_pathname, char *raw_search_paths, Allocator *allocator){
-    DynArr *search_paths = DYNARR_CREATE_TYPE_BY(
-        (DynArrAllocator *)allocator,
+DynArr *parse_search_paths(Allocator *allocator, DStr *main_search_pathname, char *raw_search_paths){
+    DynArr *search_paths = MEMORY_DYNARR_TYPE_COUNT(
+        allocator,
         DStr,
         DEFAULT_INITIAL_SEARCH_PATHS_BUFF_LEN
     );
-
     DStr cwd_rstr = get_cwd(allocator);
 
-    dynarr_insert(search_paths, &cwd_rstr);
-
-    size_t source_pathname_len = strlen(source_pathname);
-    size_t result_pathname_len = cwd_rstr.len + 1 + source_pathname_len;
-    char result_pathname[result_pathname_len + 1];
-
-    memcpy(result_pathname, cwd_rstr.buff, cwd_rstr.len);
-    memcpy(result_pathname + cwd_rstr.len, "/", 1);
-    memcpy(result_pathname + cwd_rstr.len + 1, source_pathname, source_pathname_len);
-    result_pathname[result_pathname_len] = 0;
-
-    if(!UTILS_FILES_EXISTS(result_pathname)){
-        char *buff = utils_files_parent_pathname(source_pathname, allocator);
-        size_t len = strlen(buff);
-        DStr parent_rstr = {
-            .len = len,
-            .buff = buff
-        };
-
-        dynarr_insert(search_paths, &parent_rstr);
+    if(strcmp(main_search_pathname->buff, cwd_rstr.buff) == 0){
+        MEMORY_DEALLOC(allocator, char, cwd_rstr.len + 1, cwd_rstr.buff);
+    }else{
+        dynarr_insert(search_paths, &cwd_rstr);
     }
 
-    if(!raw_search_paths){
+    size_t start_idx = 0;
+    size_t raw_search_paths_len = raw_search_paths ? strlen(raw_search_paths) : 0;
+
+    if(raw_search_paths_len == 0){
         return search_paths;
     }
 
-    size_t a_idx = 0;
-    size_t b_idx = 0;
-    size_t len = strlen(raw_search_paths);
+    if(raw_search_paths[0] == OS_PATH_SEPARATOR){
+        fprintf(
+            stderr,
+            "'search paths' cannot starts with '%c'",
+            OS_PATH_SEPARATOR
+        );
+        exit(EXIT_FAILURE);
+    }
 
-    for (size_t i = 0; i < len; i++){
+    if(raw_search_paths[raw_search_paths_len - 1] == OS_PATH_SEPARATOR){
+        fprintf(
+            stderr,
+            "'search paths' cannot ends with '%c'",
+            OS_PATH_SEPARATOR
+        );
+        exit(EXIT_FAILURE);
+    }
+
+    for (size_t i = 0; i < raw_search_paths_len; i++){
         char c = raw_search_paths[i];
 
-        if(c != OS_PATH_SEPARATOR){
-            b_idx = i;
-
-            if(i + 1 < len){
-                continue;
-            }
+        if(i + 1 < raw_search_paths_len && c != OS_PATH_SEPARATOR){
+            continue;
         }
 
-        size_t buff_len = b_idx - a_idx + 1;
+        size_t buff_len = i - start_idx + (c == OS_PATH_SEPARATOR ? 0 : 1);
         char *buff = MEMORY_ALLOC(allocator, char, buff_len + 1);
 
-        memcpy(buff, raw_search_paths + a_idx, buff_len);
+        memcpy(buff, raw_search_paths + start_idx, buff_len);
         buff[buff_len] = 0;
 
-        DStr rstr = (DStr){.len = buff_len, .buff = buff};
-        dynarr_insert(search_paths, &rstr);
+        dynarr_insert(search_paths, &((DStr){.len = buff_len, .buff = buff}));
 
-        a_idx = i + 1;
+        start_idx = i + 1;
     }
 
     return search_paths;
+}
+
+static DStr *create_main_search_pathname(const Allocator *allocator, const char *source_pathname){
+    char *parent_source_pathname = utils_files_parent_pathname((char *)source_pathname, (Allocator *)allocator);
+    DStr *main_search_pathname = MEMORY_ALLOC(allocator, DStr, 1);
+
+    *main_search_pathname = (DStr){
+        .len = strlen(parent_source_pathname),
+        .buff = parent_source_pathname
+    };
+
+    return main_search_pathname;
 }
 
 void add_native(const char *name, int arity, RawNativeFn raw_native, LZOHTable *natives, const Allocator *allocator){
@@ -476,10 +483,11 @@ int main(int argc, const char *argv[]){
 
     init_memory();
 
-    DynArr *search_pathnames = parse_search_paths(source_pathname, args.search_paths, &ctallocator);
-    LZOHTable *keywords = create_keywords_table(&ctallocator);
-	DStr *source = utils_read_source(source_pathname, &ctallocator);
+    DStr *source = utils_read_source(source_pathname, &ctallocator);
+    DStr *main_search_pathname = create_main_search_pathname(&ctallocator, source_pathname);
+    DynArr *search_pathnames = parse_search_paths(&ctallocator, main_search_pathname, args.search_paths);
     char *module_path = memory_clone_cstr(&ctallocator, source_pathname, NULL);
+    LZOHTable *keywords = create_keywords_table(&ctallocator);
 
     LZOHTable *default_native = create_default_native_fns(&rtallocator);
     ScopeManager *manager = scope_manager_create(&ctallocator);
@@ -529,6 +537,7 @@ int main(int argc, const char *argv[]){
             main_module = compiler_compile(
                 compiler,
                 keywords,
+                main_search_pathname,
                 search_pathnames,
                 default_native,
                 manager,
@@ -556,6 +565,7 @@ int main(int argc, const char *argv[]){
             main_module = compiler_compile(
                 compiler,
                 keywords,
+                main_search_pathname,
                 search_pathnames,
                 default_native,
                 manager,
@@ -588,6 +598,7 @@ int main(int argc, const char *argv[]){
                 main_module = compiler_compile(
                     compiler,
                     keywords,
+                    main_search_pathname,
                     search_pathnames,
                     default_native,
                     manager,
